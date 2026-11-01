@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ProfileComponent } from './profile.component';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -34,5 +36,18 @@ describe('ProfileComponent', () => {
     component.cancelSubscription();
     expect(state.currentPlan()).toBe('Free');
     expect(state.toast()).toContain('cancelada');
+  });
+
+  it('should set page to settings on goToSettings', () => {
+    component.goToSettings();
+    expect(state.activePage()).toBe('settings');
+  });
+
+  it('should stack profile account management, collections toolbar, and dashboard columns on mobile', () => {
+    const globalStyles = readFileSync(resolve(__dirname, '../../../styles.css'), 'utf8');
+
+    expect(globalStyles).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*\.account-management\s*\{[^}]*flex-direction:\s*column/);
+    expect(globalStyles).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*\.collection-toolbar\s*\{[^}]*flex-direction:\s*column/);
+    expect(globalStyles).toMatch(/@media\s*\(max-width:\s*768px\)[\s\S]*\.dashboard-columns\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/);
   });
 });

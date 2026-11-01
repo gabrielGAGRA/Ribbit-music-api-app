@@ -1,339 +1,274 @@
 @if (state.authView() !== 'app') {
-  <app-auth />
+<app-auth />
 } @else {
-  <div class="app-shell">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <button class="brand" (click)="changePage('discover')">
-        <app-frog />
-        <span>ribbit<span class="brand-dot">.</span></span>
+<div class="app-shell">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <button class="brand" (click)="changePage('discover')">
+      <app-frog />
+      <span>ribbit<span class="brand-dot">.</span></span>
+    </button>
+    <div class="sidebar-caption">SEU PRÓXIMO PLAY COMEÇA AQUI</div>
+
+    <nav>
+      @for (item of navigationItems; track item.id) {
+      <button class="nav-item" [class.active]="isNavItemActive(item.id)" (click)="changePage(item.id)">
+        <app-icon [name]="item.icon" [size]="22" />
+        <span>
+          {{ item.label }}
+          <small>{{ item.sub }}</small>
+        </span>
+        @if (state.activePage() === item.id) {
+        <span class="nav-dot"></span>
+        }
       </button>
-      <div class="sidebar-caption">SEU PRÓXIMO PLAY COMEÇA AQUI</div>
-
-      <nav>
-        @for (item of navigationItems; track item.id) {
-          <button
-            class="nav-item"
-            [class.active]="isNavItemActive(item.id)"
-            (click)="changePage(item.id)"
-          >
-            <app-icon [name]="item.icon" [size]="22" />
-            <span>
-              {{ item.label }}
-              <small>{{ item.sub }}</small>
-            </span>
-            @if (state.activePage() === item.id) {
-              <span class="nav-dot"></span>
-            }
-          </button>
-        }
-      </nav>
-
-      <div class="sidebar-library">
-        <div class="eyebrow">
-          SUA BIBLIOTECA
-          <button aria-label="Criar playlist" (click)="openCreatePlaylist()">
-            <app-icon name="plus" [size]="16" />
-          </button>
-        </div>
-        <button (click)="changePage('likes')">
-          <span class="library-icon green">
-            <app-icon name="heart" [size]="15" />
-          </span>
-          Músicas curtidas
-          <span class="library-count">{{ likedCount() }}</span>
-        </button>
-        <button (click)="changePage('loved')">
-          <span class="library-icon pink">
-            <app-icon name="star" [size]="15" />
-          </span>
-          Minhas amadas
-          <span class="library-count">{{ lovedCount() }}</span>
-        </button>
-        <button (click)="changePage('rejected')">
-          <span class="library-icon rejected">
-            <app-icon name="close" [size]="15" />
-          </span>
-          Rejeitadas
-          <span class="library-count">{{ rejectedCount() }}</span>
-        </button>
-        @for (p of state.playlists().slice(0, 2); track p.name) {
-          <button (click)="changePage('playlists')">
-            <span class="library-icon">
-              <app-icon name="music" [size]="15" />
-            </span>
-            {{ p.name }}
-          </button>
-        }
-      </div>
-
-      <div class="sidebar-bottom">
-        <div class="jam-promo">
-          <span class="promo-icon">
-            <app-icon name="users" [size]="22" />
-          </span>
-          <strong>Música boa é compartilhada.</strong>
-          <p>Chame seus amigos e descubram juntos.</p>
-          <button (click)="openJamModal()">
-            Criar uma Jam <app-icon name="arrow" [size]="16" />
-          </button>
-        </div>
-        <button class="account" (click)="changePage('dashboard')">
-          <span class="avatar">JL</span>
-          <span>
-            <strong>{{ state.userName() }}</strong>
-            <small>
-              {{
-                state.currentPlan() === 'Free'
-                  ? 'Plano Free'
-                  : 'Ribbit ' + state.currentPlan()
-              }}
-            </small>
-          </span>
-          <app-icon name="settings" [size]="17" />
-        </button>
-      </div>
-    </aside>
-
-    <!-- Main Shell -->
-    <div class="main-shell">
-      <header class="topbar">
-        <div class="breadcrumb">
-          Seu universo musical <app-icon name="chevron" [size]="13" />
-          <span>{{ breadcrumbLabel() }}</span>
-        </div>
-        <div class="topbar-actions">
-          <span class="live-status">
-            <i></i> Na sua frequência
-          </span>
-          <button
-            class="icon-button notification-button"
-            aria-label="Notificações"
-            (click)="openNotifications()"
-          >
-            <app-icon name="bell" />
-            <i></i>
-          </button>
-          <button
-            class="avatar small-avatar"
-            (click)="changePage('profile')"
-          >
-            JL
-          </button>
-        </div>
-      </header>
-
-      <main class="workspace">
-        <section class="main-content">
-          @if (state.activePage() !== 'discover' && state.activePage() !== 'profile') {
-            <div class="page-heading">
-              <div>
-                <div class="eyebrow blue">{{ currentHeading().eyebrow }}</div>
-                <h1>
-                  {{ currentHeading().titlePrefix }}
-                  <span>{{ currentHeading().titleHighlight }}</span>
-                </h1>
-                <p>{{ currentHeading().description }}</p>
-              </div>
-            </div>
-          }
-
-          <!-- Feature Routing -->
-          <router-outlet />
-        </section>
-
-        <!-- Right Rail -->
-        <aside class="right-rail">
-          <div class="daily-card">
-            <div class="eyebrow">
-              <span class="blue">
-                <app-icon name="sparkles" [size]="15" />
-              </span>
-              SEU RITMO, TODO DIA <span class="day-badge">HOJE</span>
-            </div>
-            <h2>
-              Um pouco mais de<br />
-              <span>você em cada swipe.</span>
-            </h2>
-            <p>
-              Quanto mais você descobre, mais a gente entra na sua frequência.
-            </p>
-            <div class="daily-progress">
-              <span>
-                <strong>{{ dailyDiscoveries() }}</strong> / 20 descobertas
-              </span>
-              <span>{{ dailyProgressPercent() }}%</span>
-            </div>
-            <div class="progress-track">
-              <i [style.width.%]="dailyProgressPercent()"></i>
-            </div>
-            <div class="daily-footer">
-              <span class="tiny-frog">
-                <app-frog [small]="true" />
-              </span>
-              Seu gosto não cabe numa caixa.
-            </div>
-          </div>
-
-          <section class="recent-section">
-            <div class="section-title">
-              <h3>Últimas descobertas</h3>
-              <button
-                (click)="changePage('likes')"
-                aria-label="Ver todas as descobertas"
-              >
-                <app-icon name="arrow" [size]="17" />
-              </button>
-            </div>
-            @for (s of recentDiscoveries(); track s.title; let i = $index) {
-              <div class="song-row">
-                <div class="song-cover">
-                  <img [src]="s.image" alt="" />
-                </div>
-                <div class="song-description">
-                  <strong>{{ s.title }}</strong>
-                  <span>{{ s.artist }}</span>
-                </div>
-                <app-icon
-                  [name]="i % 2 === 0 ? 'heart' : 'star'"
-                  [size]="16"
-                  [className]="i % 2 === 0 ? 'green' : 'pink'"
-                />
-              </div>
-            }
-            <button
-              class="text-button view-collection"
-              (click)="changePage('likes')"
-            >
-              Ver minhas curtidas <app-icon name="chevron" [size]="14" />
-            </button>
-          </section>
-
-          <section class="vibe-panel">
-            <div class="section-title">
-              <h3>Sua vibe agora</h3>
-              <span class="online-dot"></span>
-            </div>
-            <div class="vibe-tags">
-              @for (g of state.selectedGenres(); track g) {
-                <button (click)="openFilters()">{{ g }}</button>
-              }
-            </div>
-            <p>Uma mistura que é só sua.</p>
-            <button class="text-button" (click)="openFilters()">
-              Refinar preferências <app-icon name="filter" [size]="13" />
-            </button>
-          </section>
-
-          <div class="quote-card">
-            <span>“</span>
-            <blockquote>
-              A próxima música pode<br />
-              mudar o seu dia.
-            </blockquote>
-            <div>CONTINUE EXPLORANDO</div>
-            <span class="quote-waves">
-              <app-icon name="pond" [size]="46" />
-            </span>
-          </div>
-
-          <div class="rail-footer">
-            <span>Feito para ouvir. Feito para sentir.</span>
-            <app-frog [small]="true" />
-          </div>
-        </aside>
-      </main>
-
-      <!-- Persistent Bottom Player -->
-      <footer class="player">
-        <div class="player-track">
-          <img [src]="currentSong().image" alt="Capa da faixa atual" />
-          <div>
-            <strong>{{ currentSong().title }}</strong>
-            <span>{{ currentSong().artist }}</span>
-          </div>
-          <button
-            class="icon-button"
-            [class.green]="isCurrentSongLiked()"
-            (click)="likeCurrentSong()"
-            aria-label="Curtir faixa atual"
-          >
-            <app-icon name="heart" [size]="18" />
-          </button>
-        </div>
-
-        <div class="player-center">
-          <button
-            class="icon-button"
-            (click)="undoSwipe()"
-            aria-label="Faixa anterior"
-          >
-            <app-icon name="undo" [size]="16" />
-          </button>
-          <button
-            class="player-play"
-            (click)="togglePlayback()"
-            [attr.aria-label]="
-              player.isPlaying()
-                ? 'Pausar demonstração'
-                : 'Reproduzir demonstração'
-            "
-          >
-            <app-icon
-              [name]="player.isPlaying() ? 'pause' : 'play'"
-              [size]="16"
-            />
-          </button>
-          <button
-            class="icon-button"
-            (click)="nextSong()"
-            aria-label="Próxima faixa"
-          >
-            <app-icon name="arrow" [size]="17" />
-          </button>
-
-          <span>0:{{ formattedPlayerTime() }}</span>
-          <input
-            class="player-progress"
-            aria-label="Progresso da prévia visual"
-            type="range"
-            [value]="player.progress()"
-            min="0"
-            max="100"
-            (input)="onProgressChange($event)"
-          />
-          <span>0:30</span>
-        </div>
-
-        <div class="player-volume">
-          <span class="preview-label">PRÉVIA VISUAL</span>
-          <app-icon name="volume" [size]="17" />
-          <input
-            aria-label="Volume"
-            type="range"
-            min="0"
-            max="100"
-            [value]="player.volume()"
-            (input)="onVolumeChange($event)"
-          />
-        </div>
-      </footer>
-    </div>
-
-    <!-- Mobile Navigation -->
-    <nav class="mobile-nav">
-      @for (n of navigationItems; track n.id) {
-        <button
-          [class.active]="isNavItemActive(n.id)"
-          (click)="changePage(n.id)"
-        >
-          <app-icon [name]="n.icon" [size]="21" />
-          <span>{{ n.label }}</span>
-        </button>
       }
     </nav>
 
-    <app-toast />
-    <app-modals />
+    <div class="sidebar-library">
+      <div class="eyebrow">
+        SUA BIBLIOTECA
+        <button aria-label="Criar playlist" (click)="openCreatePlaylist()">
+          <app-icon name="plus" [size]="16" />
+        </button>
+      </div>
+      <button (click)="changePage('likes')">
+        <span class="library-icon green">
+          <app-icon name="heart" [size]="15" />
+        </span>
+        Músicas curtidas
+        <span class="library-count">{{ likedCount() }}</span>
+      </button>
+      <button (click)="changePage('loved')">
+        <span class="library-icon pink">
+          <app-icon name="star" [size]="15" />
+        </span>
+        Minhas amadas
+        <span class="library-count">{{ lovedCount() }}</span>
+      </button>
+      <button (click)="changePage('rejected')">
+        <span class="library-icon rejected">
+          <app-icon name="close" [size]="15" />
+        </span>
+        Rejeitadas
+        <span class="library-count">{{ rejectedCount() }}</span>
+      </button>
+      @for (p of state.playlists().slice(0, 2); track p.name) {
+      <button (click)="changePage('playlists')">
+        <span class="library-icon">
+          <app-icon name="music" [size]="15" />
+        </span>
+        {{ p.name }}
+      </button>
+      }
+    </div>
+
+    <div class="sidebar-bottom">
+      <div class="jam-promo">
+        <span class="promo-icon">
+          <app-icon name="users" [size]="22" />
+        </span>
+        <strong>Música boa é compartilhada.</strong>
+        <p>Chame seus amigos e descubram juntos.</p>
+        <button (click)="openJamModal()">
+          Criar uma Jam <app-icon name="arrow" [size]="16" />
+        </button>
+      </div>
+      <div class="sidebar-settings-row">
+        <button class="sidebar-settings-btn" [class.active]="state.activePage() === 'settings'"
+          (click)="changePage('settings')" title="Configurações" aria-label="Configurações">
+          <app-icon name="settings" [size]="20" />
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Shell -->
+  <div class="main-shell">
+    <header class="topbar">
+      <button class="brand topbar-brand" (click)="changePage('discover')" aria-label="Ir para Descoberta">
+        <app-frog [small]="true" />
+        <span>ribbit<span class="brand-dot">.</span></span>
+      </button>
+      <div class="breadcrumb">
+        <span class="breadcrumb-prefix">
+          Seu universo musical <app-icon name="chevron" [size]="13" />
+        </span>
+        <span>{{ breadcrumbLabel() }}</span>
+      </div>
+      <div class="topbar-actions">
+        <span class="live-status">
+          <i></i> Na sua frequência
+        </span>
+        <button class="icon-button notification-button" aria-label="Notificações" (click)="openNotifications()">
+          <app-icon name="bell" />
+          <i></i>
+        </button>
+        <button class="avatar small-avatar" (click)="changePage('profile')" title="Meu perfil"
+          aria-label="Abrir perfil">
+          {{ userInitials() }}
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <section class="main-content">
+        @if (state.activePage() !== 'discover' && state.activePage() !== 'profile') {
+        <div class="page-heading">
+          <div>
+            <div class="eyebrow blue">{{ currentHeading().eyebrow }}</div>
+            <h1>
+              {{ currentHeading().titlePrefix }}
+              <span>{{ currentHeading().titleHighlight }}</span>
+            </h1>
+            <p>{{ currentHeading().description }}</p>
+          </div>
+        </div>
+        }
+
+        <!-- Feature Routing -->
+        <router-outlet />
+      </section>
+
+      <!-- Right Rail -->
+      <aside class="right-rail">
+        <div class="daily-card">
+          <div class="eyebrow">
+            <span class="blue">
+              <app-icon name="sparkles" [size]="15" />
+            </span>
+            SEU RITMO, TODO DIA <span class="day-badge">HOJE</span>
+          </div>
+          <h2>
+            Um pouco mais de<br />
+            <span>você em cada swipe.</span>
+          </h2>
+          <p>
+            Quanto mais você descobre, mais a gente entra na sua frequência.
+          </p>
+          <div class="daily-progress">
+            <span>
+              <strong>{{ dailyDiscoveries() }}</strong> / 20 descobertas
+            </span>
+            <span>{{ dailyProgressPercent() }}%</span>
+          </div>
+          <div class="progress-track">
+            <i [style.width.%]="dailyProgressPercent()"></i>
+          </div>
+          <div class="daily-footer">
+            <span class="tiny-frog">
+              <app-frog [small]="true" />
+            </span>
+            Seu gosto não cabe numa caixa.
+          </div>
+        </div>
+
+        <section class="recent-section">
+          <div class="section-title">
+            <h3>Últimas descobertas</h3>
+            <button (click)="changePage('likes')" aria-label="Ver todas as descobertas">
+              <app-icon name="arrow" [size]="17" />
+            </button>
+          </div>
+          @for (s of recentDiscoveries(); track s.title; let i = $index) {
+          <div class="song-row">
+            <div class="song-cover">
+              <img [src]="s.image" alt="" />
+            </div>
+            <div class="song-description">
+              <strong>{{ s.title }}</strong>
+              <span>{{ s.artist }}</span>
+            </div>
+            <app-icon [name]="i % 2 === 0 ? 'heart' : 'star'" [size]="16"
+              [className]="i % 2 === 0 ? 'green' : 'pink'" />
+          </div>
+          }
+          <button class="text-button view-collection" (click)="changePage('likes')">
+            Ver minhas curtidas <app-icon name="chevron" [size]="14" />
+          </button>
+        </section>
+
+        <section class="preferences-panel">
+          <div class="section-title">
+            <h3>Suas referências agora</h3>
+            <span class="online-dot"></span>
+          </div>
+          <div class="preferences-tags">
+            @for (g of state.selectedGenres(); track g) {
+            <button (click)="openFilters()">{{ g }}</button>
+            }
+          </div>
+          <p>Uma mistura que é só sua.</p>
+          <button class="text-button" (click)="openFilters()">
+            Refinar preferências <app-icon name="filter" [size]="13" />
+          </button>
+        </section>
+
+        <div class="rail-footer">
+          <span>Feito para ouvir. Feito para sentir.</span>
+          <app-frog [small]="true" />
+        </div>
+      </aside>
+    </main>
+
+    <!-- Persistent Bottom Player -->
+    <footer class="player">
+      <div class="player-mobile-progress" aria-hidden="true">
+        <i [style.width.%]="player.progress()"></i>
+      </div>
+      <div class="player-track">
+        <img [src]="currentSong().image" alt="Capa da faixa atual" />
+        <div>
+          <strong>{{ currentSong().title }}</strong>
+          <span>{{ currentSong().artist }}</span>
+        </div>
+        <button class="icon-button" [class.green]="isCurrentSongLiked()" (click)="likeCurrentSong()"
+          aria-label="Curtir faixa atual">
+          <app-icon name="heart" [size]="18" />
+        </button>
+      </div>
+
+      <div class="player-center">
+        <button class="icon-button" (click)="undoSwipe()" aria-label="Faixa anterior">
+          <app-icon name="undo" [size]="16" />
+        </button>
+        <button class="player-play" (click)="togglePlayback()" [attr.aria-label]="
+              player.isPlaying()
+                ? 'Pausar demonstração'
+                : 'Reproduzir demonstração'
+            ">
+          <app-icon [name]="player.isPlaying() ? 'pause' : 'play'" [size]="16" />
+        </button>
+        <button class="icon-button" (click)="nextSong()" aria-label="Próxima faixa">
+          <app-icon name="arrow" [size]="17" />
+        </button>
+
+        <span>0:{{ formattedPlayerTime() }}</span>
+        <input class="player-progress" aria-label="Progresso da prévia visual" type="range" [value]="player.progress()"
+          min="0" max="100" (input)="onProgressChange($event)" />
+        <span>0:30</span>
+      </div>
+
+      <div class="player-volume">
+        <span class="preview-label">PRÉVIA VISUAL</span>
+        <app-icon name="volume" [size]="17" />
+        <input aria-label="Volume" type="range" min="0" max="100" [value]="player.volume()"
+          (input)="onVolumeChange($event)" />
+      </div>
+    </footer>
   </div>
+
+  <!-- Mobile Navigation -->
+  <nav class="mobile-nav">
+    @for (n of navigationItems; track n.id) {
+    <button [class.active]="isNavItemActive(n.id)" (click)="changePage(n.id)">
+      <app-icon [name]="n.icon" [size]="21" />
+      <span>{{ n.label }}</span>
+    </button>
+    }
+  </nav>
+
+  <app-toast />
+  <app-modals />
+</div>
 }

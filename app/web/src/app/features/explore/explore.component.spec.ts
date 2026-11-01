@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ExploreComponent } from './explore.component';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -36,5 +38,12 @@ describe('ExploreComponent', () => {
     component.reviewSort.set('likes');
     const sorted = component.sortedReviews();
     expect(sorted[0].id).toBe(reviewId);
+  });
+
+  it('should collapse community reviews grid on tablet and mobile viewports', () => {
+    const globalStyles = readFileSync(resolve(__dirname, '../../../styles.css'), 'utf8');
+
+    expect(globalStyles).toMatch(/@media\s*\(max-width:\s*900px\)[\s\S]*\.community-reviews\s*\{[^}]*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+    expect(globalStyles).toMatch(/@media\s*\(max-width:\s*600px\)[\s\S]*\.community-reviews\s*\{[^}]*minmax\(0,\s*1fr\)/);
   });
 });
