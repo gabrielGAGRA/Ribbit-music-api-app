@@ -70,6 +70,11 @@ export class ProfileComponent {
     void this.router?.navigate(['/plans']);
   }
 
+  goToSettings(): void {
+    this.state.setPage('settings');
+    void this.router?.navigate(['/settings']);
+  }
+
   openFilters(): void {
     this.state.setModal('filters');
   }

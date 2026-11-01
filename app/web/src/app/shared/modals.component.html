@@ -8,6 +8,7 @@
       aria-label="Opções Ribbit"
       (click)="$event.stopPropagation()"
     >
+      <span class="bottom-sheet-handle" aria-hidden="true"></span>
       <button
         class="modal-close icon-button"
         (click)="closeModal()"
@@ -18,7 +19,6 @@
 
       <!-- Modal: save-queue -->
       @if (state.activeModal() === 'save-queue') {
-        <span class="bottom-sheet-handle"></span>
         <span class="modal-symbol">
           <app-icon name="music" [size]="27" />
         </span>
@@ -158,16 +158,14 @@
             />
           </label>
 
-          @if (isFilterActive('Vibe')) {
+          @if (isFilterActive('Referência')) {
             <label>
-              Vibe
-              <select>
-                <option>Triste</option>
-                <option>Música</option>
-                <option>Praia</option>
-                <option selected>Estudo</option>
-                <option>Domingo à noite</option>
-                <option>Churrasco com amigos</option>
+              Fonte de referência
+              <select name="referenceSource">
+                <option value="curtidas">Minhas Curtidas</option>
+                <option value="amadas">Minhas Amadas (Superlikes)</option>
+                <option value="playlists">Playlists da Biblioteca</option>
+                <option value="livre">Descoberta Livre</option>
               </select>
             </label>
           }
@@ -222,17 +220,6 @@
             </label>
           }
 
-          @if (isFilterActive('Música-base')) {
-            <label>
-              Música para definir a vibe
-              <select>
-                @for (s of state.songs(); track s.title) {
-                  <option>{{ s.title }} — {{ s.artist }}</option>
-                }
-              </select>
-            </label>
-          }
-
           @if (isFilterActive('Evento')) {
             <div class="event-builder">
               <div class="section-title">
@@ -243,9 +230,9 @@
                 <select aria-label="Tipo de filtro">
                   <option>Gênero</option>
                   <option>Artista</option>
-                  <option>Vibe</option>
+                  <option>Referência</option>
                 </select>
-                <input defaultValue="Pop" aria-label="Gênero, artista ou vibe" />
+                <input defaultValue="Pop" aria-label="Gênero, artista ou referência" />
                 <input type="number" min="0" max="12" defaultValue="1" aria-label="Horas" />
                 <span>h</span>
                 <input type="number" min="0" max="59" defaultValue="0" aria-label="Minutos" />
@@ -255,9 +242,9 @@
                 <select aria-label="Tipo de filtro">
                   <option>Artista</option>
                   <option>Gênero</option>
-                  <option>Vibe</option>
+                  <option>Referência</option>
                 </select>
-                <input defaultValue="Masego" aria-label="Gênero, artista ou vibe" />
+                <input defaultValue="Masego" aria-label="Gênero, artista ou referência" />
                 <input type="number" min="0" max="12" defaultValue="0" aria-label="Horas" />
                 <span>h</span>
                 <input type="number" min="0" max="59" defaultValue="45" aria-label="Minutos" />
@@ -436,7 +423,7 @@
           <app-icon name="music" [size]="28" />
         </span>
         <h2>{{ playlistViewName() }}</h2>
-        <p>Uma seleção demonstrativa para entrar na sua vibe.</p>
+        <p>Uma seleção demonstrativa para o seu momento.</p>
         @for (s of playlistViewSongs(); track s.title; let i = $index) {
           <div class="song-row">
             <div class="song-cover">

@@ -1,0 +1,204 @@
+<div class="secondary-page settings-page">
+  <!-- Profile & Account Section -->
+  <section class="panel settings-card">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon">
+          <app-icon name="user" [size]="20" />
+        </span>
+        <div>
+          <h2>Perfil da Conta</h2>
+          <p>Informações visíveis no seu espaço e nas Jams</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-account-body">
+      <div class="avatar settings-avatar">
+        {{ userInitials() }}
+      </div>
+
+      <div class="settings-user-info">
+        @if (!isEditingName()) {
+          <div class="user-name-row">
+            <span class="user-display-name">{{ state.userName() }}</span>
+            <button
+              class="inline-action-btn"
+              (click)="startEditingName()"
+              title="Editar nome"
+            >
+              <app-icon name="sparkles" [size]="14" />
+              Editar
+            </button>
+          </div>
+        } @else {
+          <div class="edit-name-group">
+            <input
+              type="text"
+              class="settings-input"
+              [value]="nameDraft()"
+              (input)="onNameInput($event)"
+              placeholder="Seu nome"
+              (keyup.enter)="saveName()"
+              (keyup.escape)="cancelEditingName()"
+              maxlength="40"
+            />
+            <div class="edit-name-actions">
+              <button class="primary-button small-btn" (click)="saveName()">
+                Salvar
+              </button>
+              <button class="outline-button small-btn" (click)="cancelEditingName()">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        }
+        <span class="user-email">joao.lucas&#64;ribbit.app</span>
+        <span class="plan-tag" [class.pro]="state.currentPlan() !== 'Free'">
+          {{ state.currentPlan() === 'Free' ? 'Plano Free' : 'Ribbit ' + state.currentPlan() }}
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Subscription & Plans Section -->
+  <section class="panel settings-card">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon">
+          <app-icon name="sparkles" [size]="20" />
+        </span>
+        <div>
+          <h2>Plano e Assinatura</h2>
+          <p>Gerencie sua assinatura e limites de descobertas</p>
+        </div>
+      </div>
+      <button class="primary-button small-btn" (click)="goToPlans()">
+        Alterar plano
+      </button>
+    </div>
+
+    <div class="settings-plan-details">
+      <div class="plan-status-box">
+        <div class="plan-status-info">
+          <strong>{{ state.currentPlan() === 'Free' ? 'Plano Free' : 'Ribbit ' + state.currentPlan() }}</strong>
+          <span>
+            @if (state.currentPlan() === 'Free') {
+              Descobertas diárias com recomendações inteligentes e criação de playlists locais.
+            } @else {
+              Descobertas ilimitadas, criação de Jams sem restrições e exportação completa.
+            }
+          </span>
+        </div>
+        @if (state.currentPlan() !== 'Free') {
+          <button class="danger-link-btn" (click)="cancelSubscription()">
+            Cancelar assinatura
+          </button>
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- Integrations Section -->
+  <section class="panel settings-card">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon">
+          <app-icon name="music" [size]="20" />
+        </span>
+        <div>
+          <h2>Conexões e Streaming</h2>
+          <p>Vincule contas de streaming para exportar músicas e sincronizar histórico</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="integration-item">
+      <div class="integration-meta">
+        <div class="integration-icon spotify-icon">
+          <app-icon name="music" [size]="22" />
+        </div>
+        <div>
+          <strong>Spotify</strong>
+          <span>
+            @if (isSpotifyLinked()) {
+              Conta vinculada e pronta para exportar playlists
+            } @else {
+              Conecte sua conta para salvar descobertas diretamente na biblioteca do Spotify
+            }
+          </span>
+        </div>
+      </div>
+      <button
+        [class]="isSpotifyLinked() ? 'outline-button small-btn' : 'primary-button small-btn'"
+        (click)="toggleSpotify()"
+      >
+        {{ isSpotifyLinked() ? 'Desvincular' : 'Conectar' }}
+      </button>
+    </div>
+  </section>
+
+  <!-- Preferences & Blocked Genres -->
+  <section class="panel settings-card">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon">
+          <app-icon name="sliders" [size]="20" />
+        </span>
+        <div>
+          <h2>Preferências Musicais</h2>
+          <p>Filtros ativos e gêneros que você escolheu não ouvir</p>
+        </div>
+      </div>
+      <button class="outline-button small-btn" (click)="openBlockedGenresModal()">
+        Editar filtros
+      </button>
+    </div>
+
+    <div class="blocked-genres-wrap">
+      <span class="settings-label">Gêneros bloqueados nas descobertas:</span>
+      @if (state.blockedGenres().length === 0) {
+        <p class="empty-text">Nenhum gênero bloqueado no momento. Todos os estilos estão liberados.</p>
+      } @else {
+        <div class="blocked-tags">
+          @for (genre of state.blockedGenres(); track genre) {
+            <span class="blocked-tag">
+              {{ genre }}
+              <button
+                type="button"
+                aria-label="Desbloquear gênero"
+                (click)="removeBlockedGenre(genre)"
+              >
+                <app-icon name="close" [size]="12" />
+              </button>
+            </span>
+          }
+        </div>
+      }
+    </div>
+  </section>
+
+  <!-- Danger Zone -->
+  <section class="panel settings-card danger-zone">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon danger-icon">
+          <app-icon name="close" [size]="20" />
+        </span>
+        <div>
+          <h2>Zona de Ações</h2>
+          <p>Opções de saída de sessão e encerramento de conta</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="danger-actions-row">
+      <button class="outline-button" (click)="logout()">
+        Sair da conta
+      </button>
+      <button class="danger-button" (click)="openDeleteModal()">
+        Excluir conta
+      </button>
+    </div>
+  </section>
+</div>

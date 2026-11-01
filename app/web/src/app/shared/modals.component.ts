@@ -45,19 +45,18 @@ export class ModalsComponent {
   ];
 
   protected readonly availableFilters: readonly string[] = [
-    'Vibe',
+    'Referência',
     'Gênero',
     'Duração',
     'Evento',
     'Lineup',
     'Época',
-    'Música-base',
   ];
 
   protected readonly communityReviews: readonly CommunityReview[] = MOCK_REVIEWS;
 
   protected readonly activeFilters = signal<readonly string[]>([
-    'Vibe',
+    'Referência',
     'Gênero',
   ]);
   protected readonly rating = signal<number>(0);

@@ -54,6 +54,18 @@ export class RibbitStateService {
   readonly activeModal = signal<string | null>(null);
   readonly mode = signal<string>('Para você');
 
+  // Gamification: Superlikes Goal
+  readonly superlikesGoal = signal<number>(3);
+  readonly superlikesCount = computed<number>(
+    () => this.history().filter((h) => h.kind === 'love').length,
+  );
+  readonly hasReachedSuperlikeGoal = computed<boolean>(
+    () => this.superlikesCount() >= this.superlikesGoal(),
+  );
+
+  // Selected playlist for detailed view
+  readonly selectedPlaylistName = signal<string | null>(null);
+
   // Queue
   readonly queue = signal<readonly number[]>([]);
   readonly queueCursor = signal<number>(0);
@@ -68,6 +80,8 @@ export class RibbitStateService {
     voteThreshold: 2,
     durationHours: 1,
     durationMinutes: 30,
+    superlikesCount: 0,
+    superlikesLimit: 5,
   });
 
   // Current Song Index
@@ -186,6 +200,29 @@ export class RibbitStateService {
     this.playlists.set(updated);
     setStored('ribbit-playlists', updated);
     this.notify(`Faixa adicionada a ${current[playlistIndex].name}.`);
+  }
+
+  deletePlaylist(name: string): void {
+    const updated = this.playlists().filter((p) => p.name !== name);
+    this.playlists.set(updated);
+    setStored('ribbit-playlists', updated);
+    if (this.selectedPlaylistName() === name) {
+      this.selectedPlaylistName.set(null);
+    }
+    this.notify(`Playlist "${name}" foi excluída.`);
+  }
+
+  removeSongFromPlaylist(playlistIndex: number): void {
+    const current = this.playlists();
+    if (!current[playlistIndex]) return;
+    const item = current[playlistIndex];
+    const newCount = Math.max(0, item.count - 1);
+    const updated = current.map((p, idx) =>
+      idx === playlistIndex ? { ...p, count: newCount } : p,
+    );
+    this.playlists.set(updated);
+    setStored('ribbit-playlists', updated);
+    this.notify(`Faixa removida de ${item.name}.`);
   }
 
   decideQueue(add: boolean): void {

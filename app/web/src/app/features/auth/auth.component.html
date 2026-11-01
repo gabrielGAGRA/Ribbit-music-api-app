@@ -30,37 +30,79 @@
       <p>
         {{
           isRegister()
-            ? 'Comece a descobrir músicas que combinam com você.'
+            ? 'Preencha suas informações para criar sua conta no Ribbit.'
             : 'Suas descobertas estão esperando por você.'
         }}
       </p>
 
+      @if (errorMessage()) {
+        <div class="auth-alert error">
+          <app-icon name="close" [size]="14" />
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
       <form (submit)="onSubmit($event)">
         @if (isRegister()) {
           <label>
-            Como podemos chamar você?
+            Nome de exibição *
             <input
               name="name"
               required
-              placeholder="Seu nome"
+              minlength="2"
+              placeholder="Ex: João Lucas"
               autocomplete="name"
+              [value]="nameDraft()"
+              (input)="onNameChange($event)"
             />
           </label>
         }
 
         <label>
-          E-mail
+          E-mail *
           <input
             name="email"
             type="email"
             required
             placeholder="voce@email.com"
             autocomplete="email"
+            [value]="emailDraft()"
+            (input)="onEmailChange($event)"
           />
         </label>
 
+        @if (isRegister()) {
+          <label>
+            Data de nascimento *
+            <input
+              name="birthDate"
+              type="date"
+              required
+              [max]="maxBirthDate()"
+              [value]="birthDateDraft()"
+              (input)="onBirthDateChange($event)"
+            />
+            @if (underageWarning()) {
+              <small class="auth-field-error">{{ underageWarning() }}</small>
+            }
+          </label>
+
+          <label>
+            Plano inicial *
+            <select
+              name="planId"
+              [value]="selectedPlanId()"
+              (change)="onPlanChange($event)"
+            >
+              @for (plan of planOptions; track plan.id) {
+                <option [value]="plan.id">{{ plan.label }}</option>
+              }
+            </select>
+          </label>
+        }
+
         <label>
-          Senha
+          Senha *
           <input
             name="password"
             type="password"
@@ -70,13 +112,31 @@
             [attr.autocomplete]="
               isRegister() ? 'new-password' : 'current-password'
             "
+            [value]="passwordDraft()"
+            (input)="onPasswordChange($event)"
           />
         </label>
 
         @if (isRegister()) {
+          <label>
+            Confirmar senha *
+            <input
+              name="confirmPassword"
+              type="password"
+              required
+              minlength="6"
+              placeholder="Digite a senha novamente"
+              autocomplete="new-password"
+              [value]="confirmPasswordDraft()"
+              (input)="onConfirmPasswordChange($event)"
+            />
+            @if (passwordMismatch()) {
+              <small class="auth-field-error">As senhas digitadas não coincidem.</small>
+            }
+          </label>
+
           <label class="checkbox-label auth-check">
-            <input type="checkbox" required /> Concordo com os Termos de uso
-            e a Política de privacidade.
+            <input type="checkbox" required /> Declaro que tenho mais de 18 anos e concordo com os Termos de uso e Política de privacidade do Ribbit.
           </label>
         } @else {
           <button type="button" class="forgot-button" (click)="onForgot()">
@@ -84,7 +144,11 @@
           </button>
         }
 
-        <button class="primary-button full-width" type="submit">
+        <button
+          class="primary-button full-width"
+          type="submit"
+          [disabled]="isRegister() && !canSubmitRegister()"
+        >
           {{ isRegister() ? 'Criar minha conta' : 'Entrar no Ribbit' }}
           <app-icon name="arrow" [size]="17" />
         </button>

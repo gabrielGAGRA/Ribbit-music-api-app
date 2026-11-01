@@ -30,7 +30,7 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
   },
   playlists: {
     eyebrow: 'YOUR STUDIO',
-    titlePrefix: 'Sua vibe. ',
+    titlePrefix: 'Seu momento. ',
     titleHighlight: 'Sua playlist.',
     description: 'Uma trilha sonora para cada versão de você.',
   },
@@ -45,6 +45,12 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     titlePrefix: 'Tem um mundo ',
     titleHighlight: 'pra ouvir.',
     description: 'Explore artistas, gêneros e histórias que merecem um play.',
+  },
+  settings: {
+    eyebrow: 'CONFIGURAÇÕES',
+    titlePrefix: 'Sua conta, ',
+    titleHighlight: 'suas regras.',
+    description: 'Gerencie preferências musicais, conexões e detalhes do seu plano.',
   },
   profile: {
     eyebrow: 'MY RIBBIT',
@@ -110,6 +116,14 @@ export class AppComponent {
 
   readonly currentSong = computed<Song>(() => this.state.currentSong());
 
+  readonly userInitials = computed<string>(() => {
+    const parts = this.state.userName().trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return this.state.userName().slice(0, 2).toUpperCase();
+  });
+
   readonly isProfileArea = computed<boolean>(() => {
     return ['profile', 'dashboard', 'likes', 'loved', 'rejected', 'plans'].includes(
       this.state.activePage(),
@@ -117,6 +131,7 @@ export class AppComponent {
   });
 
   readonly breadcrumbLabel = computed<string>(() => {
+    if (this.state.activePage() === 'settings') return 'Configurações';
     if (this.isProfileArea()) return 'Meu perfil';
     const nav = this.navigationItems.find((n) => n.id === this.state.activePage());
     return nav ? nav.label : 'Descoberta';

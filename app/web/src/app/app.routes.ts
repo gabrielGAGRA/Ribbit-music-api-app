@@ -4,6 +4,7 @@ import { PlaylistsComponent } from './features/playlists/playlists.component';
 import { JamsComponent } from './features/jams/jams.component';
 import { ExploreComponent } from './features/explore/explore.component';
 import { ProfileComponent } from './features/profile/profile.component';
+import { SettingsComponent } from './features/settings/settings.component';
 import { CollectionComponent } from './features/profile/collection.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { PlansComponent } from './features/plans/plans.component';
@@ -16,6 +17,7 @@ export const routes: Routes = [
   { path: 'jams', component: JamsComponent, title: 'Ribbit - Jams' },
   { path: 'explore', component: ExploreComponent, title: 'Ribbit - Explorar' },
   { path: 'profile', component: ProfileComponent, title: 'Ribbit - Perfil' },
+  { path: 'settings', component: SettingsComponent, title: 'Ribbit - Configurações' },
   { path: 'dashboard', component: DashboardComponent, title: 'Ribbit - Dashboard' },
   { path: 'likes', component: CollectionComponent, data: { kind: 'like' }, title: 'Ribbit - Músicas Curtidas' },
   { path: 'loved', component: CollectionComponent, data: { kind: 'love' }, title: 'Ribbit - Minhas Amadas' },

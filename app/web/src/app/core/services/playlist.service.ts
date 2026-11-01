@@ -22,4 +22,14 @@ export class PlaylistService {
     this.playlistsSignal.set(updated);
     return of(true).pipe(delay(100));
   }
+
+  exportToSpotify(
+    playlistName: string,
+  ): Observable<{ success: boolean; message: string; spotifyUrl: string }> {
+    return of({
+      success: true,
+      message: `Playlist "${playlistName}" exportada com sucesso para sua conta do Spotify!`,
+      spotifyUrl: `https://open.spotify.com/playlist/${encodeURIComponent(playlistName)}`,
+    }).pipe(delay(500));
+  }
 }

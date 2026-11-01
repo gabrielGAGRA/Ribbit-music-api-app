@@ -31,6 +31,9 @@ export class PlaylistsComponent {
     'https://images.unsplash.com/photo-1535392432937-a27c36ec07b5?auto=format&fit=crop&w=700&q=85';
 
   readonly currentTab = signal<'playlists' | 'queue'>('playlists');
+  readonly selectedPlaylist = signal<Playlist | null>(null);
+  readonly isExportingSpotify = signal<boolean>(false);
+
   protected readonly queueDrag = signal<number>(0);
   private queuePointerStart: number | null = null;
 
@@ -44,10 +47,25 @@ export class PlaylistsComponent {
     return this.state.lastQueue().slice(0, 3);
   });
 
+  readonly showLastQueueDetails = signal<boolean>(false);
+
+  toggleLastQueueDetails(): void {
+    this.showLastQueueDetails.update((v) => !v);
+  }
+
   readonly queueCardTransform = computed<string | undefined>(() => {
     const drag = this.queueDrag();
     if (drag === 0) return undefined;
     return `translateX(${drag}px) rotate(${drag / 30}deg)`;
+  });
+
+  readonly selectedPlaylistTracks = computed<readonly Song[]>(() => {
+    const p = this.selectedPlaylist();
+    if (!p) return [];
+    if (p.songs && p.songs.length > 0) return p.songs;
+    const all = this.state.songs();
+    const count = Math.min(p.count || 4, all.length);
+    return all.slice(0, count);
   });
 
   constructor(
@@ -57,6 +75,9 @@ export class PlaylistsComponent {
 
   selectTab(tab: 'playlists' | 'queue'): void {
     this.currentTab.set(tab);
+    if (tab === 'queue') {
+      this.selectedPlaylist.set(null);
+    }
   }
 
   decideQueue(add: boolean): void {
@@ -74,6 +95,11 @@ export class PlaylistsComponent {
     this.state.notify('Reproduzindo sua fila temporária.');
   }
 
+  playTrack(song: Song): void {
+    this.player.play();
+    this.state.notify(`Tocando "${song.title}" de ${song.artist}.`);
+  }
+
   openCreateModal(): void {
     this.state.setModal('playlist');
   }
@@ -82,8 +108,53 @@ export class PlaylistsComponent {
     this.state.setModal('save-queue');
   }
 
-  openPlaylistView(name: string): void {
-    this.state.setModal(`playlist-view:${name}`);
+  openPlaylistView(playlistOrName: Playlist | string): void {
+    if (typeof playlistOrName === 'string') {
+      const found = this.state.playlists().find((p) => p.name === playlistOrName);
+      this.selectedPlaylist.set(
+        found || { name: playlistOrName, count: 4, duration: '14 min' },
+      );
+    } else {
+      this.selectedPlaylist.set(playlistOrName);
+    }
+  }
+
+  closePlaylistView(): void {
+    this.selectedPlaylist.set(null);
+  }
+
+  exportCurrentToSpotify(): void {
+    const p = this.selectedPlaylist();
+    if (!p) return;
+    this.isExportingSpotify.set(true);
+    this.playlistService.exportToSpotify(p.name).subscribe({
+      next: (res) => {
+        this.isExportingSpotify.set(false);
+        this.state.notify(res.message);
+      },
+      error: () => {
+        this.isExportingSpotify.set(false);
+        this.state.notify('Erro ao exportar para o Spotify.');
+      },
+    });
+  }
+
+  removeTrackFromCurrent(index: number): void {
+    const p = this.selectedPlaylist();
+    if (!p) return;
+    const playlistIndex = this.state.playlists().findIndex((item) => item.name === p.name);
+    if (playlistIndex >= 0) {
+      this.state.removeSongFromPlaylist(playlistIndex);
+      const updatedList = this.state.playlists();
+      this.selectedPlaylist.set(updatedList[playlistIndex] || null);
+    }
+  }
+
+  deleteCurrentPlaylist(): void {
+    const p = this.selectedPlaylist();
+    if (!p) return;
+    this.state.deletePlaylist(p.name);
+    this.selectedPlaylist.set(null);
   }
 
   onQueuePointerDown(event: PointerEvent): void {

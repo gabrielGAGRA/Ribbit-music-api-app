@@ -13,7 +13,7 @@
     }
   </div>
   <button class="filter-button" (click)="openFilters()">
-    <app-icon name="filter" [size]="16" /> Ajustar vibe
+    <app-icon name="filter" [size]="16" /> Ajustar filtros
   </button>
 </div>
 
@@ -53,10 +53,6 @@
       <div class="art-shade"></div>
 
       <div class="card-top">
-        <span class="match-pill">
-          <app-icon name="sparkles" [size]="13" />
-          {{ currentSong().match }}% sua vibe
-        </span>
         <button
           class="card-more"
           aria-label="Detalhes da música"
@@ -76,8 +72,8 @@
         <span class="recommendation">
           <i></i>
           @switch (state.mode()) {
-            @case ('Novidades') {
-              Uma nova descoberta para você
+            @case ('Por Referência') {
+              Baseado nas suas referências favoritas
             }
             @case ('Fora da bolha') {
               Um passo além da sua zona de conforto
@@ -142,6 +138,7 @@
       class="swipe-button undo"
       (click)="handleUndo()"
       aria-label="Desfazer swipe"
+      title="Desfazer último swipe"
     >
       <app-icon name="undo" [size]="22" />
     </button>
@@ -152,7 +149,9 @@
       class="swipe-button reject"
       (click)="handleDecision('reject')"
       [disabled]="state.isDeckEmpty()"
+      [class.highlight]="activeDragAction() === 'reject'"
       aria-label="Rejeitar música"
+      title="Passar (Deslize para esquerda)"
     >
       <app-icon name="close" [size]="30" />
     </button>
@@ -163,7 +162,9 @@
       class="swipe-button love"
       (click)="handleDecision('love')"
       [disabled]="state.isDeckEmpty()"
+      [class.highlight]="activeDragAction() === 'love'"
       aria-label="Amar música"
+      title="Amar (Deslize para cima)"
     >
       <app-icon name="star" [size]="27" />
     </button>
@@ -174,7 +175,9 @@
       class="swipe-button like"
       (click)="handleDecision('like')"
       [disabled]="state.isDeckEmpty()"
+      [class.highlight]="activeDragAction() === 'like'"
       aria-label="Curtir música"
+      title="Curtir (Deslize para direita)"
     >
       <app-icon name="heart" [size]="29" />
     </button>
@@ -185,6 +188,7 @@
       class="swipe-button add"
       (click)="openAddModal()"
       aria-label="Adicionar à playlist"
+      title="Salvar na playlist"
     >
       <app-icon name="plus" [size]="23" />
     </button>

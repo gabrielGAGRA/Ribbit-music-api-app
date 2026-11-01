@@ -54,10 +54,14 @@ export interface CommunityReview {
   readonly date: number;
 }
 
+export type ReferenceSource = 'curtidas' | 'amadas' | 'playlists' | 'livre';
+
 export interface Playlist {
+  readonly id?: string;
   readonly name: string;
   readonly count: number;
   readonly duration: string;
+  readonly songs?: readonly Song[];
 }
 
 export interface NavigationItem {
@@ -84,6 +88,8 @@ export interface JamState {
   readonly voteThreshold: number;
   readonly durationHours: number;
   readonly durationMinutes: number;
+  readonly superlikesCount?: number;
+  readonly superlikesLimit?: number;
 }
 
 export interface MetricItem {
@@ -104,4 +110,32 @@ export interface RankedGenre {
   readonly percentage: number;
   readonly rank: string;
 }
+
+export interface CadastroUsuarioRequest {
+  readonly nome_exibicao: string;
+  readonly email: string;
+  readonly senha: string;
+  readonly data_nascimento: string;
+  readonly plano_id?: number | null;
+}
+
+export interface LoginRequest {
+  readonly email: string;
+  readonly senha: string;
+}
+
+export interface UsuarioResponse {
+  readonly usuario_id: number;
+  readonly email: string;
+  readonly nome_exibicao: string;
+  readonly idade: number;
+  readonly data_nascimento?: string | null;
+  readonly plano_id: number;
+  readonly spotify_id?: string | null;
+  readonly titular_id?: number | null;
+  readonly generos_bloqueados?: string | null;
+  readonly is_admin: boolean;
+  readonly criado_em?: string | null;
+}
+
 

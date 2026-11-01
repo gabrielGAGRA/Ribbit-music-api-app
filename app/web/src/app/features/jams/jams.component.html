@@ -1,12 +1,12 @@
-<div class="secondary-page">
+<div class="secondary-page jam-page">
   <div class="feature-banner jam-banner">
     <div>
       <span class="eyebrow blue">SEU PONTO DE ENCONTRO MUSICAL</span>
       <h2>
         Uma sala. Muitos gostos.<br />
-        Uma vibe só.
+        Um som só.
       </h2>
-      <p>Cada voto ajuda a construir a próxima descoberta.</p>
+      <p>Cada voto ajuda a construir a próxima descoberta em grupo.</p>
       <button class="primary-button" (click)="openJamModal()">
         <app-icon name="plus" [size]="17" />
         {{ state.jamState().active ? 'Convidar amigos' : 'Criar uma Jam' }}
@@ -21,108 +21,215 @@
   </div>
 
   @if (state.jamState().active) {
-    <div class="panel jam-room">
-      <div class="section-title">
-        <h2>
-          {{ state.jamState().roomName }}
-          <span class="live-label">DEMO</span>
-        </h2>
-        <button class="text-button" (click)="copyCode()">
-          {{ state.jamState().code }} <app-icon name="send" [size]="15" />
-        </button>
-      </div>
-      <p class="muted">Sala local de demonstração · 1 participante</p>
-
-      <div class="jam-timer">
-        <span>Tempo total da Jam</span>
-        <strong>
-          {{ state.jamState().durationHours }}h
-          {{ formattedDurationMinutes() }}min
-        </strong>
-        <span>+ 18 min de músicas</span>
-      </div>
-      <div class="duration-bar">
-        <i></i>
-      </div>
-
-      <div class="section-title">
-        <h3>Tocando agora</h3>
-      </div>
-      <div class="song-row">
-        <div class="song-cover">
-          <img [src]="currentSong().image" alt="" />
-        </div>
-        <div class="song-description">
-          <strong>{{ currentSong().title }}</strong>
-          <span>{{ currentSong().artist }}</span>
-        </div>
-        <span class="song-time">{{ currentSong().time }}</span>
-      </div>
-
-      <div class="jam-votes">
-        <button class="outline-button" (click)="voteSkip()">
-          Votar para pular · {{ state.jamVotes() }}/{{
-            state.jamState().voteThreshold
-          }}
-        </button>
-        <button class="primary-button" (click)="likeCurrent()">
-          Curtir <app-icon name="heart" [size]="17" />
-        </button>
-      </div>
-
-      <div class="section-title">
-        <h3>Próximas na fila</h3>
-      </div>
-      @for (s of upcomingSongs(); track s.title; let i = $index) {
-        <div class="song-row">
-          <div class="song-cover">
-            <img [src]="s.image" alt="" />
-          </div>
-          <div class="song-description">
-            <strong>{{ s.title }}</strong>
-            <span>{{ s.artist }}</span>
-          </div>
-          <div class="jam-track-actions">
-            <span>
-              <app-icon name="heart" [size]="14" />
-              {{ 12 - i * 2 }}
-            </span>
-            <span>
-              <app-icon name="star" [size]="14" />
-              {{ 4 - i }}
-            </span>
-            <button
-              class="icon-button"
-              [attr.aria-label]="'Adicionar ' + s.title + ' às favoritas'"
-              (click)="loveTrack(s)"
-            >
-              <app-icon name="plus" [size]="16" />
-            </button>
-          </div>
-        </div>
-      }
-
+    <!-- Jam active navigation toggle -->
+    <div class="segmented jam-view-tabs">
       <button
-        class="primary-button full-width jam-swipe-button"
-        (click)="goToDiscover()"
+        [class.selected]="jamView() === 'swipe'"
+        (click)="selectJamView('swipe')"
       >
-        <app-icon name="pond" [size]="17" /> Dar likes para esta Jam
+        <app-icon name="pond" [size]="15" /> Swipe da Sala
+      </button>
+      <button
+        [class.selected]="jamView() === 'room'"
+        (click)="selectJamView('room')"
+      >
+        <app-icon name="music" [size]="15" /> Fila & Sala
       </button>
     </div>
+
+    @if (jamView() === 'swipe') {
+      <!-- Jam Swipe Deck -->
+      <div class="jam-swipe-workspace tab-enter">
+        <div class="jam-swipe-header">
+          <div>
+            <span class="eyebrow blue">{{ state.jamState().roomName }}</span>
+            <h2>Deslize para a Jam</h2>
+            <p>Seus votos adicionam e pontuam faixas diretamente na fila coletiva.</p>
+          </div>
+          <button class="text-button room-code-pill" (click)="copyCode()">
+            {{ state.jamState().code }} <app-icon name="send" [size]="13" />
+          </button>
+        </div>
+
+        <div class="jam-superlikes-bar">
+          <div class="superlikes-quota">
+            <app-icon name="star" [size]="15" />
+            <strong>Superlikes da Sala:</strong>
+            <span>{{ jamSuperlikesCount() }}/{{ jamSuperlikesLimit() }}</span>
+          </div>
+          <span class="superlikes-rule">+1 Voto (Like) · +2 Votos (Superlike)</span>
+        </div>
+
+        <div class="jam-deck-stage">
+          <div
+            class="jam-swipe-card"
+            [style.transform]="jamCardTransform()"
+            (pointerdown)="onJamPointerDown($event)"
+            (pointermove)="onJamPointerMove($event)"
+            (pointerup)="onJamPointerUp()"
+            (pointercancel)="onJamPointerCancel()"
+          >
+            <img
+              [src]="currentJamDeckSong().image"
+              [alt]="'Capa de ' + currentJamDeckSong().title"
+            />
+            <div class="jam-card-shade"></div>
+            <div class="jam-card-info">
+              <strong>{{ currentJamDeckSong().title }}</strong>
+              <span>{{ currentJamDeckSong().artist }} · <small>{{ currentJamDeckSong().genre }}</small></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="jam-swipe-actions">
+          <div class="jam-action-item">
+            <button
+              class="swipe-button reject"
+              (click)="decideJamCard('reject')"
+              aria-label="Pular música"
+              title="Pular música (0 votos)"
+            >
+              <app-icon name="close" [size]="24" />
+            </button>
+            <span>Pular</span>
+          </div>
+          <div class="jam-action-item">
+            <button
+              class="swipe-button love"
+              [disabled]="jamSuperlikesCount() >= jamSuperlikesLimit()"
+              (click)="decideJamCard('superlike')"
+              aria-label="Supercurtir música"
+              title="Supercurtir (+2 votos)"
+            >
+              <app-icon name="star" [size]="22" />
+            </button>
+            <span>Superlike</span>
+          </div>
+          <div class="jam-action-item">
+            <button
+              class="swipe-button like"
+              (click)="decideJamCard('like')"
+              aria-label="Curtir música"
+              title="Curtir (+1 voto)"
+            >
+              <app-icon name="heart" [size]="24" />
+            </button>
+            <span>Curtir</span>
+          </div>
+        </div>
+
+        <div class="jam-swipe-footer">
+          <button class="outline-button full-width" (click)="selectJamView('room')">
+            <app-icon name="music" [size]="16" /> Ver Fila Coletiva ({{ upcomingSongs().length + 1 }} faixas)
+          </button>
+        </div>
+      </div>
+    } @else {
+      <!-- Jam Room & Queue Overview -->
+      <div class="panel jam-room tab-enter">
+        <div class="section-title">
+          <h2>
+            {{ state.jamState().roomName }}
+            <span class="live-label">AO VIVO</span>
+          </h2>
+          <button class="text-button" (click)="copyCode()">
+            {{ state.jamState().code }} <app-icon name="send" [size]="15" />
+          </button>
+        </div>
+        <p class="muted">Sala de reprodução colaborativa · 1 participante ativo</p>
+
+        <div class="jam-timer">
+          <span>Tempo total da Jam</span>
+          <strong>
+            {{ state.jamState().durationHours }}h
+            {{ formattedDurationMinutes() }}min
+          </strong>
+          <span>+ 18 min de músicas</span>
+        </div>
+        <div class="duration-bar">
+          <i></i>
+        </div>
+
+        <div class="section-title">
+          <h3>Tocando agora</h3>
+        </div>
+        <div class="song-row">
+          <div class="song-cover">
+            <img [src]="currentSong().image" alt="" />
+          </div>
+          <div class="song-description">
+            <strong>{{ currentSong().title }}</strong>
+            <span>{{ currentSong().artist }}</span>
+          </div>
+          <span class="song-time">{{ currentSong().time }}</span>
+        </div>
+
+        <div class="jam-votes">
+          <button class="outline-button" (click)="voteSkip()">
+            Votar para pular · {{ state.jamVotes() }}/{{
+              state.jamState().voteThreshold
+            }}
+          </button>
+          <button class="primary-button" (click)="likeCurrent()">
+            Curtir <app-icon name="heart" [size]="17" />
+          </button>
+        </div>
+
+        <div class="section-title">
+          <h3>Próximas na fila</h3>
+          <span>Ordenadas por pontuação de swipe</span>
+        </div>
+        @for (s of upcomingSongs(); track s.title; let i = $index) {
+          <div class="song-row">
+            <div class="song-cover">
+              <img [src]="s.image" alt="" />
+            </div>
+            <div class="song-description">
+              <strong>{{ s.title }}</strong>
+              <span>{{ s.artist }}</span>
+            </div>
+            <div class="jam-track-actions">
+              <span>
+                <app-icon name="heart" [size]="14" />
+                {{ 12 - i * 2 }}
+              </span>
+              <span>
+                <app-icon name="star" [size]="14" />
+                {{ 4 - i }}
+              </span>
+              <button
+                class="icon-button"
+                [attr.aria-label]="'Adicionar ' + s.title + ' às favoritas'"
+                (click)="loveTrack(s)"
+              >
+                <app-icon name="plus" [size]="16" />
+              </button>
+            </div>
+          </div>
+        }
+
+        <button
+          class="primary-button full-width jam-swipe-button"
+          (click)="selectJamView('swipe')"
+        >
+          <app-icon name="pond" [size]="17" /> Voltar ao Swipe da Jam
+        </button>
+      </div>
+    }
   } @else {
     <div class="panel join-panel">
       <app-icon name="headphones" [size]="32" />
       <h2>Já tem uma Jam rolando?</h2>
-      <p>Entre usando o código compartilhado por um amigo.</p>
+      <p>Entre usando o código compartilhado por um amigo para começar a deslizar músicas.</p>
       <form (submit)="onJoinSubmit($event)">
         <input
           required
           name="jamCode"
-          placeholder="Código da Jam"
+          placeholder="Código da Jam (ex: RIBBIT-729)"
           aria-label="Código da Jam"
         />
         <button class="outline-button" type="submit">
-          Entrar <app-icon name="arrow" [size]="16" />
+          Entrar e Deslizar <app-icon name="arrow" [size]="16" />
         </button>
       </form>
     </div>
