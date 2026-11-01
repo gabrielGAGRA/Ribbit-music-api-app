@@ -17,7 +17,7 @@
     "experimentalDecorators": true,
     "useUnknownInCatchVariables": true,
     "paths": {
-      "@ribbit/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@ribbit/shared-types": ["../packages/shared-types/src/index.ts"],
       "@core/*": ["./src/app/core/*"],
       "@shared/*": ["./src/app/shared/*"],
       "@features/*": ["./src/app/features/*"]

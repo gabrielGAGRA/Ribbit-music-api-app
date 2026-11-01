@@ -130,7 +130,7 @@ O projeto é composto por duas frentes:
 ### 2. Instalação das Dependências
 Na raiz do repositório, instale as dependências executando:
 ```bash
-npm --prefix app/web install
+npm --prefix view install
 ```
 
 ### 3. Iniciar o Frontend em Desenvolvimento
@@ -138,7 +138,7 @@ Inicie o servidor de desenvolvimento a partir da raiz:
 ```bash
 npm run dev:web
 ```
-*(ou dentro de `app/web`: `npm start`)*
+*(ou dentro de `view`: `npm start`)*
 
 O servidor é iniciado automaticamente com `--host 0.0.0.0 --port 4200`, disponibilizando a aplicação para conexões locais e na rede interna.
 

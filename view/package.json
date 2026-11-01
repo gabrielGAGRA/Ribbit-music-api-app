@@ -16,7 +16,7 @@
     "@angular/forms": "^21.2.25",
     "@angular/platform-browser": "^21.2.25",
     "@angular/router": "^21.2.25",
-    "@ribbit/shared-types": "file:../../packages/shared-types",
+    "@ribbit/shared-types": "file:../packages/shared-types",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
