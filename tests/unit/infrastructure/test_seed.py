@@ -89,12 +89,13 @@ def test_migrate_additive_columns_upgrades_legacy_tables() -> None:
         assert row["birth_date"] is None
         assert row["display_name"] == "Legacy User"
 
-        # Verify playlists has max_duration_seconds and deck_filters
+        # Verify playlists has its new filtering and cover columns
         playlist_cols = {
             r["name"] for r in conn.execute("PRAGMA table_info(playlists)").fetchall()
         }
         assert "max_duration_seconds" in playlist_cols
         assert "deck_filters" in playlist_cols
+        assert "cover_image_url" in playlist_cols
 
         # Verify jams has the 7 new columns
         jam_cols = {
@@ -121,6 +122,15 @@ def test_migrate_additive_columns_upgrades_legacy_tables() -> None:
         assert "jam_participants" in table_names
         assert "jam_skip_votes" in table_names
         assert "review_likes" in table_names
+        assert "playlist_images" in table_names
+
+        interaction_cols = {
+            r["name"]
+            for r in conn.execute("PRAGMA table_info(interactions)").fetchall()
+        }
+        assert "source" in interaction_cols
+
+        migrate_additive_columns(conn)
     finally:
         conn.close()
 

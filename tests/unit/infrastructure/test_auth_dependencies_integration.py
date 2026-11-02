@@ -78,7 +78,11 @@ def test_require_admin_with_bearer_token() -> None:
     request.app.state.container.token_service = token_service
     request.app.state.container.user_repo.find_by_id.return_value = admin_user
 
-    result = require_admin(request=request, authorization=f"Bearer {admin_token}")
+    admin_id = get_current_user_id(
+        request=request,
+        authorization=f"Bearer {admin_token}",
+    )
+    result = require_admin(request=request, admin_id=admin_id)
     assert result == 1
     assert request.state.admin_user == admin_user
 
@@ -103,4 +107,8 @@ def test_require_admin_with_non_admin_bearer_token_raises_forbidden() -> None:
     with pytest.raises(
         PermissionDeniedError, match="Access restricted to administrators"
     ):
-        require_admin(request=request, authorization=f"Bearer {user_token}")
+        user_id = get_current_user_id(
+            request=request,
+            authorization=f"Bearer {user_token}",
+        )
+        require_admin(request=request, admin_id=user_id)

@@ -46,7 +46,6 @@ def test_create_deck_playlist_forwards_command_and_returns_playlist() -> None:
     )
     mock_use_case.execute.return_value = playlist
     req = DeckPlaylistRequest(
-        user_id=3,
         name="Roadtrip Deck",
         duration_minutes=30,
         genre="rock",
@@ -56,7 +55,7 @@ def test_create_deck_playlist_forwards_command_and_returns_playlist() -> None:
         description="Energetic rock",
     )
 
-    res = create_deck_playlist(req=req, use_case=mock_use_case)
+    res = create_deck_playlist(req=req, current_user_id=3, use_case=mock_use_case)
 
     assert res.playlist_id == 10
     assert res.user_id == 3
@@ -73,6 +72,7 @@ def test_create_deck_playlist_forwards_command_and_returns_playlist() -> None:
             artist="Artist 1",
             country="US",
             description="Energetic rock",
+            populate_tracks=False,
         )
     )
 
@@ -84,7 +84,7 @@ def test_swipe_add_track_executes_command_and_returns_success() -> None:
     res = swipe_add_track(
         playlist_id=10,
         req=req,
-        user_id=3,
+        current_user_id=3,
         use_case=mock_use_case,
     )
 
@@ -107,7 +107,7 @@ def test_list_playlists_returns_mapped_user_playlists() -> None:
     )
     mock_use_case.execute.return_value = [playlist]
 
-    res = list_playlists(user_id=3, use_case=mock_use_case)
+    res = list_playlists(current_user_id=3, use_case=mock_use_case)
 
     assert len(res) == 1
     assert res[0].playlist_id == 11
@@ -128,7 +128,7 @@ def test_export_playlist_to_spotify_returns_updated_playlist() -> None:
 
     res = export_playlist_to_spotify(
         playlist_id=11,
-        user_id=3,
+        current_user_id=3,
         use_case=mock_use_case,
     )
 

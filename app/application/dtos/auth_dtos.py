@@ -14,6 +14,7 @@ class RegisterUserCommand:
     age: int | None = None
     plan_id: int | None = None
     birth_date: str | None = None
+    blocked_genres: tuple[str, ...] = ()
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

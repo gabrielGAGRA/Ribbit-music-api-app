@@ -14,6 +14,10 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "playlists": {
         "max_duration_seconds": "INTEGER",
         "deck_filters": "TEXT",
+        "cover_image_url": "TEXT",
+    },
+    "interactions": {
+        "source": "TEXT",
     },
     "jams": {
         "duration_minutes": "INTEGER NOT NULL DEFAULT 60",

@@ -189,6 +189,22 @@ def test_user_is_adult_and_can_listen_filtering() -> None:
         genre="  FUNK ",
         explicit=False,
     )
+    clean_rap = Track(
+        track_id=5,
+        title="Clean Rap",
+        artist="Artist",
+        duration_seconds=180,
+        genre="Hip-Hop/Rap",
+        explicit=False,
+    )
+    clean_hip_hop = Track(
+        track_id=6,
+        title="Clean Hip Hop",
+        artist="Artist",
+        duration_seconds=180,
+        genre="Hip Hop",
+        explicit=False,
+    )
     explicit_metal = Track(
         track_id=4,
         title="Heavy",
@@ -202,6 +218,8 @@ def test_user_is_adult_and_can_listen_filtering() -> None:
     assert minor.can_listen(clean_jazz) is True
     assert minor.can_listen(explicit_jazz) is False
     assert minor.can_listen(clean_funk) is False
+    assert minor.can_listen(clean_rap) is False
+    assert minor.can_listen(clean_hip_hop) is False
 
     assert adult.is_adult is True
     assert adult.can_listen(clean_jazz) is True

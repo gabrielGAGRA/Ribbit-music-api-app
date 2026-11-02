@@ -43,7 +43,7 @@ O projeto é composto por duas frentes:
   - **Like (Direita)**: Envia a música para as Curtidas.
   - **Superlike (Cima)**: Adiciona a faixa às Amadas e Curtidas em lista separada.
   - **Rejeitar (Esquerda)**: Remove a música de futuras recomendações e sugestões de playlists.
-- **Desfazer Ação**: Botão para restaurar a última faixa avaliada em caso de toque acidental.
+  - **Desfazer Ação (Premium Ribbit)**: Restaura a última faixa avaliada na Descoberta em caso de toque acidental; disponível nos planos pagos.
 
 #### 3. Playlists Inteligentes e Contextuais
 - **Montagem por Swipe**: Modo de adicionar músicas a uma playlist via gestos sem poluir a lista global de Curtidas.
@@ -70,6 +70,11 @@ O projeto é composto por duas frentes:
 - Dashboard pessoal com artistas principais, gêneros predominantes, entre outras estatísticas.
 - Exclusão transparente de dados sob solicitação do usuário.
 - Edição do plano de assinatura
+
+#### 7. Restrições de conteúdo para menores
+- Contas de menores não recebem nem podem interagir com faixas explícitas ou classificadas como Funk, Trap, Rap ou Hip Hop.
+- A regra se aplica à descoberta, busca, decks de playlists e Jams, histórico e ações sobre faixas.
+- Para menores, a busca externa não é usada como alternativa quando não há resultado local, pois os resultados externos não têm gênero confiável para aplicar o filtro.
 
 
 ---
@@ -101,19 +106,30 @@ O projeto é composto por duas frentes:
 
 ### 1. Pré-requisitos
 - **NPM**: gerenciador de pacotes incluído com o Node.
+- **Python 3.15 ou superior**: necessário para executar o backend.
 
-### 2. Instalação das Dependências
-Na raiz do repositório, instale as dependências executando:
-```bash
-npm --prefix app/web install
+### 2. Iniciar o Backend
+Na raiz do repositório, crie e ative o ambiente virtual, instale as dependências e inicie a API:
+```powershell
+py -3.15 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
 ```
 
-### 3. Iniciar o Frontend em Desenvolvimento
+O backend ficará disponível em `http://127.0.0.1:8000`, e a documentação interativa da API em `http://127.0.0.1:8000/docs`.
+
+### 3. Instalação das Dependências do Frontend
+Na raiz do repositório, instale as dependências executando:
+```bash
+npm install
+```
+
+### 4. Iniciar o Frontend em Desenvolvimento
 Inicie o servidor de desenvolvimento a partir da raiz:
 ```bash
 npm run dev:web
 ```
-*(ou dentro de `app/web`: `npm start`)*
 
 O servidor é iniciado automaticamente com `--host 0.0.0.0 --port 4200`, disponibilizando a aplicação para conexões locais e na rede interna.
 
@@ -132,32 +148,19 @@ Abra qualquer navegador moderno (Chrome, Edge, Firefox, Brave) e acesse:
 2. No navegador do celular (Chrome ou Samsung Internet), acesse a URL da rede exibida no terminal:
    - **URL**: `http://<SEU_IP_LOCAL>:4200` *(no seu caso: `http://10.46.214.63:4200`)*
 
-#### Opção B: Acesso via Túnel Seguro (Sem bloqueio de Firewall ou Wi-Fi)
-Se você estiver conectado a uma rede Wi-Fi pública/universitária (como redes `10.x.x.x` que bloqueiam conexões diretas entre dispositivos) ou se o Firewall do Windows estiver impedindo a conexão direta:
-
-1. Deixe o servidor rodando em um terminal (`npm run dev:web`).
-2. Em um **segundo terminal**, execute:
-   ```bash
-   npm run tunnel:web
-   ```
-3. O terminal fornecerá um link HTTPS público (ex: `https://meu-app.loca.lt`).
-4. Abra esse link no seu Samsung Galaxy (funciona tanto no Wi-Fi quanto no 4G/5G).
-
 ---
 
 ### Testes Automatizados & Qualidade
 
 - **Executar testes unitários**:
   ```bash
-  npm run test:web
+  npm test
   ```
 - **Checar tipagem estrita com TypeScript**:
   ```bash
-  npm run typecheck:web
+  npm run typecheck
   ```
 - **Gerar build de produção**:
   ```bash
-  npm run build:web
+  npm run build
   ```
-
-

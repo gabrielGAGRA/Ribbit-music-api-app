@@ -42,9 +42,9 @@ def test_create_jam_forwards_command_and_returns_jam_response() -> None:
         is_active=True,
     )
     mock_use_case.execute.return_value = jam
-    req = CreateJamRequest(host_user_id=10, room_name="Swamp Party")
+    req = CreateJamRequest(room_name="Swamp Party")
 
-    res = create_jam(req=req, use_case=mock_use_case)
+    res = create_jam(req=req, current_user_id=10, use_case=mock_use_case)
 
     assert res.jam_id == 1
     assert res.host_user_id == 10
@@ -71,11 +71,14 @@ def test_join_jam_forwards_room_code_and_returns_jam_response() -> None:
     mock_use_case.execute.return_value = jam
     req = JoinJamRequest(room_code="JAM-XYZ789")
 
-    res = join_jam(req=req, use_case=mock_use_case)
+    res = join_jam(req=req, current_user_id=10, use_case=mock_use_case)
 
     assert res.jam_id == 2
     assert res.room_code == "JAM-XYZ789"
-    mock_use_case.execute.assert_called_once_with(room_code="JAM-XYZ789")
+    mock_use_case.execute.assert_called_once_with(
+        room_code="JAM-XYZ789",
+        user_id=10,
+    )
 
 
 def test_get_jam_state_returns_composite_jam_state_response() -> None:
@@ -107,7 +110,7 @@ def test_get_jam_state_returns_composite_jam_state_response() -> None:
         "queue": [queue_item],
     }
 
-    res = get_jam_state(jam_id=3, user_id=10, use_case=mock_use_case)
+    res = get_jam_state(jam_id=3, current_user_id=10, use_case=mock_use_case)
 
     assert res.jam.jam_id == 3
     assert res.current_track is not None
@@ -127,9 +130,14 @@ def test_vote_jam_track_forwards_command_and_returns_queue_item() -> None:
         initial_vote_points=5,
     )
     mock_use_case.execute.return_value = queue_item
-    req = VoteJamTrackRequest(user_id=15, track_id=51, points=3)
+    req = VoteJamTrackRequest(track_id=51, points=3)
 
-    res = vote_jam_track(jam_id=3, req=req, use_case=mock_use_case)
+    res = vote_jam_track(
+        jam_id=3,
+        req=req,
+        current_user_id=15,
+        use_case=mock_use_case,
+    )
 
     assert res.jam_queue_id == 12
     assert res.jam_id == 3
@@ -147,9 +155,14 @@ def test_vote_jam_track_forwards_command_and_returns_queue_item() -> None:
 
 def test_skip_jam_track_forwards_command_and_returns_success() -> None:
     mock_use_case = MagicMock(spec=VoteSkipJamTrackUseCase)
-    req = SkipJamTrackRequest(user_id=15, track_id=50)
+    req = SkipJamTrackRequest(track_id=50)
 
-    res = skip_jam_track(jam_id=3, req=req, use_case=mock_use_case)
+    res = skip_jam_track(
+        jam_id=3,
+        req=req,
+        current_user_id=15,
+        use_case=mock_use_case,
+    )
 
     assert res.success is True
     mock_use_case.execute.assert_called_once_with(
@@ -175,7 +188,7 @@ def test_advance_jam_playback_forwards_ids_and_returns_jam_response() -> None:
 
     res = advance_jam_playback(
         jam_id=3,
-        requester_user_id=10,
+        current_user_id=10,
         use_case=mock_use_case,
     )
 

@@ -9,63 +9,41 @@ from app.domain.exceptions import (
     PermissionDeniedError,
 )
 from app.domain.models import User
+from app.infrastructure.security.token_service import HMACTokenService
 from app.presentation.dependencies.auth import (
-    get_admin_id,
     get_current_user_id,
     require_admin,
     require_user,
 )
 
 
-def test_get_current_user_id_bearer_token() -> None:
-    user_id = get_current_user_id(authorization="Bearer 42")
+def _request_with_token_service() -> tuple[MagicMock, HMACTokenService]:
+    request = MagicMock()
+    token_service = HMACTokenService(secret_key="test-signing-key")
+    request.app.state.container.token_service = token_service
+    return request, token_service
+
+
+def test_get_current_user_id_from_bearer_token() -> None:
+    request, token_service = _request_with_token_service()
+    token = token_service.create_access_token(user_id=42)
+
+    user_id = get_current_user_id(request, authorization=f"Bearer {token}")
+
     assert user_id == 42
 
 
-def test_get_current_user_id_raw_authorization_header() -> None:
-    user_id = get_current_user_id(authorization="100")
-    assert user_id == 100
+@pytest.mark.parametrize(
+    "authorization",
+    [None, "", "42", "Bearer", "Custom token", "Bearer token with spaces"],
+)
+def test_get_current_user_id_rejects_non_bearer_credentials(
+    authorization: str | None,
+) -> None:
+    request, _ = _request_with_token_service()
 
-
-def test_get_current_user_id_x_user_id_header() -> None:
-    user_id = get_current_user_id(x_user_id="77")
-    assert user_id == 77
-
-
-def test_get_current_user_id_query_param_fallback() -> None:
-    user_id = get_current_user_id(user_id="88")
-    assert user_id == 88
-
-
-def test_get_current_user_id_precedence() -> None:
-    assert (
-        get_current_user_id(authorization="Bearer 1", x_user_id="2", user_id="3") == 1
-    )
-    assert get_current_user_id(x_user_id="2", user_id="3") == 2
-
-
-def test_get_current_user_id_whitespace_fallback() -> None:
-    assert get_current_user_id(authorization="   ", x_user_id="55") == 55
-    assert get_current_user_id(authorization="   ", x_user_id="  ", user_id="66") == 66
-
-
-def test_get_current_user_id_missing_all_raises_error() -> None:
-    with pytest.raises(AuthenticationRequiredError, match="Authentication required"):
-        get_current_user_id()
-
-
-def test_get_current_user_id_invalid_int_raises_error() -> None:
-    with pytest.raises(AuthenticationRequiredError, match="Invalid user ID"):
-        get_current_user_id(authorization="Bearer not_a_number")
-
-    with pytest.raises(AuthenticationRequiredError, match="Invalid user ID"):
-        get_current_user_id(authorization="CustomScheme token extra")
-
-    with pytest.raises(AuthenticationRequiredError, match="Invalid user ID"):
-        get_current_user_id(x_user_id="invalid")
-
-    with pytest.raises(AuthenticationRequiredError, match="Invalid user ID"):
-        get_current_user_id(user_id="bad_id")
+    with pytest.raises(AuthenticationRequiredError):
+        get_current_user_id(request, authorization=authorization)
 
 
 def test_require_user_success() -> None:
@@ -81,6 +59,7 @@ def test_require_user_success() -> None:
     request.app.state.container.user_repo.find_by_id.return_value = user
 
     result = require_user(request=request, user_id=10)
+
     assert result == 10
     request.app.state.container.user_repo.find_by_id.assert_called_once_with(10)
 
@@ -91,24 +70,6 @@ def test_require_user_not_found_raises_error() -> None:
 
     with pytest.raises(AuthenticationRequiredError, match="User not found"):
         require_user(request=request, user_id=999)
-
-
-def test_get_admin_id_valid_header_returns_int() -> None:
-    assert get_admin_id(header="1") == 1
-
-
-def test_get_admin_id_missing_header_raises_error() -> None:
-    with pytest.raises(
-        AuthenticationRequiredError, match="Administrator ID header missing"
-    ):
-        get_admin_id(header=None)
-
-
-def test_get_admin_id_invalid_int_raises_error() -> None:
-    with pytest.raises(
-        AuthenticationRequiredError, match="Invalid administrator ID header"
-    ):
-        get_admin_id(header="not_an_int")
 
 
 def test_require_admin_success() -> None:
@@ -125,6 +86,7 @@ def test_require_admin_success() -> None:
     request.app.state.container.user_repo.find_by_id.return_value = admin_user
 
     result = require_admin(request=request, admin_id=1)
+
     assert result == 1
     request.app.state.container.user_repo.find_by_id.assert_called_once_with(1)
 

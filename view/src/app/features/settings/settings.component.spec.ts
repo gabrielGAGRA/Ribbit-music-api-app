@@ -63,6 +63,7 @@ describe('SettingsComponent', () => {
     component.toggleSpotify();
     const linkReq = httpMock.expectOne('/api/profile/link-spotify');
     expect(linkReq.request.method).toBe('POST');
+    expect(linkReq.request.body).toEqual({ spotify_id: 'spotify_user_9' });
     linkReq.flush({
       user_id: 9,
       email: 'joao@ribbit.app',

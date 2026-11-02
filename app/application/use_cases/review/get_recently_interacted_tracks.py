@@ -30,7 +30,11 @@ class GetRecentlyInteractedTracksUseCase:
         results: list[UserTrackInteractionResult] = []
         for interaction in interactions:
             track = self.track_repo.find_by_id(interaction.track_id)
-            if track and not track.is_deleted:
+            if (
+                track
+                and not track.is_deleted
+                and not user.is_track_restricted_for_minor(track)
+            ):
                 results.append(
                     UserTrackInteractionResult(
                         interaction=interaction,

@@ -58,7 +58,7 @@ function flushInitialHydration(httpMock: HttpTestingController): void {
   httpMock.expectOne('/api/reviews/feed?days=30&limit=20').flush([]);
   httpMock.expectOne('/api/playlists').flush([]);
   httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
-  httpMock.expectOne('/api/profile/history').flush([]);
+  httpMock.expectOne('/api/profile/interactions').flush([]);
   httpMock.expectOne('/api/discovery/next').flush(SAMPLE_TRACK);
 }
 
@@ -132,7 +132,7 @@ describe('RibbitStateService', () => {
         track: SAMPLE_TRACK,
       },
     ]);
-    httpMock.expectOne('/api/profile/history').flush([]);
+    httpMock.expectOne('/api/profile/interactions').flush([]);
     expect(service.isDeckEmpty()).toBe(true);
 
     service.undo();

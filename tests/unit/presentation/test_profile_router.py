@@ -32,7 +32,7 @@ from app.presentation.routers.profile import (
     link_spotify,
     list_blocked_genres,
     list_family_members,
-    list_history,
+    list_interactions,
     list_plans,
     remove_family_member,
     update_blocked_genres,
@@ -113,9 +113,9 @@ def test_link_spotify_forwards_parameters_and_returns_user() -> None:
     user = _sample_user(10)
     user.link_spotify("spotify_user_abc")
     mock_use_case.execute.return_value = user
-    req = LinkSpotifyRequest(user_id=10, spotify_id="spotify_user_abc")
+    req = LinkSpotifyRequest(spotify_id="spotify_user_abc")
 
-    res = link_spotify(req=req, use_case=mock_use_case)
+    res = link_spotify(req=req, user_id=10, use_case=mock_use_case)
 
     assert res.user_id == 10
     assert res.spotify_id == "spotify_user_abc"
@@ -141,9 +141,9 @@ def test_change_plan_forwards_ids_and_returns_updated_user() -> None:
     mock_use_case = MagicMock(spec=ChangeSubscriptionPlanUseCase)
     user = _sample_user(10, plan_id=3)
     mock_use_case.execute.return_value = user
-    req = ChangePlanRequest(user_id=10, new_plan_id=3)
+    req = ChangePlanRequest(new_plan_id=3)
 
-    res = change_plan(req=req, use_case=mock_use_case)
+    res = change_plan(req=req, user_id=10, use_case=mock_use_case)
 
     assert res.user_id == 10
     assert res.plan_id == 3
@@ -201,9 +201,9 @@ def test_change_interaction_converts_action_and_returns_interaction() -> None:
         action=InteractionAction.LIKE,
     )
     mock_use_case.execute.return_value = interaction
-    req = ChangeInteractionRequest(user_id=10, track_id=55, new_action="like")
+    req = ChangeInteractionRequest(track_id=55, new_action="like")
 
-    res = change_interaction(req=req, use_case=mock_use_case)
+    res = change_interaction(req=req, user_id=10, use_case=mock_use_case)
 
     assert res.interaction_id == 8
     assert res.action == "like"
@@ -214,7 +214,7 @@ def test_change_interaction_converts_action_and_returns_interaction() -> None:
     )
 
 
-def test_list_history_without_category_passes_none_action() -> None:
+def test_list_interactions_without_category_passes_none_action() -> None:
     mock_use_case = MagicMock(spec=ListUserInteractionsUseCase)
     interaction = Interaction(
         interaction_id=8,
@@ -224,18 +224,18 @@ def test_list_history_without_category_passes_none_action() -> None:
     )
     mock_use_case.execute.return_value = [interaction]
 
-    res = list_history(user_id=10, use_case=mock_use_case, category=None)
+    res = list_interactions(user_id=10, use_case=mock_use_case, category=None)
 
     assert len(res) == 1
     assert res[0].action == "dislike"
     mock_use_case.execute.assert_called_once_with(user_id=10, action=None)
 
 
-def test_list_history_with_category_converts_to_interaction_action() -> None:
+def test_list_interactions_with_category_converts_to_interaction_action() -> None:
     mock_use_case = MagicMock(spec=ListUserInteractionsUseCase)
     mock_use_case.execute.return_value = []
 
-    res = list_history(user_id=10, use_case=mock_use_case, category="SUPERLIKE")
+    res = list_interactions(user_id=10, use_case=mock_use_case, category="SUPERLIKE")
 
     assert res == []
     mock_use_case.execute.assert_called_once_with(
@@ -259,9 +259,9 @@ def test_update_blocked_genres_parses_comma_separated_string() -> None:
     user = _sample_user(10)
     user.update_blocked_genres(["rock", "pop"])
     mock_use_case.execute.return_value = user
-    req = BlockedGenresRequest(user_id=10, blocked_genres=" rock , pop ,  ")
+    req = BlockedGenresRequest(blocked_genres=" rock , pop ,  ")
 
-    res = update_blocked_genres(req=req, use_case=mock_use_case)
+    res = update_blocked_genres(req=req, user_id=10, use_case=mock_use_case)
 
     assert res.user_id == 10
     mock_use_case.execute.assert_called_once_with(
@@ -275,9 +275,9 @@ def test_update_blocked_genres_accepts_list_of_strings() -> None:
     user = _sample_user(10)
     user.update_blocked_genres(["jazz", "metal"])
     mock_use_case.execute.return_value = user
-    req = BlockedGenresRequest(user_id=10, blocked_genres=[" jazz ", "metal", " "])
+    req = BlockedGenresRequest(blocked_genres=[" jazz ", "metal", " "])
 
-    res = update_blocked_genres(req=req, use_case=mock_use_case)
+    res = update_blocked_genres(req=req, user_id=10, use_case=mock_use_case)
 
     assert res.user_id == 10
     mock_use_case.execute.assert_called_once_with(
@@ -292,7 +292,7 @@ def test_list_family_members_returns_dependent_users() -> None:
     dependent.link_primary_account(10)
     mock_use_case.execute.return_value = [dependent]
 
-    res = list_family_members(primary_account_id=10, use_case=mock_use_case)
+    res = list_family_members(user_id=10, use_case=mock_use_case)
 
     assert len(res) == 1
     assert res[0].user_id == 11
@@ -305,9 +305,9 @@ def test_add_family_member_forwards_ids_and_returns_dependent() -> None:
     dependent = _sample_user(12, plan_id=3)
     dependent.link_primary_account(10)
     mock_use_case.execute.return_value = dependent
-    req = AddFamilyMemberRequest(primary_account_id=10, dependent_user_id=12)
+    req = AddFamilyMemberRequest(dependent_user_id=12)
 
-    res = add_family_member(req=req, use_case=mock_use_case)
+    res = add_family_member(req=req, user_id=10, use_case=mock_use_case)
 
     assert res.user_id == 12
     assert res.primary_account_id == 10
@@ -324,7 +324,7 @@ def test_remove_family_member_forwards_ids_and_returns_unlinked_user() -> None:
 
     res = remove_family_member(
         member_id=12,
-        primary_account_id=10,
+        user_id=10,
         use_case=mock_use_case,
     )
 
@@ -356,7 +356,7 @@ def test_add_family_member_provisioning_flow_forwards_credentials() -> None:
         birth_date="2014-05-10",
     )
 
-    res = add_family_member(req=req, use_case=mock_use_case, auth_user_id=10)
+    res = add_family_member(req=req, use_case=mock_use_case, user_id=10)
 
     assert res.user_id == 15
     assert res.email == "kid@ribbit.com"
@@ -392,24 +392,20 @@ def test_get_profile_includes_recent_interactions() -> None:
     assert len(res.recent_interactions) == 1
     assert res.recent_interactions[0].track_id == 5
     assert res.recent_interactions[0].action == "like"
-    assert len(res.interacoes_recentes) == 1
+    assert len(res.recent_interactions) == 1
 
 
-def test_profile_router_has_portuguese_route_aliases() -> None:
+def test_profile_router_keeps_canonical_and_legacy_history_routes() -> None:
     from app.presentation.routers.profile import router
 
     paths = [route.path for route in router.routes]  # type: ignore[attr-defined]
     assert "/api/profile/me" in paths
-    assert "/api/perfil/me" in paths
     assert "/api/plans" in paths
-    assert "/api/planos" in paths
     assert "/api/profile/plan" in paths
-    assert "/api/perfil/plano" in paths
     assert "/api/profile/account" in paths
-    assert "/api/perfil/conta" in paths
     assert "/api/profile/blocked-genres" in paths
-    assert "/api/perfil/generos-bloqueados" in paths
+    assert "/api/profile/interactions" in paths
+    assert "/api/profile/history" not in paths
     assert "/api/profile/family/members" in paths
-    assert "/api/perfil/familia/membros" in paths
     assert "/api/profile/family/members/{member_id}" in paths
-    assert "/api/perfil/familia/membros/{member_id}" in paths
+    assert paths.count("/api/profile/plan") == 2

@@ -1,108 +1,178 @@
 // https://dbdiagram.io/d/Diagrama-Entidade-Relacionamento-6acbd98250a8c6fc36259a47
-// RIBBIT PLATFORM - SCHEMA UNIFICADO (9 TABELAS)
+// Ribbit Platform - atualizado conforme app/infrastructure/repositories/schema.sql
 
-Table planos {
-  plano_id int [pk, increment]
-  nome varchar [not null, unique]
-  preco_mensal decimal [not null]
-  max_perfis int [not null, default: 1]
+Table plans {
+  plan_id integer [pk, increment]
+  name text [not null, unique]
+  monthly_price real [not null]
+  max_profiles integer [not null, default: 1]
 }
 
-Table usuarios {
-  usuario_id int [pk, increment]
-  email varchar [not null, unique]
-  senha_hash varchar [not null]
-  spotify_id varchar [unique]
-  nome_exibicao varchar [not null]
-  idade int [not null]
-  plano_id int [not null, ref: > planos.plano_id]
-  titular_id int [ref: >? usuarios.usuario_id] // Auto-relacionamento para Plano Família
-  generos_bloqueados text
-  is_admin boolean [not null, default: false]
-  criado_em timestamp [default: `CURRENT_TIMESTAMP`]
-}
-
-Table musicas {
-  musica_id int [pk, increment]
-  spotify_id varchar
-  titulo varchar [not null]
-  artista varchar [not null]
-  album varchar
-  duracao_segundos int [not null]
-  genero varchar [not null]
-  pais varchar
-  ano_lancamento int
-  capa_url text
-  itunes_preview_url text
-  is_deleted boolean [not null, default: false]
-}
-
-Table interacoes {
-  Interaction_id int [pk, increment]
-  usuario_id int [not null, ref: > usuarios.usuario_id]
-  musica_id int [not null, ref: > musicas.musica_id]
-  acao varchar [not null]
-  criado_em timestamp [default: `CURRENT_TIMESTAMP`]
+Table users {
+  user_id integer [pk, increment]
+  email text [not null, unique]
+  password_hash text [not null]
+  spotify_id text [unique]
+  display_name text [not null]
+  age integer [not null]
+  plan_id integer [not null, ref: > plans.plan_id]
+  primary_account_id integer [ref: > users.user_id]
+  blocked_genres text
+  is_admin integer [not null, default: 0]
+  created_at text [not null]
+  birth_date text
 
   indexes {
-    (usuario_id, musica_id) [unique]
+    email [name: 'idx_users_email']
+  }
+}
+
+Table tracks {
+  track_id integer [pk, increment]
+  spotify_id text
+  title text [not null]
+  artist text [not null]
+  album text
+  duration_seconds integer [not null]
+  genre text [not null]
+  country text
+  release_year integer
+  cover_url text
+  itunes_preview_url text
+  explicit integer [not null, default: 0]
+  is_deleted integer [not null, default: 0]
+  created_at text [not null]
+
+  indexes {
+    title [name: 'idx_tracks_title']
+    artist [name: 'idx_tracks_artist']
+    genre [name: 'idx_tracks_genre']
+  }
+}
+
+Table interactions {
+  interaction_id integer [pk, increment]
+  user_id integer [not null, ref: > users.user_id]
+  track_id integer [not null, ref: > tracks.track_id]
+  action text [not null]
+  created_at text [not null]
+  source text
+
+  indexes {
+    (user_id, track_id) [unique, name: 'uq_interactions_user_track']
   }
 }
 
 Table playlists {
-  playlist_id int [pk, increment]
-  usuario_id int [not null, ref: > usuarios.usuario_id]
-  nome varchar [not null]
-  descricao text
-  spotify_playlist_id varchar
-  is_exportada boolean [default: false]
-  criado_em timestamp [default: `CURRENT_TIMESTAMP`]
+  playlist_id integer [pk, increment]
+  user_id integer [not null, ref: > users.user_id]
+  name text [not null]
+  description text
+  spotify_playlist_id text
+  is_exported integer [not null, default: 0]
+  created_at text [not null]
+  max_duration_seconds integer
+  deck_filters text
+  cover_image_url text
 }
 
-Table playlist_musicas {
-  playlist_musica_id int [pk, increment]
-  playlist_id int [not null, ref: > playlists.playlist_id]
-  musica_id int [not null, ref: > musicas.musica_id]
-  adicionado_em timestamp [default: `CURRENT_TIMESTAMP`]
+Table playlist_images {
+  playlist_id integer [pk, ref: > playlists.playlist_id]
+  content_type text [not null]
+  image_data blob [not null]
+  updated_at text [not null]
+}
+
+Table playlist_tracks {
+  playlist_track_id integer [pk, increment]
+  playlist_id integer [not null, ref: > playlists.playlist_id]
+  track_id integer [not null, ref: > tracks.track_id]
+  added_at text [not null]
 
   indexes {
-    (playlist_id, musica_id) [unique]
+    (playlist_id, track_id) [unique, name: 'uq_playlist_tracks_playlist_track']
   }
 }
 
 Table jams {
-  jam_id int [pk, increment]
-  host_usuario_id int [not null, ref: > usuarios.usuario_id]
-  nome_sala varchar [not null]
-  codigo_sala varchar [not null, unique]
-  is_ativa boolean [default: true]
-  musica_atual_id int [ref: >? musicas.musica_id]
-  criado_em timestamp [default: `CURRENT_TIMESTAMP`]
+  jam_id integer [pk, increment]
+  host_user_id integer [not null, ref: > users.user_id]
+  room_name text [not null]
+  room_code text [not null, unique]
+  is_active integer [not null, default: 1]
+  current_track_id integer [ref: > tracks.track_id]
+  created_at text [not null]
+  duration_minutes integer [not null, default: 60]
+  max_superlikes integer [not null, default: 10]
+  superlikes_used integer [not null, default: 0]
+  skip_votes_threshold integer [not null, default: 3]
+  accumulated_duration_seconds integer [not null, default: 0]
+  deck_source text [not null, default: 'livre']
+  source_playlist_id integer
 }
 
-Table jam_fila {
-  jam_fila_id int [pk, increment]
-  jam_id int [not null, ref: > jams.jam_id]
-  musica_id int [not null, ref: > musicas.musica_id]
-  pontos_voto int [default: 0]
-  adicionado_em timestamp [default: `CURRENT_TIMESTAMP`]
+Table jam_queue_items {
+  jam_queue_id integer [pk, increment]
+  jam_id integer [not null, ref: > jams.jam_id]
+  track_id integer [not null, ref: > tracks.track_id]
+  vote_points integer [not null, default: 0]
+  added_at text [not null]
 
   indexes {
-    (jam_id, musica_id) [unique]
+    (jam_id, track_id) [unique, name: 'uq_jam_queue_items_jam_track']
   }
 }
 
-Table avaliacoes_comentarios {
-  avaliacao_id int [pk, increment]
-  usuario_id int [not null, ref: > usuarios.usuario_id]
-  musica_id int [not null, ref: > musicas.musica_id]
-  nota int [not null]
-  texto text
-  likes_count int [default: 0]
-  is_deleted boolean [not null, default: false]
-  criado_em timestamp [default: `CURRENT_TIMESTAMP`]
+Table jam_participants {
+  jam_id integer [not null, ref: > jams.jam_id]
+  user_id integer [not null, ref: > users.user_id]
+  joined_at text [not null]
 
   indexes {
-    (usuario_id, musica_id) [unique]
+    (jam_id, user_id) [pk]
   }
+}
+
+Table jam_skip_votes {
+  jam_id integer [not null, ref: > jams.jam_id]
+  track_id integer [not null, ref: > tracks.track_id]
+  user_id integer [not null, ref: > users.user_id]
+  voted_at text [not null]
+
+  indexes {
+    (jam_id, track_id, user_id) [pk]
+  }
+}
+
+Table reviews {
+  review_id integer [pk, increment]
+  user_id integer [not null, ref: > users.user_id]
+  track_id integer [not null, ref: > tracks.track_id]
+  rating integer [not null]
+  text text
+  likes_count integer [not null, default: 0]
+  is_deleted integer [not null, default: 0]
+  created_at text [not null]
+
+  indexes {
+    track_id [name: 'idx_reviews_track_id']
+    (user_id, track_id) [unique, name: 'idx_reviews_active_user_track', note: 'Índice único parcial: aplica quando is_deleted = 0']
+  }
+}
+
+Table review_likes {
+  review_id integer [not null, ref: > reviews.review_id]
+  user_id integer [not null, ref: > users.user_id]
+  created_at text [not null]
+
+  indexes {
+    (review_id, user_id) [pk]
+  }
+}
+
+Table audit_logs {
+  log_id integer [pk, increment]
+  event text [not null]
+  status text [not null]
+  created_at text [not null]
 }

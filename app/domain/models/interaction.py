@@ -23,6 +23,7 @@ class Interaction:
     track_id: int
     action: InteractionAction
     created_at: datetime | None = None
+    source: str | None = None
 
     @property
     def is_positive(self) -> bool:

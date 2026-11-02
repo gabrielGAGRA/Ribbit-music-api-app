@@ -6,6 +6,7 @@ from app.domain.exceptions import EntityNotFoundError
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
+lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.domain.models.interaction import Interaction, InteractionAction
 
@@ -16,6 +17,7 @@ class ListUserInteractionsUseCase:
 
     user_repo: UserRepositoryPort
     interaction_repo: InteractionRepositoryPort
+    track_repo: TrackRepositoryPort | None = None
 
     def execute(
         self, user_id: int, action: InteractionAction | None = None
@@ -24,4 +26,17 @@ class ListUserInteractionsUseCase:
         if not user:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
-        return self.interaction_repo.list_by_user(user_id, action=action)
+        interactions = self.interaction_repo.list_by_user(user_id, action=action)
+        if self.track_repo is None:
+            return interactions
+
+        visible: list[Interaction] = []
+        for interaction in interactions:
+            track = self.track_repo.find_by_id(interaction.track_id)
+            if (
+                track is not None
+                and not track.is_deleted
+                and not user.is_track_restricted_for_minor(track)
+            ):
+                visible.append(interaction)
+        return visible

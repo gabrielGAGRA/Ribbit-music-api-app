@@ -82,5 +82,6 @@ class RegisterUserUseCase:
             plan_id=plan_id,
             is_admin=False,
             birth_date=birth_date_str,
+            blocked_genres=frozenset(command.blocked_genres),
         )
         return self.user_repo.save(new_user)
