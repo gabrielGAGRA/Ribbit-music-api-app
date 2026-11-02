@@ -20,16 +20,12 @@
     </div>
     <label class="mini-search">
       <app-icon name="search" [size]="16" />
-      <input
-        [value]="query()"
-        (input)="onSearchInput($event)"
-        placeholder="Buscar nesta lista"
-      />
+      <input [value]="query()" (input)="onSearchInput($event)" placeholder="Buscar nesta lista" />
     </label>
   </div>
 
   <div class="panel collection-list">
-    @for (item of filteredItems(); track item.title; let rowIndex = $index) {
+    @for (item of filteredItems(); track item.title) {
       <div class="song-row">
         <button
           class="song-cover"
@@ -51,13 +47,12 @@
             "
             (click)="onItemAction(item)"
           >
-            <app-icon
-              [name]="kind() === 'reject' ? 'undo' : 'close'"
-              [size]="16"
-            />
+            <app-icon [name]="kind() === 'reject' ? 'undo' : 'close'" [size]="16" />
           </button>
         </div>
       </div>
+    } @empty {
+      <p class="empty-text">Nenhuma música encontrada nesta lista ainda.</p>
     }
   </div>
 </div>

@@ -1,20 +1,15 @@
-import {
-  Component,
-  ChangeDetectionStrategy,
-  inject,
-  computed,
-} from '@angular/core';
-import { Router, RouterOutlet, NavigationEnd } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs/operators';
-import { safeInject } from './core/safe-inject';
-import { RibbitStateService } from './core/ribbit-state.service';
+import type { NavigationItem, Song } from '@ribbit/shared-types';
 import { AudioPlayerService } from './core/audio-player.service';
-import { IconComponent } from './shared/icon.component';
-import { FrogComponent } from './shared/frog.component';
-import { ToastComponent } from './shared/toast.component';
-import { ModalsComponent } from './shared/modals.component';
+import { RibbitStateService } from './core/ribbit-state.service';
 import { AuthComponent } from './features/auth/auth.component';
-import { NavigationItem, Song } from '@ribbit/shared-types';
+import { WidthPercentDirective } from './shared/dynamic-style.directive';
+import { FrogComponent } from './shared/frog.component';
+import { IconComponent } from './shared/icon.component';
+import { ModalsComponent } from './shared/modals.component';
+import { ToastComponent } from './shared/toast.component';
 
 interface PageHeading {
   readonly eyebrow: string;
@@ -30,7 +25,7 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
   },
   playlists: {
     eyebrow: 'YOUR STUDIO',
-    titlePrefix: 'Sua vibe. ',
+    titlePrefix: 'Seu momento. ',
     titleHighlight: 'Sua playlist.',
     description: 'Uma trilha sonora para cada versão de você.',
   },
@@ -45,6 +40,12 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     titlePrefix: 'Tem um mundo ',
     titleHighlight: 'pra ouvir.',
     description: 'Explore artistas, gêneros e histórias que merecem um play.',
+  },
+  settings: {
+    eyebrow: 'CONFIGURAÇÕES',
+    titlePrefix: 'Sua conta, ',
+    titleHighlight: 'suas regras.',
+    description: 'Gerencie preferências musicais, conexões e detalhes do seu plano.',
   },
   profile: {
     eyebrow: 'MY RIBBIT',
@@ -82,6 +83,7 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
   },
 };
 
+/** Root application shell hosting sidebar navigation, active feature outlet, right rail, and bottom player. */
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -92,13 +94,20 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     ToastComponent,
     ModalsComponent,
     AuthComponent,
+    WidthPercentDirective,
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AppComponent {
-  private readonly router: Router | null = safeInject(Router, null);
+  protected readonly state = inject(RibbitStateService);
+  protected readonly player = inject(AudioPlayerService);
+  private readonly router = inject(Router, { optional: true });
+
+  readonly isAdminRoute = signal<boolean>(
+    typeof window !== 'undefined' && window.location.pathname.startsWith('/admin'),
+  );
 
   protected readonly navigationItems: readonly NavigationItem[] = [
     { id: 'discover', label: 'Descoberta', sub: 'The Pond', icon: 'pond' },
@@ -110,54 +119,62 @@ export class AppComponent {
 
   readonly currentSong = computed<Song>(() => this.state.currentSong());
 
-  readonly isProfileArea = computed<boolean>(() => {
-    return ['profile', 'dashboard', 'likes', 'loved', 'rejected', 'plans'].includes(
-      this.state.activePage(),
-    );
+  readonly userInitials = computed<string>(() => {
+    const parts = this.state
+      .userName()
+      .trim()
+      .split(/\s+/)
+      .filter((item) => item.length > 0);
+    if (parts.length >= 2) {
+      return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
+    }
+    return this.state.userName().slice(0, 2).toUpperCase() || 'RB';
   });
 
+  readonly isProfileArea = computed<boolean>(() =>
+    ['profile', 'dashboard', 'likes', 'loved', 'rejected', 'plans'].includes(
+      this.state.activePage(),
+    ),
+  );
+
   readonly breadcrumbLabel = computed<string>(() => {
+    if (this.state.activePage() === 'settings') return 'Configurações';
     if (this.isProfileArea()) return 'Meu perfil';
-    const nav = this.navigationItems.find((n) => n.id === this.state.activePage());
+    const nav = this.navigationItems.find((item) => item.id === this.state.activePage());
     return nav ? nav.label : 'Descoberta';
   });
 
   readonly currentHeading = computed<PageHeading>(() => {
     const page = this.state.activePage();
-    return PAGE_HEADINGS[page] || PAGE_HEADINGS['profile'];
+    return PAGE_HEADINGS[page] ?? PAGE_HEADINGS['profile']!;
   });
 
-  readonly likedCount = computed<number>(() => {
-    return (
-      128 + this.state.history().filter((h) => h.kind !== 'reject').length
-    );
-  });
-
-  readonly lovedCount = computed<number>(() => {
-    return 32 + this.state.history().filter((h) => h.kind === 'love').length;
-  });
-
-  readonly rejectedCount = computed<number>(() => {
-    return 18 + this.state.history().filter((h) => h.kind === 'reject').length;
-  });
+  readonly likedCount = computed<number>(() => this.state.likedSongs().length);
+  readonly lovedCount = computed<number>(() => this.state.lovedSongs().length);
+  readonly rejectedCount = computed<number>(() => this.state.rejectedSongs().length);
 
   readonly isCurrentSongLiked = computed<boolean>(() => {
-    const idx = this.state.currentIndex();
+    const current = this.currentSong();
     return this.state
-      .history()
-      .some((h) => h.index === idx && h.kind !== 'reject');
+      .likedSongs()
+      .some((item) =>
+        current.trackId !== undefined
+          ? item.trackId === current.trackId
+          : item.title === current.title,
+      );
   });
 
-  readonly dailyDiscoveries = computed<number>(() => {
-    return Math.min(this.state.history().length + 8, 20);
-  });
+  readonly dailyDiscoveries = computed<number>(() =>
+    Math.min(this.likedCount() + this.rejectedCount(), 20),
+  );
 
-  readonly dailyProgressPercent = computed<number>(() => {
-    return Math.min(this.dailyDiscoveries() * 5, 100);
-  });
+  readonly dailyProgressPercent = computed<number>(() =>
+    Math.min(this.dailyDiscoveries() * 5, 100),
+  );
 
   readonly recentDiscoveries = computed<readonly Song[]>(() => {
-    return this.state.songs().slice(1, 4);
+    const liked = this.state.likedSongs();
+    return liked.length > 0 ? liked.slice(0, 3) : this.state.songs().slice(0, 3);
   });
 
   readonly formattedPlayerTime = computed<string>(() => {
@@ -165,14 +182,15 @@ export class AppComponent {
     return String(sec).padStart(2, '0');
   });
 
-  constructor(
-    protected readonly state: RibbitStateService = inject(RibbitStateService),
-    protected readonly player: AudioPlayerService = inject(AudioPlayerService),
-  ) {
+  constructor() {
     if (this.router) {
+      this.isAdminRoute.set(this.router.url.startsWith('/admin'));
       this.router.events
         .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
         .subscribe((event) => {
+          const isAdmin = event.urlAfterRedirects.startsWith('/admin');
+          this.isAdminRoute.set(isAdmin);
+          if (isAdmin) return;
           const path = event.urlAfterRedirects.replace(/^\//, '').split('/')[0] || 'discover';
           if (path && path !== this.state.activePage()) {
             this.state.setPage(path);
@@ -189,7 +207,7 @@ export class AppComponent {
   changePage(id: string): void {
     this.state.setPage(id);
     if (this.router) {
-      void this.router.navigate([`/${id}`]);
+      void this.router.navigate([`/${id}`]).catch(() => false);
     }
   }
 
@@ -230,12 +248,10 @@ export class AppComponent {
   }
 
   onProgressChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.player.setProgress(Number(target.value));
+    this.player.setProgress(Number((event.target as HTMLInputElement).value));
   }
 
   onVolumeChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.player.setVolume(Number(target.value));
+    this.player.setVolume(Number((event.target as HTMLInputElement).value));
   }
 }

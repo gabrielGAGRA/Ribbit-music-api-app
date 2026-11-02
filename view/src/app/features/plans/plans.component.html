@@ -1,34 +1,20 @@
 <div class="secondary-page plans-page">
   <div class="billing-toggle">
-    <button
-      [class.active]="!annualPlans()"
-      (click)="setAnnual(false)"
-    >
-      Mensal
-    </button>
-    <button
-      [class.active]="annualPlans()"
-      (click)="setAnnual(true)"
-    >
+    <button [class.active]="!annualPlans()" (click)="setAnnual(false)">Mensal</button>
+    <button [class.active]="annualPlans()" (click)="setAnnual(true)">
       Anual <span>ECONOMIZE 20%</span>
     </button>
   </div>
 
   <div class="plans-carousel">
-    @for (plan of computedPlans(); track plan.name; let i = $index) {
-      <article
-        class="plan-card"
-        [class.featured]="plan.featured"
-      >
+    @for (plan of computedPlans(); track plan.name) {
+      <article class="plan-card" [class.featured]="plan.featured">
         @if (plan.featured) {
           <span class="popular-badge">MAIS ESCOLHIDO</span>
         }
 
         <div class="plan-icon">
-          <app-icon
-            [name]="getPlanIcon(plan.name)"
-            [size]="23"
-          />
+          <app-icon [name]="getPlanIcon(plan.name)" [size]="23" />
         </div>
 
         <h2>{{ plan.displayName }}</h2>
@@ -45,7 +31,7 @@
         </div>
 
         @if (annualPlans() && plan.name !== 'Free') {
-          <small class="annual-note">Cobrado anualmente</small>
+          <small class="annual-note">Cobrado anualmente (checkout simulado)</small>
         }
 
         <ul>
@@ -58,19 +44,15 @@
         </ul>
 
         <button
-          [class]="
-            plan.featured
-              ? 'primary-button full-width'
-              : 'outline-button full-width'
-          "
-          (click)="selectPlan(plan.name)"
+          [class]="plan.featured ? 'primary-button full-width' : 'outline-button full-width'"
+          (click)="selectPlan(plan)"
         >
           @if (state.currentPlan() === plan.name) {
             Plano atual
           } @else if (plan.name === 'Free') {
-            Continuar no Free
+            Mudar para Free
           } @else {
-            Escolher {{ plan.name }}
+            Assinar {{ plan.name }}
           }
         </button>
       </article>
@@ -90,8 +72,8 @@
   <div class="plans-note">
     <app-icon name="check" [size]="17" />
     <span>
-      <strong>7 dias grátis nos planos pagos.</strong> Cancele quando
-      quiser. Nenhuma cobrança será realizada neste protótipo.
+      <strong>Pagamento 100% simulado.</strong> Ao escolher um plano pago, você passará por uma tela
+      demonstrativa de checkout sem nenhuma cobrança real.
     </span>
   </div>
 </div>

@@ -1,6 +1,7 @@
-import { Component, ChangeDetectionStrategy, input } from '@angular/core';
-import { IconName } from '@ribbit/shared-types';
+import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import type { IconName } from '@ribbit/shared-types';
 
+/** Renders Ribbit SVG stroke icons by semantic icon name. */
 @Component({
   selector: 'app-icon',
   standalone: true,

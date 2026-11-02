@@ -1,46 +1,65 @@
-import {
-  Component,
-  ChangeDetectionStrategy,
-  inject,
-  signal,
-  computed,
-} from '@angular/core';
-import { RibbitStateService } from '../../core/ribbit-state.service';
-import { SongService } from '../../core/services/song.service';
-import { safeInject } from '../../core/safe-inject';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import type { DecisionKind, Song } from '@ribbit/shared-types';
 import { AudioPlayerService } from '../../core/audio-player.service';
-import { IconComponent } from '../../shared/icon.component';
+import { RibbitStateService } from '../../core/ribbit-state.service';
+import {
+  TransformStyleDirective,
+  WaveBarStyleDirective,
+} from '../../shared/dynamic-style.directive';
 import { FrogComponent } from '../../shared/frog.component';
-import { DecisionKind, Song } from '@ribbit/shared-types';
+import { IconComponent } from '../../shared/icon.component';
 
+/** Primary Tinder-style musical discovery deck backed by /api/discovery. */
 @Component({
   selector: 'app-discover',
   standalone: true,
-  imports: [IconComponent, FrogComponent],
+  imports: [IconComponent, FrogComponent, TransformStyleDirective, WaveBarStyleDirective],
   templateUrl: './discover.component.html',
   styleUrl: './discover.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DiscoverComponent {
-  protected readonly songService: SongService = safeInject(SongService, new SongService());
+  protected readonly state = inject(RibbitStateService);
+  protected readonly player = inject(AudioPlayerService);
 
   protected readonly availableModes: readonly string[] = [
     'Para você',
-    'Novidades',
+    'Por Referência',
     'Fora da bolha',
   ];
   protected readonly waveformBars = Array.from({ length: 65 });
 
-  protected readonly animation = signal<string>('');
-  protected readonly drag = signal<{ x: number; y: number }>({ x: 0, y: 0 });
+  readonly animation = signal<string>('');
+  readonly drag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
 
-  private pointerStart: { x: number; y: number } | null = null;
+  private pointerStart: { readonly x: number; readonly y: number } | null = null;
 
   readonly currentSong = computed<Song>(() => this.state.currentSong());
 
-  readonly cardTransform = computed<string | undefined>(() => {
+  readonly activeDragAction = computed<DecisionKind | null>(() => {
+    const { x, y } = this.drag();
+    const threshold = 40;
+    const absX = Math.abs(x);
+    const absY = Math.abs(y);
+
+    if (absX < threshold && y > -threshold) {
+      return null;
+    }
+
+    if (y < -threshold && absY > absX) {
+      return 'love';
+    }
+
+    if (absX >= threshold && absX >= absY) {
+      return x > 0 ? 'like' : 'reject';
+    }
+
+    return null;
+  });
+
+  readonly cardTransform = computed<string>(() => {
     const d = this.drag();
-    if (d.x === 0 && d.y === 0) return undefined;
+    if (d.x === 0 && d.y === 0) return '';
     return `translate(${d.x}px, ${d.y}px) rotate(${d.x / 30}deg)`;
   });
 
@@ -49,19 +68,17 @@ export class DiscoverComponent {
     return String(sec).padStart(2, '0');
   });
 
-  constructor(
-    protected readonly state: RibbitStateService = inject(RibbitStateService),
-    protected readonly player: AudioPlayerService = inject(AudioPlayerService),
-  ) {}
-
   selectMode(mode: string): void {
     this.state.mode.set(mode);
-    if (mode === 'Novidades') {
-      this.state.currentIndex.set(3);
-    } else if (mode === 'Fora da bolha') {
-      this.state.currentIndex.set(2);
-    } else {
-      this.state.currentIndex.set(0);
+    this.state.loadNextDiscoveryTrack();
+    if (!this.state.discoverySong()) {
+      if (mode === 'Por Referência') {
+        this.state.currentIndex.set(1);
+      } else if (mode === 'Fora da bolha') {
+        this.state.currentIndex.set(2);
+      } else {
+        this.state.currentIndex.set(0);
+      }
     }
   }
 
@@ -121,13 +138,9 @@ export class DiscoverComponent {
   onPointerUp(): void {
     if (!this.pointerStart) return;
     this.pointerStart = null;
-    const currentDrag = this.drag();
-    if (currentDrag.y < -70) {
-      this.handleDecision('love');
-    } else if (currentDrag.x > 70) {
-      this.handleDecision('like');
-    } else if (currentDrag.x < -70) {
-      this.handleDecision('reject');
+    const action = this.activeDragAction();
+    if (action) {
+      this.handleDecision(action);
     } else {
       this.drag.set({ x: 0, y: 0 });
     }

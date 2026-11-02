@@ -1,24 +1,24 @@
 @if (state.activeModal()) {
-  <div class="modal-backdrop" (click)="closeModal()">
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="onBackdropClick($event)"
+    (keydown.escape)="closeModal()"
+  >
     <section
       class="modal"
       [class.bottom-sheet]="state.activeModal() === 'save-queue'"
       role="dialog"
       aria-modal="true"
       aria-label="Opções Ribbit"
-      (click)="$event.stopPropagation()"
     >
-      <button
-        class="modal-close icon-button"
-        (click)="closeModal()"
-        aria-label="Fechar"
-      >
+      <span class="bottom-sheet-handle" aria-hidden="true"></span>
+      <button class="modal-close icon-button" (click)="closeModal()" aria-label="Fechar">
         <app-icon name="close" />
       </button>
 
       <!-- Modal: save-queue -->
       @if (state.activeModal() === 'save-queue') {
-        <span class="bottom-sheet-handle"></span>
         <span class="modal-symbol">
           <app-icon name="music" [size]="27" />
         </span>
@@ -27,11 +27,7 @@
         <form (submit)="onSaveQueueSubmit($event)">
           <label>
             Nome
-            <input
-              name="queueName"
-              required
-              defaultValue="Fim de tarde sem pressa"
-            />
+            <input name="queueName" required defaultValue="Fim de tarde sem pressa" />
           </label>
           <label>
             Descrição
@@ -52,32 +48,30 @@
           <app-icon name="filter" [size]="28" />
         </span>
         <h2>Filtrar sua busca</h2>
-        <p>Refine os resultados por tipo, gênero e época.</p>
-        <h3>Mostrar</h3>
+        <p>Refine os resultados do catálogo por gênero e época.</p>
+        <h3>Gênero</h3>
         <div class="genre-options">
-          @for (item of ['Músicas', 'Artistas', 'Álbuns', 'Playlists']; track item; let i = $index) {
-            <button [class.chosen]="i === 0">
+          @for (item of searchGenreOptions; track item) {
+            <button
+              type="button"
+              [class.chosen]="searchGenreDraft() === item"
+              (click)="selectSearchGenre(item)"
+            >
               {{ item }}
-              @if (i === 0) {
+              @if (searchGenreDraft() === item) {
                 <app-icon name="check" [size]="12" />
               }
             </button>
           }
         </div>
-        <h3>Gênero</h3>
-        <div class="genre-options">
-          @for (item of ['Todos', 'Indie', 'Pop', 'Eletrônica', 'R&B / Soul']; track item; let i = $index) {
-            <button [class.chosen]="i === 0">{{ item }}</button>
-          }
-        </div>
         <label>
           Época
-          <select>
-            <option>Todas as épocas</option>
-            <option>Anos 2020</option>
-            <option>Anos 2010</option>
-            <option>Anos 2000</option>
-            <option>Anos 90</option>
+          <select [value]="searchDecadeDraft()" (change)="onSearchDecadeChange($event)">
+            <option value="Todas as épocas">Todas as épocas</option>
+            <option value="Anos 2020">Anos 2020</option>
+            <option value="Anos 2010">Anos 2010</option>
+            <option value="Anos 2000">Anos 2000</option>
+            <option value="Anos 90">Anos 90</option>
           </select>
         </label>
         <button class="primary-button full-width" (click)="applyFilters()">
@@ -96,6 +90,7 @@
         <div class="genre-options">
           @for (g of allGenres; track g) {
             <button
+              type="button"
               [class.chosen]="isGenreSelected(g)"
               (click)="toggleSelectedGenre(g)"
             >
@@ -108,11 +103,12 @@
         </div>
         <h3>Fora do seu radar</h3>
         <p class="small-copy">
-          Gêneros bloqueados nunca aparecem nas sugestões.
+          Gêneros bloqueados nunca aparecem nas sugestões (recurso Ribbit Pro &amp; Família).
         </p>
         <div class="genre-options">
           @for (g of blockableGenres; track g) {
             <button
+              type="button"
               [class.blocked]="isGenreBlocked(g)"
               (click)="toggleBlockedGenre(g)"
             >
@@ -137,10 +133,7 @@
         <p>Combine quantos filtros quiser. A gente cuida da trilha sonora.</p>
         <div class="genre-options">
           @for (f of availableFilters; track f) {
-            <button
-              [class.chosen]="isFilterActive(f)"
-              (click)="toggleFilter(f)"
-            >
+            <button type="button" [class.chosen]="isFilterActive(f)" (click)="toggleFilter(f)">
               {{ f }}
               @if (isFilterActive(f)) {
                 <app-icon name="check" [size]="12" />
@@ -151,23 +144,17 @@
         <form (submit)="onCreatePlaylistSubmit($event)">
           <label>
             Nome da playlist
-            <input
-              name="name"
-              required
-              placeholder="Minha nova frequência"
-            />
+            <input name="name" required placeholder="Minha nova frequência" />
           </label>
 
-          @if (isFilterActive('Vibe')) {
+          @if (isFilterActive('Referência')) {
             <label>
-              Vibe
-              <select>
-                <option>Triste</option>
-                <option>Música</option>
-                <option>Praia</option>
-                <option selected>Estudo</option>
-                <option>Domingo à noite</option>
-                <option>Churrasco com amigos</option>
+              Fonte de referência
+              <select name="referenceSource">
+                <option value="curtidas">Minhas Curtidas</option>
+                <option value="amadas">Minhas Amadas (Superlikes)</option>
+                <option value="playlists">Playlists da Biblioteca</option>
+                <option value="livre">Descoberta Livre</option>
               </select>
             </label>
           }
@@ -175,14 +162,14 @@
           @if (isFilterActive('Gênero')) {
             <label>
               Gênero musical
-              <select>
-                <option>Indie</option>
-                <option>Pop</option>
-                <option>Rock</option>
-                <option>R&B / Soul</option>
-                <option>Eletrônica</option>
-                <option>MPB</option>
-                <option>Hip-hop</option>
+              <select name="genre">
+                <option value="Indie">Indie</option>
+                <option value="Pop">Pop</option>
+                <option value="Rock">Rock</option>
+                <option value="R&amp;B / Soul">R&amp;B / Soul</option>
+                <option value="Eletrônica">Eletrônica</option>
+                <option value="MPB">MPB</option>
+                <option value="Hip-hop">Hip-hop</option>
               </select>
             </label>
           }
@@ -190,45 +177,28 @@
           @if (isFilterActive('Lineup')) {
             <label>
               Artistas ou lineup
-              <textarea placeholder="The Paper Kites, Tycho, Masego..."></textarea>
+              <textarea name="lineup" placeholder="The Paper Kites, Tycho, Masego..."></textarea>
             </label>
           }
 
           @if (isFilterActive('Duração')) {
             <label>
               Duração total (minutos)
-              <input
-                name="duration"
-                type="number"
-                min="10"
-                max="480"
-                defaultValue="90"
-              />
+              <input name="duration" type="number" min="10" max="480" defaultValue="90" />
             </label>
           }
 
           @if (isFilterActive('Época')) {
             <label>
               Época
-              <select>
-                <option>Atual</option>
-                <option>Anos 2020</option>
-                <option>Anos 2010</option>
-                <option>Anos 2000</option>
-                <option>Anos 90</option>
-                <option>Anos 80</option>
-                <option>Clássicos</option>
-              </select>
-            </label>
-          }
-
-          @if (isFilterActive('Música-base')) {
-            <label>
-              Música para definir a vibe
-              <select>
-                @for (s of state.songs(); track s.title) {
-                  <option>{{ s.title }} — {{ s.artist }}</option>
-                }
+              <select name="decade">
+                <option value="Atual">Atual</option>
+                <option value="Anos 2020">Anos 2020</option>
+                <option value="Anos 2010">Anos 2010</option>
+                <option value="Anos 2000">Anos 2000</option>
+                <option value="Anos 90">Anos 90</option>
+                <option value="Anos 80">Anos 80</option>
+                <option value="Clássicos">Clássicos</option>
               </select>
             </label>
           }
@@ -243,9 +213,9 @@
                 <select aria-label="Tipo de filtro">
                   <option>Gênero</option>
                   <option>Artista</option>
-                  <option>Vibe</option>
+                  <option>Referência</option>
                 </select>
-                <input defaultValue="Pop" aria-label="Gênero, artista ou vibe" />
+                <input defaultValue="Pop" aria-label="Gênero, artista ou referência" />
                 <input type="number" min="0" max="12" defaultValue="1" aria-label="Horas" />
                 <span>h</span>
                 <input type="number" min="0" max="59" defaultValue="0" aria-label="Minutos" />
@@ -255,9 +225,9 @@
                 <select aria-label="Tipo de filtro">
                   <option>Artista</option>
                   <option>Gênero</option>
-                  <option>Vibe</option>
+                  <option>Referência</option>
                 </select>
-                <input defaultValue="Masego" aria-label="Gênero, artista ou vibe" />
+                <input defaultValue="Masego" aria-label="Gênero, artista ou referência" />
                 <input type="number" min="0" max="12" defaultValue="0" aria-label="Horas" />
                 <span>h</span>
                 <input type="number" min="0" max="59" defaultValue="45" aria-label="Minutos" />
@@ -277,10 +247,7 @@
         <h2>Um lugar para {{ currentSong().title }}.</h2>
         <p>Adicione essa descoberta à sua playlist.</p>
         @for (p of state.playlists(); track p.name; let i = $index) {
-          <button
-            class="playlist-choice"
-            (click)="addToExistingPlaylist(i)"
-          >
+          <button class="playlist-choice" (click)="addToExistingPlaylist(i)">
             <app-icon name="music" />
             <span>
               {{ p.name }}
@@ -288,11 +255,10 @@
             </span>
             <app-icon name="plus" [size]="17" />
           </button>
+        } @empty {
+          <p class="small-copy">Você ainda não possui playlists criadas.</p>
         }
-        <button
-          class="outline-button full-width"
-          (click)="openCreateFromAdd()"
-        >
+        <button class="outline-button full-width" (click)="openCreateFromAdd()">
           <app-icon name="plus" [size]="17" /> Criar nova playlist
         </button>
       }
@@ -303,15 +269,11 @@
           <app-icon name="users" [size]="28" />
         </span>
         <h2>O som fica melhor junto.</h2>
-        <p>Crie sua Jam e compartilhe o código com seus amigos.</p>
+        <p>Crie sua Jam no servidor e compartilhe o código com seus amigos.</p>
         <form (submit)="onCreateJamSubmit($event)">
           <label>
             Nome da sala
-            <input
-              name="roomName"
-              required
-              [defaultValue]="state.jamState().roomName"
-            />
+            <input name="roomName" required [defaultValue]="state.jamState().roomName" />
           </label>
           <div class="jam-duration-fields">
             <label>
@@ -346,11 +308,10 @@
             />
           </label>
           <div class="info-note">
-            Protótipo local: conexão entre participantes requer um serviço
-            em tempo real.
+            A fila colaborativa sincroniza automaticamente os votos dos participantes.
           </div>
           <button class="primary-button full-width" type="submit">
-            {{ state.jamState().active ? 'Ver minha Jam' : 'Criar Jam' }}
+            {{ state.jamState().active ? 'Criar nova Jam' : 'Criar Jam' }}
             <app-icon name="arrow" [size]="17" />
           </button>
         </form>
@@ -359,18 +320,19 @@
       <!-- Modal: details (Detalhes e comentários) -->
       @if (state.activeModal() === 'details') {
         <div class="detail-header">
-          <img [src]="currentSong().image" alt="Capa ilustrativa" />
+          <img [src]="detailsSong().image" alt="Capa ilustrativa" />
           <div>
             <span class="eyebrow blue">POR TRÁS DO PLAY</span>
-            <h2>{{ currentSong().title }}</h2>
-            <p>{{ currentSong().artist }} · {{ currentSong().year }}</p>
-            <span>{{ currentSong().genre }} · {{ currentSong().time }}</span>
+            <h2>{{ detailsSong().title }}</h2>
+            <p>{{ detailsSong().artist }} · {{ detailsSong().year }}</p>
+            <span>{{ detailsSong().genre }} · {{ detailsSong().time }}</span>
           </div>
         </div>
         <h3>O que esse som te faz sentir?</h3>
         <div class="rating-stars">
           @for (n of [1, 2, 3, 4, 5]; track n) {
             <button
+              type="button"
               [class.rated]="n <= rating()"
               [attr.aria-label]="'Avaliar com ' + n + ' estrelas'"
               (click)="rateSong(n)"
@@ -379,55 +341,139 @@
             </button>
           }
         </div>
-        <p class="small-copy">
-          Sua avaliação:
-          {{ rating() ? rating() + '/5' : 'ainda não avaliada' }}
-        </p>
+        <p class="small-copy">Sua avaliação: {{ rating() }}/5 estrelas</p>
         <form class="comment-form" (submit)="onCommentSubmit($event)">
-          <input
-            required
-            name="commentText"
-            placeholder="Compartilhe sua impressão..."
-          />
-          <button
-            class="primary-button"
-            aria-label="Publicar comentário"
-            type="submit"
-          >
+          <input required name="commentText" placeholder="Compartilhe sua impressão..." />
+          <button class="primary-button" aria-label="Publicar comentário" type="submit">
             <app-icon name="send" [size]="17" />
           </button>
         </form>
         <div class="reviews-heading modal-reviews-heading">
           <div>
             <h3>Reviews desta música</h3>
-            <span>
-              {{ state.comments().length + communityReviews.length }} opiniões
-            </span>
+            <span>{{ trackReviews().length }} opiniões</span>
           </div>
         </div>
         <div class="comment-list">
-          @for (c of state.comments(); track c; let i = $index) {
-            <div class="comment">
-              <span class="avatar">JL</span>
-              <div>
-                <strong>Você <small>· agora</small></strong>
-                <p>{{ c }}</p>
-                <button (click)="deleteMyComment(i)">Excluir</button>
-              </div>
-            </div>
-          }
-          @for (review of communityReviews; track review.id) {
-            <div class="comment community-comment">
+          @for (review of trackReviews(); track review.id) {
+            <div class="comment" [class.community-comment]="!isOwnReview(review)">
               <span class="avatar">{{ review.initials }}</span>
               <div>
                 <strong>
                   {{ review.author }} <small>· {{ review.age }}</small>
                 </strong>
                 <p>{{ review.text }}</p>
+                @if (isOwnReview(review)) {
+                  <button type="button" (click)="deleteReview(review.id)">Excluir</button>
+                }
               </div>
             </div>
+          } @empty {
+            <p class="small-copy">Seja o primeiro a avaliar esta faixa!</p>
           }
         </div>
+      }
+
+      <!-- Modal: checkout (Pagamento simulado de plano pago) -->
+      @if (state.activeModal() === 'checkout' && checkoutPlan(); as plan) {
+        <span class="modal-symbol">
+          <app-icon name="sparkles" [size]="28" />
+        </span>
+        <h2>Checkout demonstrativo</h2>
+        <p>
+          Confirme a ativação simulada do <strong>{{ plan.displayName }}</strong> ({{ plan.name }}).
+        </p>
+
+        <div class="checkout-summary">
+          <div>
+            <span>Plano selecionado</span>
+            <strong>{{ plan.displayName }}</strong>
+          </div>
+          <div>
+            <span>Valor demonstrativo</span>
+            <strong>{{ plan.price }} / mês</strong>
+          </div>
+        </div>
+
+        <div class="checkout-methods" role="radiogroup" aria-label="Forma de pagamento simulada">
+          <button
+            type="button"
+            [class.chosen]="paymentMethod() === 'card'"
+            (click)="selectPaymentMethod('card')"
+          >
+            Cartão de Crédito
+          </button>
+          <button
+            type="button"
+            [class.chosen]="paymentMethod() === 'pix'"
+            (click)="selectPaymentMethod('pix')"
+          >
+            PIX Instantâneo
+          </button>
+        </div>
+
+        <form (submit)="onCheckoutSubmit($event)">
+          @if (paymentMethod() === 'card') {
+            <label>
+              Nome impresso no cartão (fictício)
+              <input name="cardHolder" required [defaultValue]="state.userName()" />
+            </label>
+            <div class="jam-duration-fields">
+              <label>
+                Número demonstrativo
+                <input name="cardNumber" required defaultValue="4242 •••• •••• 4242" />
+              </label>
+              <label>
+                Validade / CVV
+                <input name="cardMeta" required defaultValue="12/29 · 123" />
+              </label>
+            </div>
+          } @else {
+            <div class="checkout-pix-box">
+              <strong>Código PIX Simulado</strong>
+              <code>00020126580014BR.GOV.BCB.PIX0114RIBBIT-PRO-DEMO52040000</code>
+              <small>Clique abaixo para simular a confirmação imediata do PIX.</small>
+            </div>
+          }
+
+          <div class="info-note">
+            Ambiente acadêmico: nenhum dado bancário real é necessário e nenhuma cobrança é
+            realizada.
+          </div>
+
+          <button class="primary-button full-width" type="submit">
+            Confirmar pagamento simulado <app-icon name="check" [size]="17" />
+          </button>
+          <button
+            type="button"
+            class="outline-button full-width checkout-cancel"
+            (click)="closeModal()"
+          >
+            Cancelar
+          </button>
+        </form>
+      }
+
+      <!-- Modal: upgrade (Aviso 403 recurso exclusivo de plano pago) -->
+      @if (state.activeModal() === 'upgrade') {
+        <span class="modal-symbol">
+          <app-icon name="star" [size]="28" />
+        </span>
+        <h2>Recurso Ribbit Pro &amp; Família</h2>
+        <p>{{ state.upgradePromptReason() }}</p>
+        <div class="info-note">
+          Você pode ativar um plano pago gratuitamente pelo nosso checkout demonstrativo.
+        </div>
+        <button class="primary-button full-width" (click)="goToPlansFromUpgrade()">
+          Ver planos disponíveis <app-icon name="arrow" [size]="17" />
+        </button>
+        <button
+          type="button"
+          class="outline-button full-width checkout-cancel"
+          (click)="closeModal()"
+        >
+          Agora não
+        </button>
       }
 
       <!-- Modal: playlist-view -->
@@ -436,8 +482,8 @@
           <app-icon name="music" [size]="28" />
         </span>
         <h2>{{ playlistViewName() }}</h2>
-        <p>Uma seleção demonstrativa para entrar na sua vibe.</p>
-        @for (s of playlistViewSongs(); track s.title; let i = $index) {
+        <p>Faixas salvas nesta playlist.</p>
+        @for (s of playlistViewSongs(); track s.title) {
           <div class="song-row">
             <div class="song-cover">
               <img [src]="s.image" alt="" />
@@ -458,18 +504,13 @@
       @if (state.activeModal() === 'delete') {
         <h2>Excluir sua conta?</h2>
         <p>
-          Seu perfil, histórico, playlists e reviews deste protótipo serão
-          apagados. Essa ação não pode ser desfeita.
+          Seu perfil, histórico, playlists e reviews serão apagados permanentemente do servidor.
+          Essa ação não pode ser desfeita.
         </p>
-        <button
-          class="danger-button full-width"
-          (click)="confirmDeleteAccount()"
-        >
+        <button class="danger-button full-width" (click)="confirmDeleteAccount()">
           Excluir minha conta
         </button>
-        <button class="outline-button full-width" (click)="closeModal()">
-          Manter meus dados
-        </button>
+        <button class="outline-button full-width" (click)="closeModal()">Manter meus dados</button>
       }
 
       <!-- Modal: notifications -->
@@ -478,18 +519,11 @@
           <app-icon name="bell" [size]="28" />
         </span>
         <h2>Na sua frequência.</h2>
-        <p>
-          Você está em dia. Continue explorando para encontrar sua próxima
-          música favorita.
-        </p>
+        <p>Você está em dia. Continue explorando para encontrar sua próxima música favorita.</p>
         <div class="info-note">
-          <app-icon name="sparkles" [size]="19" /> Seu radar de descobertas
-          está pronto.
+          <app-icon name="sparkles" [size]="19" /> Seu radar de descobertas está pronto.
         </div>
-        <button
-          class="primary-button full-width"
-          (click)="goToExploreRadar()"
-        >
+        <button class="primary-button full-width" (click)="goToExploreRadar()">
           Explorar meu radar <app-icon name="arrow" [size]="17" />
         </button>
       }

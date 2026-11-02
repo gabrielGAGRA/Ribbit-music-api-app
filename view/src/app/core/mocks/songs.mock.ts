@@ -1,4 +1,4 @@
-import { Song } from '@ribbit/shared-types';
+import type { Song } from '@ribbit/shared-types';
 
 export const MOCK_SONGS: readonly Song[] = [
   {

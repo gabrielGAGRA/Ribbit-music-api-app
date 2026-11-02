@@ -1,18 +1,27 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ProfileComponent } from './profile.component';
+import { authInterceptor } from '../../core/auth.interceptor';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { AudioPlayerService } from '../../core/audio-player.service';
 
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
   let state: RibbitStateService;
-  let player: AudioPlayerService;
 
   beforeEach(() => {
     localStorage.clear();
-    state = new RibbitStateService();
-    player = new AudioPlayerService();
-    component = new ProfileComponent(state, player);
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+      ],
+    });
+    state = TestBed.inject(RibbitStateService);
+    component = TestBed.runInInjectionContext(() => new ProfileComponent());
   });
 
   it('should switch between like, love, and reject tabs', () => {
@@ -21,10 +30,13 @@ describe('ProfileComponent', () => {
     expect(component.selectedTab()).toBe('love');
   });
 
-  it('should calculate counts for collections', () => {
-    expect(component.likeCount()).toBeGreaterThan(0);
-    expect(component.loveCount()).toBeGreaterThan(0);
-    expect(component.rejectCount()).toBeGreaterThan(0);
+  it('should calculate real counts from state collections', () => {
+    expect(component.likeCount()).toBe(0);
+    state.decide('love');
+    expect(component.likeCount()).toBe(1);
+    expect(component.loveCount()).toBe(1);
+    state.decide('reject');
+    expect(component.rejectCount()).toBe(1);
   });
 
   it('should cancel subscription to free plan', () => {
@@ -34,5 +46,24 @@ describe('ProfileComponent', () => {
     component.cancelSubscription();
     expect(state.currentPlan()).toBe('Free');
     expect(state.toast()).toContain('cancelada');
+  });
+
+  it('should set page to settings on goToSettings', () => {
+    component.goToSettings();
+    expect(state.activePage()).toBe('settings');
+  });
+
+  it('should stack profile account management, collections toolbar, and dashboard columns on mobile', () => {
+    const globalStyles = readFileSync(resolve(__dirname, '../../../styles.css'), 'utf8');
+
+    expect(globalStyles).toMatch(
+      /@media\s*\(max-width:\s*768px\)[\s\S]*\.account-management\s*\{[^}]*flex-direction:\s*column/,
+    );
+    expect(globalStyles).toMatch(
+      /@media\s*\(max-width:\s*768px\)[\s\S]*\.collection-toolbar\s*\{[^}]*flex-direction:\s*column/,
+    );
+    expect(globalStyles).toMatch(
+      /@media\s*\(max-width:\s*768px\)[\s\S]*\.dashboard-columns\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
   });
 });

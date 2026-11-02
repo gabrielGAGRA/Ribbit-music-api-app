@@ -1,4 +1,4 @@
-import { SubscriptionPlan } from '@ribbit/shared-types';
+import type { SubscriptionPlan } from '@ribbit/shared-types';
 
 export const MOCK_PLANS: readonly SubscriptionPlan[] = [
   {
@@ -6,11 +6,7 @@ export const MOCK_PLANS: readonly SubscriptionPlan[] = [
     displayName: 'Ribbit Free',
     price: 'R$ 0',
     copy: 'Para descobrir no seu ritmo.',
-    features: [
-      'Swipes ilimitados',
-      'Playlists manuais',
-      'Prévia de 30 segundos',
-    ],
+    features: ['Swipes ilimitados', 'Playlists manuais', 'Prévia de 30 segundos'],
   },
   {
     name: 'Individual',

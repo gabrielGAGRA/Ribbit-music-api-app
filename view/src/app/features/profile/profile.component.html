@@ -1,17 +1,23 @@
 <div class="secondary-page">
   <div class="profile-heading">
-    <span class="avatar profile-avatar">JL</span>
+    <span class="avatar profile-avatar">{{ userInitials() }}</span>
     <div>
       <h2>{{ state.userName() }}</h2>
-      <p>Explorando novas frequências desde 2024</p>
-      <button class="profile-plan-link" (click)="goToPlans()">
-        Meus planos <app-icon name="chevron" [size]="12" />
-      </button>
+      <p>{{ state.userEmail() || 'Explorando novas frequências no Ribbit' }}</p>
+      <div class="preferences-tags">
+        <button class="profile-plan-link" (click)="goToPlans()">
+          Plano: {{ state.currentPlan() }} <app-icon name="chevron" [size]="12" />
+        </button>
+        <button class="profile-plan-link" (click)="goToDashboard()">
+          Dashboard anual <app-icon name="sparkles" [size]="12" />
+        </button>
+      </div>
     </div>
     <button
       class="icon-button"
-      aria-label="Editar preferências"
-      (click)="openFilters()"
+      aria-label="Configurações"
+      title="Configurações"
+      (click)="goToSettings()"
     >
       <app-icon name="settings" />
     </button>
@@ -22,11 +28,7 @@
     <span>Organizadas pelas suas escolhas</span>
   </div>
 
-  <div
-    class="profile-collection-tabs"
-    role="tablist"
-    aria-label="Categorias de descobertas"
-  >
+  <div class="profile-collection-tabs" role="tablist" aria-label="Categorias de descobertas">
     <button
       role="tab"
       [attr.aria-selected]="selectedTab() === 'like'"
@@ -34,7 +36,9 @@
       (click)="selectTab('like')"
     >
       <app-icon name="heart" [size]="15" />
-      <span>Curtidas<small>{{ likeCount() }} faixas</small></span>
+      <span
+        >Curtidas<small>{{ likeCount() }} faixas</small></span
+      >
     </button>
 
     <button
@@ -44,7 +48,9 @@
       (click)="selectTab('love')"
     >
       <app-icon name="star" [size]="15" />
-      <span>Amadas<small>{{ loveCount() }} faixas</small></span>
+      <span
+        >Amadas<small>{{ loveCount() }} faixas</small></span
+      >
     </button>
 
     <button
@@ -54,7 +60,9 @@
       (click)="selectTab('reject')"
     >
       <app-icon name="close" [size]="15" />
-      <span>Rejeitadas<small>{{ rejectCount() }} faixas</small></span>
+      <span
+        >Rejeitadas<small>{{ rejectCount() }} faixas</small></span
+      >
     </button>
   </div>
 
@@ -66,7 +74,7 @@
       </button>
     </div>
 
-    @for (item of activeTabItems(); track item.title; let i = $index) {
+    @for (item of activeTabItems(); track item.title) {
       <div class="song-row">
         <div class="song-cover">
           <img [src]="item.image" alt="" />
@@ -83,6 +91,11 @@
           <app-icon name="play" [size]="15" />
         </button>
       </div>
+    } @empty {
+      <p class="empty-text">
+        Nenhuma faixa em {{ activeTabLabel().toLowerCase() }} ainda. Deslize no The Pond para
+        construir sua coleção!
+      </p>
     }
   </div>
 
@@ -98,12 +111,10 @@
     >
       Cancelar assinatura
     </button>
-    <button class="danger-button" (click)="openDeleteModal()">
-      Excluir minha conta
-    </button>
+    <button class="danger-button" (click)="openDeleteModal()">Excluir minha conta</button>
   </div>
 
   <button class="logout-button" (click)="logout()">
-    <app-icon name="logout" [size]="16" /> Sair da demonstração
+    <app-icon name="logout" [size]="16" /> Sair da conta
   </button>
 </div>

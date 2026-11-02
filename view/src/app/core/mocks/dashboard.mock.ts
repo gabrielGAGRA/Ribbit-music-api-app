@@ -1,4 +1,4 @@
-import { MetricItem, RankedGenre } from '@ribbit/shared-types';
+import type { MetricItem, RankedGenre } from '@ribbit/shared-types';
 
 export const MOCK_METRICS: readonly MetricItem[] = [
   { value: '256', label: 'Descobertas', detail: '+18 esta semana', icon: 'sparkles' },

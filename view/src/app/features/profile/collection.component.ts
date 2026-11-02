@@ -1,19 +1,11 @@
-import {
-  Component,
-  ChangeDetectionStrategy,
-  inject,
-  input,
-  signal,
-  computed,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { RibbitStateService } from '../../core/ribbit-state.service';
-import { SongService } from '../../core/services/song.service';
-import { safeInject } from '../../core/safe-inject';
+import type { IconName, Song } from '@ribbit/shared-types';
 import { AudioPlayerService } from '../../core/audio-player.service';
+import { RibbitStateService } from '../../core/ribbit-state.service';
 import { IconComponent } from '../../shared/icon.component';
-import { Song, IconName } from '@ribbit/shared-types';
 
+/** Renders full liked, loved, or rejected track collections with revision actions. */
 @Component({
   selector: 'app-collection',
   standalone: true,
@@ -23,11 +15,11 @@ import { Song, IconName } from '@ribbit/shared-types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class CollectionComponent {
-  private readonly router: Router | null = safeInject(Router, null);
-  protected readonly songService: SongService = safeInject(SongService, new SongService());
+  protected readonly state = inject(RibbitStateService);
+  protected readonly player = inject(AudioPlayerService);
+  private readonly router = inject(Router, { optional: true });
 
   readonly kind = input<'like' | 'love' | 'reject'>('like');
-
   readonly query = signal<string>('');
 
   readonly accentClass = computed<string>(() => {
@@ -51,82 +43,56 @@ export class CollectionComponent {
 
   readonly songsList = computed<readonly Song[]>(() => {
     const k = this.kind();
-    const history = this.state.history();
-    const allSongs = this.state.songs();
-    const defaults =
-      k === 'like' ? [0, 1, 2, 3] : k === 'love' ? [1, 3, 4] : [4, 5];
-
-    const historyItems = history
-      .filter((item) => (k === 'like' ? item.kind !== 'reject' : item.kind === k))
-      .map((item) => item.index % allSongs.length);
-
-    const indexes = [...new Set([...historyItems, ...defaults])].filter((idx) => {
-      const decision = history.find((item) => item.index === idx);
-      if (!decision) return true;
-      return k === 'like' ? decision.kind !== 'reject' : decision.kind === k;
-    });
-
-    return indexes.map((idx) => allSongs[idx]);
+    if (k === 'like') return this.state.likedSongs();
+    if (k === 'love') return this.state.lovedSongs();
+    return this.state.rejectedSongs();
   });
 
-  readonly totalCount = computed<number>(() => {
-    const k = this.kind();
-    const base = k === 'like' ? 128 : k === 'love' ? 32 : 18;
-    return this.songsList().length + base;
-  });
+  readonly totalCount = computed<number>(() => this.songsList().length);
 
   readonly filteredItems = computed<readonly Song[]>(() => {
     const q = this.query().toLowerCase().trim();
     const list = this.songsList();
     if (!q) return list;
-    return list.filter((item) =>
-      `${item.title} ${item.artist}`.toLowerCase().includes(q),
-    );
+    return list.filter((item) => `${item.title} ${item.artist}`.toLowerCase().includes(q));
   });
 
-  constructor(
-    protected readonly state: RibbitStateService = inject(RibbitStateService),
-    protected readonly player: AudioPlayerService = inject(AudioPlayerService),
-  ) {}
-
   onSearchInput(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.query.set(target.value);
+    this.query.set((event.target as HTMLInputElement).value);
   }
 
   onSummaryAction(): void {
+    const list = this.songsList();
     if (this.kind() === 'reject') {
-      const updated = this.state.history().filter((item) => item.kind !== 'reject');
-      this.state.history.set(updated);
-      this.state.notify('Suas rejeições foram revisadas.');
-    } else {
+      const firstRejected = list[0];
+      if (!firstRejected) {
+        this.state.notify('Nenhuma música rejeitada para revisar.');
+        return;
+      }
+      this.state.reviseCollectionItem(firstRejected, 'reject');
+      return;
+    }
+
+    const firstSong = list[0];
+    if (firstSong) {
+      this.state.discoverySong.set(firstSong);
+      this.player.loadTrack(firstSong.previewUrl);
       this.player.play();
-      this.state.notify('Reproduzindo sua coleção em modo demonstrativo.');
+      this.state.notify(`Reproduzindo "${firstSong.title}".`);
+    } else {
+      this.state.notify('Sua coleção ainda está vazia.');
     }
   }
 
   onSongClick(song: Song): void {
-    const idx = this.state.songs().indexOf(song);
-    if (idx >= 0) {
-      this.state.currentIndex.set(idx);
-      this.player.resetProgress();
-      this.state.setPage('discover');
-      void this.router?.navigate(['/discover']);
-    }
+    this.state.discoverySong.set(song);
+    this.player.loadTrack(song.previewUrl);
+    this.player.resetProgress();
+    this.state.setPage('discover');
+    void this.router?.navigate(['/discover']).catch(() => false);
   }
 
   onItemAction(song: Song): void {
-    const idx = this.state.songs().indexOf(song);
-    const updated = this.state.history().filter((decision) => decision.index !== idx);
-    this.state.history.set(updated);
-
-    if (this.kind() === 'reject') {
-      this.state.currentIndex.set(idx);
-      this.state.setPage('discover');
-      void this.router?.navigate(['/discover']);
-      this.state.notify('Essa faixa voltou para o The Pond.');
-    } else {
-      this.state.notify('Faixa removida da coleção.');
-    }
+    this.state.reviseCollectionItem(song, this.kind());
   }
 }

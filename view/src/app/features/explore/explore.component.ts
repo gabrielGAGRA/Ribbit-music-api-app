@@ -1,17 +1,22 @@
+import type { OnInit } from '@angular/core';
 import {
-  Component,
   ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
   inject,
   signal,
-  computed,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import type { CommunityReview, Song } from '@ribbit/shared-types';
+import { mapTrackDtoToSong } from '../../core/api-mappers';
+import { readAuthToken } from '../../core/auth-token.storage';
+import { MOCK_REVIEWS } from '../../core/mocks/reviews.mock';
 import { RibbitStateService } from '../../core/ribbit-state.service';
 import { SongService } from '../../core/services/song.service';
-import { safeInject } from '../../core/safe-inject';
 import { IconComponent } from '../../shared/icon.component';
-import { CommunityReview, Song } from '@ribbit/shared-types';
 
+/** Provides catalog search, recent interacted tracks history, and community review feed. */
 @Component({
   selector: 'app-explore',
   standalone: true,
@@ -20,34 +25,49 @@ import { CommunityReview, Song } from '@ribbit/shared-types';
   styleUrl: './explore.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ExploreComponent {
-  private readonly router: Router | null = safeInject(Router, null);
-  protected readonly songService: SongService = safeInject(SongService, new SongService());
+export class ExploreComponent implements OnInit {
+  protected readonly state = inject(RibbitStateService);
+  protected readonly songService = inject(SongService);
+  private readonly router = inject(Router, { optional: true });
 
-  readonly query = signal<string>('');
+  readonly query = this.state.searchQuery;
   readonly historyExpanded = signal<boolean>(false);
   readonly reviewSort = signal<string>('recent');
   readonly reviewLikes = signal<Record<number, boolean>>({});
+  private readonly serverSearchResults = signal<readonly Song[] | null>(null);
+  private readonly recentHistoryApiSongs = signal<readonly Song[]>([]);
+
+  readonly hasActiveSearch = computed<boolean>(() => {
+    const q = this.query().trim();
+    const genre = this.state.searchFilterGenre();
+    const year = this.state.searchFilterYear();
+    return q.length > 0 || genre !== 'Todos' || year !== undefined;
+  });
 
   readonly filteredSongs = computed<readonly Song[]>(() => {
+    if (!this.hasActiveSearch()) return [];
+    const serverResults = this.serverSearchResults();
+    if (serverResults !== null) {
+      return serverResults;
+    }
     const q = this.query().toLowerCase().trim();
-    if (!q) return [];
     return this.state
       .songs()
-      .filter((s) =>
-        `${s.title} ${s.artist} ${s.genre} ${s.album}`.toLowerCase().includes(q),
-      );
+      .filter((s) => `${s.title} ${s.artist} ${s.genre} ${s.album}`.toLowerCase().includes(q));
   });
 
   readonly recentSongs = computed<readonly Song[]>(() => {
-    const reversed = [...this.state.songs()].reverse();
-    return this.historyExpanded() ? reversed : reversed.slice(0, 3);
+    const fromApi = this.recentHistoryApiSongs();
+    const source = fromApi.length > 0 ? fromApi : [...this.state.songs()].reverse();
+    return this.historyExpanded() ? source : source.slice(0, 3);
   });
 
   readonly sortedReviews = computed<readonly CommunityReview[]>(() => {
     const sort = this.reviewSort();
     const likes = this.reviewLikes();
-    const reviews = this.songService.reviews();
+    const apiReviews = this.songService.reviews();
+    const reviews = apiReviews.length > 0 || readAuthToken() ? apiReviews : MOCK_REVIEWS;
+
     return [...reviews].sort((a, b) => {
       if (sort === 'likes') {
         const aLikes = a.likes + (likes[a.id] ? 1 : 0);
@@ -61,21 +81,68 @@ export class ExploreComponent {
     });
   });
 
-  readonly displayedReviews = computed<readonly CommunityReview[]>(() => {
-    return this.sortedReviews().slice(0, 3);
-  });
+  readonly displayedReviews = computed<readonly CommunityReview[]>(() =>
+    this.sortedReviews().slice(0, 6),
+  );
 
-  constructor(
-    protected readonly state: RibbitStateService = inject(RibbitStateService),
-  ) {}
+  constructor() {
+    effect(() => {
+      const q = this.query().trim();
+      const genre = this.state.searchFilterGenre();
+      const year = this.state.searchFilterYear();
+
+      if (!readAuthToken()) {
+        this.serverSearchResults.set(null);
+        return;
+      }
+      if (!q && genre === 'Todos' && year === undefined) {
+        this.serverSearchResults.set(null);
+        return;
+      }
+
+      this.songService
+        .searchSongs({
+          ...(q ? { query: q } : {}),
+          ...(genre !== 'Todos' ? { genre } : {}),
+          ...(year !== undefined ? { year } : {}),
+          limit: 30,
+        })
+        .subscribe({
+          next: (items) => {
+            this.serverSearchResults.set(items);
+          },
+          error: () => {
+            this.serverSearchResults.set(null);
+          },
+        });
+    });
+  }
+
+  ngOnInit(): void {
+    if (!readAuthToken()) return;
+
+    this.songService.getRecentInteractedTracks(30).subscribe({
+      next: (items) => {
+        this.recentHistoryApiSongs.set(items.map((entry) => mapTrackDtoToSong(entry.track)));
+      },
+      error: () => {
+        // Fallback to catalog order if endpoint fails
+      },
+    });
+
+    if (this.songService.reviews().length === 0) {
+      this.state.refreshCatalogAndFeed();
+    }
+  }
 
   onQueryInput(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.query.set(target.value);
+    this.query.set((event.target as HTMLInputElement).value);
   }
 
   clearQuery(): void {
     this.query.set('');
+    this.state.searchFilterGenre.set('Todos');
+    this.state.searchFilterYear.set(undefined);
   }
 
   toggleHistory(): void {
@@ -83,32 +150,38 @@ export class ExploreComponent {
   }
 
   onSortChange(event: Event): void {
-    const target = event.target as HTMLSelectElement;
-    this.reviewSort.set(target.value);
+    this.reviewSort.set((event.target as HTMLSelectElement).value);
   }
 
   toggleReviewLike(id: number): void {
+    const alreadyLiked = Boolean(this.reviewLikes()[id]);
     this.reviewLikes.update((cur) => ({
       ...cur,
-      [id]: !cur[id],
+      [id]: !alreadyLiked,
     }));
+
+    if (!alreadyLiked && readAuthToken()) {
+      this.songService.likeReview(id).subscribe({
+        error: () => {
+          // Keep optimistic UI state on transient error
+        },
+      });
+    }
+  }
+
+  fallbackReviewSong(idx: number): Song {
+    const list = this.state.songs();
+    return list[idx % list.length] ?? list[0]!;
   }
 
   selectSong(song: Song): void {
-    const idx = this.state.songs().indexOf(song);
-    if (idx >= 0) {
-      this.state.currentIndex.set(idx);
-      this.state.setPage('discover');
-      void this.router?.navigate(['/discover']);
-    }
+    this.state.discoverySong.set(song);
+    this.state.setPage('discover');
+    void this.router?.navigate(['/discover']).catch(() => false);
   }
 
   openSongDetails(song: Song): void {
-    const idx = this.state.songs().indexOf(song);
-    if (idx >= 0) {
-      this.state.currentIndex.set(idx);
-      this.state.setModal('details');
-    }
+    this.state.openTrackDetailsModal(song);
   }
 
   openSearchFilters(): void {

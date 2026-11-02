@@ -7,27 +7,24 @@
         [value]="query()"
         (input)="onQueryInput($event)"
       />
-      @if (query()) {
+      @if (hasActiveSearch()) {
         <button aria-label="Limpar busca" (click)="clearQuery()">
           <app-icon name="close" [size]="16" />
         </button>
       }
     </label>
-    <button
-      class="filter-button search-filter-button"
-      (click)="openSearchFilters()"
-    >
+    <button class="filter-button search-filter-button" (click)="openSearchFilters()">
       <app-icon name="filter" [size]="16" /> Filtros
     </button>
   </div>
 
-  @if (query()) {
+  @if (hasActiveSearch()) {
     <div class="section-title">
       <h2>Resultados da busca</h2>
-      <span>Atualizados enquanto você digita</span>
+      <span>Catálogo sincronizado com o Ribbit</span>
     </div>
     <div class="panel search-results">
-      @for (item of filteredSongs(); track item.title; let i = $index) {
+      @for (item of filteredSongs(); track item.title) {
         <div class="song-row">
           <button
             class="song-cover"
@@ -48,20 +45,17 @@
             <app-icon name="chevron" [size]="18" />
           </button>
         </div>
-      }
-      @if (filteredSongs().length === 0) {
-        <p class="muted">
-          Nenhum resultado. Tente outro artista ou gênero.
-        </p>
+      } @empty {
+        <p class="muted">Nenhum resultado. Tente outro artista ou gênero.</p>
       }
     </div>
   } @else {
     <div class="section-title">
       <h2>Ouvidas recentemente</h2>
-      <span>Seu histórico de reprodução</span>
+      <span>Seu histórico de interações</span>
     </div>
     <div class="panel listening-history">
-      @for (item of recentSongs(); track item.title; let i = $index) {
+      @for (item of recentSongs(); track item.title) {
         <div class="song-row">
           <button
             class="song-cover"
@@ -85,23 +79,16 @@
       }
       <button class="text-button history-toggle" (click)="toggleHistory()">
         {{ historyExpanded() ? 'Mostrar menos' : 'Ver histórico completo' }}
-        <app-icon
-          [name]="historyExpanded() ? 'undo' : 'arrow'"
-          [size]="14"
-        />
+        <app-icon [name]="historyExpanded() ? 'undo' : 'arrow'" [size]="14" />
       </button>
     </div>
 
     <div class="reviews-heading">
       <div class="section-title">
         <h2>Reviews da comunidade</h2>
-        <span>Sobre suas últimas músicas</span>
+        <span>Sobre as músicas do catálogo</span>
       </div>
-      <select
-        [value]="reviewSort()"
-        (change)="onSortChange($event)"
-        aria-label="Ordenar reviews"
-      >
+      <select [value]="reviewSort()" (change)="onSortChange($event)" aria-label="Ordenar reviews">
         <option value="recent">Mais recentes</option>
         <option value="likes">Mais curtidas</option>
         <option value="oldest">Mais antigas</option>
@@ -110,12 +97,13 @@
 
     <div class="community-reviews">
       @for (review of displayedReviews(); track review.id; let idx = $index) {
+        @let fallback = fallbackReviewSong(idx);
         <article class="review-card">
           <div class="review-song">
-            <img [src]="state.songs()[idx % state.songs().length].image" alt="" />
+            <img [src]="review.songImage ?? fallback.image" alt="" />
             <span>
-              <strong>{{ state.songs()[idx % state.songs().length].title }}</strong>
-              <small>{{ state.songs()[idx % state.songs().length].artist }}</small>
+              <strong>{{ review.songTitle ?? fallback.title }}</strong>
+              <small>{{ review.songArtist ?? fallback.artist }}</small>
             </span>
           </div>
           <div class="review-author">
@@ -124,14 +112,13 @@
             <small>{{ review.age }}</small>
           </div>
           <p>{{ review.text }}</p>
-          <button
-            [class.liked]="reviewLikes()[review.id]"
-            (click)="toggleReviewLike(review.id)"
-          >
+          <button [class.liked]="reviewLikes()[review.id]" (click)="toggleReviewLike(review.id)">
             <app-icon name="heart" [size]="14" />
             {{ review.likes + (reviewLikes()[review.id] ? 1 : 0) }}
           </button>
         </article>
+      } @empty {
+        <p class="muted">Nenhuma avaliação publicada na comunidade ainda.</p>
       }
     </div>
   }

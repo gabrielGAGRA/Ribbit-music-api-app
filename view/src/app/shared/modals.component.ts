@@ -1,17 +1,41 @@
-import {
-  Component,
-  ChangeDetectionStrategy,
-  inject,
-  signal,
-  computed,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { safeInject } from '../core/safe-inject';
-import { RibbitStateService } from '../core/ribbit-state.service';
-import { MOCK_REVIEWS } from '../core/mocks/reviews.mock';
+import type {
+  CommunityReview,
+  DeckPlaylistApiRequest,
+  Song,
+  SubscriptionPlan,
+} from '@ribbit/shared-types';
 import { IconComponent } from './icon.component';
-import { Song, CommunityReview } from '@ribbit/shared-types';
+import { RibbitStateService } from '../core/ribbit-state.service';
 
+function mapDecadeLabelToYear(decade: string): number | undefined {
+  switch (decade) {
+    case 'Anos 2020':
+      return 2022;
+    case 'Anos 2010':
+      return 2015;
+    case 'Anos 2000':
+      return 2005;
+    case 'Anos 90':
+      return 1995;
+    case 'Anos 80':
+      return 1985;
+    default:
+      return undefined;
+  }
+}
+
+function readNamedInputValue(form: HTMLFormElement, name: string): string {
+  const item = form.elements.namedItem(name) as
+    | HTMLInputElement
+    | HTMLSelectElement
+    | HTMLTextAreaElement
+    | null;
+  return item?.value?.trim() ?? '';
+}
+
+/** Central modal overlay handling playlist creation, filters, track reviews, Jams, 403 upgrade notices, and mock checkout. */
 @Component({
   selector: 'app-modals',
   standalone: true,
@@ -21,7 +45,8 @@ import { Song, CommunityReview } from '@ribbit/shared-types';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ModalsComponent {
-  private readonly router: Router | null = safeInject(Router, null);
+  protected readonly state = inject(RibbitStateService);
+  private readonly router = inject(Router, { optional: true });
 
   protected readonly allGenres: readonly string[] = [
     'Indie',
@@ -42,43 +67,61 @@ export class ModalsComponent {
     'R&B / Soul',
     'Indie Pop',
     'Dream Pop',
+    'Rock',
+    'Hip-hop',
+  ];
+
+  protected readonly searchGenreOptions: readonly string[] = [
+    'Todos',
+    'Indie',
+    'Pop',
+    'Rock',
+    'Eletrônica',
+    'R&B / Soul',
+    'MPB',
   ];
 
   protected readonly availableFilters: readonly string[] = [
-    'Vibe',
+    'Referência',
     'Gênero',
     'Duração',
     'Evento',
     'Lineup',
     'Época',
-    'Música-base',
   ];
 
-  protected readonly communityReviews: readonly CommunityReview[] = MOCK_REVIEWS;
-
-  protected readonly activeFilters = signal<readonly string[]>([
-    'Vibe',
-    'Gênero',
-  ]);
-  protected readonly rating = signal<number>(0);
+  protected readonly activeFilters = signal<readonly string[]>(['Referência', 'Gênero']);
+  protected readonly rating = signal<number>(5);
+  protected readonly paymentMethod = signal<'card' | 'pix'>('card');
+  protected readonly searchGenreDraft = signal<string>('Todos');
+  protected readonly searchDecadeDraft = signal<string>('Todas as épocas');
 
   readonly currentSong = computed<Song>(() => this.state.currentSong());
+  readonly detailsSong = computed<Song>(() => this.state.detailsTargetSong());
+  readonly trackReviews = computed<readonly CommunityReview[]>(() =>
+    this.state.activeTrackReviews(),
+  );
+  readonly checkoutPlan = computed<SubscriptionPlan | null>(() => this.state.pendingCheckoutPlan());
 
   readonly playlistViewName = computed<string>(() => {
     const modal = this.state.activeModal();
     if (modal && modal.startsWith('playlist-view:')) {
-      return modal.split('playlist-view:')[1];
+      return modal.split('playlist-view:')[1] ?? 'Playlist';
     }
     return 'Playlist';
   });
 
   readonly playlistViewSongs = computed<readonly Song[]>(() => {
-    return this.state.songs().slice(0, 4);
+    const name = this.playlistViewName();
+    const matched = this.state.playlists().find((p) => p.name === name);
+    return matched?.songs ?? this.state.songs().slice(0, 4);
   });
 
-  constructor(
-    protected readonly state: RibbitStateService = inject(RibbitStateService),
-  ) {}
+  onBackdropClick(event: MouseEvent): void {
+    if (event.target === event.currentTarget) {
+      this.closeModal();
+    }
+  }
 
   closeModal(): void {
     this.state.setModal(null);
@@ -92,15 +135,30 @@ export class ModalsComponent {
   onSaveQueueSubmit(event: Event): void {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
-    const nameInput = form.elements.namedItem('queueName') as HTMLInputElement;
-    this.state.createPlaylist(nameInput.value || 'Fim de tarde sem pressa', 18);
+    const queueName = readNamedInputValue(form, 'queueName') || 'Fim de tarde sem pressa';
+    const description = readNamedInputValue(form, 'queueDescription');
+    this.state.createPlaylist(
+      queueName,
+      18,
+      description ? { description } : {},
+      this.state.queueSongs(),
+    );
     this.closeModal();
     this.state.setPage('playlists');
-    void this.router?.navigate(['/playlists']);
-    this.state.notify('Fila salva como playlist permanente.');
+    void this.router?.navigate(['/playlists']).catch(() => false);
+  }
+
+  selectSearchGenre(genre: string): void {
+    this.searchGenreDraft.set(genre);
+  }
+
+  onSearchDecadeChange(event: Event): void {
+    this.searchDecadeDraft.set((event.target as HTMLSelectElement).value);
   }
 
   applyFilters(): void {
+    this.state.searchFilterGenre.set(this.searchGenreDraft());
+    this.state.searchFilterYear.set(mapDecadeLabelToYear(this.searchDecadeDraft()));
     this.closeModal();
     this.state.notify('Filtros de busca aplicados.');
   }
@@ -111,9 +169,7 @@ export class ModalsComponent {
 
   toggleSelectedGenre(genre: string): void {
     const list = this.state.selectedGenres();
-    const updated = list.includes(genre)
-      ? list.filter((g) => g !== genre)
-      : [...list, genre];
+    const updated = list.includes(genre) ? list.filter((g) => g !== genre) : [...list, genre];
     this.state.setSelectedGenres(updated);
   }
 
@@ -123,9 +179,7 @@ export class ModalsComponent {
 
   toggleBlockedGenre(genre: string): void {
     const list = this.state.blockedGenres();
-    const updated = list.includes(genre)
-      ? list.filter((g) => g !== genre)
-      : [...list, genre];
+    const updated = list.includes(genre) ? list.filter((g) => g !== genre) : [...list, genre];
     this.state.setBlockedGenres(updated);
   }
 
@@ -148,13 +202,15 @@ export class ModalsComponent {
   onCreatePlaylistSubmit(event: Event): void {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
-    const nameInput = form.elements.namedItem('name') as HTMLInputElement;
-    const durationInput = form.elements.namedItem('duration') as HTMLInputElement | null;
-    const dur = durationInput ? Number(durationInput.value) || 45 : 45;
-    this.state.createPlaylist(nameInput.value, dur);
+    const name = readNamedInputValue(form, 'name') || 'Minha nova frequência';
+    const rawDuration = Number(readNamedInputValue(form, 'duration'));
+    const duration = Number.isFinite(rawDuration) && rawDuration >= 10 ? rawDuration : 45;
+    const extraFilters = this.extractPlaylistFilters(form);
+
+    this.state.createPlaylist(name, duration, extraFilters);
     this.closeModal();
     this.state.setPage('playlists');
-    void this.router?.navigate(['/playlists']);
+    void this.router?.navigate(['/playlists']).catch(() => false);
   }
 
   addToExistingPlaylist(index: number): void {
@@ -169,50 +225,65 @@ export class ModalsComponent {
   onCreateJamSubmit(event: Event): void {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
-    const roomInput = form.elements.namedItem('roomName') as HTMLInputElement;
-    const hoursInput = form.elements.namedItem('hours') as HTMLInputElement;
-    const minInput = form.elements.namedItem('minutes') as HTMLInputElement;
-    const threshInput = form.elements.namedItem('threshold') as HTMLInputElement;
+    const roomName = readNamedInputValue(form, 'roomName') || this.state.jamState().roomName;
+    const hours = Number(readNamedInputValue(form, 'hours')) || 0;
+    const minutes = Number(readNamedInputValue(form, 'minutes')) || 0;
+    const threshold = Number(readNamedInputValue(form, 'threshold')) || 3;
+    const durationMinutes = Math.max(15, hours * 60 + minutes);
 
-    const current = this.state.jamState();
-    this.state.jamState.set({
-      ...current,
-      active: true,
-      roomName: roomInput.value || current.roomName,
-      durationHours: Number(hoursInput.value) || current.durationHours,
-      durationMinutes: Number(minInput.value) || current.durationMinutes,
-      voteThreshold: Number(threshInput.value) || current.voteThreshold,
+    this.state.createJamRoom({
+      room_name: roomName,
+      duration_minutes: durationMinutes,
+      skip_votes_threshold: threshold,
     });
-
     this.closeModal();
     this.state.setPage('jams');
-    void this.router?.navigate(['/jams']);
-    this.state.notify('Jam de demonstração criada. Código: RIBBIT-729');
+    void this.router?.navigate(['/jams']).catch(() => false);
   }
 
   rateSong(stars: number): void {
     this.rating.set(stars);
-    this.state.notify(`Avaliação de ${stars} estrelas registrada.`);
   }
 
   onCommentSubmit(event: Event): void {
     event.preventDefault();
     const form = event.target as HTMLFormElement;
     const input = form.elements.namedItem('commentText') as HTMLInputElement;
-    if (input.value.trim()) {
-      this.state.addComment(input.value);
+    const text = input.value.trim();
+    if (text) {
+      this.state.publishTrackReview(this.rating(), text);
       input.value = '';
     }
   }
 
-  deleteMyComment(index: number): void {
-    this.state.deleteComment(index);
+  deleteReview(reviewId: number): void {
+    this.state.deleteTrackReview(reviewId);
+  }
+
+  isOwnReview(review: CommunityReview): boolean {
+    const uid = this.state.userId();
+    return uid !== null && review.userId === uid;
+  }
+
+  selectPaymentMethod(method: 'card' | 'pix'): void {
+    this.paymentMethod.set(method);
+  }
+
+  onCheckoutSubmit(event: Event): void {
+    event.preventDefault();
+    this.state.confirmMockPlanCheckout(this.paymentMethod());
+  }
+
+  goToPlansFromUpgrade(): void {
+    this.closeModal();
+    this.state.setPage('plans');
+    void this.router?.navigate(['/plans']).catch(() => false);
   }
 
   addBySwipe(): void {
     this.closeModal();
     this.state.setPage('discover');
-    void this.router?.navigate(['/discover']);
+    void this.router?.navigate(['/discover']).catch(() => false);
     this.state.notify('Descubra músicas e use + para adicionar à playlist.');
   }
 
@@ -223,6 +294,22 @@ export class ModalsComponent {
   goToExploreRadar(): void {
     this.closeModal();
     this.state.setPage('explore');
-    void this.router?.navigate(['/explore']);
+    void this.router?.navigate(['/explore']).catch(() => false);
+  }
+
+  private extractPlaylistFilters(
+    form: HTMLFormElement,
+  ): Omit<DeckPlaylistApiRequest, 'name' | 'duration_minutes'> {
+    const genre = this.isFilterActive('Gênero') ? readNamedInputValue(form, 'genre') : '';
+    const lineup = this.isFilterActive('Lineup') ? readNamedInputValue(form, 'lineup') : '';
+    const firstArtist = lineup.split(',')[0]?.trim() ?? '';
+    const decade = this.isFilterActive('Época') ? readNamedInputValue(form, 'decade') : '';
+    const releaseYear = mapDecadeLabelToYear(decade);
+
+    return {
+      ...(genre ? { genre } : {}),
+      ...(firstArtist ? { artist: firstArtist } : {}),
+      ...(releaseYear !== undefined ? { release_year: releaseYear } : {}),
+    };
   }
 }

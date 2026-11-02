@@ -1,50 +1,60 @@
-import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
-import { delay } from 'rxjs/operators';
-import { SubscriptionPlan } from '@ribbit/shared-types';
-import { MOCK_PLANS } from '../mocks/plans.mock';
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject, signal } from '@angular/core';
+import type { Observable } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
+import type { PlanApiDto, SubscriptionPlan, UserApiDto } from '@ribbit/shared-types';
+import { mapPlanDtoToSubscriptionPlan } from '../api-mappers';
 
+const DEFAULT_PLAN_DTOS: readonly PlanApiDto[] = [
+  { plan_id: 1, name: 'Free', monthly_price: 0, max_profiles: 1 },
+  { plan_id: 2, name: 'Individual', monthly_price: 14.9, max_profiles: 1 },
+  { plan_id: 3, name: 'Família', monthly_price: 27.9, max_profiles: 6 },
+];
+
+/** Fetches subscription tiers and manages plan changes via /api/plans and /api/profile/plan. */
 @Injectable({ providedIn: 'root' })
 export class PlanService {
-  getPlans(annual: boolean = true): Observable<readonly SubscriptionPlan[]> {
-    const plans: readonly SubscriptionPlan[] = [
-      {
-        name: 'Free',
-        displayName: 'Ribbit Free',
-        price: 'R$ 0',
-        copy: 'Para descobrir no seu ritmo.',
-        features: [
-          'Swipes ilimitados',
-          'Playlists manuais',
-          'Prévia de 30 segundos',
-        ],
-      },
-      {
-        name: 'Individual',
-        displayName: 'Ribbit Pro',
-        price: annual ? 'R$ 14,90' : 'R$ 18,90',
-        copy: 'Sua experiência completa.',
-        featured: true,
-        features: [
-          'Tudo do plano Free',
-          'Sem anúncios',
-          'Áudio completo e offline',
-          'Playlists inteligentes',
-        ],
-      },
-      {
-        name: 'Família',
-        displayName: 'Ribbit Jam',
-        price: annual ? 'R$ 27,90' : 'R$ 34,90',
-        copy: 'Até seis perfis, cada um no seu ritmo.',
-        features: [
-          'Até 6 contas',
-          'Jams privadas ilimitadas',
-          'Controle familiar',
-          'Recomendações separadas',
-        ],
-      },
-    ];
-    return of(plans).pipe(delay(100));
+  private readonly http = inject(HttpClient);
+  private readonly rawPlansSignal = signal<readonly PlanApiDto[]>(DEFAULT_PLAN_DTOS);
+
+  readonly rawPlans = this.rawPlansSignal.asReadonly();
+
+  /** Loads raw plan definitions from the backend and updates local cache. */
+  loadPlanDtos(): Observable<readonly PlanApiDto[]> {
+    return this.http.get<readonly PlanApiDto[]>('/api/plans').pipe(
+      tap((plans) => {
+        if (plans.length > 0) {
+          this.rawPlansSignal.set(plans);
+        }
+      }),
+    );
+  }
+
+  /** Returns formatted SubscriptionPlan view models for monthly or annual billing. */
+  getPlans(annual = true): Observable<readonly SubscriptionPlan[]> {
+    return this.loadPlanDtos().pipe(
+      map((plans) => plans.map((dto) => mapPlanDtoToSubscriptionPlan(dto, annual))),
+    );
+  }
+
+  /** Resolves a numeric plan_id by plan name using cached backend plans. */
+  resolvePlanIdByName(name: string): number {
+    const normalized = name.trim().toLowerCase();
+    const match = this.rawPlansSignal().find(
+      (plan) => plan.name.trim().toLowerCase() === normalized,
+    );
+    return match?.plan_id ?? 1;
+  }
+
+  /** Switches the authenticated user's active subscription plan. */
+  changePlan(newPlanId: number): Observable<UserApiDto> {
+    return this.http.put<UserApiDto>('/api/profile/plan', {
+      new_plan_id: newPlanId,
+    });
+  }
+
+  /** Cancels a paid subscription and downgrades the user back to Free. */
+  cancelPlan(): Observable<UserApiDto> {
+    return this.http.delete<UserApiDto>('/api/profile/plan');
   }
 }

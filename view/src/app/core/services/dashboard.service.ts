@@ -1,16 +1,35 @@
-import { Injectable } from '@angular/core';
-import { Observable, of } from 'rxjs';
-import { delay } from 'rxjs/operators';
-import { MetricItem, RankedGenre } from '@ribbit/shared-types';
-import { MOCK_METRICS, MOCK_FAVORITE_GENRES } from '../mocks/dashboard.mock';
+import { HttpClient } from '@angular/common/http';
+import { Injectable, inject } from '@angular/core';
+import type { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import type {
+  AnnualStatsApiDto,
+  MetricItem,
+  RankedArtist,
+  RankedGenre,
+  Song,
+} from '@ribbit/shared-types';
+import { mapAnnualStatsToDashboard } from '../api-mappers';
 
+export interface DashboardViewData {
+  readonly hoursLabel: string;
+  readonly metrics: readonly MetricItem[];
+  readonly genres: readonly RankedGenre[];
+  readonly artists: readonly RankedArtist[];
+}
+
+/** Loads retrospective listening statistics for the Dashboard view. */
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
-  getMetrics(): Observable<readonly MetricItem[]> {
-    return of(MOCK_METRICS).pipe(delay(100));
+  private readonly http = inject(HttpClient);
+
+  /** Fetches raw annual listening statistics from /api/profile/stats. */
+  getAnnualStats(): Observable<AnnualStatsApiDto> {
+    return this.http.get<AnnualStatsApiDto>('/api/profile/stats');
   }
 
-  getFavoriteGenres(): Observable<readonly RankedGenre[]> {
-    return of(MOCK_FAVORITE_GENRES).pipe(delay(100));
+  /** Maps backend annual stats into Dashboard cards and ranked lists. */
+  getDashboardData(knownSongs: readonly Song[]): Observable<DashboardViewData> {
+    return this.getAnnualStats().pipe(map((dto) => mapAnnualStatsToDashboard(dto, knownSongs)));
   }
 }

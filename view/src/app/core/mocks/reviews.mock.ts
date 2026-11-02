@@ -1,4 +1,4 @@
-import { CommunityReview } from '@ribbit/shared-types';
+import type { CommunityReview } from '@ribbit/shared-types';
 
 export const MOCK_REVIEWS: readonly CommunityReview[] = [
   {

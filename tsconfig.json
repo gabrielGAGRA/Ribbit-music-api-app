@@ -22,6 +22,7 @@
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
     "useUnknownInCatchVariables": true,
+    "types": ["node"],
     "paths": {
       "@ribbit/shared-types": ["./view/src/types/index.ts"],
       "@core/*": ["./view/src/app/core/*"],
@@ -30,6 +31,7 @@
     }
   },
   "include": [
-    "view/**/*.ts"
+    "view/**/*.ts",
+    "vitest.config.ts"
   ]
 }
