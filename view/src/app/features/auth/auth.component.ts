@@ -1,5 +1,6 @@
 import type { OnInit } from '@angular/core';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import type { PlanApiDto } from '@ribbit/shared-types';
 import { AuthApiService } from './auth-api.service';
 import { toApiError } from '../../core/api-error';
@@ -49,6 +50,7 @@ function parseBirthDate(raw: string): Date | null {
 export class AuthComponent implements OnInit {
   private readonly authApi = inject(AuthApiService);
   private readonly planService = inject(PlanService);
+  private readonly router = inject(Router, { optional: true });
   protected readonly state = inject(RibbitStateService);
 
   readonly planOptions = signal<readonly PlanOption[]>(PLAN_OPTIONS);
@@ -142,6 +144,10 @@ export class AuthComponent implements OnInit {
 
   onGoogleLogin(): void {
     this.state.notify('Use seu e-mail e senha para autenticar no Ribbit.');
+  }
+
+  openAdminConsole(): void {
+    this.router?.navigate(['/admin']).catch(() => {});
   }
 
   onNameChange(event: Event): void {

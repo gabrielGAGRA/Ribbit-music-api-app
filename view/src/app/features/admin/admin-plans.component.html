@@ -1,0 +1,115 @@
+<div class="admin-plans-page">
+  <div class="plans-endpoint-bar">
+    <span class="eyebrow blue"
+      >GET /API/ADMIN/PLANS · PUT /API/ADMIN/PLANS/&#123;PLAN_ID&#125;</span
+    >
+    <span class="muted">
+      Alterações recalculam imediatamente a receita líquida estimada do Dashboard Executivo.
+    </span>
+  </div>
+
+  <div class="plans-cards-grid">
+    @for (plan of adminState.plans(); track plan.plan_id) {
+      <article
+        class="admin-card plan-admin-card"
+        [class.editing]="editingPlanId() === plan.plan_id"
+      >
+        <div class="plan-card-top">
+          <div>
+            <span class="plan-id-pill">ID #{{ plan.plan_id }}</span>
+            <h2>{{ plan.name }}</h2>
+          </div>
+          <strong class="plan-price-tag">
+            {{ formatPrice(plan.monthly_price) }}<small>/mês</small>
+          </strong>
+        </div>
+
+        <dl class="plan-stats-list">
+          <div>
+            <dt>Cota máxima de perfis</dt>
+            <dd>{{ plan.max_profiles }} {{ plan.max_profiles === 1 ? 'perfil' : 'perfis' }}</dd>
+          </div>
+          <div>
+            <dt>Assinantes vinculados</dt>
+            <dd>{{ subscriberCount(plan.name) }} contas</dd>
+          </div>
+          <div>
+            <dt>Maior ocupação familiar atual</dt>
+            <dd>{{ occupiedProfiles(plan.plan_id) }} em uso</dd>
+          </div>
+        </dl>
+
+        @if (editingPlanId() === plan.plan_id) {
+          @if (formError()) {
+            <div class="plan-error-banner" role="alert">
+              <app-icon name="close" [size]="14" />
+              <span>{{ formError() }}</span>
+            </div>
+          }
+
+          <form class="plan-edit-form" (submit)="savePlan($event, plan.plan_id)">
+            <div class="plan-field">
+              <label [attr.for]="'plan-name-' + plan.plan_id">Nome comercial *</label>
+              <span class="field-hint">Deve ser único entre todos os planos</span>
+              <input
+                [attr.id]="'plan-name-' + plan.plan_id"
+                type="text"
+                required
+                minlength="2"
+                [value]="nameDraft()"
+                (input)="updateNameDraft($event)"
+              />
+            </div>
+
+            <div class="plan-field-row">
+              <div class="plan-field">
+                <label [attr.for]="'plan-price-' + plan.plan_id">Mensalidade (R$) *</label>
+                <span class="field-hint">Valor &ge; 0,00</span>
+                <input
+                  [attr.id]="'plan-price-' + plan.plan_id"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  [value]="priceDraft()"
+                  (input)="updatePriceDraft($event)"
+                />
+              </div>
+
+              <div class="plan-field">
+                <label [attr.for]="'plan-profiles-' + plan.plan_id">Máx. perfis *</label>
+                <span class="field-hint">Mínimo atual: {{ occupiedProfiles(plan.plan_id) }}</span>
+                <input
+                  [attr.id]="'plan-profiles-' + plan.plan_id"
+                  type="number"
+                  step="1"
+                  min="1"
+                  required
+                  [value]="maxProfilesDraft()"
+                  (input)="updateMaxProfilesDraft($event)"
+                />
+              </div>
+            </div>
+
+            <div class="plan-form-actions">
+              <button type="submit" class="primary-button small-btn">
+                <app-icon name="check" [size]="15" />
+                Salvar plano
+              </button>
+              <button type="button" class="outline-button small-btn" (click)="cancelEditing()">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        } @else {
+          <button type="button" class="outline-button full-width" (click)="startEditing(plan)">
+            <app-icon name="sliders" [size]="15" />
+            Editar parâmetros do plano
+          </button>
+        }
+      </article>
+    } @empty {
+      <p class="muted">Nenhum plano disponível.</p>
+    }
+  </div>
+</div>

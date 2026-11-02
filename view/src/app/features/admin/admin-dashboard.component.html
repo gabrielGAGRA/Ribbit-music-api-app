@@ -1,0 +1,146 @@
+<div class="admin-dashboard-grid">
+  <section class="kpi-strip" aria-label="Indicadores executivos principais">
+    <article class="admin-card kpi-card featured-kpi">
+      <div class="kpi-header">
+        <span class="kpi-icon green-bg">
+          <app-icon name="sparkles" [size]="19" />
+        </span>
+        <span class="endpoint-tag">GET /api/admin/dashboard</span>
+      </div>
+      <strong class="kpi-value">{{ formattedNetRevenue() }}</strong>
+      <span class="kpi-label">Receita líquida mensal estimada</span>
+      <small class="kpi-detail">Titulares ativos (exclui dependentes familiares)</small>
+    </article>
+
+    <article class="admin-card kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-icon blue-bg">
+          <app-icon name="users" [size]="19" />
+        </span>
+        <button type="button" class="inline-jump-btn" (click)="goToUsers()">
+          Ver contas <app-icon name="arrow" [size]="13" />
+        </button>
+      </div>
+      <strong class="kpi-value">{{ adminState.executiveDashboard().total_users }}</strong>
+      <span class="kpi-label">Usuários registrados</span>
+      <small class="kpi-detail">{{ adminCount() }} administradores com acesso ao console</small>
+    </article>
+
+    <article class="admin-card kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-icon green-bg">
+          <app-icon name="music" [size]="19" />
+        </span>
+        <span class="endpoint-tag">GET /api/admin/audience</span>
+      </div>
+      <strong class="kpi-value">
+        {{ adminState.audienceReport().active_tracks }} /
+        {{ adminState.audienceReport().total_tracks }}
+      </strong>
+      <span class="kpi-label">Faixas ativas no catálogo</span>
+      <small class="kpi-detail"
+        >{{ catalogAvailabilityPercent() }}% de disponibilidade no deck</small
+      >
+    </article>
+
+    <article class="admin-card kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-icon pink-bg">
+          <app-icon name="shield" [size]="19" />
+        </span>
+        <button type="button" class="inline-jump-btn" (click)="goToModeration()">
+          Moderar <app-icon name="arrow" [size]="13" />
+        </button>
+      </div>
+      <strong class="kpi-value">{{ blockedTrackCount() }}</strong>
+      <span class="kpi-label">Faixas bloqueadas</span>
+      <small class="kpi-detail">Soft-delete ativo fora das recomendações</small>
+    </article>
+  </section>
+
+  <div class="dashboard-panels">
+    <section class="admin-card">
+      <div class="card-head">
+        <div>
+          <span class="eyebrow blue">RECEITA & ASSINANTES POR PLANO</span>
+          <h2>Distribuição Comercial</h2>
+        </div>
+        <button type="button" class="outline-button small-btn" (click)="goToPlans()">
+          Configurar planos
+        </button>
+      </div>
+
+      <div
+        tabindex="0"
+        role="region"
+        aria-labelledby="plan-breakdown-caption"
+        class="table-wrapper"
+      >
+        <table class="admin-table plan-breakdown-table">
+          <caption id="plan-breakdown-caption" class="sr-only">
+            Distribuição de usuários e receita mensal por plano de assinatura
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Plano</th>
+              <th scope="col">Usuários</th>
+              <th scope="col">Receita Mensal</th>
+              <th scope="col">Participação na Receita</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of adminState.planBreakdown(); track row.planName) {
+              <tr>
+                <th scope="row">{{ row.planName }}</th>
+                <td>{{ row.userCount }} ({{ row.userPercent }}%)</td>
+                <td>{{ formatCurrency(row.revenue) }}</td>
+                <td>
+                  <div class="bar-cell">
+                    <div class="bar-track">
+                      <i class="bar-fill blue-fill" [appWidthPercent]="row.revenuePercent"></i>
+                    </div>
+                    <span>{{ row.revenuePercent }}%</span>
+                  </div>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="4" class="empty-cell">Nenhum plano cadastrado.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="card-head">
+        <div>
+          <span class="eyebrow blue">PREFERÊNCIAS DE AUDIÊNCIA</span>
+          <h2>Gêneros Mais Bloqueados</h2>
+        </div>
+        <span class="endpoint-tag">/api/admin/audiencia</span>
+      </div>
+
+      <p class="panel-copy">
+        Volume agregado de ouvintes que ocultaram cada gênero musical nas descobertas.
+      </p>
+
+      <div class="genre-rank-list">
+        @for (entry of adminState.blockedGenreRanking(); track entry.genre) {
+          <div class="genre-rank-item">
+            <div class="genre-rank-meta">
+              <strong>{{ entry.genre }}</strong>
+              <span>{{ entry.count }} {{ entry.count === 1 ? 'usuário' : 'usuários' }}</span>
+            </div>
+            <div class="bar-track">
+              <i class="bar-fill pink-fill" [appWidthPercent]="entry.percent"></i>
+            </div>
+          </div>
+        } @empty {
+          <p class="empty-cell">Nenhum gênero bloqueado pelos usuários até o momento.</p>
+        }
+      </div>
+    </section>
+  </div>
+</div>

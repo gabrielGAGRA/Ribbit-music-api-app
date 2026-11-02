@@ -1,4 +1,11 @@
 import type { Routes } from '@angular/router';
+import { adminAuthGuard } from './features/admin/admin-auth.guard';
+import { AdminDashboardComponent } from './features/admin/admin-dashboard.component';
+import { AdminLoginComponent } from './features/admin/admin-login.component';
+import { AdminModerationComponent } from './features/admin/admin-moderation.component';
+import { AdminPlansComponent } from './features/admin/admin-plans.component';
+import { AdminShellComponent } from './features/admin/admin-shell.component';
+import { AdminUsersComponent } from './features/admin/admin-users.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { DiscoverComponent } from './features/discover/discover.component';
 import { ExploreComponent } from './features/explore/explore.component';
@@ -38,5 +45,35 @@ export const routes: Routes = [
     title: 'Ribbit - Rejeitadas',
   },
   { path: 'plans', component: PlansComponent, title: 'Ribbit - Planos' },
+  { path: 'admin/login', component: AdminLoginComponent, title: 'Ribbit Admin - Login' },
+  {
+    path: 'admin',
+    component: AdminShellComponent,
+    canActivate: [adminAuthGuard],
+    canActivateChild: [adminAuthGuard],
+    children: [
+      { path: '', redirectTo: 'dashboard', pathMatch: 'full' },
+      {
+        path: 'dashboard',
+        component: AdminDashboardComponent,
+        title: 'Ribbit Admin - Visão Executiva',
+      },
+      {
+        path: 'users',
+        component: AdminUsersComponent,
+        title: 'Ribbit Admin - Usuários & Admins',
+      },
+      {
+        path: 'plans',
+        component: AdminPlansComponent,
+        title: 'Ribbit Admin - Planos & Preços',
+      },
+      {
+        path: 'moderation',
+        component: AdminModerationComponent,
+        title: 'Ribbit Admin - Moderação',
+      },
+    ],
+  },
   { path: '**', component: NotFoundComponent, title: 'Ribbit - Não Encontrado' },
 ];

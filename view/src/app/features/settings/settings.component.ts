@@ -83,4 +83,8 @@ export class SettingsComponent {
   logout(): void {
     this.state.logout();
   }
+
+  openAdminConsole(): void {
+    this.router?.navigate(['/admin']).catch(() => {});
+  }
 }

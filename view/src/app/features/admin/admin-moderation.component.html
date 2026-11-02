@@ -1,0 +1,294 @@
+<div class="admin-moderation-page">
+  <section class="admin-card moderation-toolbar">
+    <div class="tabs-row" role="tablist" aria-label="Áreas de moderação">
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'catalog'"
+        [class.active]="activeTab() === 'catalog'"
+        (click)="selectTab('catalog')"
+      >
+        <app-icon name="music" [size]="16" />
+        Catálogo Ativo ({{ adminState.activeTracks().length }})
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'blocked'"
+        [class.active]="activeTab() === 'blocked'"
+        (click)="selectTab('blocked')"
+      >
+        <app-icon name="shield" [size]="16" />
+        Faixas Bloqueadas ({{ blockedTracks().length }})
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'reviews'"
+        [class.active]="activeTab() === 'reviews'"
+        (click)="selectTab('reviews')"
+      >
+        <app-icon name="star" [size]="16" />
+        Top Reviews 30d ({{ topReviews().length }})
+      </button>
+    </div>
+
+    @if (activeTab() === 'catalog') {
+      <div class="search-field">
+        <label for="moderation-track-search"
+          >Pesquisar faixas ativas (GET /api/tracks/search)</label
+        >
+        <span id="moderation-search-hint" class="field-hint">
+          Busque por título, artista, álbum ou gênero para bloquear ou aplicar selo +18
+        </span>
+        <div class="search-box">
+          <app-icon name="search" [size]="16" />
+          <input
+            id="moderation-track-search"
+            type="search"
+            placeholder="Ex.: Liniker, Trap, Baile Subterrâneo..."
+            aria-describedby="moderation-search-hint"
+            [value]="trackQuery()"
+            (input)="updateTrackQuery($event)"
+          />
+        </div>
+      </div>
+    }
+
+    @if (moderationError()) {
+      <div class="moderation-alert" role="alert">
+        <app-icon name="close" [size]="15" />
+        <span>{{ moderationError() }}</span>
+      </div>
+    }
+  </section>
+
+  @switch (activeTab()) {
+    @case ('catalog') {
+      <section class="admin-card">
+        <div class="section-head">
+          <span class="eyebrow blue">
+            PUT /API/ADMIN/TRACKS/&#123;ID&#125;/EXPLICIT · PUT
+            /API/ADMIN/TRACKS/&#123;ID&#125;/BLOCK
+          </span>
+          <h2>Catálogo Musical Disponível</h2>
+        </div>
+
+        <div
+          tabindex="0"
+          role="region"
+          aria-labelledby="catalog-tracks-caption"
+          class="table-wrapper"
+        >
+          <table class="admin-table tracks-table">
+            <caption id="catalog-tracks-caption" class="sr-only">
+              Faixas ativas disponíveis no catálogo com controles de selo explícito e bloqueio
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Faixa</th>
+                <th scope="col">Artista / Álbum</th>
+                <th scope="col">Gênero</th>
+                <th scope="col">Duração</th>
+                <th scope="col">Classificação +18</th>
+                <th scope="col">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (track of searchedActiveTracks(); track track.track_id) {
+                <tr>
+                  <th scope="row">
+                    <div class="track-title-cell">
+                      <strong>{{ track.title }}</strong>
+                      <small>#{{ track.track_id }}</small>
+                    </div>
+                  </th>
+                  <td>
+                    <div class="track-sub-cell">
+                      <span>{{ track.artist }}</span>
+                      <small>{{ track.album ?? 'Single' }} · {{ track.release_year ?? '—' }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="genre-pill">{{ track.genre }}</span>
+                  </td>
+                  <td>{{ formatDuration(track.duration_seconds) }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      class="explicit-toggle"
+                      [class.active]="track.explicit"
+                      [attr.aria-pressed]="track.explicit"
+                      (click)="toggleExplicit(track)"
+                    >
+                      {{ track.explicit ? '+18 Explícita' : 'Livre (Marcar +18)' }}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="danger-outline-btn"
+                      (click)="blockTrack(track.track_id)"
+                    >
+                      Bloquear faixa
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6" class="empty-cell">
+                    Nenhuma faixa ativa corresponde ao termo pesquisado.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @case ('blocked') {
+      <section class="admin-card">
+        <div class="section-head">
+          <span class="eyebrow blue">
+            GET /API/ADMIN/BLOCKED-TRACKS · PUT /API/ADMIN/MUSICAS/&#123;ID&#125;/BLOQUEAR
+          </span>
+          <h2>Faixas Bloqueadas (Soft-Delete)</h2>
+        </div>
+
+        <div
+          tabindex="0"
+          role="region"
+          aria-labelledby="blocked-tracks-caption"
+          class="table-wrapper"
+        >
+          <table class="admin-table tracks-table">
+            <caption id="blocked-tracks-caption" class="sr-only">
+              Faixas bloqueadas que não aparecem nas descobertas de ouvintes
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Faixa Bloqueada</th>
+                <th scope="col">Artista / Álbum</th>
+                <th scope="col">Gênero</th>
+                <th scope="col">Duração</th>
+                <th scope="col">Classificação +18</th>
+                <th scope="col">Restauração</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (track of blockedTracks(); track track.track_id) {
+                <tr>
+                  <th scope="row">
+                    <div class="track-title-cell">
+                      <strong>{{ track.title }}</strong>
+                      <small>#{{ track.track_id }}</small>
+                    </div>
+                  </th>
+                  <td>
+                    <div class="track-sub-cell">
+                      <span>{{ track.artist }}</span>
+                      <small>{{ track.album ?? 'Single' }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="genre-pill">{{ track.genre }}</span>
+                  </td>
+                  <td>{{ formatDuration(track.duration_seconds) }}</td>
+                  <td>
+                    <button
+                      type="button"
+                      class="explicit-toggle"
+                      [class.active]="track.explicit"
+                      [attr.aria-pressed]="track.explicit"
+                      (click)="toggleExplicit(track)"
+                    >
+                      {{ track.explicit ? '+18 Explícita' : 'Livre' }}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="restore-btn"
+                      (click)="restoreTrack(track.track_id)"
+                    >
+                      Restaurar ao catálogo
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="6" class="empty-cell">
+                    Nenhuma faixa bloqueada no momento. Todo o catálogo está ativo.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @case ('reviews') {
+      <section class="admin-card">
+        <div class="section-head">
+          <span class="eyebrow blue"
+            >GET /API/ADMIN/REVIEWS · DELETE /API/REVIEWS/&#123;REVIEW_ID&#125;</span
+          >
+          <h2>Avaliações Mais Curtidas (Últimos 30 Dias)</h2>
+        </div>
+
+        <div class="reviews-list">
+          @for (review of topReviews(); track review.review_id) {
+            <article class="review-mod-card">
+              <div class="review-mod-header">
+                <div class="review-author-meta">
+                  <strong>{{ review.author_name }}</strong>
+                  <span class="muted">em</span>
+                  <span class="review-track-tag">
+                    {{ review.track_title }} — {{ review.track_artist }}
+                  </span>
+                </div>
+
+                <div class="review-metrics">
+                  <span class="stars-group" [attr.aria-label]="'Nota ' + review.rating + ' de 5'">
+                    @for (star of starArray(review.rating); track star) {
+                      <app-icon name="star" [size]="14" />
+                    }
+                  </span>
+                  <span class="likes-pill">
+                    <app-icon name="heart" [size]="13" />
+                    {{ review.likes_count }} curtidas
+                  </span>
+                </div>
+              </div>
+
+              <p class="review-body-text">{{ review.text }}</p>
+
+              <div class="review-mod-footer">
+                <small class="muted"
+                  >Review #{{ review.review_id }} · Usuário #{{ review.user_id }}</small
+                >
+                <button
+                  type="button"
+                  class="danger-outline-btn"
+                  (click)="removeReview(review.review_id)"
+                >
+                  <app-icon name="close" [size]="13" />
+                  Excluir avaliação
+                </button>
+              </div>
+            </article>
+          } @empty {
+            <p class="empty-cell">Nenhuma avaliação pendente de revisão nos últimos 30 dias.</p>
+          }
+        </div>
+      </section>
+    }
+  }
+</div>

@@ -1,0 +1,135 @@
+<div class="admin-layout">
+  <aside class="admin-sidebar" aria-label="Navegação administrativa">
+    <button type="button" class="brand admin-sidebar-brand" (click)="navigateSection('dashboard')">
+      <app-frog />
+      <span>ribbit<span class="brand-dot">.</span></span>
+      <span class="console-pill">ADMIN</span>
+    </button>
+    <div class="sidebar-caption">CONSOLE DE ADMINISTRAÇÃO</div>
+
+    <nav class="admin-nav">
+      @for (item of navItems; track item.id) {
+        <button
+          type="button"
+          class="nav-item"
+          [class.active]="activeSection() === item.id"
+          (click)="navigateSection(item.id)"
+        >
+          <app-icon [name]="item.icon" [size]="21" />
+          <span>
+            {{ item.label }}
+            <small>{{ item.sub }}</small>
+          </span>
+          @if (activeSection() === item.id) {
+            <span class="nav-dot"></span>
+          }
+        </button>
+      }
+    </nav>
+
+    <div class="admin-sidebar-footer">
+      <div class="admin-env-box">
+        <div class="env-title">
+          <app-icon name="sliders" [size]="15" />
+          <span>Modo Sandbox Local</span>
+        </div>
+        <p>Estado isolado em <code>ribbit-admin-*</code> sem afetar o player de ouvinte.</p>
+        <button type="button" class="outline-button small-btn full-width" (click)="resetDemo()">
+          <app-icon name="repeat" [size]="14" />
+          Restaurar dados demo
+        </button>
+      </div>
+
+      <div class="admin-footer-actions">
+        <button type="button" class="admin-switch-btn" (click)="openListenerApp()">
+          <app-icon name="headphones" [size]="17" />
+          Ir para App Ouvinte
+        </button>
+        <button type="button" class="admin-logout-btn" (click)="signOutAdmin()">
+          <app-icon name="logout" [size]="17" />
+          Sair do Admin
+        </button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="admin-main-column">
+    <header class="admin-topbar">
+      <button
+        type="button"
+        class="brand admin-mobile-brand"
+        (click)="navigateSection('dashboard')"
+        aria-label="Início do painel administrativo"
+      >
+        <app-frog [small]="true" />
+        <span>ribbit<span class="brand-dot">.</span></span>
+        <span class="console-pill">ADMIN</span>
+      </button>
+
+      <div class="admin-breadcrumb">
+        <span class="crumb-root">
+          Admin Console
+          <app-icon name="chevron" [size]="13" />
+        </span>
+        <strong>{{ currentNavLabel() }}</strong>
+      </div>
+
+      <div class="admin-topbar-actions">
+        <button
+          type="button"
+          class="outline-button small-btn mobile-app-shortcut"
+          (click)="openListenerApp()"
+        >
+          <app-icon name="headphones" [size]="15" />
+          <span>App Ouvinte</span>
+        </button>
+        <div class="admin-identity">
+          <span class="avatar small-avatar admin-avatar">{{ adminInitials() }}</span>
+          <div class="admin-identity-text">
+            <strong>{{ adminState.currentAdmin()?.display_name ?? 'Administrador' }}</strong>
+            <span>{{ adminState.currentAdmin()?.email ?? 'admin@ribbit.example.com' }}</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="admin-workspace">
+      <header class="admin-page-heading">
+        <div class="eyebrow blue">{{ sectionMeta().eyebrow }}</div>
+        <h1>
+          {{ sectionMeta().titlePrefix }}<span>{{ sectionMeta().titleHighlight }}</span>
+        </h1>
+        <p>{{ sectionMeta().description }}</p>
+      </header>
+
+      <router-outlet />
+    </main>
+  </div>
+
+  <nav class="admin-mobile-nav" aria-label="Menu rápido administrativo">
+    @for (item of navItems; track item.id) {
+      <button
+        type="button"
+        [class.active]="activeSection() === item.id"
+        (click)="navigateSection(item.id)"
+      >
+        <app-icon [name]="item.icon" [size]="20" />
+        <span>{{ item.label }}</span>
+      </button>
+    }
+    <button type="button" (click)="signOutAdmin()" aria-label="Encerrar sessão admin">
+      <app-icon name="logout" [size]="20" />
+      <span>Sair</span>
+    </button>
+  </nav>
+
+  @if (adminState.toastMessage()) {
+    <div class="admin-toast" role="status" aria-live="polite">
+      <app-icon name="check" [size]="16" />
+      <span>{{ adminState.toastMessage() }}</span>
+      <button type="button" aria-label="Fechar aviso" (click)="adminState.clearToast()">
+        <app-icon name="close" [size]="14" />
+      </button>
+    </div>
+  }
+</div>
