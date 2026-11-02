@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node scripts/dev-server.mjs",
+    "dev:web": "node scripts/dev-server.mjs",
     "build": "ng build",
     "typecheck": "node ./node_modules/typescript-7/bin/tsc --noEmit",
     "lint": "oxlint --type-aware view/ && eslint .",
@@ -10,8 +12,8 @@
     "lint:angular": "eslint .",
     "lint:fix": "oxlint --type-aware --fix view/ && eslint . --fix",
     "lint:angular:fix": "eslint . --fix",
-    "format": "oxfmt --write \"view/**/*.{ts,html,css,scss,json}\" *.mjs",
-    "format:check": "oxfmt --check \"view/**/*.{ts,html,css,scss,json}\" *.mjs",
+    "format": "oxfmt --write \"view/**/*.{ts,html,css,scss,json}\" *.mjs scripts/*.mjs",
+    "format:check": "oxfmt --check \"view/**/*.{ts,html,css,scss,json}\" *.mjs scripts/*.mjs",
     "test": "vitest run"
   },
   "devDependencies": {
@@ -28,7 +30,7 @@
     "oxlint-tsgolint": "^7.0.2004",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-7": "npm:typescript@^7.0.2",
-    "vitest": "^3.0.0"
+    "vitest": "^5.1.0"
   },
   "dependencies": {
     "@angular/common": "^22.2.3",
@@ -38,5 +40,8 @@
     "@angular/platform-browser": "^22.2.3",
     "@angular/router": "^22.2.3",
     "rxjs": "^7.8.2"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.67.4"
   }
 }
