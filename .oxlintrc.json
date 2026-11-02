@@ -11,27 +11,69 @@
     "correctness": "error"
   },
   "rules": {
-    "eqeqeq": ["error", "always", { "null": "ignore" }],
-    "curly": ["error", "multi-line"],
-    "one-var": ["error", "never"],
+    "eqeqeq": [
+      "error",
+      "always",
+      {
+        "null": "ignore"
+      }
+    ],
+    "curly": [
+      "error",
+      "multi-line"
+    ],
+    "one-var": [
+      "error",
+      "never"
+    ],
     "default-case": "error",
     "guard-for-in": "error",
-    "no-console": ["error", { "allow": ["warn", "error"] }],
+    "no-console": [
+      "error",
+      {
+        "allow": [
+          "warn",
+          "error"
+        ]
+      }
+    ],
     "no-eval": "error",
     "no-new-func": "error",
     "no-new-wrappers": "error",
     "no-extend-native": "error",
     "no-proto": "error",
-    "no-implicit-coercion": ["error", { "boolean": false }],
-    "func-style": ["error", "declaration", { "allowArrowFunctions": true }],
+    "no-implicit-coercion": [
+      "error",
+      {
+        "boolean": false
+      }
+    ],
+    "func-style": [
+      "error",
+      "declaration",
+      {
+        "allowArrowFunctions": true
+      }
+    ],
     "prefer-arrow-callback": "error",
-    "complexity": ["error", 10],
-    "max-params": ["error", 5],
+    "complexity": [
+      "error",
+      10
+    ],
+    "max-params": [
+      "error",
+      5
+    ],
     "no-restricted-imports": [
       "error",
       {
         "patterns": [
-          { "group": ["../../../*"], "message": "Use a shorter relative path or a tsconfig alias." }
+          {
+            "group": [
+              "../../../*"
+            ],
+            "message": "Use a shorter relative path or a tsconfig alias."
+          }
         ]
       }
     ],
@@ -46,7 +88,10 @@
     ],
     "typescript/consistent-type-assertions": [
       "error",
-      { "assertionStyle": "as", "objectLiteralTypeAssertions": "never" }
+      {
+        "assertionStyle": "as",
+        "objectLiteralTypeAssertions": "never"
+      }
     ],
     "typescript/consistent-type-imports": [
       "error",
@@ -60,29 +105,58 @@
     "typescript/no-import-type-side-effects": "error",
     "typescript/explicit-module-boundary-types": "error",
     "typescript/switch-exhaustiveness-check": "error",
-    "typescript/no-confusing-void-expression": ["error", { "ignoreArrowShorthand": false }],
-    "typescript/restrict-template-expressions": ["error", { "allowNumber": true }],
-    "typescript/no-extraneous-class": ["error", { "allowWithDecorator": true }],
+    "typescript/no-confusing-void-expression": [
+      "error",
+      {
+        "ignoreArrowShorthand": false
+      }
+    ],
+    "typescript/restrict-template-expressions": [
+      "error",
+      {
+        "allowNumber": true
+      }
+    ],
+    "typescript/no-extraneous-class": [
+      "error",
+      {
+        "allowWithDecorator": true
+      }
+    ],
     "typescript/prefer-readonly": "error",
     "typescript/explicit-member-accessibility": [
       "error",
-      { "accessibility": "no-public", "overrides": { "parameterProperties": "off" } }
+      {
+        "accessibility": "no-public",
+        "overrides": {
+          "parameterProperties": "off"
+        }
+      }
     ],
     "import/no-default-export": "error",
     "import/no-mutable-exports": "error",
     "import/no-duplicates": "error",
-    "jsdoc/check-tag-names": ["error", { "typed": true }]
+    "jsdoc/check-tag-names": [
+      "error",
+      {
+        "typed": true
+      }
+    ]
   },
   "overrides": [
     {
-      "files": ["**/*.spec.ts"],
+      "files": [
+        "**/*.spec.ts"
+      ],
       "rules": {
         "typescript/no-non-null-assertion": "off",
         "typescript/no-explicit-any": "off"
       }
     },
     {
-      "files": ["**/*.{js,mjs}"],
+      "files": [
+        "**/*.{js,mjs}"
+      ],
       "rules": {
         "import/no-default-export": "off"
       }
@@ -90,7 +164,7 @@
   ],
   "ignorePatterns": [
     "app/**",
-    "tests/unit/**",
+    "tests/**",
     "docs/**",
     "local/**",
     "node_modules/**"

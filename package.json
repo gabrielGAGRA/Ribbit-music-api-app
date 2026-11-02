@@ -10,20 +10,29 @@
     "dev:web": "npm --prefix view start",
     "start:web": "npm --prefix view start",
     "tunnel:web": "npx localtunnel --port 4200",
-    "lint": "oxlint --type-aware src/ && eslint .",
-    "lint:fix": "oxlint --type-aware --fix src/ && eslint . --fix",
-    "format": "oxfmt --write \"src/**/*.{ts,html,css,scss,json}\" *.mjs",
-    "format:check": "oxfmt --check \"src/**/*.{ts,html,css,scss,json}\" *.mjs"
+    "lint": "oxlint --type-aware view/ && eslint .",
+    "lint:ts": "oxlint --type-aware view/",
+    "lint:angular": "eslint .",
+    "lint:fix": "oxlint --type-aware --fix view/ && eslint . --fix",
+    "lint:angular:fix": "eslint . --fix",
+    "format": "oxfmt --write \"view/**/*.{ts,html,css,scss,json}\" *.mjs",
+    "format:check": "oxfmt --check \"view/**/*.{ts,html,css,scss,json}\" *.mjs"
   },
   "devDependencies": {
     "@total-typescript/ts-reset": "^0.6.1",
     "angular-eslint": "^22.6.0",
-    "eslint": "^10.12.0",
-    "eslint-plugin-oxlint": "^1.87.0",
-    "oxfmt": "^0.72.0",
-    "oxlint": "^1.87.0",
+    "eslint": "^10.13.0",
+    "eslint-plugin-oxlint": "^1.88.0",
+    "oxfmt": "^0.73.0",
+    "oxlint": "^1.88.0",
     "oxlint-tsgolint": "^7.0.2004",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "typescript-7": "npm:typescript@^7.0.2"
+  },
+  "dependencies": {
+    "@angular/common": "^22.2.3",
+    "@angular/compiler": "^22.2.3",
+    "@angular/core": "^22.2.3",
+    "rxjs": "^7.8.2"
   }
 }

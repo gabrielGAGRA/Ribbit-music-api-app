@@ -3,30 +3,28 @@
 
 
 ### Time: Crazy Frogs
-Membros:
 - Carolina Britto Haddad
 - Fernando Mendes Seraco
 - Gabriel Agra de Castro Motta
 - Mateus Silva de Araújo
 
 ## Sumário
-- [Sobre o Projeto](#-sobre-o-projeto)
+- [Sobre](#-sobre)
 - [Funcionalidades](#-funcionalidades)
-  - [Aplicativo Mobile](#aplicativo-mobile)
-  - [Painel Administrativo (Web)](#painel-administrativo-web)
+  - [Aplicativo](#aplicativo)
+  - [Painel Administrativo](#painel-administrativo)
 - [Arquitetura e Tecnologias](#-arquitetura-e-tecnologias)
-- [Estrutura de Pastas](#-estrutura-de-pastas)
 - [Como Executar](#-como-executar)
 
 ---
 
-## Sobre o Projeto
+## Sobre
 
-O **Ribbit** redefine a experiência de encontrar novas músicas através de uma mecânica interativa inspirada em cartões de *swipe*, aliando geração dinâmica de playlists, sessões colaborativas em tempo real (*Jams*) e controle rígido de privacidade musical. 
+O **Ribbit** redefine a experiência de ouvir novas músicas através de uma mecânica interativa inspirada em *swipe*, usando da geração dinâmica de playlists e sessões colaborativas em tempo real (*Jams*).
 
 O projeto é composto por duas frentes:
 1. **Ribbit**: Aplicativo voltado ao usuário final para descoberta, criação de playlists inteligentes e interação social em grupo.
-2. **Ribbit Admin Console**: Painel web restrito para curadoria de catálogo com *Soft Delete* e monitoramento de métricas financeiras.
+2. **Ribbit Admin Console**: Painel web restrito para curadoria de catálogo com *soft delete* e monitoramento de métricas.
 
 ---
 
@@ -94,12 +92,11 @@ O projeto é composto por duas frentes:
 
 ## Arquitetura e Tecnologias
 
-- **Frontend**: TypeScript e Angular (Framework).
-- **Backend**: Python -- FastAPI.
+- **Frontend**: TypeScript e Angular.
+- **Backend**: Python.
 
 ---
 
-## Estrutura de Pastas
 
 ```text
 ├── app/

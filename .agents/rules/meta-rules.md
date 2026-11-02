@@ -12,7 +12,7 @@ description: Use for rule priority, where to find docs, and when to invoke skill
 3. agents-feature-checklist - change order (before, during, and after implementation)
 4. project-architecture / project-domain-api - layout and sandbox explanations and pointers
 5. project-tests - test layout and pointers
-6. docs/llm/software-engineering-rules.md - coding standards (passive; read only when implementing)
+6. docs/llm/python-engineering-rules.md - coding standards (passive; read only when implementing)
 
 ## Skill Invocation (single registry)
 | Trigger / Intent | Action |
@@ -31,6 +31,5 @@ description: Use for rule priority, where to find docs, and when to invoke skill
 <!-- FILL: Navigation row — layer map / package layout. Discover: app/ tree. Keep: project-architecture + docs/llm/architecture-guide.md. -->
 <!-- FILL: Navigation row — env, secrets, deploy runtime config. Discover: app/config.py, pipeline/, infra yaml. Keep: list concrete config paths. -->
 | Python patterns, imports, DIP | docs/llm/software-engineering-rules.md |
-| Angular view, TypeScript, eslint/prettier/tsc gate | project-view + docs/llm/view/typescript-engineering-rules.md; configs: eslint.config.mjs, tsconfig.json, .prettierrc |
 <!-- FILL: Navigation row — test tree and pytest markers. Discover: tests/, pytest.ini. Keep: project-tests + docs/llm/tests-guide.md + tests/pytest.ini. -->
 | Rule create / update / self-healing | @project-rules-writing skill |

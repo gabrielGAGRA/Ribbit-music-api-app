@@ -1,6 +1,6 @@
 # Angular Engineering Rules & Style Guide
 
-Scope: Angular view only (`src/`). Formatting is handled by Oxfmt; mechanical syntax checks are enforced via `.oxlintrc.json` and `eslint.config.mjs` and not repeated in depth. General TypeScript standards (immutability, error handling, typing) follow `typescript-engineering-rules.md`.
+Scope: Angular view only (`view/`). Formatting is handled by Oxfmt; mechanical syntax checks are enforced via `.oxlintrc.json` and `eslint.config.mjs` and not repeated in depth. General TypeScript standards (immutability, error handling, typing) follow `typescript-engineering-rules.md`.
 
 Gate: `npm run format`, `npm run lint:fix`, `npm run typecheck`.
 
@@ -10,9 +10,9 @@ Gate: `npm run format`, `npm run lint:fix`, `npm run typecheck`.
 
 - ALWAYS use standalone components, directives, and pipes; NEVER introduce new `NgModule`s.
   Why: Standalone primitives eliminate module indirection, enable fine-grained tree-shaking, and simplify the dependency graph. [Lint: yes (`@angular-eslint/prefer-standalone`)]
-- ALWAYS organize files by feature areas inside `src/` (e.g., `src/movies/booking/`); NEVER group files by technical category (e.g., `components/`, `services/`, `directives/`).
+- ALWAYS organize files by feature areas inside `view/` (e.g., `view/movies/booking/`); NEVER group files by technical category (e.g., `components/`, `services/`, `directives/`).
   Why: Co-locating related units reduces context switching and isolates blast radius during refactors. [Lint: no]
-- ALWAYS keep application bootstrap inside `src/main.ts` using `bootstrapApplication()`.
+- ALWAYS keep application bootstrap inside `view/main.ts` using `bootstrapApplication()`.
   Why: Maintains a uniform, predictable entry point across applications. [Lint: no]
 - ALWAYS keep source files focused on a single concept (one component, directive, or service per file).
   Why: Prevents bloated files and keeps tests, templates, and styles aligned 1:1. [Lint: no]

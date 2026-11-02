@@ -1,7 +1,7 @@
 ---
 name: project-rules-writing 
 description: > 
-  Create, update, or self-heal project rules and conventions. ALWAYS invoke this autonomously without waiting for the user to ask when you make a mistake.
+  Create, update, or self-heal project rules and conventions.
 ---
 
 # Project Rules Governance
@@ -52,9 +52,7 @@ Keep 5–8 rule files.
 	1.	Edit heavy doc in docs/llm/ for detailed changes.
 	2.	Edit thin adapter only if triggers (description, globs) or top invariants changed.
 
-## 5. Self-healing (autonomous — do not wait for user)
-
-Trigger when: user corrects a recurring error; you lacked project context; a rule or docs/llm/ guide is stale or misleading.
+## 5. Self-healing
 
 	1.	Root cause — why the failure happened (missing context, ambiguous rule, wrong stack assumption).
 	2.	Before/after — concrete wrong vs correct pattern.

@@ -1,0 +1,14 @@
+---
+trigger: model_decision
+description: Use when editing Angular view code (view/**/*.{ts,html,css}) - TypeScript rules, lint/format/typecheck gate.
+globs: view/**/*.{ts,html,css}
+---
+
+# View (Angular + TypeScript) Map
+
+- Angular app (`@ribbit/web`) lives in `view/`; the Python backend is `app/`. No hexagonal layering on the view.
+- Tooling: `.oxlintrc.json` (oxlint type-aware, import, jsdoc), `eslint.config.mjs` (angular template linting), `tsconfig.json` / `view/tsconfig.json`, `.oxfmtrc.json` (oxfmt), Vitest (`view/vitest.config.ts`).
+- Gate after every change: `npm run test:web`, `npm run typecheck:web`, `npm run build:web`, plus root `npm run format`, `npm run lint:fix`, `npm run typecheck`.
+- Only the judgement rules are written down; do not restate lint rules.
+
+Deeper detail: `docs/llm/view/typescript-engineering-rules.md`, Angular conventions: `docs/llm/view/angular-style-guide.md`.
