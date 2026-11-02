@@ -3,9 +3,7 @@ name: interview-plan
 description: Grill the user while planning.
 ---
 
-# Interview and Plan (Grill Me)
-
-## Core rule
+# Grill Me
 
 The plan is where human taste does the most work, because the plan is what produces the code.
 

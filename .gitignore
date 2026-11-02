@@ -230,3 +230,11 @@ node_modules/
 .angular/
 dist/
 coverage/
+
+# GCP and cloud credentials
+*-key.json
+*credentials*.json
+*service-account*.json
+gcp*.json
+secrets/
+

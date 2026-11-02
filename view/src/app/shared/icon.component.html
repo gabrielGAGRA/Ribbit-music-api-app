@@ -1,0 +1,121 @@
+<svg
+  [attr.width]="size()"
+  [attr.height]="size()"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="1.7"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  [class]="className()"
+  aria-hidden="true"
+>
+  @switch (name()) {
+    @case ('pond') {
+      <path d="M3 17c2-2 4 2 6 0s4 2 6 0 4 2 6 0M3 21c2-2 4 2 6 0s4 2 6 0 4 2 6 0" />
+      <path d="m7 12 5-9 5 9H7Z" />
+    }
+    @case ('music') {
+      <path d="M9 18V5l12-2v13M9 8l12-2" />
+      <ellipse cx="6" cy="18" rx="3" ry="3" />
+      <ellipse cx="18" cy="16" rx="3" ry="3" />
+    }
+    @case ('users') {
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 21v-3a6 6 0 0 1 12 0v3M16 5a3 3 0 0 1 0 6m2 4a5 5 0 0 1 3 5" />
+    }
+    @case ('search') {
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m16 16 5 5" />
+    }
+    @case ('user') {
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    }
+    @case ('arrow') {
+      <path d="M5 12h14m-5-5 5 5-5 5" />
+    }
+    @case ('chevron') {
+      <path d="m9 5 7 7-7 7" />
+    }
+    @case ('heart') {
+      <path
+        d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"
+      />
+    }
+    @case ('star') {
+      <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
+    }
+    @case ('close') {
+      <path d="m6 6 12 12M6 18 18 6" />
+    }
+    @case ('undo') {
+      <path d="m9 7-5 5 5 5" />
+      <path d="M5 12h9a6 6 0 1 1-5.2 9" />
+    }
+    @case ('play') {
+      <path d="m9 5 11 7-11 7V5Z" />
+    }
+    @case ('pause') {
+      <path d="M8 5v14M16 5v14" />
+    }
+    @case ('check') {
+      <path d="m5 12 4 4L19 6" />
+    }
+    @case ('filter') {
+      <path d="M4 6h16M4 12h16M4 18h16" />
+      <circle cx="9" cy="6" r="2" />
+      <circle cx="15" cy="12" r="2" />
+      <circle cx="8" cy="18" r="2" />
+    }
+    @case ('bell') {
+      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" />
+    }
+    @case ('plus') {
+      <path d="M12 5v14M5 12h14" />
+    }
+    @case ('clock') {
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    }
+    @case ('headphones') {
+      <path d="M4 14v-3a8 8 0 0 1 16 0v3" />
+      <rect x="3" y="12" width="4" height="8" rx="2" />
+      <rect x="17" y="12" width="4" height="8" rx="2" />
+    }
+    @case ('settings') {
+      <path d="m9 3-1 3-3 1v4l-2 1 2 1v4l3 1 1 3h6l1-3 3-1v-4l2-1-2-1V7l-3-1-1-3Z" />
+      <circle cx="12" cy="12" r="3" />
+    }
+    @case ('logout') {
+      <path d="M10 4H4v16h6m4-15 7 7-7 7m-5-7h12" />
+    }
+    @case ('sparkles') {
+      <path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3ZM20 2v4m-2-2h4" />
+    }
+    @case ('volume') {
+      <path d="m11 4-6 5H2v6h3l6 5V4Zm5 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" />
+    }
+    @case ('send') {
+      <path d="m22 2-7 20-4-9-9-4 20-7ZM11 13 22 2" />
+    }
+    @case ('globe') {
+      <circle cx="12" cy="12" r="9" />
+      <ellipse cx="12" cy="12" rx="4" ry="9" />
+      <path d="M3 12h18" />
+    }
+    @case ('repeat') {
+      <path d="M4 10V7h15m-3-3 3 3-3 3M20 14v3H5m3 3-3-3 3-3" />
+    }
+    @case ('sliders') {
+      <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" />
+    }
+    @case ('shield') {
+      <path d="M12 3 4 7v5c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V7l-8-4Z" />
+      <path d="m9 12 2 2 4-4" />
+    }
+    @case ('chart') {
+      <path d="M4 20h16M7 16v-5M12 16V7M17 16v-8" />
+    }
+  }
+</svg>

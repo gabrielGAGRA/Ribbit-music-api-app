@@ -1,0 +1,108 @@
+<div class="secondary-page dashboard-page">
+  @if (isPremiumLocked()) {
+    <section class="panel dashboard-upgrade-card">
+      <div class="dashboard-upgrade-copy">
+        <span class="eyebrow blue">EXCLUSIVO RIBBIT PRO &amp; FAMÍLIA</span>
+        <h2>Desbloqueie sua retrospectiva musical completa.</h2>
+        <p>
+          O Dashboard anual com horas ouvidas, artistas favoritos e gêneros dominantes está
+          disponível nos planos pagos do Ribbit. Você pode experimentar agora pelo checkout
+          simulado.
+        </p>
+      </div>
+      <button class="primary-button" (click)="goToPlans()">
+        Aprimorar meu plano <app-icon name="sparkles" [size]="16" />
+      </button>
+    </section>
+  }
+
+  <div class="dashboard-hero">
+    <div>
+      <span class="eyebrow">RETROSPECTIVA ANUAL RIBBIT</span>
+      <h2>
+        Olá, {{ userFirstName() }}.<br />
+        Seu gosto não para de evoluir.
+      </h2>
+      <p>
+        @if (isPremiumLocked()) {
+          Prévia ilustrativa — assine um plano pago para calcular seus números reais.
+        } @else {
+          Estatísticas calculadas em tempo real a partir das suas interações.
+        }
+      </p>
+    </div>
+    <div class="listening-ring">
+      <div>
+        <strong>{{ hoursLabel() }}</strong>
+        <span>ouvindo</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="metric-grid">
+    @for (m of metrics(); track m.label) {
+      <div class="metric-card">
+        <span>
+          <app-icon [name]="m.icon" [size]="18" />
+        </span>
+        <strong>{{ m.value }}</strong>
+        <h3>{{ m.label }}</h3>
+        <small>{{ m.detail }}</small>
+      </div>
+    }
+  </div>
+
+  <div class="dashboard-columns">
+    <div class="panel favorite-artists">
+      <div class="section-title">
+        <h2>Artistas favoritos</h2>
+        <span>Mais ouvidos</span>
+      </div>
+      @for (a of favoriteArtists(); track a.rank) {
+        <button (click)="searchArtist(a.song.artist)">
+          <strong>{{ a.rank }}</strong>
+          <img [src]="a.song.image" alt="" />
+          <span>
+            <b>{{ a.song.artist }}</b>
+            <small>{{ a.song.genre }}</small>
+          </span>
+          <small>{{ a.time }}</small>
+        </button>
+      } @empty {
+        <p class="empty-text">Curta músicas no The Pond para ver seus artistas favoritos aqui.</p>
+      }
+    </div>
+
+    <div class="panel dashboard-genres">
+      <div class="section-title">
+        <h2>Gêneros favoritos</h2>
+        <app-icon name="sparkles" [size]="17" />
+      </div>
+      @for (g of favoriteGenres(); track g.genre) {
+        <div class="dashboard-genre">
+          <span>{{ g.rank }}</span>
+          <strong>{{ g.genre }}</strong>
+          <div>
+            <i [appWidthPercent]="g.percentage"></i>
+          </div>
+          <small>{{ g.percentage }}%</small>
+        </div>
+      } @empty {
+        <p class="empty-text">Nenhum gênero dominante registrado ainda.</p>
+      }
+    </div>
+  </div>
+
+  <div class="panel mood-card">
+    <div>
+      <span class="eyebrow blue">SEU ESTILO DOMINANTE</span>
+      <h2>Calma que movimenta.</h2>
+      <p>Suas escolhas constroem uma identidade sonora única a cada sessão.</p>
+    </div>
+    <div class="mood-tags">
+      <span>Contemplativo</span>
+      <span>Solar</span>
+      <span>Fora da bolha</span>
+    </div>
+  </div>
+</div>

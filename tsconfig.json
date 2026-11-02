@@ -3,7 +3,11 @@
     "target": "ES2022",
     "module": "ES2022",
     "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "noEmit": true,
     "strict": true,
     "noUncheckedIndexedAccess": true,
@@ -15,7 +19,19 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "experimentalDecorators": true,
+    "useUnknownInCatchVariables": true,
+    "types": ["node"],
+    "paths": {
+      "@ribbit/shared-types": ["./view/src/types/index.ts"],
+      "@core/*": ["./view/src/app/core/*"],
+      "@shared/*": ["./view/src/app/shared/*"],
+      "@features/*": ["./view/src/app/features/*"]
+    }
   },
-  "include": ["src/**/*.ts"]
+  "include": [
+    "view/**/*.ts",
+    "vitest.config.ts"
+  ]
 }

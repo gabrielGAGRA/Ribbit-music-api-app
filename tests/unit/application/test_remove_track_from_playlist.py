@@ -1,0 +1,109 @@
+"""Unit tests for RemoveTrackFromPlaylistUseCase."""
+
+from unittest.mock import MagicMock
+
+import pytest
+
+from app.application.dtos.playlist_dtos import RemoveTrackFromPlaylistCommand
+from app.application.ports.repositories.playlist_repository import (
+    PlaylistRepositoryPort,
+)
+from app.application.ports.repositories.user_repository import UserRepositoryPort
+from app.application.use_cases.playlist.remove_track_from_playlist import (
+    RemoveTrackFromPlaylistUseCase,
+)
+from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
+from app.domain.models import Playlist, Track, User
+
+
+def test_remove_track_from_playlist_success() -> None:
+    user = User(
+        user_id=1,
+        email="owner@ribbit.com",
+        password_hash="pw",
+        display_name="Owner",
+        age=30,
+        plan_id=1,
+    )
+    track = Track(
+        track_id=10, title="Song", artist="Artist", duration_seconds=200, genre="Pop"
+    )
+    playlist = Playlist(
+        playlist_id=5, user_id=1, name="My Playlist", initial_tracks=[track]
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+    playlist_repo.remove_track.return_value = True
+
+    use_case = RemoveTrackFromPlaylistUseCase(
+        user_repo=user_repo, playlist_repo=playlist_repo
+    )
+    result = use_case.execute(
+        RemoveTrackFromPlaylistCommand(playlist_id=5, track_id=10, user_id=1)
+    )
+
+    assert result is True
+    playlist_repo.remove_track.assert_called_once_with(5, 10)
+
+
+def test_remove_track_from_playlist_non_owner_raises_permission_denied() -> None:
+    user = User(
+        user_id=2,
+        email="other@ribbit.com",
+        password_hash="pw",
+        display_name="Other",
+        age=30,
+        plan_id=1,
+    )
+    track = Track(
+        track_id=10, title="Song", artist="Artist", duration_seconds=200, genre="Pop"
+    )
+    playlist = Playlist(
+        playlist_id=5, user_id=1, name="My Playlist", initial_tracks=[track]
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+
+    use_case = RemoveTrackFromPlaylistUseCase(
+        user_repo=user_repo, playlist_repo=playlist_repo
+    )
+    with pytest.raises(PermissionDeniedError, match="playlist does not belong"):
+        use_case.execute(
+            RemoveTrackFromPlaylistCommand(playlist_id=5, track_id=10, user_id=2)
+        )
+
+
+def test_remove_track_not_in_playlist_raises_entity_not_found() -> None:
+    user = User(
+        user_id=1,
+        email="owner@ribbit.com",
+        password_hash="pw",
+        display_name="Owner",
+        age=30,
+        plan_id=1,
+    )
+    playlist = Playlist(playlist_id=5, user_id=1, name="My Playlist")
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+
+    use_case = RemoveTrackFromPlaylistUseCase(
+        user_repo=user_repo, playlist_repo=playlist_repo
+    )
+    with pytest.raises(
+        EntityNotFoundError, match="Track with ID 99 not found in playlist"
+    ):
+        use_case.execute(
+            RemoveTrackFromPlaylistCommand(playlist_id=5, track_id=99, user_id=1)
+        )

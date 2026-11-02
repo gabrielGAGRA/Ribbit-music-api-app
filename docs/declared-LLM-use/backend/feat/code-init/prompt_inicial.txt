@@ -1,0 +1,104 @@
+@workspace Você é o Arquiteto de Software e Desenvolvedor Sênior responsável pelo backend do projeto **Ribbit**.
+
+### 🎯 SEU OBJETIVO
+O backend já possui uma estrutura inicial funcional em **Arquitetura Hexagonal (FastAPI + PostgreSQL)**. Seu objetivo é **revisar, refatorar e estender** o código existente para alinhar os Casos de Uso (`application`), os Contratos (`domain/ports.py`), a Infraestrutura (`infrastructure`) e os Routers (`presentation/routers/`) exatamente com a nova especificação de telas e regras descrita abaixo.
+
+---
+
+### 📐 DIRETRIZES ARQUITETURAIS OBRIGATÓRIAS
+1. **`app/domain/`**: Apenas `dataclasses` puras e `ports.py` (interfaces `ABC`). NENHUMA importação do SQLAlchemy, FastAPI ou Pydantic aqui.
+2. **`app/application/`**: Casos de uso com a lógica de negócio (trava de idade, validação de plano Premium/Família, regras de Jam). Depende apenas de `domain`.
+3. **`app/infrastructure/`**: ORM SQLAlchemy (`db_models.py`), Repositórios (`repositories.py`) e adaptadores em `apis_externas.py` (stubs para iTunes/Spotify), itunes só é usado para preencher preview no banco de dados
+4. **`app/presentation/`**: Schemas Pydantic e Routers FastAPI.
+
+---
+
+### 🗺️ MAPEAMENTO COMPLETO DE TELAS, CASOS DE USO E ROTAS
+
+#### 1. Autenticação & Planos
+* **Tela de Login:**
+  - `POST /api/auth/login`  Valida e-mail e hash da senha (usuário ou admin).
+* **Tela de Criar Conta:**
+  - `POST /api/auth/cadastrar`  Registra usuário (bloqueia e-mail existente e menores de 18 anos), pega nome, e-mail, senha e data de nascimento
+* **Tela de Escolha / Gerenciamento de Planos:**
+  - `GET /api/planos`  Lista planos, valores e limites de perfis.
+  - `POST /api/perfil/plano`  Confirma/muda o plano do usuário.
+
+#### 2. Descoberta & Interação
+* **Tela de Descobrir Música:**
+  - `GET /api/descoberta/proxima`  Retorna próxima sugestão do deck com preview iTunes, respeitando gêneros bloqueados, histórico prévio (músicas ainda não interagidas) e trava de idade.
+  - `POST /api/descoberta/interagir`  Registra ação com música (`like`, `deslike`, `superlike`).
+
+#### 3. Playlists
+* **Tela Playlists (Biblioteca):**
+  - `GET /api/playlists`  Lista playlists do usuário.
+  - `DELETE /api/playlists/{id}`  Deleta uma playlist.
+* **Popup / Deck de Criar Playlist:**
+  - `POST /api/playlists/deck`  Cria a playlist com nome e gera deck por parâmetros (duração, gênero, etc.).
+  - `GET /api/playlists/{id}/deck`  Retorna faixas do deck (parando ao bater a duração máxima e aplicando filtros de idade/gêneros).
+  - `POST /api/playlists/{id}/swipe-add`  Adiciona faixas aprovadas na playlist (likes vão para a playlist e superlikes vão também para as 'amadas').
+* **Tela Músicas na Playlist X:**
+  - `GET /api/playlists/{id}`  Exibe músicas e duração total calculada.
+  - `DELETE /api/playlists/{id}/musicas/{musica_id}`  Remove música da playlist.
+  - `POST /api/playlists/{id}/exportar-spotify`  Stub/preparação para exportação (mock).
+
+#### 4. Jams (Salas Coletivas)
+* **Acesso / Criação de Jam:**
+  - `POST /api/jams/entrar`  Adiciona usuário à sala via código numérico.
+  - `POST /api/jams`  Cria sala com nome obrigatório, duração, limite de superlikes e meta de votos para pular, retornando id da sala.
+* **Tela Jam Específica:**
+  - `GET /api/jams/{id}/estado`  Fila ordenada por pontos, código da sala, duração acumulada e setada e contagem de votos.
+  - `POST /api/jams/{id}/votar-pular`  Registra voto para pular faixa atual.
+  - `POST /api/jams/{id}/curtir-fila`  Salva faixa da fila nas curtidas ou em uma playlist.
+  - `POST /api/jams/{id}/encerrar`  Host desativa a sala (`is_ativa = False`).
+* **Deck de Adicionar Música na Jam:**
+  - `GET /api/jams/{id}/deck-adicionar`  Exibe sugestões com base na fonte configurada (minhas playlists, minhas curtidas, livre), respeitando filtros de idade/gêneros.
+  - `POST /api/jams/{id}/interagir-deck`  Pontua na fila (+1 para like, +2 para superlike respeitando o limite da sala).
+
+#### 5. Reviews, Busca & Avaliação
+* **Tela de Reviews / Pesquisa:**
+  - `GET /api/reviews/ultimas-interagidas`  Músicas recentemente interagidas pelo usuário.
+  - `GET /api/reviews/feed-top5dias`  Top comentários das últimas semanas de maior engajamento.
+  - `POST /api/reviews/{id}/like`  Curte um comentário.
+  - `GET /api/musicas/buscar`  Busca por artista, música ou álbum no banco de dados (fallback mockado para Spotify).
+* **Popup / Detalhes de Avaliação:**
+  - `POST /api/reviews/{id}/curtir-busca`  Salva faixa nas curtidas ou em uma playlist.
+  - `GET /api/reviews/musica/{id}`  Exibe capa, informações e comentários da música.
+  - `POST /api/reviews`  Avalia e comenta a música (caso ainda não tenha avaliado).
+  - `DELETE /api/reviews/{id}`  Exclui o próprio comentário.
+
+#### 6. Perfil, Planos & Configurações
+* **Perfil do Usuário:**
+  - `GET /api/perfil/me`  Resumo cadastral, plano e últimas interações.
+  - `PUT /api/perfil/me`  Atualiza nome ou senha.
+  - `POST /api/perfil/vincular-spotify`  Vincula conta do Spotify (mock).
+  - `DELETE /api/perfil/plano`  Cancela assinatura (retorna para o plano Free).
+  - `DELETE /api/perfil/conta`  Exclui permanentemente o usuário.
+  - `GET /api/perfil/interacoes`  Lista faixas por categoria (likes, superlikes, rejeitadas).
+* **Recursos Premium:**
+  - `PUT /api/perfil/interacao`  Altera a categoria de uma interação existente.
+  - `GET /api/perfil/dash`  Estatísticas do usuário (gêneros favoritos, total de playlists).
+  - `GET /api/perfil/generos-bloqueados` e `PUT /api/perfil/generos-bloqueados`  Consulta e edita bloqueios de gêneros.
+* **Gestão do Plano Família (Apenas Titular):**
+  - `GET /api/perfil/familia/membros`  Lista contas no plano.
+  - `POST /api/perfil/familia/membros`  Cadastra membro dependente (permite cadastro de menor de idade).
+  - `DELETE /api/perfil/familia/membros/{membro_id}`  Remove membro do plano familiar.
+
+#### 7. Painel Administrativo (`is_admin == True`) -> pelo menos uma pessoa no seed tem que existir
+* `GET /api/admin/dashboard`  Receita e total de usuários.
+* `GET /api/admin/audiencia`  Relatório de consumo e gêneros bloqueados.
+* `GET /api/admin/administradores` e `PUT /api/admin/administradores/{id}`  Gerencia papéis de admin.
+* `GET /api/admin/musicas-bloqueadas` e `PUT /api/admin/musicas/{id}/bloquear`  Oculta/desoculta músicas.
+* `GET /api/admin/planos` e `PUT /api/admin/planos/{id}`  Altera valores e regras dos planos.
+
+---
+
+### 🚀 PLANO DE AÇÃO SUGERIDO
+1. Verifique primeiro a estrutura atual do código no `@workspace` para identificar quais arquivos já existem e quais precisam apenas de ajustes.
+2. Apresente um resumo breve do que será alterado ou criado.
+3. Atualize o Domínio (e entidades e bancos) e Use Cases, garantindo o cumprimento de todas as regras de negócio.
+4. Atualize os Repositórios e Routers FastAPI correspondentes.
+5. Atualize os .md, readmes e relacionados e crie/edite arquivos de teste
+
+💡 *Caso o limite de tokens impeça a conclusão de tudo em uma única resposta, foque em deixar as rotas 100% implementadas e o restante estruturado com stubs funcionais (`# TODO`).*
+

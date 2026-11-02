@@ -1,0 +1,208 @@
+<div class="admin-users-page">
+  <section class="admin-card toolbar-card">
+    <div class="tabs-row" role="tablist" aria-label="Visões de contas">
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'all'"
+        [class.active]="activeTab() === 'all'"
+        (click)="selectTab('all')"
+      >
+        <app-icon name="users" [size]="16" />
+        Todos os Usuários ({{ adminState.usersWithPlans().length }})
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'admins'"
+        [class.active]="activeTab() === 'admins'"
+        (click)="selectTab('admins')"
+      >
+        <app-icon name="shield" [size]="16" />
+        Administradores ({{ adminState.administrators().length }})
+      </button>
+    </div>
+
+    <div class="filters-row">
+      <div class="filter-field grow-field">
+        <label for="admin-users-search">Buscar por nome ou e-mail</label>
+        <span id="admin-users-search-hint" class="field-hint">
+          Filtra instantaneamente a listagem ativa
+        </span>
+        <div class="search-input-box">
+          <app-icon name="search" [size]="16" />
+          <input
+            id="admin-users-search"
+            type="search"
+            placeholder="Ex.: Carolina, admin@ribbit..."
+            aria-describedby="admin-users-search-hint"
+            [value]="searchQuery()"
+            (input)="updateSearch($event)"
+          />
+        </div>
+      </div>
+
+      @if (activeTab() === 'all') {
+        <div class="filter-field">
+          <label for="admin-users-plan-filter">Filtrar por plano</label>
+          <span class="field-hint">Tier atribuído</span>
+          <select
+            id="admin-users-plan-filter"
+            class="admin-select"
+            [value]="selectedPlanFilter()"
+            (change)="updatePlanFilter($event)"
+          >
+            <option value="all">Todos os planos</option>
+            @for (planName of planFilterOptions(); track planName) {
+              <option [value]="planName">{{ planName }}</option>
+            }
+          </select>
+        </div>
+      }
+    </div>
+
+    @if (actionError()) {
+      <div class="admin-error-banner" role="alert">
+        <app-icon name="close" [size]="15" />
+        <span>{{ actionError() }}</span>
+      </div>
+    }
+  </section>
+
+  @if (activeTab() === 'all') {
+    <section class="admin-card">
+      <div class="section-header-row">
+        <div>
+          <span class="eyebrow blue"
+            >GET /API/ADMIN/USERS · PUT /USERS/&#123;ID&#125;/PROMOTE-ADMIN</span
+          >
+          <h2>Base de Assinantes e Contas</h2>
+        </div>
+      </div>
+
+      <div tabindex="0" role="region" aria-labelledby="all-users-caption" class="table-wrapper">
+        <table class="admin-table users-table">
+          <caption id="all-users-caption" class="sr-only">
+            Lista de usuários registrados com plano de assinatura e status administrativo
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Usuário</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Idade</th>
+              <th scope="col">Plano</th>
+              <th scope="col">Permissão</th>
+              <th scope="col">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of filteredUsers(); track user.user_id) {
+              <tr>
+                <th scope="row">
+                  <div class="user-cell">
+                    <strong>{{ user.display_name }}</strong>
+                    <small>#{{ user.user_id }}</small>
+                  </div>
+                </th>
+                <td>{{ user.email }}</td>
+                <td>{{ user.age }} anos</td>
+                <td>
+                  <span class="plan-chip" [class.paid]="user.plan_name !== 'Free'">
+                    {{ user.plan_name }}
+                  </span>
+                </td>
+                <td>
+                  @if (user.is_admin) {
+                    <span class="role-badge admin-role">Administrador</span>
+                  } @else {
+                    <span class="role-badge listener-role">Ouvinte</span>
+                  }
+                </td>
+                <td>
+                  @if (!user.is_admin) {
+                    <button
+                      type="button"
+                      class="outline-button small-btn"
+                      (click)="promoteUser(user.user_id)"
+                    >
+                      Promover a Admin
+                    </button>
+                  } @else {
+                    <span class="muted">Acesso ativo</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="empty-cell">
+                  Nenhum usuário encontrado para os filtros aplicados.
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  } @else {
+    <section class="admin-card">
+      <div class="section-header-row">
+        <div>
+          <span class="eyebrow blue">
+            GET /API/ADMIN/ADMINISTRATORS · PUT /ADMINISTRATORS/&#123;ID&#125;
+          </span>
+          <h2>Equipe com Privilégio Administrativo</h2>
+        </div>
+      </div>
+
+      <div tabindex="0" role="region" aria-labelledby="admins-table-caption" class="table-wrapper">
+        <table class="admin-table admins-table">
+          <caption id="admins-table-caption" class="sr-only">
+            Lista de administradores ativos da plataforma Ribbit
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Administrador</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Idade</th>
+              <th scope="col">Status da Sessão</th>
+              <th scope="col">Governança</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (admin of filteredAdministrators(); track admin.user_id) {
+              <tr>
+                <th scope="row">
+                  <div class="user-cell">
+                    <strong>{{ admin.display_name }}</strong>
+                    <small>#{{ admin.user_id }}</small>
+                  </div>
+                </th>
+                <td>{{ admin.email }}</td>
+                <td>{{ admin.age }} anos</td>
+                <td>
+                  @if (isCurrentSessionUser(admin.user_id)) {
+                    <span class="role-badge self-badge">Você (sessão atual)</span>
+                  } @else {
+                    <span class="role-badge admin-role">Credencial ativa</span>
+                  }
+                </td>
+                <td>
+                  <button type="button" class="revoke-btn" (click)="revokeAdmin(admin.user_id)">
+                    Revogar acesso
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="empty-cell">Nenhum administrador corresponde à busca.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>

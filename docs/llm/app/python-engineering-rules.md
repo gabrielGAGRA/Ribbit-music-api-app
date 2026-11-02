@@ -9,7 +9,7 @@
 - **Direct symbol import** for stable, unambiguous types and public interfaces (`from package.models.user import User`).
 - Avoid wildcard imports outside tightly controlled package re-exports.
 - **Stdlib / third-party**: Symbol imports are fine (`from pydantic import BaseModel`).
-- **Lazy imports**: Use explicit `lazy import` / `lazy from ... import ...` for startup-sensitive paths (e.g., CLI entry points, heavy optional dependencies). NEVER use lazy imports to conceal circular dependencies or deferred side effects. Avoid immediate module-level access of lazy imports.
+- **Lazy imports**: Use explicit `lazy import` / `lazy from ... import ...`. NEVER use lazy imports to conceal circular dependencies or deferred side effects. Avoid immediate module-level access of lazy imports.
 - **No import-time side effects**: NEVER load configuration, create network/database clients, or perform environment-dependent registration at import time. Defer to the composition root.
 
 ---
@@ -50,7 +50,7 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
   - Used in more than one place → a helpers module or a domain policy module (for policies with no natural entity owner).
   - Module-level beside classes only when strongly justified (a composition hook or framework registry).
 - **Classes**
-  - Multiple classes in one file are fine.
+  - Multiple classes in one file are fine when tightly cohesive (e.g., aggregate root, related child entities/value objects, and domain exceptions).
   - Do not mix a pile of free functions with classes in one file unless justified. Put shared validators/normalizers in a helpers module; keep helpers modules functions-only.
 
 - **Mutable globals**: Avoid process-wide mutable state; if needed, `_name` + accessors. Module constants that follow the placement rules above are fine.
@@ -63,14 +63,14 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 - **Truthiness**: Explicit `is None` / `== 0` when those must not conflate with emptiness/falsey checks.
 - **Static / class methods**: Prefer an instance method when behavior needs instance state; `@classmethod` for alternate constructors or class-aware behavior; `@staticmethod` when the operation belongs with the type but needs neither `self` nor `cls`. NEVER conceal global mutable state in classmethods; caches must be explicit and bounded by lifetime, invalidation, and isolation. NEVER perform I/O in decorator logic. Non-trivial decorators need documented effects, tests, and valid parameters that do not fail at import.
 - **Power features**: Avoid `getattr`/metaclasses/bytecode/dynamic inheritance unless stdlib (`abc`, `enum`, …).
-- **Properties**: Do not add getters/setters merely to wrap fields. Expose read-only properties where appropriate; use intention-revealing methods for state changes that enforce business rules.
+- **Properties**: Do not add trivial getters/setters merely to wrap fields (avoid Java-style anemic boilerplate). Expose attributes directly by default. Convert to a @property only when lazy evaluation, dynamic calculation, or invariant validation is actively needed. Expose read-only properties (no setter) for internal counters or bounded state; use intention-revealing methods for state changes that enforce business rules.
 - **Threads**: Do not assume container ops are atomic — use `Queue` / `Lock`. Use `Condition` only to wait on a shared predicate; otherwise `Event` / `Queue` / `Semaphore`.
 - **Async**: NEVER run blocking I/O or subprocess work on the event loop, suppress cancellation, or create unbounded tasks/queues. ALWAYS set outbound timeouts. Bound concurrency and queues. Prefer structured ownership and lifecycle for spawned tasks. Retry only bounded, idempotent, clearly transient operations.
 - **Data modeling** — choose by domain role first (entity / value object / DTO), then by validation and serialization needs:
-  - **Entity / aggregate** — explicit class when the concept has identity, lifecycle, mutable state, business invariants, or behavior. Keep state private where practical; expose intention-revealing operations instead of arbitrary field mutation. Equality is identity-based unless documented otherwise. A public operation must leave the object valid.
-  - **Value object** — immutable, value-based equality; validates itself at construction; may contain behavior. Prefer an explicit immutable class (or a frozen model when construction-time validation is valuable), using built-in `frozendict` for immutable mappings. Do not expose mutable internals.
-  - **DTO** — a validation model at transport, configuration, and external-data boundaries. DTOs must not become domain entities merely because they validate input.
-  - Use a validation library (e.g. Pydantic) at API/config boundaries and for untrusted or weakly typed payloads. Map DB rows explicitly to domain entities/value objects; validate at the mapper boundary when schema uncertainty warrants it. NEVER make the domain validation-library-shaped solely for transport. Avoid `@dataclass`; prefer a validation model or an explicit class.
+  - **Entity / aggregate** — use standard classes or @dataclass(slots=True, kw_only=True). Avoid hand-rolling manual __slots__ = (...) alongside repetitive __init__ and pass-through getters/setters when a dataclass satisfies the layout. Keep internal state private where business invariants require protection; expose intention-revealing operations instead of unrestricted setters. Equality is identity-based unless documented otherwise. A public operation must leave the object valid.
+  - **Value object** —  immutable, value-based equality; validates itself at construction; may contain behavior. Prefer @dataclass(slots=True, frozen=True, kw_only=True) (or an explicit immutable class when custom instantiation branches warrant it), using built-in frozendict for immutable mappings. Do not expose mutable internals.
+  - **DTO** — a validation model (e.g., Pydantic BaseModel) strictly at transport, configuration, messaging, and external-data boundaries. DTOs must not become domain entities merely because they validate input.
+  - **Boundaries & mappers** — use a validation library (e.g., Pydantic) at API/config boundaries and for untrusted or weakly typed payloads. Map DB rows and incoming DTOs explicitly to pure domain entities/value objects via dedicated mappers or factory methods; validate at the mapper boundary when schema uncertainty warrants it. NEVER leak validation-library types, JSON casing aliases, or transport schemas into the domain layer.
   - `NamedTuple` — lightweight immutable record, no behavior. Do not choose it mainly for hashability.
   - attrs — only if you need frozen/slots + validators/converters and refuse a larger dependency (do not add by default).
 
@@ -92,7 +92,7 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 ## 5. Type Annotations
 
 - Parameters: prefer `collections.abc` abstractions (`Sequence`, `Mapping`) over concrete `list`/`dict`.
-- **`TYPE_CHECKING`**: Prefer fixing real import cycles (move shared helpers, invert ownership, pass primitives) over `TYPE_CHECKING` or lazy imports. Use `TYPE_CHECKING` only when the symbol is genuinely unnecessary at runtime **and** a cycle cannot be removed cleanly.
+- **`TYPE_CHECKING`**: Prefer fixing real import cycles (move shared helpers, invert ownership, pass primitives) over `TYPE_CHECKING` or lazy imports. Use `TYPE_CHECKING` only when the symbol is genuinely unnecessary at runtime and a cycle cannot be removed cleanly.
 - **Runtime-inspected boundaries**: Validation models, framework endpoint signatures, serializers, and ORM relationships inspect annotations — ensure referenced types resolve in the namespace those frameworks use.
 - **Quoted annotations**: Use only when runtime must not resolve the type. Do not treat them as a universal circular-import fix; they can defer a failure to framework startup or runtime.
 - **Deferred evaluation (Python 3.14+)**: Changes *when* annotations resolve, not whether frameworks need them. Introspection paths remain sensitive to namespace and framework behavior.
@@ -103,22 +103,26 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 
 ---
 
-## 6. Hexagonal Architecture
+## 6. SOLID
 
-### SOLID
-
-- **SRP — use cases**: A use case coordinates a single business capability and transaction boundary. It loads domain objects, invokes domain behavior, persists changes, and coordinates ports. Business invariants and state transitions belong in entities, value objects, or explicit domain policies — not in use cases by default.
+- **SRP — use cases**: A use case coordinates a single business capability and transaction boundary. It loads domain objects, invokes domain behavior, persists changes, and coordinates ports. Business invariants and state transitions belong in entities or explicit domain policies — not in use cases by default.
 - **OCP**: Add or modify a use case when the business capability changes; add or replace an adapter when an external mechanism or provider changes. Keep provider-specific branching in infrastructure or composition code, not domain/application logic. Do not introduce abstractions merely because a second implementation is theoretically possible.
 - **LSP / ISP**: Honor Protocols; keep ports small.
 - **DIP**: Depend on port/repository Protocols — never on infrastructure concretes outside the composition root. ALWAYS make each adapter/repository concrete implement the Protocol it fulfills. Wire concretes only in the composition root.
+
+---
+
+## 7. Domain
+
 - **Package ownership**: `domain` owns concepts/invariants; `application` owns ports, commands, DTOs, and orchestration; `infrastructure` owns adapters, facades, and other I/O; `presentation` owns transport. Add `helpers/` folders inside layers as needed. Avoid generic dumping packages; a cross-cutting package is acceptable only for truly neutral primitives (IDs, time, result/error primitives, observability interfaces) with explicit ownership. Cross-cutting I/O helpers belong in infrastructure.
 - **Domain**: models, pure logic, exceptions only. Put identity, invariants, and state transitions on entities/value objects (aggregates own navigation and invariants over their own state). Use domain services/policies only when behavior is domain-significant and has no natural entity owner. “Pure” means no concrete infrastructure — the domain may depend on injected abstractions (clock, policy, deterministic ID generator). Domain NEVER imports settings; pass narrow policy values as parameters.
   - **Encapsulation**: Entity state must not be publicly mutable by default. State transitions go through named operations that preserve invariants. Do not expose mutable internal collections — return immutable views/copies or expose domain operations.
   - **Enums**: Keep alias maps and membership helpers inside the enum type; do not leave post-class module dicts or duplicate frozensets across layers.
 - **Ports vs repositories**: External I/O Protocols are ports. Reserve `repositories` for entity persistence; blob/file storage is a port.
-  - *Why:* The default AI label for any storage is “repository.”
 
-### Composition root
+---
+
+## 8. Composition root
 
 - Each executable entry point owns a composition root (HTTP server, worker/consumer, scheduled job, CLI, migration task, or test fixture/application factory). NEVER force non-HTTP entry points through the HTTP bootstrap; tests use an equivalent bootstrap.
 - Prefer one composition class/function that **inlines** session/client/adapter/use-case/router construction — always in the composition root, NEVER in presentation. Avoid a parallel wiring module in the application layer that imports infrastructure concretes.
@@ -133,7 +137,7 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 
 ---
 
-## 7. Presentation
+## 9. Presentation
 
 - **Routers/handlers**: Prefer the framework's function-based handlers with dependency injection for use cases and request context. Class-based handlers are acceptable in existing modules — mirror the local style when extending them.
 - **Composition mounts routers**: The composition root mounts already-built routers — no separate presentation-layer aggregator, no infrastructure imports in presentation.
@@ -146,18 +150,17 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 - NEVER put secrets in URLs or query strings.
 - Delegated/pass-through credentials follow the downstream protocol’s required transport; NEVER persist or log token values. Require explicit delegation authorization. Prefer short-lived scoped tokens or token exchange over forwarding long-lived secrets.
 - State the service’s role when relevant: token relay, delegated-credential broker, or OAuth client — those are materially different responsibilities.
-  - *Why:* Bearer is for auth we validate; downstream credentials follow their own protocol and carry higher leakage risk.
 
 ---
 
-## 8. Application
+## 10. Application
 
 - **Names**: One public `execute()` per use case; descriptive module names; shared helpers may be unsuffixed. Keep helpers modules functions-only; use-case base classes live with the use cases.
 - Routers call use cases directly; NEVER orchestrate in presentation.
 - NEVER import infrastructure concretes from the application layer (wiring belongs in the composition root). A port name may say “router” for strategy selection without implying HTTP.
 - **Module helpers**: `_name` for module-internal naming; single leading `_` only (`__name` is class name-mangling). Do not accumulate `_validate_*` / `_map_*` / `_build_*` helpers beside a use case that operate on domain objects — move that behavior onto the entity, value object, or a named domain policy.
-- **Naming**: Descriptive; no ambiguous abbreviations; avoid type-redundant names (`users` not `user_list`). Short names (`i`, `x`, `T`) OK in tiny scopes. Test names discoverable by the runner; `.py` filenames use `_`, never `-`.
-- **`__all__`**: On package re-export `__init__.py` or any module with an intentional public surface. Prefer thin barrels — do not re-export across layer boundaries for convenience.
+- **Naming**: Descriptive; no ambiguous abbreviations; avoid type-redundant names (`users` not `user_list`). Acronyms in CapWords uppercase per PEP 8 (`HTTPServerError`, not `HttpServerError`), exempting external FFI/C++ bindings. Short names (`i`, `x`, `T`) OK in tiny scopes. Test names discoverable by the runner; `.py` filenames use `_`, never `-`.
+- **`__all__`**: On package re-export `__init__.py` or any module with an intentional public surface. Prefer thin barrels. Use barrel re-exports only per aggregate or bounded sub-package.
 - **Ports**: Capability-focused and minimal. Prefer methods for operations; read-only properties only when fundamental to the capability and not exposing mutable state.
 - **DTOs and validation ownership**:
   - Prefer DTOs as field-only models — no methods beyond validators. Shared DTO normalizers live in a helpers module, not beside the DTO classes.
@@ -169,16 +172,7 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 
 ---
 
-## 9. Testing
-
-- **Prefer test-first** for new behavior and defect fixes (especially domain/application). Behavior changes need automated coverage before merge; spikes/emergency fixes need follow-up tests + tracked rationale.
-- **CI**: fakes only — no real external services in developer or PR/CI runs.
-- AAA; match the surrounding test style.
-- No coverage inflation that bypasses business contracts.
-
----
-
-## 10. Comments & Docstrings
+## 11. Comments & Docstrings
 
 ### Comments — minimal by default
 - Add comments only for an invariant, constraint, tradeoff, workaround, or external contract that the code and types cannot express. NEVER narrate control flow or restate adjacent code.
@@ -189,6 +183,7 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 - **Write one** when types/names do not carry the contract: public API behavior, non-obvious domain rules, externally visible side effects, or integration-adapter quirks.
 - Do not restate the signature or function name in prose.
 - Structured sections (`Args` / `Returns` / `Raises` / …) only when they add information beyond types.
+- **Decorated targets**: If a function or class is decorated, its docstring must describe post-decorator behavior observed by callers (e.g., `@contextmanager`).
 
 ---
 

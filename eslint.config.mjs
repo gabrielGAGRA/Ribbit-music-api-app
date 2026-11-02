@@ -5,7 +5,7 @@ import oxlint from 'eslint-plugin-oxlint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig(
-  globalIgnores(['app/**', 'tests/unit/**', 'docs/**', 'local/**', 'node_modules/**']),
+  globalIgnores(['app/**', 'tests/unit/**', 'docs/**', 'local/**']),
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
 
   // Oxlint desativa regras duplicadas no ESLint

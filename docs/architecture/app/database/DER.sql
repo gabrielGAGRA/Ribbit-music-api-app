@@ -38,7 +38,7 @@ Table musicas {
 }
 
 Table interacoes {
-  interacao_id int [pk, increment]
+  Interaction_id int [pk, increment]
   usuario_id int [not null, ref: > usuarios.usuario_id]
   musica_id int [not null, ref: > musicas.musica_id]
   acao varchar [not null]

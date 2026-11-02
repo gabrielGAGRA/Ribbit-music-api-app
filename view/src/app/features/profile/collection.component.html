@@ -1,0 +1,58 @@
+<div class="secondary-page collection-page">
+  <div class="collection-summary" [class]="accentClass()">
+    <span class="collection-symbol">
+      <app-icon [name]="iconName()" [size]="30" />
+    </span>
+    <div>
+      <strong>{{ totalCount() }}</strong>
+      <span>{{ subtitle() }}</span>
+    </div>
+    <button class="outline-button" (click)="onSummaryAction()">
+      <app-icon [name]="kind() === 'reject' ? 'repeat' : 'play'" [size]="16" />
+      {{ kind() === 'reject' ? 'Revisar escolhas' : 'Ouvir coleção' }}
+    </button>
+  </div>
+
+  <div class="collection-toolbar">
+    <div class="section-title">
+      <h2>{{ kind() === 'reject' ? 'Histórico de rejeições' : 'Sua coleção' }}</h2>
+      <span>Ordenado por mais recente</span>
+    </div>
+    <label class="mini-search">
+      <app-icon name="search" [size]="16" />
+      <input [value]="query()" (input)="onSearchInput($event)" placeholder="Buscar nesta lista" />
+    </label>
+  </div>
+
+  <div class="panel collection-list">
+    @for (item of filteredItems(); track item.title) {
+      <div class="song-row">
+        <button
+          class="song-cover"
+          (click)="onSongClick(item)"
+          [attr.aria-label]="'Descobrir ' + item.title"
+        >
+          <img [src]="item.image" [alt]="'Capa de ' + item.title" />
+        </button>
+        <div class="song-description">
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.artist }}</span>
+        </div>
+        <div class="collection-actions">
+          <span class="song-time">{{ item.time }}</span>
+          <button
+            class="icon-button"
+            [attr.aria-label]="
+              kind() === 'reject' ? 'Dar uma segunda chance' : 'Remover da coleção'
+            "
+            (click)="onItemAction(item)"
+          >
+            <app-icon [name]="kind() === 'reject' ? 'undo' : 'close'" [size]="16" />
+          </button>
+        </div>
+      </div>
+    } @empty {
+      <p class="empty-text">Nenhuma música encontrada nesta lista ainda.</p>
+    }
+  </div>
+</div>

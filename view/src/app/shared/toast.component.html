@@ -1,0 +1,11 @@
+@if (state.toast()) {
+  <div class="toast" role="status">
+    <span>
+      <app-icon name="check" [size]="17" />
+    </span>
+    {{ state.toast() }}
+    <button (click)="closeToast()" aria-label="Fechar aviso">
+      <app-icon name="close" [size]="15" />
+    </button>
+  </div>
+}

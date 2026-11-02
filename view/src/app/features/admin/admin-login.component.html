@@ -1,0 +1,106 @@
+<div class="admin-login-shell">
+  <section class="admin-login-story">
+    <button type="button" class="brand admin-brand" (click)="returnToListenerApp()">
+      <app-frog />
+      <span>ribbit<span class="brand-dot">.</span></span>
+      <span class="admin-badge">ADMIN</span>
+    </button>
+
+    <div class="admin-story-copy">
+      <span class="eyebrow blue">CONSOLE DE GOVERNANÇA</span>
+      <h1>Operação, catálogo e planos <span>em um só lugar.</span></h1>
+      <p>
+        Acompanhe receita líquida estimada, audiência, permissões administrativas e moderação de
+        faixas e avaliações do Ribbit.
+      </p>
+    </div>
+
+    <div class="admin-credential-box">
+      <div class="credential-header">
+        <app-icon name="shield" [size]="18" />
+        <strong>Credenciais locais de demonstração</strong>
+      </div>
+      <p>
+        E-mail: <code>{{ adminState.defaultAdminEmail }}</code>
+      </p>
+      <p>
+        Senha: <code>{{ adminState.defaultAdminPassword }}</code>
+      </p>
+      <button type="button" class="outline-button small-btn" (click)="fillDemoCredentials()">
+        Preencher credenciais demo
+      </button>
+    </div>
+  </section>
+
+  <section class="admin-login-panel">
+    <div class="admin-login-card">
+      <div class="eyebrow blue">ACESSO RESTRITO · POST /API/ADMIN/LOGIN</div>
+      <h2>Entrar no Painel Admin</h2>
+      <p class="admin-card-sub">Exclusivo para contas com privilégio administrativo habilitado.</p>
+
+      @if (errorMessage()) {
+        <div class="admin-alert" role="alert">
+          <app-icon name="close" [size]="15" />
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
+      <form class="admin-login-form" (submit)="authenticateAdmin($event)">
+        <div class="admin-field">
+          <label for="admin-login-email">E-mail corporativo *</label>
+          <span id="admin-email-hint" class="field-hint">
+            Formato: nome&#64;ribbit.example.com
+          </span>
+          <input
+            id="admin-login-email"
+            name="email"
+            type="email"
+            required
+            autocomplete="email"
+            aria-describedby="admin-email-hint"
+            [class.user-invalid-fallback]="isEmailFallbackInvalid()"
+            [attr.aria-invalid]="isEmailFallbackInvalid() ? 'true' : null"
+            [value]="emailDraft()"
+            (input)="updateEmail($event)"
+            (blur)="markEmailBlurred()"
+          />
+          <div class="field-error-msg">Informe um endereço de e-mail válido.</div>
+        </div>
+
+        <div class="admin-field">
+          <label for="admin-login-password">Senha de administrador *</label>
+          <span id="admin-password-hint" class="field-hint"> Mínimo de 6 caracteres </span>
+          <input
+            id="admin-login-password"
+            name="password"
+            type="password"
+            required
+            minlength="6"
+            autocomplete="current-password"
+            aria-describedby="admin-password-hint"
+            [class.user-invalid-fallback]="isPasswordFallbackInvalid()"
+            [attr.aria-invalid]="isPasswordFallbackInvalid() ? 'true' : null"
+            [value]="passwordDraft()"
+            (input)="updatePassword($event)"
+            (blur)="markPasswordBlurred()"
+          />
+          <div class="field-error-msg">A senha deve possuir ao menos 6 caracteres.</div>
+        </div>
+
+        <button type="submit" class="primary-button full-width admin-submit-btn">
+          Acessar Console Admin
+          <app-icon name="arrow" [size]="17" />
+        </button>
+      </form>
+
+      <div class="admin-login-actions">
+        <button type="button" class="outline-button full-width" (click)="fillDemoCredentials()">
+          Usar conta Administrador Local
+        </button>
+        <button type="button" class="back-link-btn" (click)="returnToListenerApp()">
+          Voltar para o app de ouvinte
+        </button>
+      </div>
+    </div>
+  </section>
+</div>

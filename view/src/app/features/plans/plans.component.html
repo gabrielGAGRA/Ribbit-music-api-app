@@ -1,0 +1,79 @@
+<div class="secondary-page plans-page">
+  <div class="billing-toggle">
+    <button [class.active]="!annualPlans()" (click)="setAnnual(false)">Mensal</button>
+    <button [class.active]="annualPlans()" (click)="setAnnual(true)">
+      Anual <span>ECONOMIZE 20%</span>
+    </button>
+  </div>
+
+  <div class="plans-carousel">
+    @for (plan of computedPlans(); track plan.name) {
+      <article class="plan-card" [class.featured]="plan.featured">
+        @if (plan.featured) {
+          <span class="popular-badge">MAIS ESCOLHIDO</span>
+        }
+
+        <div class="plan-icon">
+          <app-icon [name]="getPlanIcon(plan.name)" [size]="23" />
+        </div>
+
+        <h2>{{ plan.displayName }}</h2>
+        @if (plan.name !== 'Free') {
+          <span class="plan-audience">{{ plan.name }}</span>
+        }
+        <p>{{ plan.copy }}</p>
+
+        <div class="plan-price">
+          <strong>{{ plan.price }}</strong>
+          @if (plan.name !== 'Free') {
+            <span>/ mês</span>
+          }
+        </div>
+
+        @if (annualPlans() && plan.name !== 'Free') {
+          <small class="annual-note">Cobrado anualmente (checkout simulado)</small>
+        }
+
+        <ul>
+          @for (feature of plan.features; track feature) {
+            <li>
+              <app-icon name="check" [size]="15" />
+              {{ feature }}
+            </li>
+          }
+        </ul>
+
+        <button
+          [class]="plan.featured ? 'primary-button full-width' : 'outline-button full-width'"
+          (click)="selectPlan(plan)"
+        >
+          @if (state.currentPlan() === plan.name) {
+            Plano atual
+          } @else if (plan.name === 'Free') {
+            Mudar para Free
+          } @else {
+            Assinar {{ plan.name }}
+          }
+        </button>
+      </article>
+    }
+  </div>
+
+  <div class="plans-pagination" aria-label="Navegação dos planos">
+    @for (dot of [0, 1, 2]; track dot) {
+      <button
+        [class.active]="activeSlide() === dot"
+        [attr.aria-label]="'Ver plano ' + (dot + 1)"
+        (click)="setSlide(dot)"
+      ></button>
+    }
+  </div>
+
+  <div class="plans-note">
+    <app-icon name="check" [size]="17" />
+    <span>
+      <strong>Pagamento 100% simulado.</strong> Ao escolher um plano pago, você passará por uma tela
+      demonstrativa de checkout sem nenhuma cobrança real.
+    </span>
+  </div>
+</div>

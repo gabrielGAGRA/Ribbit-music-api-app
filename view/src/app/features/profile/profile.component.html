@@ -1,0 +1,120 @@
+<div class="secondary-page">
+  <div class="profile-heading">
+    <span class="avatar profile-avatar">{{ userInitials() }}</span>
+    <div>
+      <h2>{{ state.userName() }}</h2>
+      <p>{{ state.userEmail() || 'Explorando novas frequências no Ribbit' }}</p>
+      <div class="preferences-tags">
+        <button class="profile-plan-link" (click)="goToPlans()">
+          Plano: {{ state.currentPlan() }} <app-icon name="chevron" [size]="12" />
+        </button>
+        <button class="profile-plan-link" (click)="goToDashboard()">
+          Dashboard anual <app-icon name="sparkles" [size]="12" />
+        </button>
+      </div>
+    </div>
+    <button
+      class="icon-button"
+      aria-label="Configurações"
+      title="Configurações"
+      (click)="goToSettings()"
+    >
+      <app-icon name="settings" />
+    </button>
+  </div>
+
+  <div class="section-title">
+    <h2>Suas descobertas</h2>
+    <span>Organizadas pelas suas escolhas</span>
+  </div>
+
+  <div class="profile-collection-tabs" role="tablist" aria-label="Categorias de descobertas">
+    <button
+      role="tab"
+      [attr.aria-selected]="selectedTab() === 'like'"
+      [class.active]="selectedTab() === 'like'"
+      (click)="selectTab('like')"
+    >
+      <app-icon name="heart" [size]="15" />
+      <span
+        >Curtidas<small>{{ likeCount() }} faixas</small></span
+      >
+    </button>
+
+    <button
+      role="tab"
+      [attr.aria-selected]="selectedTab() === 'love'"
+      [class.active]="selectedTab() === 'love'"
+      (click)="selectTab('love')"
+    >
+      <app-icon name="star" [size]="15" />
+      <span
+        >Amadas<small>{{ loveCount() }} faixas</small></span
+      >
+    </button>
+
+    <button
+      role="tab"
+      [attr.aria-selected]="selectedTab() === 'reject'"
+      [class.active]="selectedTab() === 'reject'"
+      (click)="selectTab('reject')"
+    >
+      <app-icon name="close" [size]="15" />
+      <span
+        >Rejeitadas<small>{{ rejectCount() }} faixas</small></span
+      >
+    </button>
+  </div>
+
+  <div class="panel profile-tab-content" role="tabpanel">
+    <div class="section-title">
+      <h3>{{ activeTabLabel() }}</h3>
+      <button class="text-button" (click)="viewFullCollection()">
+        Ver coleção completa <app-icon name="arrow" [size]="14" />
+      </button>
+    </div>
+
+    @for (item of activeTabItems(); track item.title) {
+      <div class="song-row">
+        <div class="song-cover">
+          <img [src]="item.image" alt="" />
+        </div>
+        <div class="song-description">
+          <strong>{{ item.title }}</strong>
+          <span>{{ item.artist }}</span>
+        </div>
+        <button
+          class="icon-button"
+          [attr.aria-label]="'Reproduzir ' + item.title"
+          (click)="playSong(item)"
+        >
+          <app-icon name="play" [size]="15" />
+        </button>
+      </div>
+    } @empty {
+      <p class="empty-text">
+        Nenhuma faixa em {{ activeTabLabel().toLowerCase() }} ainda. Deslize no The Pond para
+        construir sua coleção!
+      </p>
+    }
+  </div>
+
+  <div class="panel account-management">
+    <div>
+      <h3>Conta e assinatura</h3>
+      <p>Gerencie seu plano atual ou encerre sua conta Ribbit.</p>
+    </div>
+    <button
+      class="outline-button"
+      [disabled]="state.currentPlan() === 'Free'"
+      (click)="cancelSubscription()"
+    >
+      Cancelar assinatura
+    </button>
+    <button class="danger-button" (click)="openDeleteModal()">Excluir minha conta</button>
+  </div>
+
+  <button class="logout-button" (click)="logout()">
+    <app-icon name="logout" [size]="16" /> Sair da conta
+  </button>
+</div>

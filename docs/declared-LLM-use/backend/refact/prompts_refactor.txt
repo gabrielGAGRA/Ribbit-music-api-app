@@ -1,0 +1,125 @@
+Decide the best strategy, use subagents to review somethings i find suspicious and achieve the goal with a consensus. Then change the code. Dont create tests for now.:
+
+# domain:
+- domain/services is empty
+- domain/types.py exists and is not inside any folder
+
+# infrastructure: 
+- infrastructure/adapter/security exists. isnt it an odd choice?
+- dont have any from future import annotations. we changed to python 3.15. apply lazy imports as rules suggest. if 
+- also would be great if we didnt need logger = logging.getLogger(__name__) in every file, but if its normal, then keep. if its unnecessary boiler or instantiating many times the same thing, then maybe we change.
+- im also not sure wether things like __all__ = ["SpotifyAdapter"]
+ in the end of a file are actually good practice. review those files.
+- isnt music_service kinda thrown there? is this good architecture?
+
+# application:
+
+- evaluate lazy and type checking
+
+- if we need those from_domain in dtos, that map the same names
+
+- in use cases, some have init, others only execute. evaluate.
+
+
+# presentation:
+- we sure need to update those imports based on our import rules
+- dependencies.py as a single file with a lot of things. surely bad practice.
+- shemas.py should be in the folder schemas. presentation has folders routers and schemas.
+
+# composition.py:
+- theres a lot of imports. is this correct? over 150 lines, is it good practice?
+- evaluate  lazy and type checking if adequate
+- why are we seeding the database? it should be used the local .db file. also, for some reason there are 2 .db files. we shouldnt have any seeding database or creating it. it should be a local one used. in the future, it will connect to gcp.
+
+
+
+
+
+
+
+
+Change everything in the files to english (with no legacy code or alias) and fix everything you found. Do note that apis_externas changed a bit, but feel free to change again.
+
+also some comments:
+- db_models to not be a single file... if we REALLY need it, then should be a folder
+- seed.py is gonna be deteled (you can read in this plan file, what i changed)
+- apis_externas is wrong language name, probably in the wrong place, its outside any folder etc etc. everything in the repo should use port-adapter.
+- repositories also shouldnt be a single file.
+
+- remove the sqlalchemy and database things.
+we should use sqlite for local database testing (if needed)
+it should be data saved on a local file and an optional command to run locally (when we use uvicorn on port), no files that always autopopulate or anything like that.
+when we eventually go to gcp, we will use something better than sqlite. gcp should be a folder, we will use adapter, but any databse should work like local, cloud (gcp, aws etc). we wont implement all, but the port-adapter idea should be there.
+
+
+
+
+
+Spin a subagent to change everything in app/ folder to english, removing and not keeping any backward compatible or alias or legacy code. Should all be changed to english, correct file names and correct classes names
+
+
+
+
+
+
+
+
+
+### 3. Still Open Items (Opportunities for Future Slices)
+
+The following items from the legacy reviews remain open in the codebase:
+
+#### Business Logic and Security
+- Caller validation on review likes: [`LikeReviewCommentUseCase`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/application/use_cases/review/like_review_comment.py#L18-L24) takes only `review_id` without tracking caller `user_id`, allowing repeat likes by the same user.
+- Password change verification: [`UpdateProfileUseCase`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/application/use_cases/user/update_profile.py#L24-L32) hashes and saves `new_password` without validating the user's current password.
+- Mock external integrations: [`SpotifyAdapter.export_playlist`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/infrastructure/adapters/spotify_adapter.py#L73-L81) uses Python `hash()` to return a dummy URI; [`GetAnnualListeningStatsUseCase`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/application/use_cases/user/get_annual_stats.py#L40-L41) hardcodes top genres and artists; [`GetAuditLogsUseCase`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/application/use_cases/admin/get_audit_logs.py#L13-L16) returns a static mock list.
+- Unauthenticated user endpoints: Several routes in [`app/presentation/routers/profile.py`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/presentation/routers/profile.py) accept a raw `user_id` query parameter without token authentication.
+- Hardcoded community feed parameters: [`app/presentation/routers/tracks_reviews.py`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/presentation/routers/tracks_reviews.py#L80) hardcodes `days=5, limit=3`.
+
+#### Persistence and Data Integrity
+- Check-then-insert race condition: [`SQLiteInteractionRepository.save`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/infrastructure/repositories/interaction_repository.py#L43-L83) queries `find_by_user_and_track` before inserting or updating, rather than using an atomic `ON CONFLICT DO UPDATE`.
+- Defect masking on missing ID: In `user_repository`, `jam_repository`, and `playlist_repository`, passing an entity with an ID not found in the table falls through to an insert that generates a new ID instead of raising an error.
+- Transaction boundaries across multiple repositories: [`AdvanceJamPlaybackUseCase`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/application/use_cases/jam/advance_jam_playback.py#L34-L35) performs separate commits across `jam_repo` and `jam_queue_repo`.
+- N+1 query: [`GetJamStateUseCase`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/application/use_cases/jam/get_jam_state.py#L36-L43) queries tracks in a loop for each queue item.
+- Memory loading for count: [`GetAudienceReportUseCase`](file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/app/application/use_cases/admin/get_audience_report.py#L20) runs `len(self.track_repo.list_active(limit=1000))` instead of executing a `SELECT COUNT(*)`.
+
+#### Telemetry
+- Structured logging: Structured JSON logging, correlation IDs, and operational events (§4) are not yet implemented.
+
+spin a subagent to implement them and commit the changes following [commit](directory;file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/.agents/skills/commit) . divide into more than one if needed.
+
+
+
+
+
+spin a subagent that will define tests based on the project features and descriptions. it should be an expert on tests and create every test for our backend in tests/unit according to the layer and the python rules.
+
+use your critical thinking to decide the approach, if you give all context to the agent, only some, if you first define stratey with one and then implement details with other etc.
+
+
+
+
+
+
+
+
+spin a subagent to check all those type checking, lazy imports and _all_ against the rules and fix all. it should check use of new python 3.15 type aliases type, Self, StrEnum, sentinel(), frozendict), lazy imports and python 3.14 Deferred Evaluation of Annotations.
+
+
+
+
+
+
+
+
+Get the commit history of the branch feat/backend-core and understand the last 2 commits changes (only see those 2 changes history)
+
+They were applied to an old and INADEQUATE version of the repo, pre-refactor.
+Your job is to understand those changes, how they were implemented and hand this job to subagents to reimplement them cleanly into the new refactored codebase, but following [python-engineering-rules.md](file;file:///c:/Users/gabri/Documents/PROJETOS/POLI/Lab_Engenharia_Software/docs/llm/app/python-engineering-rules.md) (which the old implementation may have not) and using python 3.15 features and tests. 
+
+Add changes by what features they brought, do not copy code changes or refactors made or any specifics to the old codebase. We should make a clean port.
+
+Decide strategy, use subagents as you want
+
+OBS: Also, re-add requirements.txt with the correct (and only necessary) requirements. Use uv always. Have also the uv file so anyone can fast load it (also edit it in pyproject tool.uv). Use pyrefly, but ignore frozendict errors.
+

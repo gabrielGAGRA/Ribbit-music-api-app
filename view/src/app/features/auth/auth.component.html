@@ -1,0 +1,174 @@
+<div class="auth-shell">
+  <section class="auth-story">
+    <div class="brand auth-brand">
+      <app-frog />
+      <span>ribbit<span class="brand-dot">.</span></span>
+    </div>
+    <div class="auth-message">
+      <span class="eyebrow blue">SEU PRÓXIMO PLAY COMEÇA AQUI</span>
+      <h1>Descubra o som que <span>ainda não sabe que ama.</span></h1>
+      <p>Uma frequência só sua, construída a cada swipe.</p>
+    </div>
+    <div class="auth-art">
+      <div class="auth-ripple ripple-one"></div>
+      <div class="auth-ripple ripple-two"></div>
+      <app-frog />
+    </div>
+  </section>
+
+  <section class="auth-panel">
+    <div class="auth-card">
+      <span class="auth-mobile-logo"> <app-frog [small]="true" /> ribbit. </span>
+      <div class="eyebrow blue">
+        {{ isRegister() ? 'BEM-VINDO AO LAGO' : 'QUE BOM TER VOCÊ DE VOLTA' }}
+      </div>
+      <h2>
+        {{ isRegister() ? 'Crie sua frequência.' : 'Entre no seu universo.' }}
+      </h2>
+      <p>
+        {{
+          isRegister()
+            ? 'Preencha suas informações para criar sua conta no Ribbit.'
+            : 'Suas descobertas estão esperando por você.'
+        }}
+      </p>
+
+      @if (errorMessage()) {
+        <div class="auth-alert error" role="alert">
+          <app-icon name="close" [size]="14" />
+          <span>{{ errorMessage() }}</span>
+        </div>
+      }
+
+      <form (submit)="onSubmit($event)">
+        @if (isRegister()) {
+          <label>
+            Nome de exibição *
+            <input
+              name="name"
+              required
+              minlength="2"
+              placeholder="Ex: João Lucas"
+              autocomplete="name"
+              [value]="nameDraft()"
+              (input)="onNameChange($event)"
+            />
+          </label>
+        }
+
+        <label>
+          E-mail *
+          <input
+            name="email"
+            type="email"
+            required
+            placeholder="voce@email.com"
+            autocomplete="email"
+            [value]="emailDraft()"
+            (input)="onEmailChange($event)"
+          />
+        </label>
+
+        @if (isRegister()) {
+          <label>
+            Data de nascimento *
+            <input
+              name="birthDate"
+              type="date"
+              required
+              [max]="maxBirthDate()"
+              [value]="birthDateDraft()"
+              (input)="onBirthDateChange($event)"
+            />
+            @if (underageWarning()) {
+              <small class="auth-field-error">{{ underageWarning() }}</small>
+            }
+          </label>
+
+          <label>
+            Plano inicial *
+            <select name="planId" [value]="selectedPlanId()" (change)="onPlanChange($event)">
+              @for (plan of planOptions(); track plan.id) {
+                <option [value]="plan.id">{{ plan.label }}</option>
+              }
+            </select>
+          </label>
+        }
+
+        <label>
+          Senha *
+          <input
+            name="password"
+            type="password"
+            required
+            minlength="6"
+            placeholder="Mínimo de 6 caracteres"
+            [attr.autocomplete]="isRegister() ? 'new-password' : 'current-password'"
+            [value]="passwordDraft()"
+            (input)="onPasswordChange($event)"
+          />
+        </label>
+
+        @if (isRegister()) {
+          <label>
+            Confirmar senha *
+            <input
+              name="confirmPassword"
+              type="password"
+              required
+              minlength="6"
+              placeholder="Digite a senha novamente"
+              autocomplete="new-password"
+              [value]="confirmPasswordDraft()"
+              (input)="onConfirmPasswordChange($event)"
+            />
+            @if (passwordMismatch()) {
+              <small class="auth-field-error">As senhas digitadas não coincidem.</small>
+            }
+          </label>
+
+          <label class="checkbox-label auth-check">
+            <input type="checkbox" required /> Declaro que tenho mais de 18 anos e concordo com os
+            Termos de uso e Política de privacidade do Ribbit.
+          </label>
+        } @else {
+          <button type="button" class="forgot-button" (click)="onForgot()">
+            Esqueci minha senha
+          </button>
+        }
+
+        <button
+          class="primary-button full-width"
+          type="submit"
+          [disabled]="isSubmitting() || (isRegister() && !canSubmitRegister())"
+        >
+          {{
+            isSubmitting()
+              ? 'Conectando...'
+              : isRegister()
+                ? 'Criar minha conta'
+                : 'Entrar no Ribbit'
+          }}
+          <app-icon name="arrow" [size]="17" />
+        </button>
+      </form>
+
+      <div class="auth-divider"><span>ou</span></div>
+
+      <button type="button" class="outline-button full-width" (click)="onGoogleLogin()">
+        Continuar com Google
+      </button>
+
+      <p class="auth-switch">
+        {{ isRegister() ? 'Já faz parte do lago?' : 'Novo por aqui?' }}
+        <button type="button" (click)="toggleView()">
+          {{ isRegister() ? 'Fazer login' : 'Criar conta' }}
+        </button>
+      </p>
+
+      <button type="button" class="auth-demo" (click)="openAdminConsole()">
+        Acessar Console Admin
+      </button>
+    </div>
+  </section>
+</div>

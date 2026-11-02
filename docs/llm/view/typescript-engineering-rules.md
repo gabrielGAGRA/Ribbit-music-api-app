@@ -1,6 +1,6 @@
 # TypeScript Engineering Rules
 
-Scope: Angular view only (`src/`). Formatting is Oxfmt; everything a linter or `tsc` catches is
+Scope: Angular view only (`view/`). Formatting is Oxfmt; everything a linter or `tsc` catches is
 configured in `.oxlintrc.json`, `eslint.config.mjs`, `tsconfig.json` and `.oxfmtrc.json` and is not repeated here.
 Angular-specific rules live in `angular-style-guide.md`.
 

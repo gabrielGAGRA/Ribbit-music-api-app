@@ -1,48 +1,100 @@
+[project]
+name = "lab-engenharia-software"
+requires-python = ">=3.15"
+
+
 [tool.ruff]
 target-version = "py315"
-extend-exclude = ["docs", "scripts"]
+extend-exclude = ["docs", "local", ".agents"]
 
 [tool.ruff.lint]
 select = [
-"B",      # bugbear
-"I",      # isort
+# Estilo
 "F",      # pyflakes
-"C901",   # complexity
-"N",      # pep8-naming
-"S",      # bandit
-"PERF",   # perflint
-"G",      # logging
-"UP",     # pyupgrade
-"TRY",    # exceptions
-"SIM",    # simplifications
-"D",      # docstrings
-"TID",    # imports
-"PL",     # pylint
 "E4",     # PEP-8-imports
 "E7",     # PEP-8-statements
 "E9",     # PEP-8-runtime
-"W505",   # docs line-length
 "W605",   # escape
-"RUF012", # mutable
+"I",      # isort
+"TID",    # imports
+"W505",   # docs line-length
+"TD",     # flake8-todos
+# Convenções
+"C901",   # complexity
+"N",      # pep8-naming
+"SIM",    # simplifications
+"TRY",    # exceptions
+"D",      # docstrings
+"PLC",    # pylint
+"PLE",    # pylint
+"PLW",    # pylint
+# Integridade
+"UP",     # pyupgrade
+"B",      # bugbear
+"PERF",   # perflint
+# Segurança
+"S",      # bandit
+# Lógica
 "BLE",    # except
 "C4",     # comprehensions
+"RUF012", # mutable
+# APIs
+"ASYNC",  # flake8-async
+"DTZ",    # flake8-datetime-timezone
+"FAST",   # fastapi
+"T20",    # flake8-print
+"G",      # flake8-gedcom
+"LOG",    # flake8-logging
+"PTH",    # flake8-use-pathlib
+"TC",     # flake8-type-checking
 ]
-ignore = ["D101", "D102", "D103", "D107", "TRY003", "SIM108"]
+ignore = [
+    "D101", "D102", "D103", "D105", "D107", # docstrings não obrigatórias
+    "TRY003", # liberação de try sem else
+    "SIM108", # libera if em vez de ternários
+    "TD002",  # libera TODO sem autor obrigatório
+    "TD003",  # libera TODO sem link obrigatórios
+]
 unfixable = ["B"]
 
+
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "SIM117", "PLC0415", "N803", "PLR2004", "TRY300", "PLR0913", "TID251"]
+"tests/**" = [
+    "S101", # libera assert
+    "S105", "S106", # libera senhas mock hardcodadas
+    "SIM117", # libera vários context managers aninhados (with patch(...))
+    "PLC0415", # libera imports dentro de funções de teste
+    "N803", # libera quaisquer nomes de argumentos em fixtures
+    "TRY300", # libera assert no try sem bloco de else
+    "TID251", # libera apis banidas
+    "T201"  # libera prints em teste
+]
+
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
 
 [tool.ruff.lint.pep8-naming]
-classmethod-decorators = ["classmethod", "pydantic.field_validator"]
+classmethod-decorators = [
+    "classmethod", 
+    "pydantic.field_validator", 
+    "pydantic.model_validator"
+]
 extend-ignore-names = ["main", "_"]
 
-# PEP8
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel"]
+runtime-evaluated-decorators = [
+    "fastapi.APIRouter.get",
+    "fastapi.APIRouter.post",
+    "fastapi.APIRouter.put",
+    "fastapi.APIRouter.delete",
+    "fastapi.APIRouter.patch",
+]
+exempt-modules = ["fastapi", "typing"]
+
 [tool.ruff.lint.flake8-tidy-imports]
-ban-relative-imports = "parents"
+ban-relative-imports = "all"
 
 [tool.ruff.lint.pycodestyle]
 max-doc-length = 100
@@ -51,19 +103,24 @@ max-doc-length = 100
 convention = "google"
 
 
+
 # Tests
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "src"]
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --strict-markers"
+markers = [
+    "unit",
+    "integration",
+]
 
 [tool.coverage.run]
 branch = true
-source = ["app.py"]
-omit = ["tests/*"]
+source = ["app"]
+omit = ["tests/*", "app/main.py"]
 
 [tool.coverage.report]
 fail_under = 85
@@ -71,13 +128,17 @@ show_missing = true
 skip_covered = true
 
 
-# Zuban: Type checking
-[tool.zuban]
-strict = true
-disallow_untyped_defs = true
-warn_unreachable = true
-allow_untyped_globals = false
-check_untyped_defs = true
-follow_untyped_imports = true
-exclude_gitignore = true
-exclude = ["tests"]
+
+# Pyrefly: Type checking
+[tool.pyrefly]
+preset = "strict"
+python-version = "3.15"
+project-includes = ["app"]
+project-excludes = ["tests", "docs", "local"]
+search-path = ["."]
+check-unannotated-defs = true
+
+[tool.pyrefly.errors]
+missing-override-decorator = "ignore"
+bad-assignment = "ignore"
+bad-argument-count = "ignore"

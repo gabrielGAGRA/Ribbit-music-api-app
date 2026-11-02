@@ -3,30 +3,28 @@
 
 
 ### Time: Crazy Frogs
-Membros:
 - Carolina Britto Haddad
 - Fernando Mendes Seraco
 - Gabriel Agra de Castro Motta
 - Mateus Silva de Araújo
 
 ## Sumário
-- [Sobre o Projeto](#-sobre-o-projeto)
+- [Sobre](#-sobre)
 - [Funcionalidades](#-funcionalidades)
-  - [Aplicativo Mobile](#aplicativo-mobile)
-  - [Painel Administrativo (Web)](#painel-administrativo-web)
+  - [Aplicativo](#aplicativo)
+  - [Painel Administrativo](#painel-administrativo)
 - [Arquitetura e Tecnologias](#-arquitetura-e-tecnologias)
-- [Estrutura de Pastas](#-estrutura-de-pastas)
 - [Como Executar](#-como-executar)
 
 ---
 
-## Sobre o Projeto
+## Sobre
 
-O **Ribbit** redefine a experiência de encontrar novas músicas através de uma mecânica interativa inspirada em cartões de *swipe*, aliando geração dinâmica de playlists, sessões colaborativas em tempo real (*Jams*) e controle rígido de privacidade musical. 
+O **Ribbit** redefine a experiência de ouvir novas músicas através de uma mecânica interativa inspirada em *swipe*, usando da geração dinâmica de playlists e sessões colaborativas em tempo real (*Jams*).
 
 O projeto é composto por duas frentes:
 1. **Ribbit**: Aplicativo voltado ao usuário final para descoberta, criação de playlists inteligentes e interação social em grupo.
-2. **Ribbit Admin Console**: Painel web restrito para curadoria de catálogo com *Soft Delete* e monitoramento de métricas financeiras.
+2. **Ribbit Admin Console**: Painel web restrito para curadoria de catálogo com *soft delete* e monitoramento de métricas.
 
 ---
 
@@ -94,12 +92,72 @@ O projeto é composto por duas frentes:
 
 ## Arquitetura e Tecnologias
 
-- **Frontend**: TypeScript e Angular (Framework).
-- **Backend**: Python -- FastAPI.
+- **Frontend**: TypeScript e Angular.
+- **Backend**: Python.
 
 ---
 
-## Estrutura de Pastas
-
 ## Como Executar
+
+### 1. Pré-requisitos
+- **NPM**: gerenciador de pacotes incluído com o Node.
+
+### 2. Instalação das Dependências
+Na raiz do repositório, instale as dependências executando:
+```bash
+npm --prefix app/web install
+```
+
+### 3. Iniciar o Frontend em Desenvolvimento
+Inicie o servidor de desenvolvimento a partir da raiz:
+```bash
+npm run dev:web
+```
+*(ou dentro de `app/web`: `npm start`)*
+
+O servidor é iniciado automaticamente com `--host 0.0.0.0 --port 4200`, disponibilizando a aplicação para conexões locais e na rede interna.
+
+---
+
+## Como Visualizar
+
+### No Computador
+Abra qualquer navegador moderno (Chrome, Edge, Firefox, Brave) e acesse:
+- **URL**: [http://localhost:4200](http://localhost:4200)
+
+### No Celular
+
+#### Opção A: Acesso Direto (Mesma rede Wi-Fi)
+1. Conecte o computador e o celular na **mesma rede Wi-Fi**.
+2. No navegador do celular (Chrome ou Samsung Internet), acesse a URL da rede exibida no terminal:
+   - **URL**: `http://<SEU_IP_LOCAL>:4200` *(no seu caso: `http://10.46.214.63:4200`)*
+
+#### Opção B: Acesso via Túnel Seguro (Sem bloqueio de Firewall ou Wi-Fi)
+Se você estiver conectado a uma rede Wi-Fi pública/universitária (como redes `10.x.x.x` que bloqueiam conexões diretas entre dispositivos) ou se o Firewall do Windows estiver impedindo a conexão direta:
+
+1. Deixe o servidor rodando em um terminal (`npm run dev:web`).
+2. Em um **segundo terminal**, execute:
+   ```bash
+   npm run tunnel:web
+   ```
+3. O terminal fornecerá um link HTTPS público (ex: `https://meu-app.loca.lt`).
+4. Abra esse link no seu Samsung Galaxy (funciona tanto no Wi-Fi quanto no 4G/5G).
+
+---
+
+### Testes Automatizados & Qualidade
+
+- **Executar testes unitários**:
+  ```bash
+  npm run test:web
+  ```
+- **Checar tipagem estrita com TypeScript**:
+  ```bash
+  npm run typecheck:web
+  ```
+- **Gerar build de produção**:
+  ```bash
+  npm run build:web
+  ```
+
 

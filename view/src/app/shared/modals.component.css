@@ -1,0 +1,65 @@
+:host {
+  display: contents;
+}
+
+.checkout-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.checkout-summary span {
+  display: block;
+  font-size: 0.78rem;
+  color: #9ba5b8;
+  margin-bottom: 4px;
+}
+
+.checkout-methods {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.checkout-methods button {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: #dce3f0;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.checkout-methods button.chosen {
+  border-color: #5db8ff;
+  background: rgba(93, 184, 255, 0.14);
+  color: #ffffff;
+}
+
+.checkout-pix-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  background: rgba(16, 26, 42, 0.75);
+  border: 1px dashed rgba(93, 184, 255, 0.45);
+}
+
+.checkout-pix-box code {
+  word-break: break-all;
+  font-size: 0.78rem;
+  color: #8fd0ff;
+}
+
+.checkout-cancel {
+  margin-top: 8px;
+}
