@@ -982,9 +982,7 @@ def test_family_minor_is_filtered_and_jam_votes_advance_automatically(
     client: TestClient, app
 ) -> None:
     plans = client.get("/api/plans").json()
-    family_id = next(
-        plan["plan_id"] for plan in plans if plan["name"] == "Família"
-    )
+    family_id = next(plan["plan_id"] for plan in plans if plan["name"] == "Família")
     _, host_headers = _cadastrar(
         client, "family-owner@ribbit.com", "1980-05-01", family_id
     )
@@ -1023,9 +1021,7 @@ def test_family_minor_is_filtered_and_jam_votes_advance_automatically(
         json={"room_code": jam["room_code"]},
     )
     assert joined.status_code == 200
-    child_deck = client.get(
-        f"/api/jams/{jam['jam_id']}/deck", headers=child_headers
-    )
+    child_deck = client.get(f"/api/jams/{jam['jam_id']}/deck", headers=child_headers)
     assert child_deck.status_code == 200
     assert all(track["title"] != "Rap God" for track in child_deck.json()["items"])
 
@@ -1122,9 +1118,7 @@ def test_rejected_tracks_are_skipped_and_playlist_and_jam_decks_are_large(
         f"/api/playlists/{playlist_id}/deck?limit=20", headers=headers
     )
     assert playlist_suggestions.status_code == 200
-    playlist_ids = {
-        track["track_id"] for track in playlist_suggestions.json()["items"]
-    }
+    playlist_ids = {track["track_id"] for track in playlist_suggestions.json()["items"]}
     assert rejected_id not in playlist_ids
     assert len(playlist_ids) == 20
     assert playlist_suggestions.json()["has_more"] is True

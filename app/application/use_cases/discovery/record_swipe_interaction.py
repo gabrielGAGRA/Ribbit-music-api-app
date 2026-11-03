@@ -51,9 +51,7 @@ class RecordSwipeInteractionUseCase:
             )
 
         if track.genre.strip().casefold() in user.blocked_genres:
-            raise BusinessRuleViolationError(
-                "Gênero bloqueado pelo usuário."
-            )
+            raise BusinessRuleViolationError("Gênero bloqueado pelo usuário.")
 
         if isinstance(command.action, InteractionAction):
             action_enum = command.action

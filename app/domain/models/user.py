@@ -98,8 +98,7 @@ class User:
         return any(
             genre_tokens[index : index + len(term_tokens)] == term_tokens
             for term_tokens in (
-                tuple(term.split())
-                for term in self.MINOR_RESTRICTED_GENRE_TERMS
+                tuple(term.split()) for term in self.MINOR_RESTRICTED_GENRE_TERMS
             )
             for index in range(len(genre_tokens) - len(term_tokens) + 1)
         )

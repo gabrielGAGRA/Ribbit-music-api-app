@@ -13,6 +13,7 @@ class PlanResponse(BaseModel):
     monthly_price: float
     max_profiles: int
 
+
 class UpdatePlanAdminRequest(BaseModel):
     """Payload for modifying an existing subscription plan tier."""
 
@@ -45,6 +46,7 @@ class TrackBlockResponse(BaseModel):
     track_id: int | None = None
     blocked: bool
 
+
 class TrackExplicitResponse(BaseModel):
     """Response returned upon updating explicit status on a track."""
 
@@ -64,6 +66,7 @@ class ExecutiveDashboardResponse(BaseModel):
     users_by_plan: dict[str, int] = Field(default_factory=dict)
     revenue_by_plan: dict[str, float] = Field(default_factory=dict)
 
+
 class AudienceReportResponse(BaseModel):
     """Aggregate volume counts of registered users, catalog tracks, and blocked genres."""
 
@@ -73,6 +76,7 @@ class AudienceReportResponse(BaseModel):
     total_tracks: int
     active_tracks: int
     blocked_genres: dict[str, int] = Field(default_factory=dict)
+
 
 class UserPlanSummaryResponse(BaseModel):
     """Summary overview of a registered user and their assigned subscription plan."""

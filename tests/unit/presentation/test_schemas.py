@@ -65,16 +65,12 @@ def test_interaction_request_accepts_only_valid_literals(
 
 def test_interaction_request_rejects_invalid_action() -> None:
     with pytest.raises(ValidationError):
-        InteractionRequest.model_validate(
-            {"track_id": 2, "action": "love"}
-        )
+        InteractionRequest.model_validate({"track_id": 2, "action": "love"})
 
 
 def test_change_interaction_request_rejects_invalid_action() -> None:
     with pytest.raises(ValidationError):
-        ChangeInteractionRequest.model_validate(
-            {"track_id": 2, "new_action": "skip"}
-        )
+        ChangeInteractionRequest.model_validate({"track_id": 2, "new_action": "skip"})
 
 
 @pytest.mark.parametrize(

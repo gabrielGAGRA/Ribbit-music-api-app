@@ -31,6 +31,7 @@ class ReviewResponse(BaseModel):
     is_deleted: bool = False
     created_at: datetime | None = None
 
+
 class CatalogTrackResponse(BaseModel):
     """Public representation of a catalog track with multi-language aliases."""
 
@@ -50,6 +51,7 @@ class CatalogTrackResponse(BaseModel):
     explicit: bool = False
     is_deleted: bool = False
 
+
 class RecentInteractedTrackResponse(BaseModel):
     """Response item pairing an interaction with the track details."""
 
@@ -57,6 +59,7 @@ class RecentInteractedTrackResponse(BaseModel):
 
     interaction: InteractionResponse
     track: CatalogTrackResponse
+
 
 class SaveSearchTrackLikeRequest(BaseModel):
     """Payload to save a search track into favorites and optional playlist."""

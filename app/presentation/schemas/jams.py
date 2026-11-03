@@ -83,6 +83,7 @@ class JamQueueItemResponse(BaseModel):
     track_id: int
     vote_points: int
 
+
 JamFilaResponse = JamQueueItemResponse
 
 
@@ -105,6 +106,7 @@ class JamResponse(BaseModel):
     deck_source: str = "livre"
     source_playlist_id: int | None = None
 
+
 class JamStateResponse(BaseModel):
     """Public representation of current Jam playback and queue state."""
 
@@ -114,6 +116,7 @@ class JamStateResponse(BaseModel):
     current_track: TrackResponse | None = None
     queue: list[JamQueueItemResponse] = Field(default_factory=list)
     skip_votes: int = 0
+
 
 JamEstadoResponse = JamStateResponse
 
@@ -130,6 +133,7 @@ class SkipVoteResponse(BaseModel):
     advanced: bool
     is_active: bool
     success: bool = True
+
 
 __all__ = [
     "CreateJamRequest",

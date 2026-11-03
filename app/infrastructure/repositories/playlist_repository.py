@@ -27,9 +27,7 @@ def _row_to_playlist(row: sqlite3.Row, tracks: list[Track]) -> Playlist:
         name=row["name"],
         description=row["description"],
         spotify_playlist_id=row["spotify_playlist_id"],
-        cover_image_url=(
-            row["cover_image_url"] if "cover_image_url" in keys else None
-        ),
+        cover_image_url=(row["cover_image_url"] if "cover_image_url" in keys else None),
         is_exported=bool(row["is_exported"]),
         created_at=created_at,
         max_duration_seconds=max_duration,

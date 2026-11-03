@@ -22,6 +22,7 @@ class TrackResponse(BaseModel):
     explicit: bool = False
     is_deleted: bool = False
 
+
 class DeckPlaylistRequest(BaseModel):
     """Payload for generating a dynamic deck playlist."""
 

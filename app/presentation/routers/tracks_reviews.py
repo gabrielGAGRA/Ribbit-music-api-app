@@ -165,7 +165,9 @@ def get_recently_interacted_tracks(
     ]
 
 
-@router.post("/api/reviews/{track_id}/like-and-save", response_model=ReviewActionResponse)
+@router.post(
+    "/api/reviews/{track_id}/like-and-save", response_model=ReviewActionResponse
+)
 def save_search_track_like(
     track_id: int,
     user_id: Annotated[int, Depends(require_user)],
@@ -206,9 +208,7 @@ def get_track_reviews(
 ) -> list[ReviewResponse]:
     track = get_container(request).track_repo.find_by_id(track_id)
     if not track or track.is_deleted:
-        raise EntityNotFoundError(
-            f"Track with ID {track_id} not found or inactive."
-        )
+        raise EntityNotFoundError(f"Track with ID {track_id} not found or inactive.")
     reviews = use_case.execute(track_id=track_id)
     return [ReviewResponse.model_validate(r) for r in reviews]
 

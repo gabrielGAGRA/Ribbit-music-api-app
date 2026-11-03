@@ -42,9 +42,7 @@ def test_register_issues_bearer_token_and_returns_user() -> None:
     assert res.access_token == "signed-token"
     assert res.token_type == "bearer"
     assert res.user.user_id == 1
-    token_service.create_access_token.assert_called_once_with(
-        user_id=1, is_admin=False
-    )
+    token_service.create_access_token.assert_called_once_with(user_id=1, is_admin=False)
     mock_use_case.execute.assert_called_once_with(
         RegisterUserCommand(
             email="new@ribbit.com",

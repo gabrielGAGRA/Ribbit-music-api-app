@@ -69,9 +69,7 @@ class SearchTracksUseCase:
                 tracks.append(saved)
 
         return [
-            track
-            for track in tracks
-            if not user.is_track_restricted_for_minor(track)
+            track for track in tracks if not user.is_track_restricted_for_minor(track)
         ]
 
 

@@ -189,7 +189,9 @@ async def upload_playlist_image(
     if playlist is None:
         raise EntityNotFoundError(entity_name="Playlist", entity_id=playlist_id)
     if not playlist.is_owned_by(current_user_id):
-        raise PermissionDeniedError("Access denied: playlist does not belong to this user.")
+        raise PermissionDeniedError(
+            "Access denied: playlist does not belong to this user."
+        )
 
     content_type = (
         request.headers.get("content-type", "").split(";", maxsplit=1)[0].lower()
@@ -222,7 +224,9 @@ def get_playlist_image(
     if playlist is None:
         raise EntityNotFoundError(entity_name="Playlist", entity_id=playlist_id)
     if not playlist.is_owned_by(current_user_id):
-        raise PermissionDeniedError("Access denied: playlist does not belong to this user.")
+        raise PermissionDeniedError(
+            "Access denied: playlist does not belong to this user."
+        )
 
     image = container.playlist_repo.get_cover_image(playlist_id)
     if image is None:

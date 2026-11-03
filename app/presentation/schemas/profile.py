@@ -14,6 +14,7 @@ class UpdateProfileRequest(BaseModel):
     new_password: str | None = Field(default=None, min_length=6)
     current_password: str | None = Field(default=None)
 
+
 class LinkSpotifyRequest(BaseModel):
     """Payload to associate a third-party Spotify identifier."""
 
@@ -28,6 +29,7 @@ class ChangePlanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     new_plan_id: int
+
 
 class BlockedGenresRequest(BaseModel):
     """Payload to update blocked music genres."""
@@ -58,6 +60,7 @@ class UserProfileResponse(BaseModel):
     user: UserResponse
     plan: PlanResponse
     recent_interactions: list[InteractionResponse] = Field(default_factory=list)
+
 
 class AnnualStatsResponse(BaseModel):
     """Aggregated listening statistics and retrospective metrics for a user."""

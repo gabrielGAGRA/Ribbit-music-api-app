@@ -55,6 +55,7 @@ class AuthResponse(BaseModel):
     token_type: str = "bearer"  # noqa: S105
     user: UserResponse
 
+
 __all__ = [
     "AuthResponse",
     "LoginRequest",
