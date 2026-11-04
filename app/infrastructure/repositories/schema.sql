@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     spotify_id TEXT UNIQUE,
     display_name TEXT NOT NULL,
-    age INTEGER NOT NULL,
+    age INTEGER,
     plan_id INTEGER NOT NULL REFERENCES plans(plan_id),
     primary_account_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
     blocked_genres TEXT,

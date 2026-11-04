@@ -30,7 +30,7 @@ class User:
     email: str
     password_hash: str
     display_name: str
-    age: int
+    age: int | None = None
     plan_id: int
     spotify_id: str | None = None
     primary_account_id: int | None = None
@@ -44,7 +44,7 @@ class User:
             raise ValueError("Email cannot be blank.")
         if not self.display_name.strip():
             raise ValueError("Display name cannot be blank.")
-        if self.age < 0:
+        if self.age is not None and self.age < 0:
             raise ValueError("Age cannot be negative.")
         if self.birth_date is not None:
             self.birth_date = self.birth_date.strip() or None
@@ -54,11 +54,11 @@ class User:
 
     def current_age(self, today: date | None = None) -> int:
         if not self.birth_date:
-            return self.age
+            return self.age if self.age is not None else 0
         try:
             bdate = date.fromisoformat(self.birth_date)
         except ValueError, TypeError:
-            return self.age
+            return self.age if self.age is not None else 0
         ref_date = today or datetime.now(UTC).date()
         return (
             ref_date.year

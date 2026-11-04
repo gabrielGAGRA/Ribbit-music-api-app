@@ -5,7 +5,12 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import Request
 
-from app.application.ports.services import TokenServicePort, TrackPreviewPort
+from app.application.ports.services import (
+    GoogleIdpVerifierPort,
+    SpotifyUserProfilePort,
+    TokenServicePort,
+    TrackPreviewPort,
+)
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
     GetAudienceReportUseCase,
@@ -23,6 +28,7 @@ from app.application.use_cases.admin import (
 from app.application.use_cases.auth import (
     AuthenticateAdminUseCase,
     AuthenticateUserUseCase,
+    AuthenticateWithGoogleUseCase,
     RegisterUserUseCase,
 )
 from app.application.use_cases.discovery import (
@@ -59,6 +65,10 @@ from app.application.use_cases.review import (
     SaveSearchTrackLikeUseCase,
     SearchTracksUseCase,
 )
+from app.application.use_cases.spotify import (
+    ConnectSpotifyAccountUseCase,
+    GetSpotifyAuthorizeUrlUseCase,
+)
 from app.application.use_cases.user import (
     AddFamilyMemberUseCase,
     CancelSubscriptionPlanUseCase,
@@ -85,6 +95,9 @@ ALL_USE_CASES = [
     RegisterUserUseCase,
     AuthenticateUserUseCase,
     AuthenticateAdminUseCase,
+    AuthenticateWithGoogleUseCase,
+    GetSpotifyAuthorizeUrlUseCase,
+    ConnectSpotifyAccountUseCase,
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
     CreateDeckPlaylistUseCase,
@@ -194,3 +207,9 @@ def test_container_resolves_service_ports(container: Container) -> None:
 
     preview_service = container.resolve(TrackPreviewPort)
     assert isinstance(preview_service, TrackPreviewPort)
+
+    google_verifier = container.resolve(GoogleIdpVerifierPort)
+    assert isinstance(google_verifier, GoogleIdpVerifierPort)
+
+    spotify_profile = container.resolve(SpotifyUserProfilePort)
+    assert isinstance(spotify_profile, SpotifyUserProfilePort)

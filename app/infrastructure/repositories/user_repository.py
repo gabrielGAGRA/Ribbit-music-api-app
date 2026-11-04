@@ -58,6 +58,14 @@ class SQLiteUserRepository(UserRepositoryPort):
         row = cursor.fetchone()
         return _row_to_user(row) if row else None
 
+    def find_by_spotify_id(self, spotify_id: str) -> User | None:
+        cursor = self.conn.execute(
+            "SELECT * FROM users WHERE spotify_id = ?",
+            (spotify_id.strip(),),
+        )
+        row = cursor.fetchone()
+        return _row_to_user(row) if row else None
+
     def save(self, user: User) -> User:
         blocked_str = (
             ",".join(sorted(user.blocked_genres)) if user.blocked_genres else None
