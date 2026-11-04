@@ -13,7 +13,7 @@ class UserResponse(BaseModel):
     user_id: int
     email: str
     display_name: str
-    age: int
+    age: int | None = None
     plan_id: int
     birth_date: str | None = None
     spotify_id: str | None = None
@@ -37,6 +37,14 @@ class RegisterUserRequest(BaseModel):
     blocked_genres: list[str] = Field(default_factory=list)
 
 
+class GoogleLoginRequest(BaseModel):
+    """Payload for authenticating via Google ID token."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id_token: str = Field(min_length=1)
+
+
 class LoginRequest(BaseModel):
     """Credentials payload for user authentication."""
 
@@ -58,6 +66,7 @@ class AuthResponse(BaseModel):
 
 __all__ = [
     "AuthResponse",
+    "GoogleLoginRequest",
     "LoginRequest",
     "RegisterUserRequest",
     "UserResponse",

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Any
 lazy from collections.abc import AsyncGenerator
 
+import niquests
 from fastapi import FastAPI
 
 from app.application.ports.repositories import (
@@ -20,9 +21,11 @@ from app.application.ports.repositories import (
     UserRepositoryPort,
 )
 from app.application.ports.services import (
+    GoogleIdpVerifierPort,
     PasswordHasherPort,
     PlaylistExportPort,
     PlaylistSourcePort,
+    SpotifyUserProfilePort,
     TokenServicePort,
     TrackCatalogFilePort,
     TrackCatalogPort,
@@ -49,6 +52,7 @@ from app.application.use_cases.admin import (
 from app.application.use_cases.auth import (
     AuthenticateAdminUseCase,
     AuthenticateUserUseCase,
+    AuthenticateWithGoogleUseCase,
     RegisterUserUseCase,
 )
 from app.application.use_cases.discovery import (
@@ -86,6 +90,8 @@ from app.application.use_cases.review import (
     SearchTracksUseCase,
 )
 from app.application.use_cases.spotify import (
+    ConnectSpotifyAccountUseCase,
+    GetSpotifyAuthorizeUrlUseCase,
     SyncPlaylistFromSpotifyUseCase,
     SyncTracksFromSpotifyUseCase,
 )
@@ -113,7 +119,10 @@ from app.infrastructure.adapters import (
     ITunesAdapter,
     SpotifyAdapter,
 )
+from app.infrastructure.adapters.google_auth_adapter import GoogleIdpVerifierAdapter
 from app.infrastructure.adapters.spotify import SpotifyCredentials
+from app.infrastructure.adapters.spotify.auth import SpotifyAuth
+from app.infrastructure.adapters.spotify.user_profile import SpotifyUserProfileAdapter
 from app.infrastructure.repositories import (
     SQLiteAuditLogRepository,
     SQLiteInteractionRepository,
@@ -138,6 +147,7 @@ from app.presentation.routers.discovery import router as discovery_router
 from app.presentation.routers.jams import router as jams_router
 from app.presentation.routers.playlists import router as playlists_router
 from app.presentation.routers.profile import router as profile_router
+from app.presentation.routers.spotify import router as spotify_router
 from app.presentation.routers.tracks_reviews import (
     router as tracks_reviews_router,
 )
@@ -161,7 +171,10 @@ class Container:
     jam_repo: SQLiteJamRepository
     review_repo: SQLiteReviewRepository
     audit_log_repo: SQLiteAuditLogRepository
+    google_verifier: GoogleIdpVerifierPort
+    spotify_user_profile: SpotifyUserProfilePort
     # Auth
+    authenticate_with_google_use_case: AuthenticateWithGoogleUseCase
     register_user_use_case: RegisterUserUseCase
     authenticate_user_use_case: AuthenticateUserUseCase
     authenticate_admin_use_case: AuthenticateAdminUseCase
@@ -212,6 +225,8 @@ class Container:
     get_annual_listening_stats_use_case: GetAnnualListeningStatsUseCase
     link_spotify_account_use_case: LinkSpotifyAccountUseCase
     # Spotify
+    get_spotify_authorize_url_use_case: GetSpotifyAuthorizeUrlUseCase
+    connect_spotify_account_use_case: ConnectSpotifyAccountUseCase
     sync_tracks_from_spotify_use_case: SyncTracksFromSpotifyUseCase
     sync_playlist_from_spotify_use_case: SyncPlaylistFromSpotifyUseCase
     # Admin
@@ -246,6 +261,8 @@ class Container:
 
         # Register interface protocols explicitly
         registry[TokenServicePort] = self.token_service
+        registry[GoogleIdpVerifierPort] = self.google_verifier
+        registry[SpotifyUserProfilePort] = self.spotify_user_profile
         registry[TrackPreviewPort] = self.preview_service
         registry[TrackCatalogPort] = self.music_service
         registry[PlaylistExportPort] = self.music_service
@@ -367,6 +384,20 @@ def build_container(
         else None
     )
 
+    google_verifier = GoogleIdpVerifierAdapter(
+        expected_client_id=settings.google_client_id,
+    )
+    spotify_user_profile = SpotifyUserProfileAdapter()
+    user_spotify_credentials = SpotifyCredentials(
+        client_id=settings.spotify_client_id or "dev_spotify_client",
+        client_secret=settings.spotify_client_secret or "dev_spotify_secret",
+        redirect_uri=settings.spotify_redirect_uri or "http://127.0.0.1:8888/callback",
+    )
+    user_spotify_auth = SpotifyAuth(
+        user_spotify_credentials,
+        session=niquests.Session(),
+    )
+
     return Container(
         settings=settings,
         connection=conn,
@@ -382,6 +413,21 @@ def build_container(
         jam_repo=jam_repo,
         review_repo=review_repo,
         audit_log_repo=audit_log_repo,
+        google_verifier=google_verifier,
+        spotify_user_profile=spotify_user_profile,
+        authenticate_with_google_use_case=AuthenticateWithGoogleUseCase(
+            user_repo=user_repo,
+            token_service=token_service,
+            google_verifier=google_verifier,
+        ),
+        get_spotify_authorize_url_use_case=GetSpotifyAuthorizeUrlUseCase(
+            spotify_auth=user_spotify_auth,
+        ),
+        connect_spotify_account_use_case=ConnectSpotifyAccountUseCase(
+            user_repo=user_repo,
+            spotify_auth=user_spotify_auth,
+            spotify_profile=spotify_user_profile,
+        ),
         # Auth
         register_user_use_case=RegisterUserUseCase(
             user_repo, plan_repo, password_hasher
@@ -542,6 +588,7 @@ def _mount_presentation_routers(app: FastAPI) -> None:
         jams_router,
         tracks_reviews_router,
         admin_router,
+        spotify_router,
     ]:
         app.include_router(router)
 

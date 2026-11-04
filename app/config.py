@@ -32,6 +32,7 @@ class Settings(BaseModel):
     admin_password: str = "RibbitLocal2026!"  # noqa: S105
     gcs_bucket_name: str | None = None
     gcs_tracks_file_path: str = "Songs/songs_final.parquet"
+    google_client_id: str | None = None
 
     @model_validator(mode="after")
     def _validate_production_secret_key(self) -> Self:  # noqa: N804
@@ -114,6 +115,7 @@ def load_settings() -> Settings:
         gcs_tracks_file_path=os.getenv(
             "GCS_TRACKS_FILE_PATH", "Songs/songs_final.parquet"
         ),
+        google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
     )
 
 

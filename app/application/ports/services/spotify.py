@@ -1,5 +1,6 @@
 """Application ports for the Spotify Web API capabilities beyond catalog search."""
 
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 lazy from collections.abc import Sequence
 
@@ -10,6 +11,18 @@ lazy from app.application.dtos.spotify_dtos import (
     SpotifyTokens,
 )
 lazy from app.application.ports.services.music_service import ProviderPlaylist
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class SpotifyUserProfile:
+    id: str
+    display_name: str
+    email: str | None = None
+
+
+@runtime_checkable
+class SpotifyUserProfilePort(Protocol):
+    def get_current_user_profile(self, access_token: str) -> SpotifyUserProfile: ...
 
 
 @runtime_checkable

@@ -23,7 +23,7 @@ class UserPlanSummaryResult:
     user_id: int | None
     email: str
     display_name: str
-    age: int
+    age: int | None = None
     plan_name: str
     is_admin: bool
 
