@@ -46,6 +46,7 @@ def test_register_user_with_default_free_plan_succeeds() -> None:
         display_name="  Lily Pad  ",
         age=22,
         plan_id=None,
+        blocked_genres=("Jazz",),
     )
 
     result = use_case.execute(command)
@@ -56,6 +57,7 @@ def test_register_user_with_default_free_plan_succeeds() -> None:
     assert result.age == 22
     assert result.plan_id == 1
     assert result.is_admin is False
+    assert result.blocked_genres == frozenset({"jazz"})
     plan_repo.find_by_name.assert_called_once_with(Plan.DEFAULT_FREE_PLAN_NAME)
     password_hasher.hash_password.assert_called_once_with("raw_password")
     user_repo.save.assert_called_once()

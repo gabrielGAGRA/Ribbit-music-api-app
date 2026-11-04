@@ -22,6 +22,7 @@ from app.presentation.schemas.discovery import (
     InteractionRequest,
     InteractionResponse,
     TrackSearchQuery,
+    UndoInteractionResponse,
 )
 from app.presentation.schemas.jams import (
     CreateJamRequest,
@@ -83,6 +84,7 @@ __all__ = [
     "TrackExplicitResponse",
     "TrackResponse",
     "TrackSearchQuery",
+    "UndoInteractionResponse",
     "UpdatePlanAdminRequest",
     "UpdateProfileRequest",
     "UpdateTrackExplicitRequest",

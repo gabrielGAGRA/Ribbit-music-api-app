@@ -7,9 +7,16 @@ import pytest
 from app.application.dtos.auth_dtos import AuthenticateUserCommand
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.ports.services.password_hasher import PasswordHasherPort
+from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.auth.authenticate_user import AuthenticateUserUseCase
 from app.domain.exceptions import AuthenticationRequiredError
 from app.domain.models.user import User
+
+
+def _token_service() -> MagicMock:
+    service = MagicMock(spec=TokenServicePort)
+    service.create_access_token.return_value = "test-token"
+    return service
 
 
 def test_authenticate_user_success_normalizes_email_and_returns_user() -> None:
@@ -30,6 +37,7 @@ def test_authenticate_user_success_normalizes_email_and_returns_user() -> None:
     use_case = AuthenticateUserUseCase(
         user_repo=user_repo,
         password_hasher=password_hasher,
+        token_service=_token_service(),
     )
     command = AuthenticateUserCommand(
         email="  FROG@Ribbit.com ",
@@ -48,8 +56,6 @@ def test_authenticate_user_success_normalizes_email_and_returns_user() -> None:
 
 
 def test_authenticate_user_with_token_service_generates_bearer_token() -> None:
-    from app.application.ports.services.token_service import TokenServicePort
-
     user = User(
         user_id=10,
         email="frog@ribbit.com",
@@ -94,6 +100,7 @@ def test_authenticate_user_not_found_raises_authentication_required() -> None:
     use_case = AuthenticateUserUseCase(
         user_repo=user_repo,
         password_hasher=password_hasher,
+        token_service=_token_service(),
     )
     command = AuthenticateUserCommand(
         email="missing@ribbit.com",
@@ -124,6 +131,7 @@ def test_authenticate_user_invalid_password_raises_authentication_required() -> 
     use_case = AuthenticateUserUseCase(
         user_repo=user_repo,
         password_hasher=password_hasher,
+        token_service=_token_service(),
     )
     command = AuthenticateUserCommand(
         email="frog@ribbit.com",

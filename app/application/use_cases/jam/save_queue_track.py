@@ -112,6 +112,7 @@ class SaveQueueTrackUseCase:
                 user_id=eff_user_id,
                 track_id=eff_track_id,
                 action=InteractionAction.SUPERLIKE,
+                source="jam",
             )
         )
         return True

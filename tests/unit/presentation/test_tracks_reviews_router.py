@@ -11,7 +11,6 @@ from app.application.use_cases.review import (
     DeleteReviewUseCase,
     GetCommunityFeedUseCase,
     GetRecentlyInteractedTracksUseCase,
-    GetTrackReviewsUseCase,
     LikeReviewCommentUseCase,
     PublishReviewUseCase,
     SaveSearchTrackLikeUseCase,
@@ -38,6 +37,12 @@ from app.presentation.schemas.tracks_reviews import (
     PublishReviewRequest,
     SaveSearchTrackLikeRequest,
 )
+
+
+def _request_with_track(track: Track) -> MagicMock:
+    request = MagicMock()
+    request.app.state.container.track_repo.find_by_id.return_value = track
+    return request
 
 
 def test_search_tracks_forwards_command_and_serializes_tracks() -> None:
@@ -95,13 +100,12 @@ def test_publish_review_forwards_command_and_returns_response() -> None:
     )
     mock_use_case.execute.return_value = review
     req = PublishReviewRequest(
-        user_id=7,
         track_id=101,
         rating=4,
         text="Great bassline!",
     )
 
-    res = publish_review(req=req, use_case=mock_use_case)
+    res = publish_review(req=req, user_id=7, use_case=mock_use_case)
 
     assert res.review_id == 50
     assert res.user_id == 7
@@ -125,7 +129,6 @@ def test_delete_review_router_calls_use_case_and_returns_success() -> None:
     res = delete_review(review_id=50, user_id=7, use_case=mock_use_case)
 
     assert res.success is True
-    assert res.sucesso is True
     mock_use_case.execute.assert_called_once_with(review_id=50, user_id=7)
 
 
@@ -169,7 +172,6 @@ def test_save_search_track_like_router_calls_use_case_and_returns_success() -> N
     )
 
     assert res.success is True
-    assert res.sucesso is True
     mock_use_case.execute.assert_called_once_with(
         user_id_or_cmd=7,
         track_id=101,
@@ -199,6 +201,36 @@ def test_get_community_feed_defaults() -> None:
     mock_use_case.execute.assert_called_once_with(days=5, limit=10)
 
 
+def test_get_track_reviews_returns_review_list_for_active_track() -> None:
+    mock_use_case = MagicMock()
+    track = Track(
+        track_id=101,
+        title="Song",
+        artist="Artist",
+        duration_seconds=200,
+        genre="Pop",
+    )
+    review = ReviewComment(
+        review_id=50,
+        user_id=7,
+        track_id=101,
+        initial_rating=4,
+        text="Great bassline!",
+        initial_likes_count=2,
+    )
+    mock_use_case.execute.return_value = [review]
+
+    result = get_track_reviews(
+        track_id=101,
+        request=_request_with_track(track),
+        use_case=mock_use_case,
+    )
+
+    assert len(result) == 1
+    assert result[0].review_id == 50
+    mock_use_case.execute.assert_called_once_with(track_id=101)
+
+
 def test_like_review_router_passes_review_and_user_id() -> None:
     mock_use_case = MagicMock(spec=LikeReviewCommentUseCase)
     review = ReviewComment(
@@ -216,24 +248,3 @@ def test_like_review_router_passes_review_and_user_id() -> None:
     assert res.review_id == 1
     assert res.likes_count == 1
     mock_use_case.execute.assert_called_once_with(review_id=1, user_id=20)
-
-
-def test_get_track_reviews_returns_mapped_reviews() -> None:
-    mock_use_case = MagicMock(spec=GetTrackReviewsUseCase)
-    review = ReviewComment(
-        review_id=2,
-        user_id=12,
-        track_id=300,
-        initial_rating=5,
-        text="Classic!",
-        initial_likes_count=3,
-    )
-    mock_use_case.execute.return_value = [review]
-
-    res = get_track_reviews(track_id=300, use_case=mock_use_case)
-
-    assert len(res) == 1
-    assert res[0].review_id == 2
-    assert res[0].track_id == 300
-    assert res[0].likes_count == 3
-    mock_use_case.execute.assert_called_once_with(track_id=300)

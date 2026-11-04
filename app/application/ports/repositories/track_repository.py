@@ -19,6 +19,7 @@ class TrackRepositoryPort(Protocol):
         *,
         limit: int,
         excluded_genres: Sequence[str] = (),
+        excluded_genre_terms: Sequence[str] = (),
         block_explicit: bool = False,
         excluded_ids: Sequence[int] = (),
     ) -> list[Track]:

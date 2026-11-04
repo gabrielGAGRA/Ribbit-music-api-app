@@ -8,7 +8,6 @@ from app.application.dtos import (
     AuthenticateUserCommand,
     RegisterUserCommand,
 )
-from app.application.dtos.auth_dtos import AuthResult
 from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.auth import (
     AuthenticateUserUseCase,
@@ -30,19 +29,13 @@ router = APIRouter(prefix="/api/auth", tags=["Authentication"])
     response_model=AuthResponse,
     status_code=status.HTTP_201_CREATED,
 )
-@router.post(
-    "/cadastrar",
-    response_model=AuthResponse,
-    status_code=status.HTTP_201_CREATED,
-    include_in_schema=False,
-)
 def register(
     req: RegisterUserRequest,
     use_case: Annotated[RegisterUserUseCase, Depends(provide(RegisterUserUseCase))],
     token_service: Annotated[
-        TokenServicePort | None,
+        TokenServicePort,
         Depends(provide(TokenServicePort)),
-    ] = None,
+    ],
 ) -> AuthResponse:
     user = use_case.execute(
         RegisterUserCommand(
@@ -52,21 +45,20 @@ def register(
             age=req.age,
             plan_id=req.plan_id,
             birth_date=req.birth_date,
+            blocked_genres=tuple(req.blocked_genres),
         )
     )
-    token = ""
-    if token_service is not None and user.user_id is not None:
-        token = token_service.create_access_token(
-            user_id=user.user_id, is_admin=user.is_admin
-        )
+    if user.user_id is None:
+        raise RuntimeError("Registered user is missing its persisted ID.")
     return AuthResponse(
-        access_token=token,
+        access_token=token_service.create_access_token(
+            user_id=user.user_id, is_admin=user.is_admin
+        ),
         user=UserResponse.model_validate(user),
     )
 
 
 @router.post("/login", response_model=AuthResponse)
-@router.post("/entrar", response_model=AuthResponse, include_in_schema=False)
 def login(
     req: LoginRequest,
     use_case: Annotated[
@@ -76,15 +68,9 @@ def login(
     result = use_case.execute(
         AuthenticateUserCommand(email=req.email, password=req.password)
     )
-    if isinstance(result, AuthResult):
-        user = result.user
-        token = result.access_token
-    else:
-        user = result
-        token = ""
     return AuthResponse(
-        access_token=token,
-        user=UserResponse.model_validate(user),
+        access_token=result.access_token,
+        user=UserResponse.model_validate(result.user),
     )
 
 

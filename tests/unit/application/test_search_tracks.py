@@ -20,6 +20,7 @@ from app.domain.models import Track, User
 def mock_user() -> User:
     user = MagicMock(spec=User)
     user.is_adult = True
+    user.is_track_restricted_for_minor.return_value = False
     return user
 
 
@@ -87,12 +88,24 @@ def test_search_tracks_filters_explicit_tracks_for_underage_user() -> None:
         genre="Pop",
         explicit=True,
     )
+    restricted_genre_track = Track(
+        track_id=3,
+        title="Clean Rap Song",
+        artist="Artist",
+        duration_seconds=200,
+        genre="Rap",
+        explicit=False,
+    )
 
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = minor_user
 
     track_repo = MagicMock(spec=TrackRepositoryPort)
-    track_repo.find_by_filters.return_value = [clean_track, explicit_track]
+    track_repo.find_by_filters.return_value = [
+        clean_track,
+        explicit_track,
+        restricted_genre_track,
+    ]
 
     use_case = SearchTracksUseCase(user_repo=user_repo, track_repo=track_repo)
     command = SearchTracksCommand(
@@ -106,6 +119,31 @@ def test_search_tracks_filters_explicit_tracks_for_underage_user() -> None:
     result = use_case.execute(command)
 
     assert result == [clean_track]
+
+
+def test_search_tracks_does_not_use_unclassified_spotify_fallback_for_minors() -> None:
+    minor_user = User(
+        user_id=3,
+        email="minor@ribbit.com",
+        password_hash="pw",
+        display_name="Minor",
+        age=15,
+        plan_id=1,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = minor_user
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = []
+    music_service = MagicMock(spec=TrackCatalogPort)
+
+    use_case = SearchTracksUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        music_service=music_service,
+    )
+
+    assert use_case.execute(SearchTracksCommand(user_id=3, query="some song")) == []
+    music_service.search_tracks.assert_not_called()
 
 
 def test_search_tracks_user_not_found_raises_entity_not_found() -> None:

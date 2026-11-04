@@ -16,6 +16,7 @@ class Playlist:
     name: str
     description: str | None = None
     spotify_playlist_id: str | None = None
+    cover_image_url: str | None = None
     is_exported: bool = False
     created_at: datetime | None = None
     max_duration_seconds: int | None = None

@@ -304,7 +304,7 @@ export class AdminStateService {
     this.notify('Sessão administrativa encerrada.');
   }
 
-  /** Promotes an existing user to administrator matching PUT /api/admin/users/{id}/promote-admin. */
+  /** Promotes a user to administrator in the local mock data. */
   promoteUserToAdmin(userId: number): AdminAccount {
     return this.setUserAdminFlag(userId, true);
   }

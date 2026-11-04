@@ -7,9 +7,16 @@ import pytest
 from app.application.dtos.auth_dtos import AuthenticateAdminCommand
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.ports.services.password_hasher import PasswordHasherPort
+from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.auth.authenticate_admin import AuthenticateAdminUseCase
 from app.domain.exceptions import AuthenticationRequiredError, PermissionDeniedError
 from app.domain.models.user import User
+
+
+def _token_service() -> MagicMock:
+    service = MagicMock(spec=TokenServicePort)
+    service.create_access_token.return_value = "test-token"
+    return service
 
 
 def test_authenticate_admin_success_returns_admin_user() -> None:
@@ -31,6 +38,7 @@ def test_authenticate_admin_success_returns_admin_user() -> None:
     use_case = AuthenticateAdminUseCase(
         user_repo=user_repo,
         password_hasher=password_hasher,
+        token_service=_token_service(),
     )
     command = AuthenticateAdminCommand(
         email="  Admin@Ribbit.com  ",
@@ -49,8 +57,6 @@ def test_authenticate_admin_success_returns_admin_user() -> None:
 
 
 def test_authenticate_admin_with_token_service_generates_bearer_token() -> None:
-    from app.application.ports.services.token_service import TokenServicePort
-
     admin_user = User(
         user_id=1,
         email="admin@ribbit.com",
@@ -94,6 +100,7 @@ def test_authenticate_admin_user_not_found_raises_authentication_required() -> N
     use_case = AuthenticateAdminUseCase(
         user_repo=user_repo,
         password_hasher=password_hasher,
+        token_service=_token_service(),
     )
     command = AuthenticateAdminCommand(
         email="unknown@ribbit.com",
@@ -125,6 +132,7 @@ def test_authenticate_admin_wrong_password_raises_authentication_required() -> N
     use_case = AuthenticateAdminUseCase(
         user_repo=user_repo,
         password_hasher=password_hasher,
+        token_service=_token_service(),
     )
     command = AuthenticateAdminCommand(
         email="admin@ribbit.com",
@@ -154,6 +162,7 @@ def test_authenticate_admin_non_admin_user_raises_permission_denied() -> None:
     use_case = AuthenticateAdminUseCase(
         user_repo=user_repo,
         password_hasher=password_hasher,
+        token_service=_token_service(),
     )
     command = AuthenticateAdminCommand(
         email="user@ribbit.com",

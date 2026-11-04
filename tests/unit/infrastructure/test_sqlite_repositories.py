@@ -1,6 +1,7 @@
 """Unit tests for SQLite repositories implementing domain/application ports."""
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 lazy from collections.abc import Iterator
 
 import pytest
@@ -149,6 +150,104 @@ def test_track_and_interaction_repositories(conn: sqlite3.Connection) -> None:
     assert len(by_user) == 1
 
 
+def test_list_active_filters_minor_genres(
+    conn: sqlite3.Connection,
+) -> None:
+    track_repo = SQLiteTrackRepository(conn)
+    tracks = [
+        ("Rap Song", "Hip-Hop/Rap"),
+        ("Hip Hop Song", "Hip Hop"),
+        ("Rock Song", "Rock"),
+        ("Trap Song", "Brazilian Trap"),
+        ("Pop Song", "Pop"),
+    ]
+    for title, genre in tracks:
+        track_repo.save(
+            Track(
+                title=title,
+                artist="Artist",
+                duration_seconds=180,
+                genre=genre,
+            )
+        )
+
+    eligible = track_repo.list_active(
+        limit=10,
+        excluded_genre_terms=("hip hop", "rap", "trap"),
+    )
+
+    assert [track.genre for track in eligible] == ["Rock", "Pop"]
+
+
+def test_interaction_repository_undoes_latest_discovery_only(
+    conn: sqlite3.Connection,
+) -> None:
+    plan_repo = SQLitePlanRepository(conn)
+    user_repo = SQLiteUserRepository(conn)
+    track_repo = SQLiteTrackRepository(conn)
+    interaction_repo = SQLiteInteractionRepository(conn)
+    plan = plan_repo.save(Plan(name="Undo", initial_monthly_price=0.0))
+    user = user_repo.save(
+        User(
+            email="undo@example.com",
+            password_hash="pw",
+            display_name="Undo",
+            age=20,
+            plan_id=plan.plan_id,
+        )
+    )
+    tracks = [
+        track_repo.save(
+            Track(
+                title=f"Track {index}",
+                artist="Artist",
+                duration_seconds=180,
+                genre="Pop",
+            )
+        )
+        for index in range(3)
+    ]
+    base_time = datetime.now(UTC)
+    search_interaction = interaction_repo.save(
+        Interaction(
+            user_id=user.user_id,
+            track_id=tracks[0].track_id,
+            action=InteractionAction.LIKE,
+            source="search",
+            created_at=base_time + timedelta(seconds=2),
+        )
+    )
+    first_discovery = interaction_repo.save(
+        Interaction(
+            user_id=user.user_id,
+            track_id=tracks[1].track_id,
+            action=InteractionAction.DISLIKE,
+            source="discovery",
+            created_at=base_time,
+        )
+    )
+    latest_discovery = interaction_repo.save(
+        Interaction(
+            user_id=user.user_id,
+            track_id=tracks[2].track_id,
+            action=InteractionAction.SUPERLIKE,
+            source="discovery",
+            created_at=base_time + timedelta(seconds=1),
+        )
+    )
+
+    undone = interaction_repo.delete_latest_discovery(user.user_id)
+
+    assert undone is not None
+    assert undone.interaction_id == latest_discovery.interaction_id
+    assert undone.track_id == tracks[2].track_id
+    remaining = interaction_repo.list_by_user(user.user_id)
+    assert {interaction.interaction_id for interaction in remaining} == {
+        search_interaction.interaction_id,
+        first_discovery.interaction_id,
+    }
+
+
 def test_playlist_repository_aggregate(conn: sqlite3.Connection) -> None:
     plan_repo = SQLitePlanRepository(conn)
     user_repo = SQLiteUserRepository(conn)
@@ -193,6 +292,21 @@ def test_playlist_repository_aggregate(conn: sqlite3.Connection) -> None:
     user_playlists = playlist_repo.list_by_user(user.user_id)
     assert len(user_playlists) == 1
     assert len(user_playlists[0].tracks) == 1
+
+    image_url = f"/api/playlists/{saved_playlist.playlist_id}/image"
+    assert playlist_repo.save_cover_image(
+        playlist_id=saved_playlist.playlist_id,
+        content_type="image/png",
+        image_data=b"\x89PNG\r\n\x1a\nimage",
+        cover_image_url=image_url,
+    )
+    loaded_with_cover = playlist_repo.find_by_id(saved_playlist.playlist_id)
+    assert loaded_with_cover is not None
+    assert loaded_with_cover.cover_image_url == image_url
+    assert playlist_repo.get_cover_image(saved_playlist.playlist_id) == (
+        "image/png",
+        b"\x89PNG\r\n\x1a\nimage",
+    )
 
 
 def test_jam_and_review_repositories(conn: sqlite3.Connection) -> None:

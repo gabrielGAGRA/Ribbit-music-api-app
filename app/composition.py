@@ -489,7 +489,7 @@ def build_container(
         list_blocked_genres_use_case=ListBlockedGenresUseCase(user_repo),
         update_blocked_genres_use_case=UpdateBlockedGenresUseCase(user_repo, plan_repo),
         list_user_interactions_use_case=ListUserInteractionsUseCase(
-            user_repo, interaction_repo
+            user_repo, interaction_repo, track_repo
         ),
         change_track_interaction_use_case=ChangeTrackInteractionUseCase(
             user_repo, plan_repo, interaction_repo

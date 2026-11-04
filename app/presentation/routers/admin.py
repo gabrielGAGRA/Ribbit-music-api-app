@@ -17,7 +17,6 @@ from app.application.use_cases.admin import (
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
-    PromoteUserToAdminUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
@@ -47,7 +46,7 @@ from app.presentation.schemas.admin import (
     UpdateTrackGenreRequest,
     UserPlanSummaryResponse,
 )
-from app.presentation.schemas.auth import LoginRequest, UserResponse
+from app.presentation.schemas.auth import AuthResponse, LoginRequest, UserResponse
 from app.presentation.schemas.tracks_reviews import (
     CatalogTrackResponse,
     ReviewResponse,
@@ -104,17 +103,20 @@ def _get_sync_catalog_version_use_case(
     return container.sync_catalog_version_use_case
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=AuthResponse)
 def login_admin(
     req: LoginRequest,
     use_case: Annotated[
         AuthenticateAdminUseCase, Depends(provide(AuthenticateAdminUseCase))
     ],
-) -> UserResponse:
-    admin = use_case.execute(
+) -> AuthResponse:
+    result = use_case.execute(
         AuthenticateAdminCommand(email=req.email, password=req.password)
     )
-    return UserResponse.model_validate(admin)
+    return AuthResponse(
+        access_token=result.access_token,
+        user=UserResponse.model_validate(result.user),
+    )
 
 
 @router.get(
@@ -150,10 +152,6 @@ def list_users(
     "/audience",
     response_model=AudienceReportResponse,
 )
-@router.get(
-    "/audiencia",
-    response_model=AudienceReportResponse,
-)
 def get_audience_report(
     use_case: Annotated[
         GetAudienceReportUseCase, Depends(provide(GetAudienceReportUseCase))
@@ -168,10 +166,6 @@ def get_audience_report(
     "/administrators",
     response_model=list[UserResponse],
 )
-@router.get(
-    "/administradores",
-    response_model=list[UserResponse],
-)
 def list_administrators(
     use_case: Annotated[
         ListAdministratorsUseCase, Depends(_get_list_administrators_use_case)
@@ -184,10 +178,6 @@ def list_administrators(
 
 @router.put(
     "/administrators/{user_id}",
-    response_model=UserResponse,
-)
-@router.put(
-    "/administradores/{user_id}",
     response_model=UserResponse,
 )
 def update_admin_role(
@@ -210,10 +200,6 @@ def update_admin_role(
     "/blocked-tracks",
     response_model=list[CatalogTrackResponse],
 )
-@router.get(
-    "/musicas-bloqueadas",
-    response_model=list[CatalogTrackResponse],
-)
 def list_blocked_tracks(
     use_case: Annotated[
         ListBlockedTracksUseCase, Depends(_get_list_blocked_tracks_use_case)
@@ -228,22 +214,14 @@ def list_blocked_tracks(
     "/tracks/{track_id}/block",
     response_model=TrackBlockResponse,
 )
-@router.put(
-    "/musicas/{track_id}/bloquear",
-    response_model=TrackBlockResponse,
-)
-@router.post(
-    "/tracks/{track_id}/block",
-    response_model=TrackBlockResponse,
-)
 def block_track(
     track_id: int,
     use_case: Annotated[BlockTrackUseCase, Depends(provide(BlockTrackUseCase))],
     req: BlockTrackRequest | None = None,
     admin_id: Annotated[int, Depends(require_admin)] = 0,
 ) -> TrackBlockResponse:
-    if req is not None and (req.blocked is not None or req.bloqueada is not None):
-        result = use_case.execute(track_id=track_id, blocked=req.is_blocked())
+    if req is not None and req.blocked is not None:
+        result = use_case.execute(track_id=track_id, blocked=req.blocked)
     else:
         result = use_case.execute(track_id=track_id)
     return TrackBlockResponse(track_id=track_id, blocked=result)
@@ -289,27 +267,8 @@ def update_track_genre(
     return TrackGenreResponse(track_id=track_id, genre=genre)
 
 
-@router.put(
-    "/users/{user_id}/promote-admin",
-    response_model=UserResponse,
-)
-def promote_user_to_admin(
-    user_id: int,
-    use_case: Annotated[
-        PromoteUserToAdminUseCase, Depends(provide(PromoteUserToAdminUseCase))
-    ],
-    admin_id: Annotated[int, Depends(require_admin)] = 0,
-) -> UserResponse:
-    user = use_case.execute(user_id=user_id)
-    return UserResponse.model_validate(user)
-
-
 @router.get(
     "/plans",
-    response_model=list[PlanResponse],
-)
-@router.get(
-    "/planos",
     response_model=list[PlanResponse],
 )
 def list_plans(
@@ -324,10 +283,6 @@ def list_plans(
     "/plans/{plan_id}",
     response_model=PlanResponse,
 )
-@router.put(
-    "/planos/{plan_id}",
-    response_model=PlanResponse,
-)
 def update_plan(
     plan_id: int,
     req: UpdatePlanAdminRequest,
@@ -339,9 +294,9 @@ def update_plan(
 ) -> PlanResponse:
     command = UpdateSubscriptionPlanCommand(
         plan_id=plan_id,
-        new_price=req.resolved_price(),
-        new_name=req.resolved_name(),
-        max_profiles=req.resolved_max_profiles(),
+        new_price=req.new_price,
+        new_name=req.new_name,
+        max_profiles=req.max_profiles,
     )
     try:
         plan = use_case.execute(command)

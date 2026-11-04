@@ -179,6 +179,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         *,
         limit: int,
         excluded_genres: Sequence[str] = (),
+        excluded_genre_terms: Sequence[str] = (),
         block_explicit: bool = False,
         excluded_ids: Sequence[int] = (),
     ) -> list[Track]:
@@ -198,6 +199,15 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             placeholders = ",".join("?" for _ in clean_genres)
             conditions.append(f"lower(genre) NOT IN ({placeholders})")
             params.extend(clean_genres)
+
+        normalized_genre = (
+            "' ' || lower(replace(replace(replace(replace(genre, '-', ' '), "
+            "'/', ' '), '&', ' '), ',', ' ')) || ' '"
+        )
+        if excluded_genre_terms:
+            for term in excluded_genre_terms:
+                conditions.append(f"instr({normalized_genre}, ?) = 0")
+                params.append(f" {term.casefold().strip()} ")
 
         where_clause = " AND ".join(conditions)
         query = (

@@ -18,7 +18,7 @@ class AuthenticateAdminUseCase:
 
     user_repo: UserRepositoryPort
     password_hasher: PasswordHasherPort
-    token_service: TokenServicePort | None = None
+    token_service: TokenServicePort
 
     def execute(self, command: AuthenticateAdminCommand) -> AuthResult:
         user = self.user_repo.find_by_email(command.email.strip().lower())
@@ -33,10 +33,10 @@ class AuthenticateAdminUseCase:
         if not user.is_admin:
             raise PermissionDeniedError("Access restricted to administrators.")
 
-        token = ""
-        if self.token_service is not None and user.user_id is not None:
-            token = self.token_service.create_access_token(
-                user_id=user.user_id, is_admin=True
-            )
+        if user.user_id is None:
+            raise RuntimeError("Authenticated admin is missing its persisted ID.")
+        token = self.token_service.create_access_token(
+            user_id=user.user_id, is_admin=True
+        )
 
         return AuthResult(user=user, access_token=token)

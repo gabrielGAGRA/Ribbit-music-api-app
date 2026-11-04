@@ -171,6 +171,11 @@ class GetPlaylistDeckUseCase:
             candidates = self.track_repo.list_active(
                 limit=100,
                 excluded_genres=list(user.blocked_genres),
+                excluded_genre_terms=(
+                    tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
+                    if user.is_minor()
+                    else ()
+                ),
                 block_explicit=not user.is_adult,
                 excluded_ids=list(excluded_ids),
             )

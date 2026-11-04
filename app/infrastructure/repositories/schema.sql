@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS interactions (
     track_id INTEGER NOT NULL REFERENCES tracks(track_id) ON DELETE CASCADE,
     action TEXT NOT NULL,
     created_at TEXT NOT NULL,
+    source TEXT,
     CONSTRAINT uq_interactions_user_track UNIQUE (user_id, track_id)
 );
 
@@ -63,7 +64,15 @@ CREATE TABLE IF NOT EXISTS playlists (
     is_exported INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     max_duration_seconds INTEGER,
-    deck_filters TEXT
+    deck_filters TEXT,
+    cover_image_url TEXT
+);
+
+CREATE TABLE IF NOT EXISTS playlist_images (
+    playlist_id INTEGER PRIMARY KEY REFERENCES playlists(playlist_id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL,
+    image_data BLOB NOT NULL,
+    updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS playlist_tracks (

@@ -75,7 +75,7 @@ class SaveSearchTrackLikeUseCase:
         if not track or track.is_deleted:
             raise EntityNotFoundError("Música não encontrada ou inativa.")
 
-        if user.is_minor() and track.explicit:
+        if user.is_track_restricted_for_minor(track):
             raise BusinessRuleViolationError(
                 "Música bloqueada para usuários menores de idade."
             )
@@ -87,6 +87,7 @@ class SaveSearchTrackLikeUseCase:
             user_id=uid,
             track_id=tid,
             action=InteractionAction.LIKE,
+            source="search",
         )
         self.interaction_repo.save(interaction)
         return True

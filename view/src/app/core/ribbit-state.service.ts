@@ -444,7 +444,7 @@ export class RibbitStateService implements OnDestroy {
     const uid = this.userId();
     if (uid === null) return;
     const nextSpotifyId = this.isSpotifyLinked() ? '' : `spotify_user_${uid}`;
-    this.profileApi.linkSpotify(uid, nextSpotifyId).subscribe({
+    this.profileApi.linkSpotify(nextSpotifyId).subscribe({
       next: (updatedUser) => {
         this.applyUserDto(updatedUser);
         this.notify(
@@ -514,7 +514,6 @@ export class RibbitStateService implements OnDestroy {
     const targetAction = currentKind === 'reject' ? 'like' : 'dislike';
     this.profileApi
       .changeInteraction({
-        userId: this.userId()!,
         trackId: song.trackId,
         newAction: targetAction,
       })

@@ -27,6 +27,7 @@ def _row_to_playlist(row: sqlite3.Row, tracks: list[Track]) -> Playlist:
         name=row["name"],
         description=row["description"],
         spotify_playlist_id=row["spotify_playlist_id"],
+        cover_image_url=(row["cover_image_url"] if "cover_image_url" in keys else None),
         is_exported=bool(row["is_exported"]),
         created_at=created_at,
         max_duration_seconds=max_duration,
@@ -107,6 +108,7 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                     SET name = ?,
                         description = ?,
                         spotify_playlist_id = ?,
+                        cover_image_url = ?,
                         is_exported = ?,
                         max_duration_seconds = ?,
                         deck_filters = ?
@@ -116,6 +118,7 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                         playlist.name,
                         playlist.description,
                         playlist.spotify_playlist_id,
+                        playlist.cover_image_url,
                         1 if playlist.is_exported else 0,
                         playlist.max_duration_seconds,
                         playlist.deck_filters,
@@ -146,8 +149,8 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
             """
             INSERT INTO playlists (
                 user_id, name, description, spotify_playlist_id, is_exported,
-                created_at, max_duration_seconds, deck_filters
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, max_duration_seconds, deck_filters, cover_image_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 playlist.user_id,
@@ -158,6 +161,7 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                 created_at_str,
                 playlist.max_duration_seconds,
                 playlist.deck_filters,
+                playlist.cover_image_url,
             ),
         )
         new_id = cursor.lastrowid
@@ -175,6 +179,52 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
             return self.find_by_id(new_id) or playlist
         self.conn.commit()
         return playlist
+
+    def save_cover_image(
+        self,
+        playlist_id: int,
+        content_type: str,
+        image_data: bytes,
+        cover_image_url: str,
+    ) -> bool:
+        exists = self.conn.execute(
+            "SELECT 1 FROM playlists WHERE playlist_id = ?",
+            (playlist_id,),
+        ).fetchone()
+        if exists is None:
+            return False
+
+        updated_at = datetime.now(UTC).isoformat()
+        self.conn.execute(
+            """
+            INSERT INTO playlist_images (playlist_id, content_type, image_data, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(playlist_id) DO UPDATE SET
+                content_type = excluded.content_type,
+                image_data = excluded.image_data,
+                updated_at = excluded.updated_at
+            """,
+            (playlist_id, content_type, image_data, updated_at),
+        )
+        self.conn.execute(
+            "UPDATE playlists SET cover_image_url = ? WHERE playlist_id = ?",
+            (cover_image_url, playlist_id),
+        )
+        self.conn.commit()
+        return True
+
+    def get_cover_image(self, playlist_id: int) -> tuple[str, bytes] | None:
+        row = self.conn.execute(
+            """
+            SELECT content_type, image_data
+            FROM playlist_images
+            WHERE playlist_id = ?
+            """,
+            (playlist_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return row["content_type"], bytes(row["image_data"])
 
 
 __all__ = ["SQLitePlaylistRepository"]

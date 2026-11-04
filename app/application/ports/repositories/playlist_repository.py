@@ -20,3 +20,17 @@ class PlaylistRepositoryPort(Protocol):
     def delete(self, playlist_id: int) -> bool: ...
 
     def remove_track(self, playlist_id: int, track_id: int) -> bool: ...
+
+    def save_cover_image(
+        self,
+        playlist_id: int,
+        content_type: str,
+        image_data: bytes,
+        cover_image_url: str,
+    ) -> bool:
+        """Stores/replaces a playlist cover image; returns false if playlist is missing."""
+        ...
+
+    def get_cover_image(self, playlist_id: int) -> tuple[str, bytes] | None:
+        """Returns a playlist cover's media type and bytes, if present."""
+        ...

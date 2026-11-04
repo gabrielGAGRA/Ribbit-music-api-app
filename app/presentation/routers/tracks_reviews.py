@@ -35,7 +35,6 @@ from app.presentation.schemas.tracks_reviews import (
     ReviewActionResponse,
     ReviewResponse,
     SaveSearchTrackLikeRequest,
-    TrackReviewListResponse,
 )
 
 router = APIRouter(tags=["Tracks & Reviews"])
@@ -79,7 +78,6 @@ def _get_save_search_track_like_use_case(
 
 
 @router.get("/api/tracks/search", response_model=list[CatalogTrackResponse])
-@router.get("/api/musicas/buscar", response_model=list[CatalogTrackResponse])
 def search_tracks(
     user_id: Annotated[int, Depends(require_user)],
     query: Annotated[TrackSearchQuery, Depends()],
@@ -110,15 +108,14 @@ def search_tracks(
 def publish_review(
     req: PublishReviewRequest,
     use_case: Annotated[PublishReviewUseCase, Depends(provide(PublishReviewUseCase))],
-    user_id: Annotated[int, Depends(require_user)] = 0,
+    user_id: Annotated[int, Depends(require_user)],
 ) -> ReviewResponse:
-    effective_user_id = req.user_id if req.user_id is not None else user_id
     review = use_case.execute(
         PublishReviewCommand(
-            user_id=effective_user_id,
-            track_id=req.resolved_track_id,
-            rating=req.resolved_rating,
-            text=req.resolved_text,
+            user_id=user_id,
+            track_id=req.track_id,
+            rating=req.rating,
+            text=req.text,
         )
     )
     return ReviewResponse.model_validate(review)
@@ -150,10 +147,6 @@ def like_review(
     "/api/reviews/recent-interacted",
     response_model=list[RecentInteractedTrackResponse],
 )
-@router.get(
-    "/api/reviews/ultimas-interagidas",
-    response_model=list[RecentInteractedTrackResponse],
-)
 def get_recently_interacted_tracks(
     user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
@@ -175,9 +168,6 @@ def get_recently_interacted_tracks(
 @router.post(
     "/api/reviews/{track_id}/like-and-save", response_model=ReviewActionResponse
 )
-@router.post(
-    "/api/reviews/{track_id}/curtir-busca", response_model=ReviewActionResponse
-)
 def save_search_track_like(
     track_id: int,
     user_id: Annotated[int, Depends(require_user)],
@@ -197,7 +187,6 @@ def save_search_track_like(
 
 
 @router.get("/api/reviews/feed", response_model=list[ReviewResponse])
-@router.get("/api/reviews/feed-top5dias", response_model=list[ReviewResponse])
 def get_community_feed(
     use_case: Annotated[
         GetCommunityFeedUseCase, Depends(provide(GetCommunityFeedUseCase))
@@ -212,32 +201,16 @@ def get_community_feed(
 @router.get("/api/reviews/track/{track_id}", response_model=list[ReviewResponse])
 def get_track_reviews(
     track_id: int,
-    use_case: Annotated[
-        GetTrackReviewsUseCase, Depends(provide(GetTrackReviewsUseCase))
-    ],
-) -> list[ReviewResponse]:
-    reviews = use_case.execute(track_id=track_id)
-    return [ReviewResponse.model_validate(r) for r in reviews]
-
-
-@router.get("/api/reviews/musica/{musica_id}", response_model=TrackReviewListResponse)
-def get_musica_reviews(
-    musica_id: int,
     request: Request,
     use_case: Annotated[
         GetTrackReviewsUseCase, Depends(provide(GetTrackReviewsUseCase))
     ],
-) -> TrackReviewListResponse:
-    track = get_container(request).track_repo.find_by_id(musica_id)
+) -> list[ReviewResponse]:
+    track = get_container(request).track_repo.find_by_id(track_id)
     if not track or track.is_deleted:
-        raise EntityNotFoundError(
-            f"Música com ID {musica_id} não encontrada ou inativa."
-        )
-    reviews = use_case.execute(track_id=musica_id)
-    return TrackReviewListResponse(
-        track=CatalogTrackResponse.model_validate(track),
-        reviews=[ReviewResponse.model_validate(r) for r in reviews],
-    )
+        raise EntityNotFoundError(f"Track with ID {track_id} not found or inactive.")
+    reviews = use_case.execute(track_id=track_id)
+    return [ReviewResponse.model_validate(r) for r in reviews]
 
 
 __all__ = ["router"]

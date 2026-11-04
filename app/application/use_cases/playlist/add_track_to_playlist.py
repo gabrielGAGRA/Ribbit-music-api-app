@@ -84,6 +84,7 @@ class AddTrackToPlaylistUseCase:
                     user_id=command.user_id,
                     track_id=command.track_id,
                     action=interaction_action,
+                    source="playlist",
                 )
             )
 

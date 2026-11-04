@@ -8,9 +8,23 @@ lazy from collections.abc import Iterable
 lazy from app.domain.models.track import Track
 
 
+def _normalize_genre(genre: str) -> str:
+    return genre.strip().casefold()
+
+
+def _genre_tokens(genre: str) -> tuple[str, ...]:
+    normalized = "".join(
+        character if character.isalnum() else " " for character in genre.casefold()
+    )
+    return tuple(normalized.split())
+
+
 @dataclass(slots=True, kw_only=True, eq=False)
 class User:
     MIN_ADULT_AGE: ClassVar[int] = 18
+    MINOR_RESTRICTED_GENRE_TERMS: ClassVar[frozenset[str]] = frozenset(
+        {"funk", "hip hop", "rap", "trap"}
+    )
 
     user_id: int | None = None
     email: str
@@ -35,7 +49,7 @@ class User:
         if self.birth_date is not None:
             self.birth_date = self.birth_date.strip() or None
         self.blocked_genres = frozenset(
-            genre.strip().lower() for genre in self.blocked_genres if genre.strip()
+            _normalize_genre(genre) for genre in self.blocked_genres if genre.strip()
         )
 
     def current_age(self, today: date | None = None) -> int:
@@ -68,9 +82,26 @@ class User:
     idade_indica_menor = is_age_minor
 
     def can_listen(self, track: Track) -> bool:
-        if self.is_minor() and track.explicit:
+        genre = _normalize_genre(track.genre)
+        return (
+            not self.is_track_restricted_for_minor(track)
+            and genre not in self.blocked_genres
+        )
+
+    def is_track_restricted_for_minor(self, track: Track) -> bool:
+        if not self.is_minor():
             return False
-        return track.genre.strip().lower() not in self.blocked_genres
+        if track.explicit:
+            return True
+
+        genre_tokens = _genre_tokens(track.genre)
+        return any(
+            genre_tokens[index : index + len(term_tokens)] == term_tokens
+            for term_tokens in (
+                tuple(term.split()) for term in self.MINOR_RESTRICTED_GENRE_TERMS
+            )
+            for index in range(len(genre_tokens) - len(term_tokens) + 1)
+        )
 
     def link_primary_account(self, primary_account_id: int) -> Self:
         if self.user_id is not None and primary_account_id == self.user_id:

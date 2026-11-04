@@ -45,12 +45,12 @@ class RecordSwipeInteractionUseCase:
                 f"Track with ID {command.track_id} not found or inactive."
             )
 
-        if user.is_minor() and track.explicit:
+        if user.is_track_restricted_for_minor(track):
             raise BusinessRuleViolationError(
                 "Música bloqueada para usuários menores de idade."
             )
 
-        if track.genre.strip().lower() in user.blocked_genres:
+        if track.genre.strip().casefold() in user.blocked_genres:
             raise BusinessRuleViolationError("Gênero bloqueado pelo usuário.")
 
         if isinstance(command.action, InteractionAction):
@@ -68,5 +68,6 @@ class RecordSwipeInteractionUseCase:
             user_id=command.user_id,
             track_id=command.track_id,
             action=action_enum,
+            source="discovery",
         )
         return self.interaction_repo.save(interaction)

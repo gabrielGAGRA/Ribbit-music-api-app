@@ -157,13 +157,12 @@ def get_jam_state_use_case(request: Request) -> GetJamStateUseCase:
 @router.post("", response_model=JamResponse, status_code=status.HTTP_201_CREATED)
 def create_jam(
     req: CreateJamRequest,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
+    current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[CreateJamUseCase, Depends(get_create_jam_use_case)] = None,  # type: ignore[assignment]
 ) -> JamResponse:
-    host_id = current_user_id or req.host_user_id or 0
     jam = use_case.execute(
         CreateJamCommand(
-            host_user_id=host_id,
+            host_user_id=current_user_id,
             room_name=req.room_name,
             duration_minutes=req.duration_minutes,
             max_superlikes=req.max_superlikes,
@@ -176,31 +175,22 @@ def create_jam(
 
 
 @router.post("/join", response_model=JamResponse)
-@router.post("/entrar", response_model=JamResponse, include_in_schema=False)
 def join_jam(
     req: JoinJamRequest,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
+    current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[JoinJamUseCase, Depends(get_join_jam_use_case)] = None,  # type: ignore[assignment]
 ) -> JamResponse:
-    if current_user_id:
-        jam = use_case.execute(room_code=req.room_code, user_id=current_user_id)
-    else:
-        jam = use_case.execute(room_code=req.room_code)
+    jam = use_case.execute(room_code=req.room_code, user_id=current_user_id)
     return JamResponse.model_validate(jam)
 
 
 @router.get("/{jam_id}/state", response_model=JamStateResponse)
-@router.get(
-    "/{jam_id}/estado", response_model=JamStateResponse, include_in_schema=False
-)
 def get_jam_state(
     jam_id: int,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
-    user_id: Annotated[int | None, Query()] = None,
+    current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[GetJamStateUseCase, Depends(get_jam_state_use_case)] = None,  # type: ignore[assignment]
 ) -> JamStateResponse:
-    effective_user_id = current_user_id or user_id or 0
-    state = use_case.execute(jam_id=jam_id, user_id=effective_user_id)
+    state = use_case.execute(jam_id=jam_id, user_id=current_user_id)
     if isinstance(state, dict):
         return JamStateResponse(
             jam=JamResponse.model_validate(state["jam"]),
@@ -228,28 +218,19 @@ def get_jam_state(
 
 
 @router.post("/{jam_id}/deck-vote", response_model=JamQueueItemResponse)
-@router.post(
-    "/{jam_id}/interagir-deck",
-    response_model=JamQueueItemResponse,
-    include_in_schema=False,
-)
-@router.post(
-    "/{jam_id}/vote", response_model=JamQueueItemResponse, include_in_schema=False
-)
 def vote_jam_track(
     jam_id: int,
     req: VoteJamTrackRequest,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
+    current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         VoteJamTrackUseCase, Depends(get_vote_jam_track_use_case)
     ] = None,  # type: ignore[assignment]
 ) -> JamQueueItemResponse:
-    effective_user_id = current_user_id or req.user_id or 0
     queue_item = use_case.execute(
         VoteJamTrackCommand(
             jam_id=jam_id,
             track_id=req.track_id,
-            user_id=effective_user_id,
+            user_id=current_user_id,
             points=req.points,
             action=req.action,
         )
@@ -258,28 +239,20 @@ def vote_jam_track(
 
 
 @router.post("/{jam_id}/skip-vote", response_model=SkipVoteResponse)
-@router.post(
-    "/{jam_id}/votar-pular",
-    response_model=SkipVoteResponse,
-    include_in_schema=False,
-)
-@router.post("/{jam_id}/skip", response_model=SkipVoteResponse, include_in_schema=False)
 def skip_jam_track(
     jam_id: int,
+    current_user_id: Annotated[int, Depends(require_user)],
     req: SkipJamTrackRequest | None = None,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
     use_case: Annotated[
         VoteSkipJamTrackUseCase, Depends(get_vote_skip_jam_track_use_case)
     ] = None,  # type: ignore[assignment]
 ) -> SkipVoteResponse:
     req_track_id = req.track_id if req else None
-    req_user_id = req.user_id if req else None
-    effective_user_id = current_user_id or req_user_id or 0
     result = use_case.execute(
         VoteSkipJamTrackCommand(
             jam_id=jam_id,
             track_id=req_track_id,
-            user_id=effective_user_id,
+            user_id=current_user_id,
         )
     )
     if isinstance(result, SkipVoteResult):
@@ -315,22 +288,14 @@ def skip_jam_track(
 
 
 @router.get("/{jam_id}/deck", response_model=PaginatedTracksResponse)
-@router.get(
-    "/{jam_id}/deck-adicionar",
-    response_model=PaginatedTracksResponse,
-    include_in_schema=False,
-)
 def get_jam_deck(
     jam_id: int,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
-    limite: Annotated[int | None, Query(ge=1, le=100)] = None,
+    current_user_id: Annotated[int, Depends(require_user)],
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     cursor_id: Annotated[int | None, Query(gt=0)] = None,
     use_case: Annotated[GetJamDeckUseCase, Depends(get_jam_deck_use_case)] = None,  # type: ignore[assignment]
 ) -> PaginatedTracksResponse:
-    page_limit = (
-        limit if isinstance(limit, int) else (limite if isinstance(limite, int) else 20)
-    )
+    page_limit = limit if isinstance(limit, int) else 20
     cursor_val = cursor_id if isinstance(cursor_id, int) else None
     deck_result = use_case.execute(
         GetJamDeckCommand(
@@ -348,15 +313,10 @@ def get_jam_deck(
 
 
 @router.post("/{jam_id}/save-queue-track", response_model=ActionSuccessResponse)
-@router.post(
-    "/{jam_id}/curtir-fila",
-    response_model=ActionSuccessResponse,
-    include_in_schema=False,
-)
 def save_queue_track(
     jam_id: int,
     req: SaveQueueTrackRequest,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
+    current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         SaveQueueTrackUseCase, Depends(get_save_queue_track_use_case)
     ] = None,  # type: ignore[assignment]
@@ -373,10 +333,9 @@ def save_queue_track(
 
 
 @router.post("/{jam_id}/close", response_model=JamResponse)
-@router.post("/{jam_id}/encerrar", response_model=JamResponse, include_in_schema=False)
 def close_jam(
     jam_id: int,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
+    current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[CloseJamUseCase, Depends(get_close_jam_use_case)] = None,  # type: ignore[assignment]
 ) -> JamResponse:
     jam = use_case.execute(
@@ -391,16 +350,14 @@ def close_jam(
 @router.post("/{jam_id}/advance", response_model=JamResponse)
 def advance_jam_playback(
     jam_id: int,
-    current_user_id: Annotated[int, Depends(require_user)] = 0,
-    requester_user_id: Annotated[int | None, Query()] = None,
+    current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         AdvanceJamPlaybackUseCase, Depends(get_advance_jam_playback_use_case)
     ] = None,  # type: ignore[assignment]
 ) -> JamResponse:
-    effective_user_id = current_user_id or requester_user_id or 0
     jam = use_case.execute(
         jam_id=jam_id,
-        requester_user_id=effective_user_id,
+        requester_user_id=current_user_id,
     )
     return JamResponse.model_validate(jam)
 

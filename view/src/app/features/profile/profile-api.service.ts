@@ -33,9 +33,8 @@ export class ProfileApiService {
   }
 
   /** Links or unlinks a Spotify identifier on the user's profile. */
-  linkSpotify(userId: number, spotifyId: string): Observable<UserApiDto> {
+  linkSpotify(spotifyId: string): Observable<UserApiDto> {
     return this.http.post<UserApiDto>('/api/profile/link-spotify', {
-      user_id: userId,
       spotify_id: spotifyId,
     });
   }
@@ -48,17 +47,15 @@ export class ProfileApiService {
   /** Lists user swipe interactions, optionally filtered by category. */
   listHistory(category?: SwipeApiAction): Observable<readonly InteractionApiDto[]> {
     const params = category ? new HttpParams().set('category', category) : new HttpParams();
-    return this.http.get<readonly InteractionApiDto[]>('/api/profile/history', { params });
+    return this.http.get<readonly InteractionApiDto[]>('/api/profile/interactions', { params });
   }
 
   /** Revises an existing track swipe interaction (requires paid plan). */
   changeInteraction(options: {
-    readonly userId: number;
     readonly trackId: number;
     readonly newAction: SwipeApiAction;
   }): Observable<InteractionApiDto> {
     return this.http.put<InteractionApiDto>('/api/profile/interaction', {
-      user_id: options.userId,
       track_id: options.trackId,
       new_action: options.newAction,
     });

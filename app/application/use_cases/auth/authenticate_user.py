@@ -18,7 +18,7 @@ class AuthenticateUserUseCase:
 
     user_repo: UserRepositoryPort
     password_hasher: PasswordHasherPort
-    token_service: TokenServicePort | None = None
+    token_service: TokenServicePort
 
     def execute(self, command: AuthenticateUserCommand) -> AuthResult:
         user = self.user_repo.find_by_email(command.email.strip().lower())
@@ -30,10 +30,10 @@ class AuthenticateUserUseCase:
         ):
             raise AuthenticationRequiredError("Invalid credentials.")
 
-        token = ""
-        if self.token_service is not None and user.user_id is not None:
-            token = self.token_service.create_access_token(
-                user_id=user.user_id, is_admin=user.is_admin
-            )
+        if user.user_id is None:
+            raise RuntimeError("Authenticated user is missing its persisted ID.")
+        token = self.token_service.create_access_token(
+            user_id=user.user_id, is_admin=user.is_admin
+        )
 
         return AuthResult(user=user, access_token=token)

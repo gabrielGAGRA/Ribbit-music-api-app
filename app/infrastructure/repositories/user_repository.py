@@ -9,6 +9,7 @@ from app.domain.models.user import User
 
 
 def _row_to_user(row: sqlite3.Row) -> User:
+    keys = row.keys()
     blocked_raw = row["blocked_genres"]
     blocked_genres = (
         frozenset(g.strip() for g in blocked_raw.split(",") if g.strip())
@@ -18,7 +19,6 @@ def _row_to_user(row: sqlite3.Row) -> User:
     created_at = (
         datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
     )
-    keys = row.keys()
     birth_date = row["birth_date"] if "birth_date" in keys else None
     return User(
         user_id=row["user_id"],
@@ -106,7 +106,8 @@ class SQLiteUserRepository(UserRepositoryPort):
             """
             INSERT INTO users (
                 email, password_hash, spotify_id, display_name, age,
-                plan_id, primary_account_id, blocked_genres, is_admin, created_at, birth_date
+                plan_id, primary_account_id, blocked_genres,
+                is_admin, created_at, birth_date
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (

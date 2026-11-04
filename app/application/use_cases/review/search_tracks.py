@@ -44,7 +44,12 @@ class SearchTracksUseCase:
             or command.genre
             or (str(command.year) if command.year is not None else None)
         )
-        if not tracks and query_term and self.music_service is not None:
+        if (
+            not tracks
+            and query_term
+            and self.music_service is not None
+            and user.is_adult
+        ):
             catalog_tracks: list[CatalogTrack] = []
             with contextlib.suppress(ExternalServiceError):
                 catalog_tracks = self.music_service.search_tracks(
@@ -63,10 +68,9 @@ class SearchTracksUseCase:
                 saved = self.track_repo.save(candidate)
                 tracks.append(saved)
 
-        if not user.is_adult:
-            tracks = [t for t in tracks if not t.explicit]
-
-        return tracks
+        return [
+            track for track in tracks if not user.is_track_restricted_for_minor(track)
+        ]
 
 
 __all__ = ["SearchTracksUseCase"]

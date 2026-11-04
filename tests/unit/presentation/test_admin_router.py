@@ -8,6 +8,7 @@ from app.application.dtos import (
     AuthenticateAdminCommand,
     UpdateSubscriptionPlanCommand,
 )
+from app.application.dtos.auth_dtos import AuthResult
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
     GetAudienceReportUseCase,
@@ -16,7 +17,6 @@ from app.application.use_cases.admin import (
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
-    PromoteUserToAdminUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
@@ -33,7 +33,6 @@ from app.presentation.routers.admin import (
     list_plans,
     list_users,
     login_admin,
-    promote_user_to_admin,
     update_admin_role,
     update_plan,
     update_track_explicit,
@@ -58,13 +57,17 @@ def test_login_admin_forwards_command_and_returns_admin_user() -> None:
         plan_id=2,
         is_admin=True,
     )
-    mock_use_case.execute.return_value = admin
+    mock_use_case.execute.return_value = AuthResult(
+        user=admin,
+        access_token="signed-admin-token",
+    )
     req = LoginRequest(email="admin@ribbit.com", password="adminpassword")
 
     res = login_admin(req=req, use_case=mock_use_case)
 
-    assert res.user_id == 1
-    assert res.is_admin is True
+    assert res.access_token == "signed-admin-token"
+    assert res.user.user_id == 1
+    assert res.user.is_admin is True
     mock_use_case.execute.assert_called_once_with(
         AuthenticateAdminCommand(
             email="admin@ribbit.com",
@@ -241,26 +244,6 @@ def test_update_track_explicit_forwards_flag_and_returns_response() -> None:
     assert res.track_id == 77
     assert res.explicit is True
     mock_use_case.execute.assert_called_once_with(track_id=77, explicit=True)
-
-
-def test_promote_user_to_admin_returns_promoted_user() -> None:
-    mock_use_case = MagicMock(spec=PromoteUserToAdminUseCase)
-    promoted = User(
-        user_id=15,
-        email="mod@ribbit.com",
-        password_hash="pw",
-        display_name="New Mod",
-        age=29,
-        plan_id=1,
-        is_admin=True,
-    )
-    mock_use_case.execute.return_value = promoted
-
-    res = promote_user_to_admin(user_id=15, use_case=mock_use_case)
-
-    assert res.user_id == 15
-    assert res.is_admin is True
-    mock_use_case.execute.assert_called_once_with(user_id=15)
 
 
 def test_update_plan_forwards_command_and_returns_plan_response() -> None:

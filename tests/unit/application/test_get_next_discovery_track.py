@@ -59,6 +59,7 @@ def test_get_next_discovery_track_for_adult_passes_preferences_and_returns_track
     interaction_repo.list_interacted_track_ids.assert_called_once_with(1)
     track_repo.list_active.assert_called_once_with(
         excluded_genres=("country",),
+        excluded_genre_terms=(),
         block_explicit=False,
         excluded_ids=[1, 2, 3],
         limit=1,
@@ -104,6 +105,7 @@ def test_get_next_discovery_track_for_minor_blocks_explicit_tracks() -> None:
     assert result is clean_track
     track_repo.list_active.assert_called_once_with(
         excluded_genres=(),
+        excluded_genre_terms=("funk", "hip hop", "rap", "trap"),
         block_explicit=True,
         excluded_ids=[],
         limit=1,
