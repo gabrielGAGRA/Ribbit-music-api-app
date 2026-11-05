@@ -31,13 +31,29 @@ class SyncCatalogVersionUseCase:
     audit_log_repo: AuditLogRepositoryPort | None = None
     _last_synced_version: int = 0
 
+    def _resolve_last_synced_version(self) -> int:
+        persisted_version = 0
+        if self.audit_log_repo is not None:
+            prefix = "catalog.synced.v"
+            for entry in self.audit_log_repo.list_all():
+                if entry.status == "success" and entry.event.startswith(prefix):
+                    raw_version = entry.event.removeprefix(prefix)
+                    try:
+                        version = int(raw_version)
+                        if version > persisted_version:
+                            persisted_version = version
+                    except ValueError:
+                        continue
+        return max(self._last_synced_version, persisted_version)
+
     def execute(self, *, force: bool = False) -> SyncCatalogVersionResult:
         info = self.catalog_file_port.get_catalog_version()
-        if not force and info.version <= self._last_synced_version:
+        last_synced = self._resolve_last_synced_version()
+        if not force and info.version <= last_synced:
             return SyncCatalogVersionResult(
                 synced=False,
                 version=info.version,
-                message=f"Local catalog is up to date (version {self._last_synced_version}).",
+                message=f"Local catalog is up to date (version {last_synced}).",
             )
 
         ingest_res = self.ingest_use_case.execute()
