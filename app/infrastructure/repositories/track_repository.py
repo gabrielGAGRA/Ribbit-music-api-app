@@ -201,8 +201,8 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             params.extend(clean_genres)
 
         normalized_genre = (
-            "' ' || lower(replace(replace(replace(replace(genre, '-', ' '), "
-            "'/', ' '), '&', ' '), ',', ' ')) || ' '"
+            "' ' || lower(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(genre, "
+            "'-', ' '), '/', ' '), '&', ' '), ',', ' '), '.', ' '), ';', ' '), ':', ' '), '(', ' '), ')', ' '), '[', ' '), ']', ' '), '!', ' ')) || ' '"
         )
         if excluded_genre_terms:
             for term in excluded_genre_terms:
