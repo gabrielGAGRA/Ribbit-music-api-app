@@ -55,36 +55,6 @@ from app.presentation.schemas.tracks_reviews import (
 router = APIRouter(prefix="/api/admin", tags=["Admin Console"])
 
 
-def _get_list_administrators_use_case(
-    request: Request,
-) -> ListAdministratorsUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(ListAdministratorsUseCase)
-    except KeyError:
-        return ListAdministratorsUseCase(user_repo=container.user_repo)
-
-
-def _get_update_admin_role_use_case(
-    request: Request,
-) -> UpdateAdminRoleUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(UpdateAdminRoleUseCase)
-    except KeyError:
-        return UpdateAdminRoleUseCase(user_repo=container.user_repo)
-
-
-def _get_list_blocked_tracks_use_case(
-    request: Request,
-) -> ListBlockedTracksUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(ListBlockedTracksUseCase)
-    except KeyError:
-        return ListBlockedTracksUseCase(track_repo=container.track_repo)
-
-
 def _get_compact_catalog_use_case(
     request: Request,
 ) -> CompactCatalogUseCase:
@@ -168,7 +138,7 @@ def get_audience_report(
 )
 def list_administrators(
     use_case: Annotated[
-        ListAdministratorsUseCase, Depends(_get_list_administrators_use_case)
+        ListAdministratorsUseCase, Depends(provide(ListAdministratorsUseCase))
     ],
     admin_id: Annotated[int, Depends(require_admin)] = 0,
 ) -> list[UserResponse]:
@@ -185,7 +155,7 @@ def update_admin_role(
     req: UpdateAdminRoleRequest,
     admin_id: Annotated[int, Depends(require_admin)],
     use_case: Annotated[
-        UpdateAdminRoleUseCase, Depends(_get_update_admin_role_use_case)
+        UpdateAdminRoleUseCase, Depends(provide(UpdateAdminRoleUseCase))
     ],
 ) -> UserResponse:
     user = use_case.execute(
@@ -202,7 +172,7 @@ def update_admin_role(
 )
 def list_blocked_tracks(
     use_case: Annotated[
-        ListBlockedTracksUseCase, Depends(_get_list_blocked_tracks_use_case)
+        ListBlockedTracksUseCase, Depends(provide(ListBlockedTracksUseCase))
     ],
     admin_id: Annotated[int, Depends(require_admin)] = 0,
 ) -> list[CatalogTrackResponse]:
