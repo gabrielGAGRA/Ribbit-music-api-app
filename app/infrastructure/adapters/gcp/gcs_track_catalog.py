@@ -39,10 +39,12 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         bucket_name: str,
         file_path: str = "Songs/songs_final.parquet",
         storage_client: storage.Client | None = None,
+        timeout: float = 30.0,
     ) -> None:
         self._bucket_name = bucket_name
         self._file_path = file_path
         self._storage_client = storage_client
+        self._timeout = timeout
 
         if "/" in file_path:
             parent_dir = file_path.rsplit("/", 1)[0]
@@ -56,16 +58,17 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         if self._storage_client is not None:
             return self._storage_client
         try:
-            return storage.Client()
+            self._storage_client = storage.Client()
         except Exception as exc:
+            logger.error(  # noqa: TRY400
+                "Failed to initialize GCP Cloud Storage client: %s", exc
+            )
             raise ExternalServiceError(
-                f"Failed to initialize GCP Cloud Storage client: {exc}",
+                "Failed to initialize cloud storage client.",
                 service_name="GCP_GCS",
-                details={
-                    "bucket_name": self._bucket_name,
-                    "file_path": self._file_path,
-                },
             ) from exc
+        else:
+            return self._storage_client
 
     def fetch_tracks(self) -> Sequence[CatalogSourceTrack]:
         """Downloads the Parquet file from GCS, merging any pending deltas."""
@@ -73,22 +76,23 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             raise ExternalServiceError(
                 "GCS bucket name is not configured.",
                 service_name="GCP_GCS",
-                details={"file_path": self._file_path},
             )
 
         client = self._get_client()
         try:
             bucket = client.bucket(self._bucket_name)
             blob = bucket.blob(self._file_path)
-            content_bytes = blob.download_as_bytes()
+            content_bytes = blob.download_as_bytes(timeout=self._timeout)
         except Exception as exc:
+            logger.error(  # noqa: TRY400
+                "Failed to download '%s' from GCS bucket '%s': %s",
+                self._file_path,
+                self._bucket_name,
+                exc,
+            )
             raise ExternalServiceError(
-                f"Failed to download '{self._file_path}' from GCS bucket '{self._bucket_name}': {exc}",
+                "Failed to download catalog tracks from cloud storage.",
                 service_name="GCP_GCS",
-                details={
-                    "bucket_name": self._bucket_name,
-                    "file_path": self._file_path,
-                },
             ) from exc
 
         base_tracks = list(self.parse_parquet_bytes(content_bytes))
@@ -112,67 +116,51 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             return
 
         client = self._get_client()
-        bucket = client.bucket(self._bucket_name)
+        try:
+            bucket = client.bucket(self._bucket_name)
 
-        now_iso = datetime.now(UTC).isoformat()
-        data: dict[str, list[Any]] = {
-            "title": [title],
-            "artist": [artist],
-            "itunes_preview_url": [preview_url],
-            "genre": [genre],
-            "spotify_id": [spotify_id],
-            "updated_at": [now_iso],
-        }
-        table = pa.Table.from_pydict(data)
-        sink = io.BytesIO()
-        pq.write_table(table, sink)
-        parquet_bytes = sink.getvalue()
+            now_iso = datetime.now(UTC).isoformat()
+            data: dict[str, list[Any]] = {
+                "title": [title],
+                "artist": [artist],
+                "itunes_preview_url": [preview_url],
+                "genre": [genre],
+                "spotify_id": [spotify_id],
+                "updated_at": [now_iso],
+            }
+            table = pa.Table.from_pydict(data)
+            sink = io.BytesIO()
+            pq.write_table(table, sink)
+            parquet_bytes = sink.getvalue()
 
-        delta_blob_name = f"{self._delta_prefix}/delta_{uuid.uuid4().hex[:12]}.parquet"
-        blob = bucket.blob(delta_blob_name)
-        blob.upload_from_string(parquet_bytes, content_type="application/octet-stream")
-
-    def write_preview_delta(
-        self,
-        *,
-        title: str,
-        artist: str,
-        preview_url: str,
-        spotify_id: str | None = None,
-    ) -> None:
-        """Writes a lightweight micro-delta file to remote storage for an enriched preview URL."""
-        self.write_track_delta(
-            title=title,
-            artist=artist,
-            preview_url=preview_url,
-            spotify_id=spotify_id,
-        )
-
-    def compact_catalog(self) -> int:
-        """Consolidates pending deltas into base catalog file, cleanses deltas, bumps version."""
-        if not self._bucket_name:
-            raise ExternalServiceError(
-                "GCS bucket name is not configured.", service_name="GCP_GCS"
+            delta_blob_name = (
+                f"{self._delta_prefix}/delta_{uuid.uuid4().hex[:12]}.parquet"
             )
+            blob = bucket.blob(delta_blob_name)
+            blob.upload_from_string(
+                parquet_bytes,
+                content_type="application/octet-stream",
+                timeout=self._timeout,
+            )
+        except ExternalServiceError:
+            raise
+        except Exception as exc:
+            logger.error(  # noqa: TRY400
+                "Failed to write track delta to GCS bucket '%s': %s",
+                self._bucket_name,
+                exc,
+            )
+            raise ExternalServiceError(
+                "Failed to write track delta to cloud storage.",
+                service_name="GCP_GCS",
+            ) from exc
 
-        client = self._get_client()
-        bucket = client.bucket(self._bucket_name)
-
-        blobs = list(client.list_blobs(self._bucket_name, prefix=self._delta_prefix))
-        delta_blobs = [b for b in blobs if b.name.endswith(".parquet")]
-
-        current_version_info = self.get_catalog_version()
-        if not delta_blobs:
-            return current_version_info.version
-
-        delta_map = self._read_deltas_from_blobs(delta_blobs)
-        base_blob = bucket.blob(self._file_path)
-        base_bytes = base_blob.download_as_bytes()
-
-        table = pq.read_table(io.BytesIO(base_bytes))
-        records = table.to_pylist()
+    def _apply_deltas_to_records(
+        self,
+        records: list[dict[str, Any]],
+        delta_map: dict[str | tuple[str, str], _TrackDeltaItem],
+    ) -> list[dict[str, Any]]:
         updated_records: list[dict[str, Any]] = []
-
         for record in records:
             spotify_id = str(record.get("spotify_id") or "").strip()
             title = str(record.get("title") or "").strip().lower()
@@ -185,29 +173,81 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
                 if delta.genre:
                     record["genre"] = delta.genre
             updated_records.append(record)
+        return updated_records
 
-        updated_table = pa.Table.from_pylist(updated_records, schema=table.schema)
-        sink = io.BytesIO()
-        pq.write_table(updated_table, sink)
-        base_blob.upload_from_string(
-            sink.getvalue(), content_type="application/octet-stream"
-        )
+    def _delete_delta_blobs(self, blobs: Sequence[storage.Blob]) -> None:
+        for b in blobs:
+            try:
+                b.delete(timeout=self._timeout)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "Failed to delete compacted delta blob %s: %s", b.name, exc
+                )
 
-        for b in delta_blobs:
-            with contextlib.suppress(Exception):
-                b.delete()
+    def compact_catalog(self) -> int:
+        """Consolidates pending deltas into base catalog file, cleanses deltas, bumps version."""
+        if not self._bucket_name:
+            raise ExternalServiceError(
+                "GCS bucket name is not configured.", service_name="GCP_GCS"
+            )
 
-        new_version = current_version_info.version + 1
-        version_data = {
-            "version": new_version,
-            "updated_at": datetime.now(UTC).isoformat(),
-        }
-        version_blob = bucket.blob(self._version_path)
-        version_blob.upload_from_string(
-            json.dumps(version_data),
-            content_type="application/json",
-        )
-        return new_version
+        client = self._get_client()
+        try:
+            bucket = client.bucket(self._bucket_name)
+
+            blobs = list(
+                client.list_blobs(self._bucket_name, prefix=self._delta_prefix)
+            )
+            delta_blobs = [b for b in blobs if b.name.endswith(".parquet")]
+
+            current_version_info = self.get_catalog_version()
+            if not delta_blobs:
+                return current_version_info.version
+
+            delta_map = self._read_deltas_from_blobs(delta_blobs)
+            base_blob = bucket.blob(self._file_path)
+            base_bytes = base_blob.download_as_bytes(timeout=self._timeout)
+
+            table = pq.read_table(io.BytesIO(base_bytes))
+            records = table.to_pylist()
+            updated_records = self._apply_deltas_to_records(records, delta_map)
+
+            updated_table = pa.Table.from_pylist(updated_records, schema=table.schema)
+            sink = io.BytesIO()
+            pq.write_table(updated_table, sink)
+            base_blob.upload_from_string(
+                sink.getvalue(),
+                content_type="application/octet-stream",
+                timeout=self._timeout,
+            )
+
+            self._delete_delta_blobs(delta_blobs)
+
+            new_version = current_version_info.version + 1
+            version_data = {
+                "version": new_version,
+                "updated_at": datetime.now(UTC).isoformat(),
+            }
+            version_blob = bucket.blob(self._version_path)
+            version_blob.upload_from_string(
+                json.dumps(version_data),
+                content_type="application/json",
+                timeout=self._timeout,
+            )
+        except ExternalServiceError:
+            raise
+        except Exception as exc:
+            logger.error(  # noqa: TRY400
+                "Failed to compact catalog in GCS bucket '%s': %s",
+                self._bucket_name,
+                exc,
+            )
+            raise ExternalServiceError(
+                "Failed to compact catalog in cloud storage.",
+                service_name="GCP_GCS",
+            ) from exc
+        else:
+            return new_version
 
     def get_catalog_version(self) -> CatalogVersionInfo:
         """Reads the remote catalog version sentinel."""
@@ -220,18 +260,32 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         bucket = client.bucket(self._bucket_name)
         blob = bucket.blob(self._version_path)
 
-        if not blob.exists():
-            return CatalogVersionInfo(
-                version=1, updated_at=datetime.now(UTC).isoformat()
+        try:
+            if not blob.exists(timeout=self._timeout):
+                return CatalogVersionInfo(
+                    version=1, updated_at=datetime.now(UTC).isoformat()
+                )
+            raw_text = blob.download_as_text(timeout=self._timeout)
+        except ExternalServiceError:
+            raise
+        except Exception as exc:
+            logger.error(  # noqa: TRY400
+                "Failed to read catalog version from GCS bucket '%s': %s",
+                self._bucket_name,
+                exc,
             )
+            raise ExternalServiceError(
+                "Failed to read catalog version from cloud storage.",
+                service_name="GCP_GCS",
+            ) from exc
 
         try:
-            data = json.loads(blob.download_as_text())
+            data = json.loads(raw_text)
             return CatalogVersionInfo(
                 version=int(data.get("version", 1)),
                 updated_at=str(data.get("updated_at", datetime.now(UTC).isoformat())),
             )
-        except json.JSONDecodeError, ValueError, KeyError, RuntimeError:
+        except json.JSONDecodeError, ValueError, KeyError:
             return CatalogVersionInfo(
                 version=1, updated_at=datetime.now(UTC).isoformat()
             )
@@ -240,13 +294,18 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         self, bucket: storage.Bucket
     ) -> dict[str | tuple[str, str], _TrackDeltaItem]:
         try:
-            client = self._get_client()
+            client = (
+                self._storage_client
+                if self._storage_client is not None
+                else self._get_client()
+            )
             blobs = list(
                 client.list_blobs(self._bucket_name, prefix=self._delta_prefix)
             )
             delta_blobs = [b for b in blobs if b.name.endswith(".parquet")]
             return self._read_deltas_from_blobs(delta_blobs)
-        except ExternalServiceError, RuntimeError:
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to load pending catalog deltas: %s", exc)
             return {}
 
     def _read_deltas_from_blobs(
@@ -255,7 +314,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         delta_map: dict[str | tuple[str, str], _TrackDeltaItem] = {}
         for b in blobs:
             try:
-                content = b.download_as_bytes()
+                content = b.download_as_bytes(timeout=self._timeout)
                 table = pq.read_table(io.BytesIO(content))
                 for row in table.to_pylist():
                     preview = row.get("itunes_preview_url") or row.get("preview_url")
@@ -320,10 +379,14 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             table = pq.read_table(buffer)
             records: list[dict[str, Any]] = table.to_pylist()
         except Exception as exc:
+            logger.error(  # noqa: TRY400
+                "Failed to parse Parquet content from '%s': %s",
+                self._file_path,
+                exc,
+            )
             raise ExternalServiceError(
-                f"Failed to parse Parquet content from GCS file: {exc}",
+                "Failed to parse Parquet content from catalog file.",
                 service_name="GCP_GCS",
-                details={"file_path": self._file_path},
             ) from exc
 
         tracks: list[CatalogSourceTrack] = []

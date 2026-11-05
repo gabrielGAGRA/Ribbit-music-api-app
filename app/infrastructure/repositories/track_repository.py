@@ -286,7 +286,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         return _row_to_track(row) if row else None
 
     def list_blocked(self) -> list[Track]:
-
         cursor = self.conn.execute(
             "SELECT * FROM tracks WHERE is_deleted = 1 ORDER BY track_id ASC"
         )
