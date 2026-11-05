@@ -110,7 +110,6 @@ from app.application.use_cases.user import (
     UpdateProfileUseCase,
 )
 from app.config import Settings, load_settings
-from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters import (
     GCSTrackCatalogAdapter,
     ITunesAdapter,
@@ -577,13 +576,6 @@ def create_app(
         settings=resolved_settings,
         password_hasher=container.password_hasher,
     )
-    if container.ingest_tracks_from_catalog_use_case is not None:
-        try:
-            container.ingest_tracks_from_catalog_use_case.execute()
-        except (ExternalServiceError, RuntimeError) as exc:
-            logging.getLogger("app").warning(
-                "Initial GCS tracks ingestion skipped or failed: %s", exc
-            )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
