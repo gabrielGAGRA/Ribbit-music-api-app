@@ -1,6 +1,7 @@
 """Use case for fetching the next track candidate for swipe discovery."""
 
 import contextlib
+import logging
 from dataclasses import dataclass
 lazy import random
 
@@ -51,7 +52,7 @@ class GetNextDiscoveryTrackUseCase:
         if track is None:
             return None
         needs_preview = not track.itunes_preview_url
-        needs_genre = not track.genre
+        needs_genre = not track.has_known_genre()
         needs_cover = not track.cover_url
         if (
             needs_preview or needs_genre or needs_cover
@@ -62,20 +63,19 @@ class GetNextDiscoveryTrackUseCase:
                     f"{track.artist} {track.title}"
                 )
             if preview:
-                changed = False
-                if needs_preview and preview.preview_url:
-                    track.itunes_preview_url = str(preview.preview_url)
-                    changed = True
-                if needs_genre and preview.genre:
-                    track.genre = str(preview.genre)
-                    changed = True
-                if needs_cover and preview.cover_url:
-                    track.cover_url = str(preview.cover_url)
-                    changed = True
+                changed = track.merge_missing_metadata(
+                    itunes_preview_url=str(preview.preview_url)
+                    if needs_preview and preview.preview_url
+                    else None,
+                    genre=str(preview.genre) if needs_genre and preview.genre else None,
+                    cover_url=str(preview.cover_url)
+                    if needs_cover and preview.cover_url
+                    else None,
+                )
                 if changed:
                     self.track_repo.save(track)
                     if self.catalog_file_port is not None:
-                        with contextlib.suppress(Exception):
+                        try:
                             self.catalog_file_port.write_track_delta(
                                 title=track.title,
                                 artist=track.artist,
@@ -83,6 +83,12 @@ class GetNextDiscoveryTrackUseCase:
                                 genre=track.genre,
                                 cover_url=track.cover_url,
                                 spotify_id=track.spotify_id,
+                            )
+                        except ExternalServiceError as exc:
+                            logging.getLogger(__name__).warning(
+                                "Failed to write track delta for track %s: %s",
+                                track.track_id,
+                                exc,
                             )
 
         return track

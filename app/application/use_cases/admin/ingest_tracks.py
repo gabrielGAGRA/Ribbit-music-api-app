@@ -70,29 +70,15 @@ class IngestTracksFromCatalogUseCase:
         return self.track_repo.save(new_track)
 
     def _update_track_metadata(self, existing: Track, item: CatalogSourceTrack) -> bool:
-        changed = False
-        if not existing.cover_url and item.cover_url:
-            existing.cover_url = item.cover_url
-            changed = True
-        if not existing.album and item.album:
-            existing.album = item.album
-            changed = True
-        if existing.release_year is None and item.release_year is not None:
-            existing.release_year = item.release_year
-            changed = True
-        if not existing.country and item.country:
-            existing.country = item.country
-            changed = True
-        if not existing.itunes_preview_url and item.itunes_preview_url:
-            existing.itunes_preview_url = item.itunes_preview_url
-            changed = True
-        if not existing.genre and item.genre:
-            existing.genre = item.genre
-            changed = True
-        if not existing.spotify_id and item.spotify_id:
-            existing.spotify_id = item.spotify_id
-            changed = True
-        return changed
+        return existing.merge_missing_metadata(
+            cover_url=item.cover_url,
+            album=item.album,
+            release_year=item.release_year,
+            country=item.country,
+            itunes_preview_url=item.itunes_preview_url,
+            genre=item.genre,
+            spotify_id=item.spotify_id,
+        )
 
 
 __all__ = ["IngestTracksFromCatalogUseCase", "IngestTracksResult"]
