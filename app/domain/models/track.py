@@ -33,6 +33,60 @@ class Track:
         self.explicit = explicit
         return self
 
+    def has_known_genre(self) -> bool:
+        return bool(
+            self.genre
+            and self.genre.strip()
+            and self.genre.strip().lower() != "unknown"
+        )
+
+    def set_genre(self, genre: str) -> Self:
+        cleaned = genre.strip()
+        if not cleaned:
+            raise ValueError("Track genre must not be empty.")
+        self.genre = cleaned
+        return self
+
+    def merge_missing_metadata(
+        self,
+        *,
+        cover_url: str | None = None,
+        album: str | None = None,
+        release_year: int | None = None,
+        country: str | None = None,
+        itunes_preview_url: str | None = None,
+        genre: str | None = None,
+        spotify_id: str | None = None,
+    ) -> bool:
+        changed = False
+        if not self.cover_url and cover_url:
+            self.cover_url = cover_url
+            changed = True
+        if not self.album and album:
+            self.album = album
+            changed = True
+        if self.release_year is None and release_year is not None:
+            self.release_year = release_year
+            changed = True
+        if not self.country and country:
+            self.country = country
+            changed = True
+        if not self.itunes_preview_url and itunes_preview_url:
+            self.itunes_preview_url = itunes_preview_url
+            changed = True
+        if not self.spotify_id and spotify_id:
+            self.spotify_id = spotify_id
+            changed = True
+        if (
+            genre is not None
+            and not self.has_known_genre()
+            and genre.strip()
+            and genre.strip().lower() != "unknown"
+        ):
+            self.genre = genre.strip()
+            changed = True
+        return changed
+
     def refresh_catalog_metadata(
         self,
         *,
