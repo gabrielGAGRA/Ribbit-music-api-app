@@ -27,11 +27,13 @@ class GetRecentlyInteractedTracksUseCase:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
         interactions = self.interaction_repo.list_by_user(user_id)
+        track_ids = [interaction.track_id for interaction in interactions]
+        tracks_by_id = self.track_repo.find_by_ids(track_ids)
         results: list[UserTrackInteractionResult] = []
         for interaction in interactions:
-            track = self.track_repo.find_by_id(interaction.track_id)
+            track = tracks_by_id.get(interaction.track_id)
             if (
-                track
+                track is not None
                 and not track.is_deleted
                 and not user.is_track_restricted_for_minor(track)
             ):
