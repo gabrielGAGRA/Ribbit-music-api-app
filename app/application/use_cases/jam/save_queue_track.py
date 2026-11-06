@@ -8,7 +8,11 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     PermissionDeniedError,
 )
-from app.domain.models.interaction import Interaction, InteractionAction
+from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
@@ -112,7 +116,7 @@ class SaveQueueTrackUseCase:
                 user_id=eff_user_id,
                 track_id=eff_track_id,
                 action=InteractionAction.SUPERLIKE,
-                source="jam",
+                source=InteractionSource.JAM,
             )
         )
         return True

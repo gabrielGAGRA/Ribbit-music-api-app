@@ -29,16 +29,13 @@ class GetNextDiscoveryTrackUseCase:
         if not user:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
-        is_minor = user.is_minor()
         blocked_genres = tuple(user.blocked_genres)
         interacted_ids = self.interaction_repo.list_interacted_track_ids(user_id)
 
         candidates = self.track_repo.list_active(
             excluded_genres=blocked_genres,
-            excluded_genre_terms=(
-                tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS)) if is_minor else ()
-            ),
-            block_explicit=is_minor,
+            excluded_genre_terms=user.restricted_genre_terms(),
+            block_explicit=user.is_minor(),
             excluded_ids=interacted_ids,
             limit=1,
         )

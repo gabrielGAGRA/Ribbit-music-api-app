@@ -8,17 +8,6 @@ lazy from collections.abc import Iterable
 lazy from app.domain.models.track import Track
 
 
-def _normalize_genre(genre: str) -> str:
-    return genre.strip().casefold()
-
-
-def _genre_tokens(genre: str) -> tuple[str, ...]:
-    normalized = "".join(
-        character if character.isalnum() else " " for character in genre.casefold()
-    )
-    return tuple(normalized.split())
-
-
 @dataclass(slots=True, kw_only=True, eq=False)
 class User:
     MIN_ADULT_AGE: ClassVar[int] = 18
@@ -39,6 +28,17 @@ class User:
     created_at: datetime | None = None
     birth_date: str | None = None
 
+    @staticmethod
+    def _normalize_genre(genre: str) -> str:
+        return genre.strip().casefold()
+
+    @staticmethod
+    def _genre_tokens(genre: str) -> tuple[str, ...]:
+        normalized = "".join(
+            character if character.isalnum() else " " for character in genre.casefold()
+        )
+        return tuple(normalized.split())
+
     def __post_init__(self) -> None:
         if not self.email.strip():
             raise ValueError("Email cannot be blank.")
@@ -49,7 +49,9 @@ class User:
         if self.birth_date is not None:
             self.birth_date = self.birth_date.strip() or None
         self.blocked_genres = frozenset(
-            _normalize_genre(genre) for genre in self.blocked_genres if genre.strip()
+            self._normalize_genre(genre)
+            for genre in self.blocked_genres
+            if genre.strip()
         )
 
     def current_age(self, today: date | None = None) -> int:
@@ -77,12 +79,17 @@ class User:
     def is_adult(self) -> bool:
         return not self.is_minor()
 
+    def restricted_genre_terms(self) -> tuple[str, ...]:
+        if not self.is_minor():
+            return ()
+        return tuple(sorted(self.MINOR_RESTRICTED_GENRE_TERMS))
+
     idade_atual = current_age
     eh_menor_de_idade = is_minor
     idade_indica_menor = is_age_minor
 
     def can_listen(self, track: Track) -> bool:
-        genre = _normalize_genre(track.genre)
+        genre = self._normalize_genre(track.genre)
         return (
             not self.is_track_restricted_for_minor(track)
             and genre not in self.blocked_genres
@@ -94,7 +101,7 @@ class User:
         if track.explicit:
             return True
 
-        genre_tokens = _genre_tokens(track.genre)
+        genre_tokens = self._genre_tokens(track.genre)
         return any(
             genre_tokens[index : index + len(term_tokens)] == term_tokens
             for term_tokens in (
@@ -131,7 +138,7 @@ class User:
 
     def update_blocked_genres(self, genres: Iterable[str]) -> Self:
         self.blocked_genres = frozenset(
-            genre.strip().lower() for genre in genres if genre.strip()
+            self._normalize_genre(genre) for genre in genres if genre.strip()
         )
         return self
 
