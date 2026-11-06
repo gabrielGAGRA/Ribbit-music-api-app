@@ -13,7 +13,11 @@ lazy from app.application.ports.repositories.interaction_repository import (
 lazy from app.application.ports.repositories.plan_repository import PlanRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
-lazy from app.domain.models.interaction import Interaction, InteractionAction
+lazy from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 
 
 @dataclass(slots=True, frozen=True)
@@ -50,7 +54,7 @@ class ChangeTrackInteractionUseCase:
             raise EntityNotFoundError("Interaction for this track was not found.")
 
         interaction.change_action(new_action)
-        interaction.source = "profile"
+        interaction.source = InteractionSource.PROFILE
         return self.interaction_repo.save(interaction)
 
 
