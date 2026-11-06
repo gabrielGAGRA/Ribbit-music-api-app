@@ -1,6 +1,10 @@
 """Domain models package exposing aggregates, entities, and value objects."""
 
-from app.domain.models.interaction import Interaction, InteractionAction
+from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 from app.domain.models.jam import Jam, JamQueueItem
 from app.domain.models.plan import Plan
 from app.domain.models.playlist import Playlist
@@ -12,6 +16,7 @@ __all__ = [
     "ExternalTrackId",
     "Interaction",
     "InteractionAction",
+    "InteractionSource",
     "Jam",
     "JamQueueItem",
     "Plan",

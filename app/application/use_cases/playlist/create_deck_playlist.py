@@ -195,13 +195,9 @@ class CreateDeckPlaylistUseCase:
             else:
                 candidates = self.track_repo.list_active(
                     limit=250,
-                    block_explicit=not user.is_adult,
+                    block_explicit=user.is_minor(),
                     excluded_genres=list(user.blocked_genres),
-                    excluded_genre_terms=(
-                        tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
-                        if user.is_minor()
-                        else ()
-                    ),
+                    excluded_genre_terms=user.restricted_genre_terms(),
                 )
 
             if reference_id is None and not any(deck_filters_dict.values()):

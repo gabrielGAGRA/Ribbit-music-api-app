@@ -8,13 +8,6 @@ lazy from collections.abc import Iterable
 lazy from app.domain.models.track import Track
 
 
-def _genre_tokens(genre: str) -> tuple[str, ...]:
-    normalized = "".join(
-        character if character.isalnum() else " " for character in genre.casefold()
-    )
-    return tuple(normalized.split())
-
-
 @dataclass(slots=True, kw_only=True, eq=False)
 class User:
     MIN_ADULT_AGE: ClassVar[int] = 18
@@ -70,10 +63,6 @@ class User:
         self.preferred_theme = self._normalize_theme(self.preferred_theme)
 
     @staticmethod
-    def _normalize_genre(genre: str) -> str:
-        return genre.strip().casefold()
-
-    @staticmethod
     def _normalize_theme(theme: str | None) -> str:
         normalized = (theme or "light").strip().casefold()
         if normalized not in {"light", "dark"}:
@@ -104,6 +93,11 @@ class User:
     @property
     def is_adult(self) -> bool:
         return not self.is_minor()
+
+    def restricted_genre_terms(self) -> tuple[str, ...]:
+        if not self.is_minor():
+            return ()
+        return tuple(sorted(self.MINOR_RESTRICTED_GENRE_TERMS))
 
     idade_atual = current_age
     eh_menor_de_idade = is_minor

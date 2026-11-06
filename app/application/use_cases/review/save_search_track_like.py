@@ -7,7 +7,11 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     ForbiddenError,
 )
-from app.domain.models.interaction import Interaction, InteractionAction
+from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 lazy from app.application.dtos.review_dtos import SaveSearchTrackLikeCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
@@ -87,7 +91,7 @@ class SaveSearchTrackLikeUseCase:
             user_id=uid,
             track_id=tid,
             action=InteractionAction.LIKE,
-            source="search",
+            source=InteractionSource.SEARCH,
         )
         self.interaction_repo.save(interaction)
         return True

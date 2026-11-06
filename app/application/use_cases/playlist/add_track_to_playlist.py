@@ -7,7 +7,11 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     PermissionDeniedError,
 )
-from app.domain.models.interaction import Interaction, InteractionAction
+from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 lazy from app.application.dtos.playlist_dtos import AddTrackToPlaylistCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
@@ -84,7 +88,7 @@ class AddTrackToPlaylistUseCase:
                     user_id=command.user_id,
                     track_id=command.track_id,
                     action=interaction_action,
-                    source="playlist",
+                    source=InteractionSource.PLAYLIST,
                 )
             )
 

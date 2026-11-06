@@ -5,7 +5,13 @@ from datetime import UTC, datetime
 import pytest
 
 from app.domain.exceptions import BusinessRuleViolationError
-from app.domain.models import Interaction, InteractionAction, Playlist, Track
+from app.domain.models import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+    Playlist,
+    Track,
+)
 
 
 def test_track_construction_and_defaults() -> None:
@@ -112,6 +118,22 @@ def test_interaction_construction_and_action_transitions() -> None:
     interaction.change_action(InteractionAction.LIKE)
     assert interaction.action is InteractionAction.LIKE
     assert interaction.is_positive is True
+
+
+def test_interaction_source_enum_values() -> None:
+    assert InteractionSource.DISCOVERY == "discovery"
+    assert InteractionSource.JAM == "jam"
+    assert InteractionSource.PLAYLIST == "playlist"
+    assert InteractionSource.SEARCH == "search"
+    assert InteractionSource.PROFILE == "profile"
+
+    interaction = Interaction(
+        user_id=1,
+        track_id=10,
+        action=InteractionAction.LIKE,
+        source=InteractionSource.DISCOVERY,
+    )
+    assert interaction.source == InteractionSource.DISCOVERY
 
 
 def test_playlist_construction_ownership_and_immutable_tracks_view() -> None:
