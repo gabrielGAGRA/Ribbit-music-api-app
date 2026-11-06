@@ -16,6 +16,14 @@ class InteractionAction(StrEnum):
         return self in (InteractionAction.LIKE, InteractionAction.SUPERLIKE)
 
 
+class InteractionSource(StrEnum):
+    DISCOVERY = "discovery"
+    JAM = "jam"
+    PLAYLIST = "playlist"
+    SEARCH = "search"
+    PROFILE = "profile"
+
+
 @dataclass(slots=True, kw_only=True, eq=False)
 class Interaction:
     interaction_id: int | None = None
@@ -23,7 +31,7 @@ class Interaction:
     track_id: int
     action: InteractionAction
     created_at: datetime | None = None
-    source: str | None = None
+    source: InteractionSource | str | None = None
 
     @property
     def is_positive(self) -> bool:

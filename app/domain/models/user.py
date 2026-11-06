@@ -79,6 +79,11 @@ class User:
     def is_adult(self) -> bool:
         return not self.is_minor()
 
+    def restricted_genre_terms(self) -> tuple[str, ...]:
+        if not self.is_minor():
+            return ()
+        return tuple(sorted(self.MINOR_RESTRICTED_GENRE_TERMS))
+
     idade_atual = current_age
     eh_menor_de_idade = is_minor
     idade_indica_menor = is_age_minor
