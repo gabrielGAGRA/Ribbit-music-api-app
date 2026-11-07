@@ -40,6 +40,11 @@ class PublishReviewUseCase:
                 f"Track with ID {command.track_id} not found or inactive."
             )
 
+        if user.is_track_restricted_for_minor(track):
+            raise BusinessRuleViolationError(
+                "Música bloqueada para usuários menores de idade."
+            )
+
         existing = self.review_repo.find_active_by_user_and_track(
             command.user_id, command.track_id
         )
