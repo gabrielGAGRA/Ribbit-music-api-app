@@ -9,6 +9,17 @@ from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.track import Track, TrackId
 
 
+def _sqlite_translate(value: str | None, from_chars: str, to_chars: str) -> str | None:
+    if value is None:
+        return None
+
+    translation_table = {
+        ord(char): to_chars[index] if index < len(to_chars) else None
+        for index, char in enumerate(from_chars)
+    }
+    return value.translate(translation_table)
+
+
 def _row_to_track(row: sqlite3.Row) -> Track:
     created_at = (
         datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
@@ -36,6 +47,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+        self.conn.create_function("TRANSLATE", 3, _sqlite_translate)
 
     def find_by_id(self, track_id: int) -> Track | None:
         cursor = self.conn.execute(
@@ -201,8 +213,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             params.extend(clean_genres)
 
         normalized_genre = (
-            "' ' || lower(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(genre, "
-            "'-', ' '), '/', ' '), '&', ' '), ',', ' '), '.', ' '), ';', ' '), ':', ' '), '(', ' '), ')', ' '), '[', ' '), ']', ' '), '!', ' ')) || ' '"
+            "' ' || lower(TRANSLATE(genre, '-/&,.;:()[]!', '            ')) || ' '"
         )
         if excluded_genre_terms:
             for term in excluded_genre_terms:
