@@ -54,6 +54,7 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.discovery import (
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    UndoLatestDiscoveryInteractionUseCase,
 )
 from app.application.use_cases.jam import (
     AdvanceJamPlaybackUseCase,
@@ -71,9 +72,11 @@ from app.application.use_cases.playlist import (
     CreateDeckPlaylistUseCase,
     DeletePlaylistUseCase,
     ExportPlaylistToSpotifyUseCase,
+    GetPlaylistCoverUseCase,
     GetPlaylistDeckUseCase,
     ListUserPlaylistsUseCase,
     RemoveTrackFromPlaylistUseCase,
+    UploadPlaylistCoverUseCase,
 )
 from app.application.use_cases.review import (
     DeleteReviewUseCase,
@@ -168,6 +171,7 @@ class Container:
     # Discovery
     get_next_discovery_track_use_case: GetNextDiscoveryTrackUseCase
     record_swipe_interaction_use_case: RecordSwipeInteractionUseCase
+    undo_latest_discovery_interaction_use_case: UndoLatestDiscoveryInteractionUseCase
     # Playlist
     create_deck_playlist_use_case: CreateDeckPlaylistUseCase
     get_playlist_deck_use_case: GetPlaylistDeckUseCase
@@ -176,6 +180,8 @@ class Container:
     delete_playlist_use_case: DeletePlaylistUseCase
     export_playlist_to_spotify_use_case: ExportPlaylistToSpotifyUseCase
     list_user_playlists_use_case: ListUserPlaylistsUseCase
+    upload_playlist_cover_use_case: UploadPlaylistCoverUseCase
+    get_playlist_cover_use_case: GetPlaylistCoverUseCase
     # Jam
     create_jam_use_case: CreateJamUseCase
     join_jam_use_case: JoinJamUseCase
@@ -403,6 +409,9 @@ def build_container(
         record_swipe_interaction_use_case=RecordSwipeInteractionUseCase(
             user_repo, track_repo, interaction_repo
         ),
+        undo_latest_discovery_interaction_use_case=UndoLatestDiscoveryInteractionUseCase(
+            user_repo, plan_repo, interaction_repo
+        ),
         # Playlist
         create_deck_playlist_use_case=CreateDeckPlaylistUseCase(
             user_repo, track_repo, playlist_repo
@@ -411,7 +420,7 @@ def build_container(
             user_repo, playlist_repo, track_repo, interaction_repo
         ),
         add_track_to_playlist_use_case=AddTrackToPlaylistUseCase(
-            user_repo, track_repo, playlist_repo
+            user_repo, track_repo, playlist_repo, interaction_repo=interaction_repo
         ),
         remove_track_from_playlist_use_case=RemoveTrackFromPlaylistUseCase(
             user_repo, playlist_repo
@@ -421,6 +430,12 @@ def build_container(
             user_repo, playlist_repo, music_service
         ),
         list_user_playlists_use_case=ListUserPlaylistsUseCase(user_repo, playlist_repo),
+        upload_playlist_cover_use_case=UploadPlaylistCoverUseCase(
+            playlist_repo=playlist_repo
+        ),
+        get_playlist_cover_use_case=GetPlaylistCoverUseCase(
+            playlist_repo=playlist_repo
+        ),
         # Jam
         create_jam_use_case=CreateJamUseCase(
             jam_repo, user_repo, playlist_repo=playlist_repo
@@ -494,7 +509,7 @@ def build_container(
             user_repo, interaction_repo, track_repo
         ),
         change_track_interaction_use_case=ChangeTrackInteractionUseCase(
-            user_repo, plan_repo, interaction_repo
+            user_repo, plan_repo, interaction_repo, track_repo=track_repo
         ),
         get_annual_listening_stats_use_case=GetAnnualListeningStatsUseCase(
             user_repo, plan_repo, interaction_repo, track_repo
