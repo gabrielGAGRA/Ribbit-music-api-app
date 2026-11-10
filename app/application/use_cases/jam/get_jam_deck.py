@@ -121,6 +121,7 @@ class GetJamDeckUseCase:
                 "User must join the Jam room before requesting deck candidates."
             )
 
+        source = (jam.deck_source or "livre").strip().lower()
         excluded_ids = set()
         if jam.current_track_id is not None:
             excluded_ids.add(jam.current_track_id)
@@ -134,7 +135,14 @@ class GetJamDeckUseCase:
 
         if self.interaction_repo is not None:
             interacted = self.interaction_repo.list_by_user(eff_user_id)
-            excluded_ids.update(i.track_id for i in interacted if i.source == "jam")
+            excluded_ids.update(
+                i.track_id
+                for i in interacted
+                if i.source == "jam"
+                and (
+                    i.jam_id == t_jam_id or (i.jam_id is None and source != "curtidas")
+                )
+            )
             excluded_ids.update(
                 i.track_id for i in interacted if i.action == InteractionAction.DISLIKE
             )

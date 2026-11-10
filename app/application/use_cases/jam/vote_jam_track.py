@@ -75,7 +75,9 @@ class VoteJamTrackUseCase:
         )
         return self.jam_repo.save_queue_item(new_item)
 
-    def _record_interaction(self, user_id: int, track_id: int, action: str) -> None:
+    def _record_interaction(
+        self, jam_id: int, user_id: int, track_id: int, action: str
+    ) -> None:
         if self.interaction_repo is None:
             return
 
@@ -93,6 +95,7 @@ class VoteJamTrackUseCase:
                 track_id=track_id,
                 action=interaction_action,
                 source="jam",
+                jam_id=jam_id,
             )
         )
 
@@ -140,7 +143,9 @@ class VoteJamTrackUseCase:
         self._check_duration_cap(jam, track)
 
         saved_item = self._save_vote(command.jam_id, command.track_id, vote_points)
-        self._record_interaction(command.user_id, command.track_id, command.action)
+        self._record_interaction(
+            command.jam_id, command.user_id, command.track_id, command.action
+        )
 
         if is_superlike:
             jam.superlikes_used += 1

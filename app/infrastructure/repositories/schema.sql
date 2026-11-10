@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS interactions (
     action TEXT NOT NULL,
     created_at TEXT NOT NULL,
     source TEXT,
+    jam_id INTEGER REFERENCES jams(jam_id) ON DELETE CASCADE,
     CONSTRAINT uq_interactions_user_track UNIQUE (user_id, track_id)
 );
 

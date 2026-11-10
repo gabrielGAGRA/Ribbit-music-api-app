@@ -322,6 +322,7 @@ def test_get_jam_deck_keeps_unvoted_queue_tracks_plus_base_candidates() -> None:
             track_id=200,
             action=InteractionAction.LIKE,
             source="jam",
+            jam_id=10,
         ),
     ]
 

@@ -21,6 +21,7 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     },
     "interactions": {
         "source": "TEXT",
+        "jam_id": "INTEGER",
     },
     "jams": {
         "duration_minutes": "INTEGER NOT NULL DEFAULT 60",
