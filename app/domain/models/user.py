@@ -37,6 +37,17 @@ class User:
     created_at: datetime | None = None
     birth_date: str | None = None
 
+    @staticmethod
+    def _normalize_genre(genre: str) -> str:
+        return genre.strip().casefold()
+
+    @staticmethod
+    def _genre_tokens(genre: str) -> tuple[str, ...]:
+        normalized = "".join(
+            character if character.isalnum() else " " for character in genre.casefold()
+        )
+        return tuple(normalized.split())
+
     def __post_init__(self) -> None:
         if not self.email.strip():
             raise ValueError("Email cannot be blank.")
@@ -111,7 +122,7 @@ class User:
         if track.explicit:
             return True
 
-        genre_tokens = _genre_tokens(track.genre)
+        genre_tokens = self._genre_tokens(track.genre)
         return any(
             genre_tokens[index : index + len(term_tokens)] == term_tokens
             for term_tokens in (
@@ -148,7 +159,7 @@ class User:
 
     def update_blocked_genres(self, genres: Iterable[str]) -> Self:
         self.blocked_genres = frozenset(
-            genre.strip().lower() for genre in genres if genre.strip()
+            self._normalize_genre(genre) for genre in genres if genre.strip()
         )
         return self
 
