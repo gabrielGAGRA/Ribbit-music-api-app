@@ -1,6 +1,3 @@
-// https://dbdiagram.io/d/Diagrama-Entidade-Relacionamento-6acbd98250a8c6fc36259a47
-// Ribbit Platform - atualizado conforme app/infrastructure/repositories/schema.sql
-
 Table plans {
   plan_id integer [pk, increment]
   name text [not null, unique]
@@ -18,6 +15,8 @@ Table users {
   plan_id integer [not null, ref: > plans.plan_id]
   primary_account_id integer [ref: > users.user_id]
   blocked_genres text
+  favorite_genres text
+  preferred_theme text [not null, default: 'light']
   is_admin integer [not null, default: 0]
   created_at text [not null]
   birth_date text
@@ -57,6 +56,7 @@ Table interactions {
   action text [not null]
   created_at text [not null]
   source text
+  jam_id integer [ref: > jams.jam_id]
 
   indexes {
     (user_id, track_id) [unique, name: 'uq_interactions_user_track']
@@ -74,6 +74,7 @@ Table playlists {
   max_duration_seconds integer
   deck_filters text
   cover_image_url text
+  source_playlist_id integer [ref: > playlists.playlist_id]
 }
 
 Table playlist_images {
@@ -108,7 +109,7 @@ Table jams {
   skip_votes_threshold integer [not null, default: 3]
   accumulated_duration_seconds integer [not null, default: 0]
   deck_source text [not null, default: 'livre']
-  source_playlist_id integer
+  source_playlist_id integer [ref: > playlists.playlist_id]
 }
 
 Table jam_queue_items {
