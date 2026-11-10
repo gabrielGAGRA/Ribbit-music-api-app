@@ -134,13 +134,9 @@ class GetJamDeckUseCase:
 
         if self.interaction_repo is not None:
             interacted = self.interaction_repo.list_by_user(eff_user_id)
+            excluded_ids.update(i.track_id for i in interacted if i.source == "jam")
             excluded_ids.update(
-                i.track_id for i in interacted if i.source == "jam"
-            )
-            excluded_ids.update(
-                i.track_id
-                for i in interacted
-                if i.action == InteractionAction.DISLIKE
+                i.track_id for i in interacted if i.action == InteractionAction.DISLIKE
             )
 
         candidates = self._fetch_candidates(jam, user, eff_user_id, excluded_ids)
