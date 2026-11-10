@@ -92,9 +92,7 @@ class CreateDeckPlaylistUseCase:
         if reference_id is not None:
             source_playlist = self.playlist_repo.find_by_id(reference_id)
             if source_playlist is None:
-                raise EntityNotFoundError(
-                    f"Playlist with ID {reference_id} not found."
-                )
+                raise EntityNotFoundError(f"Playlist with ID {reference_id} not found.")
             candidates = list(source_playlist.tracks)
         elif any(filters.values()):
             candidates = self.track_repo.find_by_filters(
@@ -109,9 +107,7 @@ class CreateDeckPlaylistUseCase:
                     else filters["genre"]
                 ),
                 year=(
-                    filters["year"][0]
-                    if len(filters["year"]) == 1
-                    else filters["year"]
+                    filters["year"][0] if len(filters["year"]) == 1 else filters["year"]
                 ),
             )
         else:
