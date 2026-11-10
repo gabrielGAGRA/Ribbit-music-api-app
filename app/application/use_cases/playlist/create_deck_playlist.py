@@ -2,6 +2,7 @@
 
 import json
 from dataclasses import dataclass
+from typing import TypedDict
 
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.playlist import Playlist
@@ -12,6 +13,13 @@ lazy from app.application.ports.repositories.playlist_repository import (
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.domain.models.track import Track
+
+
+class DeckFilters(TypedDict):
+    genre: list[str]
+    year: list[int]
+    artist: list[str]
+    country: list[str]
 
 
 @dataclass(slots=True, frozen=True)
@@ -77,87 +85,7 @@ class CreateDeckPlaylistUseCase:
             )
         )
 
-    def _select_tracks(  # noqa: C901
-        self,
-        command: CreateDeckPlaylistCommand,
-        user: object,
-        filters: dict[str, list[str] | list[int]],
-        reference_id: int | None,
-        target_seconds: int | None,
-    ) -> tuple[list[Track], int]:
-        if not command.populate_tracks:
-            return [], 0
-
-        candidates: list[Track]
-        if reference_id is not None:
-            source_playlist = self.playlist_repo.find_by_id(reference_id)
-            if source_playlist is None:
-                raise EntityNotFoundError(f"Playlist with ID {reference_id} not found.")
-            candidates = list(source_playlist.tracks)
-        elif any(filters.values()):
-            candidates = self.track_repo.find_by_filters(
-                artist=(
-                    filters["artist"][0]
-                    if len(filters["artist"]) == 1
-                    else filters["artist"]
-                ),
-                genre=(
-                    filters["genre"][0]
-                    if len(filters["genre"]) == 1
-                    else filters["genre"]
-                ),
-                year=(
-                    filters["year"][0] if len(filters["year"]) == 1 else filters["year"]
-                ),
-            )
-        else:
-            candidates = self.track_repo.list_active(
-                limit=250,
-                block_explicit=not user.is_adult,
-                excluded_genres=list(user.blocked_genres),
-                excluded_genre_terms=(
-                    tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
-                    if user.is_minor()
-                    else ()
-                ),
-            )
-
-        if reference_id is None and not any(filters.values()):
-            if not user.is_adult:
-                candidates = [track for track in candidates if not track.explicit]
-        elif any(filters.values()):
-            candidates = [
-                track
-                for track in candidates
-                if self._matches_fields(
-                    track,
-                    genre=filters["genre"] or None,
-                    year=filters["year"] or None,
-                    artist=filters["artist"] or None,
-                    country=filters["country"] or None,
-                )
-            ]
-        if (reference_id is not None or any(filters.values())) and not user.is_adult:
-            candidates = [track for track in candidates if not track.explicit]
-
-        if not candidates:
-            candidates = self.track_repo.list_active(
-                block_explicit=True,
-                limit=10,
-            )
-
-        selected_tracks: list[Track] = []
-        accumulated_seconds = 0
-        for track in candidates:
-            if target_seconds and accumulated_seconds + track.duration_seconds > (
-                target_seconds + 60
-            ):
-                break
-            selected_tracks.append(track)
-            accumulated_seconds += track.duration_seconds
-        return selected_tracks, accumulated_seconds
-
-    def execute(self, command: CreateDeckPlaylistCommand) -> Playlist:
+    def execute(self, command: CreateDeckPlaylistCommand) -> Playlist:  # noqa: C901
         user = self.user_repo.find_by_id(command.user_id)
         if not user:
             raise EntityNotFoundError(f"User with ID {command.user_id} not found.")
@@ -171,7 +99,7 @@ class CreateDeckPlaylistUseCase:
         normalized_year = self._coerce_year_list(command.year)
         normalized_country = self._coerce_string_list(command.country)
 
-        deck_filters_dict = {
+        deck_filters_dict: DeckFilters = {
             "genre": normalized_genre,
             "year": normalized_year,
             "artist": normalized_artist,
@@ -232,9 +160,86 @@ class CreateDeckPlaylistUseCase:
         deck_filters_str = json.dumps(deck_filters_dict)
 
         reference_id = command.reference_playlist_id or command.source_playlist_id
-        selected_tracks, accumulated_seconds = self._select_tracks(
-            command, user, deck_filters_dict, reference_id, target_seconds
-        )
+        selected_tracks: list[Track] = []
+        accumulated_seconds = 0
+        if command.populate_tracks:
+            candidates: list[Track]
+            if reference_id is not None:
+                source_playlist = self.playlist_repo.find_by_id(reference_id)
+                if source_playlist is None:
+                    raise EntityNotFoundError(
+                        f"Playlist with ID {reference_id} not found."
+                    )
+                candidates = list(source_playlist.tracks)
+            elif any(deck_filters_dict.values()):
+                candidates = self.track_repo.find_by_filters(
+                    artist=(
+                        deck_filters_dict["artist"][0]
+                        if len(deck_filters_dict["artist"]) == 1
+                        else deck_filters_dict["artist"]
+                    )
+                    or None,
+                    genre=(
+                        deck_filters_dict["genre"][0]
+                        if len(deck_filters_dict["genre"]) == 1
+                        else deck_filters_dict["genre"]
+                    )
+                    or None,
+                    year=(
+                        deck_filters_dict["year"][0]
+                        if len(deck_filters_dict["year"]) == 1
+                        else deck_filters_dict["year"]
+                    )
+                    or None,
+                )
+            else:
+                candidates = self.track_repo.list_active(
+                    limit=250,
+                    block_explicit=not user.is_adult,
+                    excluded_genres=list(user.blocked_genres),
+                    excluded_genre_terms=(
+                        tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
+                        if user.is_minor()
+                        else ()
+                    ),
+                )
+
+            if reference_id is None and not any(deck_filters_dict.values()):
+                if not user.is_adult:
+                    candidates = [t for t in candidates if not t.explicit]
+                if not candidates:
+                    candidates = self.track_repo.list_active(
+                        block_explicit=True,
+                        limit=10,
+                    )
+            else:
+                if any(deck_filters_dict.values()):
+                    candidates = [
+                        t
+                        for t in candidates
+                        if self._matches_fields(
+                            t,
+                            genre=deck_filters_dict["genre"] or None,
+                            year=deck_filters_dict["year"] or None,
+                            artist=deck_filters_dict["artist"] or None,
+                            country=deck_filters_dict["country"] or None,
+                        )
+                    ]
+                if not user.is_adult:
+                    candidates = [t for t in candidates if not t.explicit]
+                if not candidates:
+                    candidates = self.track_repo.list_active(
+                        block_explicit=True,
+                        limit=10,
+                    )
+
+            for track in candidates:
+                if target_seconds and accumulated_seconds + track.duration_seconds > (
+                    target_seconds + 60
+                ):
+                    break
+                selected_tracks.append(track)
+                accumulated_seconds += track.duration_seconds
 
         max_duration = target_seconds
         if (

@@ -84,7 +84,7 @@ class GetPlaylistDeckUseCase:
             return values
         try:
             if str(value).strip():
-                values.append(int(value))
+                values.append(int(str(value).strip()))
         except TypeError, ValueError:
             return []
         return values
@@ -156,49 +156,7 @@ class GetPlaylistDeckUseCase:
             return False
         return not (cursor is not None and track.track_id <= cursor)
 
-    def _find_candidates(
-        self,
-        playlist: object,
-        user: User,
-        excluded_ids: set[int],
-        filters: tuple[
-            list[str] | None,
-            list[str] | None,
-            list[int] | None,
-            list[str] | None,
-        ],
-    ) -> list[Track]:
-        genre_f, artist_f, year_f, _ = filters
-        candidates: list[Track] = []
-        source_playlist_id = playlist.source_playlist_id
-        if source_playlist_id is not None:
-            source_playlist = self.playlist_repo.find_by_id(source_playlist_id)
-            if source_playlist is not None:
-                candidates = list(source_playlist.tracks)
-
-        if not candidates and (genre_f or artist_f or year_f):
-            candidates = self.track_repo.find_by_filters(
-                artist=artist_f,
-                genre=genre_f,
-                year=year_f,
-                limit=100,
-            )
-
-        if not candidates:
-            candidates = self.track_repo.list_active(
-                limit=100,
-                excluded_genres=list(user.blocked_genres),
-                excluded_genre_terms=(
-                    tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
-                    if user.is_minor()
-                    else ()
-                ),
-                block_explicit=not user.is_adult,
-                excluded_ids=list(excluded_ids),
-            )
-        return candidates
-
-    def execute(
+    def execute(  # noqa: C901
         self,
         command_or_playlist_id: GetPlaylistDeckCommand | int | None = None,
         playlist_id: int | None = None,
@@ -240,9 +198,32 @@ class GetPlaylistDeckUseCase:
             playlist.deck_filters
         )
 
-        candidates = self._find_candidates(
-            playlist, user, excluded_ids, (genre_f, artist_f, year_f, country_f)
-        )
+        candidates: list[Track] = []
+        if playlist.source_playlist_id is not None:
+            source_playlist = self.playlist_repo.find_by_id(playlist.source_playlist_id)
+            if source_playlist is not None:
+                candidates = list(source_playlist.tracks)
+
+        if not candidates and (genre_f or artist_f or year_f):
+            candidates = self.track_repo.find_by_filters(
+                artist=artist_f,
+                genre=genre_f,
+                year=year_f,
+                limit=100,
+            )
+
+        if not candidates:
+            candidates = self.track_repo.list_active(
+                limit=100,
+                excluded_genres=list(user.blocked_genres),
+                excluded_genre_terms=(
+                    tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
+                    if user.is_minor()
+                    else ()
+                ),
+                block_explicit=not user.is_adult,
+                excluded_ids=list(excluded_ids),
+            )
 
         eligible = [
             t

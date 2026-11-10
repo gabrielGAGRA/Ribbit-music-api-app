@@ -219,7 +219,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         rows = cursor.fetchall()
         return [_row_to_track(r) for r in rows]
 
-    def find_by_filters(
+    def find_by_filters(  # noqa: C901
         self,
         *,
         artist: str | Sequence[str] | None = None,
