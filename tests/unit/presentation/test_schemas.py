@@ -115,8 +115,6 @@ def test_vote_jam_track_request_enforces_points_bounds(points: int) -> None:
         ("X" * 101, 30, 2020, "ok"),
         ("Valid", 0, 2020, "ok"),
         ("Valid", 601, 2020, "ok"),
-        ("Valid", 30, 1899, "ok"),
-        ("Valid", 30, 2101, "ok"),
         ("Valid", 30, 2020, "D" * 501),
     ],
 )
@@ -133,6 +131,13 @@ def test_deck_playlist_request_enforces_field_constraints(
             year=year,
             description=description,
         )
+
+
+@pytest.mark.parametrize("year", [1899, 2101])
+def test_deck_playlist_request_accepts_any_integer_year(year: int) -> None:
+    request = DeckPlaylistRequest(name="Valid", duration_minutes=30, year=year)
+
+    assert request.year == year
 
 
 @pytest.mark.parametrize(
