@@ -265,12 +265,13 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             conditions.append(f"({genre_clauses})")
             params.extend(value.lower() for value in genre_values)
 
-        year_values: list[int] = []
-        if year is not None:
-            if isinstance(year, int):
-                year_values = [year]
-            else:
-                year_values = [int(item) for item in year if str(item).strip()]
+        year_values = (
+            [year]
+            if isinstance(year, int)
+            else [int(item) for item in year if str(item).strip()]
+            if year is not None
+            else []
+        )
         if year_values:
             placeholders = ",".join("?" for _ in year_values)
             conditions.append(f"release_year IN ({placeholders})")

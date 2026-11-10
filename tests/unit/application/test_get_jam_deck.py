@@ -198,14 +198,6 @@ def test_get_jam_deck_keeps_favorites_based_candidates_when_not_jam_interactions
     t1 = Track(
         track_id=100, title="Liked", artist="Artist", duration_seconds=180, genre="Rock"
     )
-    t2 = Track(
-        track_id=200,
-        title="Other",
-        artist="Artist",
-        duration_seconds=200,
-        genre="Pop",
-    )
-
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = user
 
