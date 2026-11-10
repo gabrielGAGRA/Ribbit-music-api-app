@@ -8,10 +8,6 @@ lazy from collections.abc import Iterable
 lazy from app.domain.models.track import Track
 
 
-def _normalize_genre(genre: str) -> str:
-    return genre.strip().casefold()
-
-
 def _genre_tokens(genre: str) -> tuple[str, ...]:
     normalized = "".join(
         character if character.isalnum() else " " for character in genre.casefold()
@@ -51,12 +47,20 @@ class User:
         if self.birth_date is not None:
             self.birth_date = self.birth_date.strip() or None
         self.blocked_genres = frozenset(
-            _normalize_genre(genre) for genre in self.blocked_genres if genre.strip()
+            self._normalize_genre(genre)
+            for genre in self.blocked_genres
+            if genre.strip()
         )
         self.favorite_genres = frozenset(
-            _normalize_genre(genre) for genre in self.favorite_genres if genre.strip()
+            self._normalize_genre(genre)
+            for genre in self.favorite_genres
+            if genre.strip()
         )
         self.preferred_theme = self._normalize_theme(self.preferred_theme)
+
+    @staticmethod
+    def _normalize_genre(genre: str) -> str:
+        return genre.strip().casefold()
 
     @staticmethod
     def _normalize_theme(theme: str | None) -> str:
@@ -95,7 +99,7 @@ class User:
     idade_indica_menor = is_age_minor
 
     def can_listen(self, track: Track) -> bool:
-        genre = _normalize_genre(track.genre)
+        genre = self._normalize_genre(track.genre)
         return (
             not self.is_track_restricted_for_minor(track)
             and genre not in self.blocked_genres
@@ -150,7 +154,7 @@ class User:
 
     def update_favorite_genres(self, genres: Iterable[str]) -> Self:
         self.favorite_genres = frozenset(
-            _normalize_genre(genre) for genre in genres if genre.strip()
+            self._normalize_genre(genre) for genre in genres if genre.strip()
         )
         return self
 
