@@ -235,7 +235,9 @@ def test_get_playlist_deck_uses_reference_playlist_when_present() -> None:
     user_repo.find_by_id.return_value = user
 
     playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
-    playlist_repo.find_by_id.side_effect = lambda pid: source_playlist if pid == 7 else deck
+    playlist_repo.find_by_id.side_effect = lambda pid: (
+        source_playlist if pid == 7 else deck
+    )
 
     track_repo = MagicMock(spec=TrackRepositoryPort)
     track_repo.list_active.return_value = []

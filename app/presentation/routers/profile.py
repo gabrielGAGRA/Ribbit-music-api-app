@@ -232,13 +232,9 @@ def update_favorite_genres(
     if user is None:
         raise EntityNotFoundError(f"User with ID {user_id} not found.")
     if isinstance(req.favorite_genres, str):
-        favorite_list = [
-            g.strip() for g in req.favorite_genres.split(",") if g.strip()
-        ]
+        favorite_list = [g.strip() for g in req.favorite_genres.split(",") if g.strip()]
     else:
-        favorite_list = [
-            str(g).strip() for g in req.favorite_genres if str(g).strip()
-        ]
+        favorite_list = [str(g).strip() for g in req.favorite_genres if str(g).strip()]
     user.update_favorite_genres(favorite_list)
     saved = get_container(request).user_repo.save(user)
     return UserResponse.model_validate(saved)

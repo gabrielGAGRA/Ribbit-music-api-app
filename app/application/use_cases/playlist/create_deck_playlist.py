@@ -47,7 +47,7 @@ class CreateDeckPlaylistUseCase:
             return values
         try:
             return [int(str(value).strip())] if str(value).strip() else []
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return []
 
     @staticmethod
@@ -59,11 +59,15 @@ class CreateDeckPlaylistUseCase:
         artist: list[str] | None,
         country: list[str] | None,
     ) -> bool:
-        if genre and not any(part.casefold() in track.genre.casefold() for part in genre):
+        if genre and not any(
+            part.casefold() in track.genre.casefold() for part in genre
+        ):
             return False
         if year is not None and track.release_year not in year:
             return False
-        if artist and not any(part.casefold() in track.artist.casefold() for part in artist):
+        if artist and not any(
+            part.casefold() in track.artist.casefold() for part in artist
+        ):
             return False
         if country and not any(
             (track.country or "").casefold().find(part.casefold()) >= 0
@@ -94,23 +98,47 @@ class CreateDeckPlaylistUseCase:
         }
         if isinstance(command.deck_filters, dict):
             deck_filters_dict = {
-                "genre": self._coerce_string_list(command.deck_filters.get("genre") or command.deck_filters.get("genero")),
-                "year": self._coerce_year_list(command.deck_filters.get("year") or command.deck_filters.get("ano")),
-                "artist": self._coerce_string_list(command.deck_filters.get("artist") or command.deck_filters.get("artista")),
-                "country": self._coerce_string_list(command.deck_filters.get("country") or command.deck_filters.get("pais")),
+                "genre": self._coerce_string_list(
+                    command.deck_filters.get("genre")
+                    or command.deck_filters.get("genero")
+                ),
+                "year": self._coerce_year_list(
+                    command.deck_filters.get("year") or command.deck_filters.get("ano")
+                ),
+                "artist": self._coerce_string_list(
+                    command.deck_filters.get("artist")
+                    or command.deck_filters.get("artista")
+                ),
+                "country": self._coerce_string_list(
+                    command.deck_filters.get("country")
+                    or command.deck_filters.get("pais")
+                ),
             }
         elif isinstance(command.deck_filters, str):
             try:
                 parsed = json.loads(command.deck_filters)
                 if isinstance(parsed, dict):
                     deck_filters_dict = {
-                        "genre": self._coerce_string_list(parsed.get("genre") or parsed.get("genero")),
-                        "year": self._coerce_year_list(parsed.get("year") or parsed.get("ano")),
-                        "artist": self._coerce_string_list(parsed.get("artist") or parsed.get("artista")),
-                        "country": self._coerce_string_list(parsed.get("country") or parsed.get("pais")),
+                        "genre": self._coerce_string_list(
+                            parsed.get("genre") or parsed.get("genero")
+                        ),
+                        "year": self._coerce_year_list(
+                            parsed.get("year") or parsed.get("ano")
+                        ),
+                        "artist": self._coerce_string_list(
+                            parsed.get("artist") or parsed.get("artista")
+                        ),
+                        "country": self._coerce_string_list(
+                            parsed.get("country") or parsed.get("pais")
+                        ),
                     }
-            except (TypeError, ValueError):
-                deck_filters_dict = {"genre": [], "year": [], "artist": [], "country": []}
+            except TypeError, ValueError:
+                deck_filters_dict = {
+                    "genre": [],
+                    "year": [],
+                    "artist": [],
+                    "country": [],
+                }
 
         if not any(deck_filters_dict.values()):
             deck_filters_dict = {

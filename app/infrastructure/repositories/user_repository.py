@@ -27,7 +27,9 @@ def _row_to_user(row: sqlite3.Row) -> User:
     )
     birth_date = row["birth_date"] if "birth_date" in keys else None
     preferred_theme = (
-        row["preferred_theme"] if "preferred_theme" in keys and row["preferred_theme"] else "light"
+        row["preferred_theme"]
+        if "preferred_theme" in keys and row["preferred_theme"]
+        else "light"
     )
     return User(
         user_id=row["user_id"],

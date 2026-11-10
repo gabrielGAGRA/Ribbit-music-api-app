@@ -85,7 +85,7 @@ class GetPlaylistDeckUseCase:
         try:
             if str(value).strip():
                 values.append(int(value))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return []
         return values
 
@@ -105,7 +105,7 @@ class GetPlaylistDeckUseCase:
             filters = json.loads(deck_filters)
             if not isinstance(filters, dict):
                 return None, None, None, None
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None, None, None, None
 
         genre_values = self._coerce_string_list(

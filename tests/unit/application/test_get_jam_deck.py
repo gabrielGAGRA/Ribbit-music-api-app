@@ -13,7 +13,15 @@ from app.application.ports.repositories.track_repository import TrackRepositoryP
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.get_jam_deck import GetJamDeckUseCase
 from app.domain.exceptions import PermissionDeniedError
-from app.domain.models import Interaction, InteractionAction, Jam, JamQueueItem, Playlist, Track, User
+from app.domain.models import (
+    Interaction,
+    InteractionAction,
+    Jam,
+    JamQueueItem,
+    Playlist,
+    Track,
+    User,
+)
 
 
 def test_get_jam_deck_for_participant_returns_candidates() -> None:
@@ -169,7 +177,9 @@ def test_get_jam_deck_excludes_tracks_already_interacted_by_user() -> None:
     assert [t.track_id for t in result.items] == [100]
 
 
-def test_get_jam_deck_keeps_favorites_based_candidates_when_not_jam_interactions() -> None:
+def test_get_jam_deck_keeps_favorites_based_candidates_when_not_jam_interactions() -> (
+    None
+):
     user = User(
         user_id=1,
         email="participant@ribbit.com",
@@ -206,8 +216,12 @@ def test_get_jam_deck_keeps_favorites_based_candidates_when_not_jam_interactions
 
     interaction_repo = MagicMock()
     interaction_repo.list_by_user.return_value = [
-        Interaction(user_id=1, track_id=100, action=InteractionAction.LIKE, source="discovery"),
-        Interaction(user_id=1, track_id=200, action=InteractionAction.LIKE, source="jam"),
+        Interaction(
+            user_id=1, track_id=100, action=InteractionAction.LIKE, source="discovery"
+        ),
+        Interaction(
+            user_id=1, track_id=200, action=InteractionAction.LIKE, source="jam"
+        ),
     ]
 
     track_repo = MagicMock(spec=TrackRepositoryPort)
