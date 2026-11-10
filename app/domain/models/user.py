@@ -35,6 +35,8 @@ class User:
     spotify_id: str | None = None
     primary_account_id: int | None = None
     blocked_genres: frozenset[str] = frozenset()
+    favorite_genres: frozenset[str] = frozenset()
+    preferred_theme: str = "light"
     is_admin: bool = False
     created_at: datetime | None = None
     birth_date: str | None = None
@@ -51,6 +53,17 @@ class User:
         self.blocked_genres = frozenset(
             _normalize_genre(genre) for genre in self.blocked_genres if genre.strip()
         )
+        self.favorite_genres = frozenset(
+            _normalize_genre(genre) for genre in self.favorite_genres if genre.strip()
+        )
+        self.preferred_theme = self._normalize_theme(self.preferred_theme)
+
+    @staticmethod
+    def _normalize_theme(theme: str | None) -> str:
+        normalized = (theme or "light").strip().casefold()
+        if normalized not in {"light", "dark"}:
+            raise ValueError("Preferred theme must be either 'light' or 'dark'.")
+        return normalized
 
     def current_age(self, today: date | None = None) -> int:
         if not self.birth_date:
@@ -133,6 +146,16 @@ class User:
         self.blocked_genres = frozenset(
             genre.strip().lower() for genre in genres if genre.strip()
         )
+        return self
+
+    def update_favorite_genres(self, genres: Iterable[str]) -> Self:
+        self.favorite_genres = frozenset(
+            _normalize_genre(genre) for genre in genres if genre.strip()
+        )
+        return self
+
+    def update_preferred_theme(self, theme: str) -> Self:
+        self.preferred_theme = self._normalize_theme(theme)
         return self
 
     def update_profile(

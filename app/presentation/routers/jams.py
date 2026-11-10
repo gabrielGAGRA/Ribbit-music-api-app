@@ -92,6 +92,7 @@ def get_vote_jam_track_use_case(request: Request) -> VoteJamTrackUseCase:
             jam_repo=container.jam_repo,
             user_repo=container.user_repo,
             track_repo=container.track_repo,
+            interaction_repo=container.interaction_repo,
         )
 
 

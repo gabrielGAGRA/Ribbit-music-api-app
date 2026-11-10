@@ -10,11 +10,14 @@ from app.infrastructure.security.password_hasher import PBKDF2PasswordHasher
 _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "users": {
         "birth_date": "TEXT",
+        "favorite_genres": "TEXT",
+        "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
     },
     "playlists": {
         "max_duration_seconds": "INTEGER",
         "deck_filters": "TEXT",
         "cover_image_url": "TEXT",
+        "source_playlist_id": "INTEGER",
     },
     "interactions": {
         "source": "TEXT",

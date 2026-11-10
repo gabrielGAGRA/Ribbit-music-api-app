@@ -149,6 +149,54 @@ def test_create_deck_playlist_filters_explicit_tracks_for_minor_and_falls_back_i
     )
 
 
+def test_create_deck_playlist_preserves_reference_playlist_id() -> None:
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+    )
+    source = Track(
+        track_id=7,
+        title="Reference Track",
+        artist="Artist",
+        duration_seconds=180,
+        genre="Rock",
+    )
+    reference_playlist = MagicMock()
+    reference_playlist.tracks = [source]
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = []
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.save.side_effect = lambda p: p
+    playlist_repo.find_by_id.return_value = reference_playlist
+
+    use_case = CreateDeckPlaylistUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        playlist_repo=playlist_repo,
+    )
+    command = CreateDeckPlaylistCommand(
+        user_id=1,
+        name="From Reference",
+        source_playlist_id=42,
+        duration_minutes=3,
+    )
+
+    result = use_case.execute(command)
+
+    assert result.source_playlist_id == 42
+    assert result.tracks == (source,)
+    playlist_repo.find_by_id.assert_called_once_with(42)
+
+
 def test_create_deck_playlist_user_not_found_raises_entity_not_found() -> None:
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = None

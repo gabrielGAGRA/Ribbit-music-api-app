@@ -121,17 +121,34 @@ class GetJamDeckUseCase:
                 "User must join the Jam room before requesting deck candidates."
             )
 
-        excluded_ids = {item.track_id for item in self.jam_repo.list_queue(t_jam_id)}
+        excluded_ids = set()
         if jam.current_track_id is not None:
             excluded_ids.add(jam.current_track_id)
 
+        queued_items = self.jam_repo.list_queue(t_jam_id)
+        queued_ids = [
+            item.track_id
+            for item in queued_items
+            if item.track_id is not None and item.track_id != jam.current_track_id
+        ]
+
         if self.interaction_repo is not None:
-            rejected = self.interaction_repo.list_by_user(
-                eff_user_id, action=InteractionAction.DISLIKE
-            )
-            excluded_ids.update(i.track_id for i in rejected)
+            interacted = self.interaction_repo.list_by_user(eff_user_id)
+            excluded_ids.update(i.track_id for i in interacted if i.source == "jam")
 
         candidates = self._fetch_candidates(jam, user, eff_user_id, excluded_ids)
+
+        queue_tracks_by_id = self.track_repo.find_by_ids(queued_ids)
+        queued_tracks = [
+            queue_tracks_by_id[track_id]
+            for track_id in queued_ids
+            if track_id in queue_tracks_by_id and track_id not in excluded_ids
+        ]
+        for queued_track in queued_tracks:
+            if queued_track.track_id is not None and all(
+                candidate.track_id != queued_track.track_id for candidate in candidates
+            ):
+                candidates.append(queued_track)
 
         eligible = [
             t

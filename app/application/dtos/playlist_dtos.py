@@ -12,13 +12,15 @@ class CreateDeckPlaylistCommand:
     user_id: int
     name: str
     duration_minutes: int | None = None
-    genre: str | None = None
-    year: int | None = None
-    artist: str | None = None
-    country: str | None = None
+    genre: str | list[str] | None = None
+    year: int | list[int] | None = None
+    artist: str | list[str] | None = None
+    country: str | list[str] | None = None
     description: str | None = None
     deck_filters: str | dict[str, Any] | None = None
     populate_tracks: bool = True
+    reference_playlist_id: int | None = None
+    source_playlist_id: int | None = None
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

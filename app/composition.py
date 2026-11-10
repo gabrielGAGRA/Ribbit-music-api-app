@@ -434,7 +434,9 @@ def build_container(
             interaction_repo=interaction_repo,
         ),
         get_jam_state_use_case=GetJamStateUseCase(jam_repo, user_repo, track_repo),
-        vote_jam_track_use_case=VoteJamTrackUseCase(jam_repo, user_repo, track_repo),
+        vote_jam_track_use_case=VoteJamTrackUseCase(
+            jam_repo, user_repo, track_repo, interaction_repo=interaction_repo
+        ),
         vote_skip_jam_track_use_case=VoteSkipJamTrackUseCase(
             jam_repo, user_repo, track_repo
         ),

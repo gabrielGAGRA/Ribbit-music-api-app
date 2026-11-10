@@ -13,7 +13,7 @@ from app.application.ports.repositories.track_repository import TrackRepositoryP
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.get_jam_deck import GetJamDeckUseCase
 from app.domain.exceptions import PermissionDeniedError
-from app.domain.models import Jam, JamQueueItem, Playlist, Track, User
+from app.domain.models import Interaction, InteractionAction, Jam, JamQueueItem, Playlist, Track, User
 
 
 def test_get_jam_deck_for_participant_returns_candidates() -> None:
@@ -108,6 +108,8 @@ def test_get_jam_deck_excludes_queue_and_current_track() -> None:
     track_repo = MagicMock(spec=TrackRepositoryPort)
     track_repo.list_active.return_value = [t1, t2, t3]
 
+    track_repo.find_by_ids.return_value = {200: t2, 300: t3}
+
     use_case = GetJamDeckUseCase(
         jam_repo=jam_repo,
         user_repo=user_repo,
@@ -115,7 +117,113 @@ def test_get_jam_deck_excludes_queue_and_current_track() -> None:
     )
     result = use_case.execute(jam_id=10, user_id=1)
 
-    assert [t.track_id for t in result.items] == [300]
+    assert [t.track_id for t in result.items] == [200, 300]
+
+
+def test_get_jam_deck_excludes_tracks_already_interacted_by_user() -> None:
+    user = User(
+        user_id=1,
+        email="participant@ribbit.com",
+        password_hash="pw",
+        display_name="Participant",
+        age=25,
+        plan_id=1,
+    )
+    jam = Jam(jam_id=10, host_user_id=2, room_name="Party", is_active=True)
+    t1 = Track(
+        track_id=100, title="T1", artist="Artist", duration_seconds=180, genre="Rock"
+    )
+    t2 = Track(
+        track_id=200, title="T2", artist="Artist", duration_seconds=200, genre="Pop"
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.is_participant.return_value = True
+    jam_repo.list_queue.return_value = []
+
+    interaction_repo = MagicMock()
+    interaction_repo.list_by_user.return_value = [
+        Interaction(
+            user_id=1,
+            track_id=200,
+            action=InteractionAction.LIKE,
+            source="jam",
+        )
+    ]
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [t1, t2]
+
+    use_case = GetJamDeckUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+    result = use_case.execute(jam_id=10, user_id=1)
+
+    assert [t.track_id for t in result.items] == [100]
+
+
+def test_get_jam_deck_keeps_favorites_based_candidates_when_not_jam_interactions() -> None:
+    user = User(
+        user_id=1,
+        email="participant@ribbit.com",
+        password_hash="pw",
+        display_name="Participant",
+        age=25,
+        plan_id=1,
+    )
+    jam = Jam(
+        jam_id=10,
+        host_user_id=2,
+        room_name="Party",
+        is_active=True,
+        deck_source="curtidas",
+    )
+    t1 = Track(
+        track_id=100, title="Liked", artist="Artist", duration_seconds=180, genre="Rock"
+    )
+    t2 = Track(
+        track_id=200,
+        title="Other",
+        artist="Artist",
+        duration_seconds=200,
+        genre="Pop",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.is_participant.return_value = True
+    jam_repo.list_queue.return_value = []
+
+    interaction_repo = MagicMock()
+    interaction_repo.list_by_user.return_value = [
+        Interaction(user_id=1, track_id=100, action=InteractionAction.LIKE, source="discovery"),
+        Interaction(user_id=1, track_id=200, action=InteractionAction.LIKE, source="jam"),
+    ]
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_ids.return_value = {100: t1}
+    track_repo.list_active.return_value = []
+
+    use_case = GetJamDeckUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+
+    result = use_case.execute(jam_id=10, user_id=1)
+
+    assert [t.track_id for t in result.items] == [100]
 
 
 def test_get_jam_deck_non_participant_raises_permission_denied() -> None:
@@ -143,6 +251,91 @@ def test_get_jam_deck_non_participant_raises_permission_denied() -> None:
     )
     with pytest.raises(PermissionDeniedError, match="must join"):
         use_case.execute(jam_id=10, user_id=5)
+
+
+def test_get_jam_deck_keeps_unvoted_queue_tracks_plus_base_candidates() -> None:
+    user = User(
+        user_id=1,
+        email="participant@ribbit.com",
+        password_hash="pw",
+        display_name="Participant",
+        age=25,
+        plan_id=1,
+    )
+    jam = Jam(
+        jam_id=10,
+        host_user_id=2,
+        room_name="Party",
+        is_active=True,
+        deck_source="curtidas",
+        current_track_id=1000,
+    )
+    profile_track = Track(
+        track_id=10,
+        title="Shape of You",
+        artist="Ed Sheeran",
+        duration_seconds=233,
+        genre="Pop",
+    )
+    queue_voted = Track(
+        track_id=200,
+        title="Jambo",
+        artist="Artist",
+        duration_seconds=180,
+        genre="Rock",
+    )
+    queue_unvoted = Track(
+        track_id=300,
+        title="Flowers",
+        artist="Miley Cyrus",
+        duration_seconds=200,
+        genre="Pop",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.is_participant.return_value = True
+    jam_repo.list_queue.return_value = [
+        JamQueueItem(jam_id=10, track_id=200, initial_vote_points=1),
+        JamQueueItem(jam_id=10, track_id=300, initial_vote_points=1),
+    ]
+
+    interaction_repo = MagicMock()
+    interaction_repo.list_by_user.return_value = [
+        Interaction(
+            user_id=1,
+            track_id=10,
+            action=InteractionAction.LIKE,
+            source="discovery",
+        ),
+        Interaction(
+            user_id=1,
+            track_id=200,
+            action=InteractionAction.LIKE,
+            source="jam",
+        ),
+    ]
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_ids.return_value = {
+        10: profile_track,
+        200: queue_voted,
+        300: queue_unvoted,
+    }
+
+    use_case = GetJamDeckUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+
+    result = use_case.execute(jam_id=10, user_id=1)
+
+    assert [t.track_id for t in result.items] == [10, 300]
 
 
 def test_get_jam_deck_playlist_source_pulls_from_configured_playlist() -> None:
