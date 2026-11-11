@@ -389,3 +389,138 @@ def test_get_jam_deck_playlist_source_pulls_from_configured_playlist() -> None:
     result = use_case.execute(jam_id=10, user_id=1)
 
     assert [t.track_id for t in result.items] == [1]
+
+
+def test_get_jam_deck_livre_weights_favorite_genres_and_paginates_deterministically() -> (
+    None
+):
+    user = User(
+        user_id=1,
+        email="participant@ribbit.com",
+        password_hash="pw",
+        display_name="Participant",
+        age=25,
+        plan_id=1,
+        favorite_genres=frozenset({"rock"}),
+    )
+    jam = Jam(
+        jam_id=10,
+        host_user_id=2,
+        room_name="Party",
+        is_active=True,
+        deck_source="livre",
+    )
+    candidates = [
+        Track(
+            track_id=i,
+            title=f"Song {i}",
+            artist="Artist",
+            duration_seconds=180,
+            genre="Rock" if i <= 15 else "Pop",
+        )
+        for i in range(1, 31)
+    ]
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.is_participant.return_value = True
+    jam_repo.list_queue.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = candidates
+
+    use_case = GetJamDeckUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+    )
+
+    page1 = use_case.execute(GetJamDeckCommand(jam_id=10, user_id=1, limit=10))
+    assert len(page1.items) == 10
+    assert page1.has_more is True
+    assert page1.next_cursor is not None
+
+    page2 = use_case.execute(
+        GetJamDeckCommand(jam_id=10, user_id=1, limit=25, cursor_id=page1.next_cursor)
+    )
+    assert len(page2.items) == 20
+    assert page2.has_more is False
+
+    combined_ids = [t.track_id for t in page1.items] + [t.track_id for t in page2.items]
+    # All 30 tracks returned across pages with zero duplicates
+    assert len(combined_ids) == 30
+    assert set(combined_ids) == set(range(1, 31))
+    # Favorite genre ("Rock") should be heavily represented in the first page
+    assert sum(1 for t in page1.items if t.genre == "Rock") >= 6
+
+
+def test_get_jam_deck_livre_cursor_pagination_when_cursor_track_was_queued_or_excluded() -> (
+    None
+):
+    user = User(
+        user_id=1,
+        email="participant@ribbit.com",
+        password_hash="pw",
+        display_name="Participant",
+        age=25,
+        plan_id=1,
+        favorite_genres=frozenset({"rock"}),
+    )
+    jam = Jam(
+        jam_id=10,
+        host_user_id=2,
+        room_name="Party",
+        is_active=True,
+        deck_source="livre",
+    )
+    candidates = [
+        Track(
+            track_id=i,
+            title=f"Song {i}",
+            artist="Artist",
+            duration_seconds=180,
+            genre="Rock" if i > 15 else "Pop",
+        )
+        for i in range(1, 31)
+    ]
+    tracks_by_id = {t.track_id: t for t in candidates if t.track_id is not None}
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.is_participant.return_value = True
+    jam_repo.list_queue.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.side_effect = lambda **kwargs: [
+        t for t in candidates if t.track_id not in set(kwargs.get("excluded_ids") or [])
+    ]
+    track_repo.find_by_id.side_effect = tracks_by_id.get
+    track_repo.find_by_ids.return_value = {}
+
+    use_case = GetJamDeckUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+    )
+
+    page1 = use_case.execute(GetJamDeckCommand(jam_id=10, user_id=1, limit=10))
+    assert len(page1.items) == 10
+    assert page1.next_cursor is not None
+
+    # Simulate the cursor track (and all Page 1 tracks) being excluded before Page 2
+    jam.current_track_id = page1.next_cursor
+    page2 = use_case.execute(
+        GetJamDeckCommand(jam_id=10, user_id=1, limit=25, cursor_id=page1.next_cursor)
+    )
+
+    page1_ids = [t.track_id for t in page1.items]
+    page2_ids = [t.track_id for t in page2.items]
+    assert len(page2_ids) == 20
+    assert set(page1_ids).isdisjoint(page2_ids)
+    assert set(page1_ids + page2_ids) == set(range(1, 31))

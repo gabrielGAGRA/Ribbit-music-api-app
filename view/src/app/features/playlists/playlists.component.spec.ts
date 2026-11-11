@@ -39,6 +39,12 @@ describe('PlaylistsComponent', () => {
     expect(state.queue().length).toBe(1);
   });
 
+  it('should toggle queue swipe card preview playback', () => {
+    component.selectTab('queue');
+    component.toggleQueueCardPlay();
+    expect(component.currentTab()).toBe('queue');
+  });
+
   it('should trigger modal to create playlist or save queue', () => {
     component.openCreateModal();
     expect(state.activeModal()).toBe('playlist');

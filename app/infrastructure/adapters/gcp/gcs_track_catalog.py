@@ -28,6 +28,8 @@ logger = logging.getLogger("app.infrastructure.gcs_track_catalog")
 class _TrackDeltaItem:
     preview_url: str | None = None
     genre: str | None = None
+    cover_url: str | None = None
+    seq: int = 0
 
 
 class GCSTrackCatalogAdapter(TrackCatalogFilePort):
@@ -105,6 +107,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         artist: str,
         preview_url: str | None = None,
         genre: str | None = None,
+        cover_url: str | None = None,
         spotify_id: str | None = None,
     ) -> None:
         """Writes a lightweight micro-delta file to remote storage for enriched track metadata."""
@@ -120,6 +123,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             "artist": [artist],
             "itunes_preview_url": [preview_url],
             "genre": [genre],
+            "cover_url": [cover_url],
             "spotify_id": [spotify_id],
             "updated_at": [now_iso],
         }
@@ -178,15 +182,18 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             title = str(record.get("title") or "").strip().lower()
             artist = str(record.get("artist") or "").strip().lower()
 
-            delta = delta_map.get(spotify_id) or delta_map.get((title, artist))
+            delta = self._lookup_track_delta(delta_map, spotify_id, title, artist)
             if delta is not None:
                 if delta.preview_url:
                     record["itunes_preview_url"] = delta.preview_url
                 if delta.genre:
                     record["genre"] = delta.genre
+                if delta.cover_url:
+                    record["cover_url"] = delta.cover_url
             updated_records.append(record)
 
-        updated_table = pa.Table.from_pylist(updated_records, schema=table.schema)
+        target_schema = self._resolve_compaction_schema(table.schema, updated_records)
+        updated_table = pa.Table.from_pylist(updated_records, schema=target_schema)
         sink = io.BytesIO()
         pq.write_table(updated_table, sink)
         base_blob.upload_from_string(
@@ -249,10 +256,57 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         except ExternalServiceError, RuntimeError:
             return {}
 
+    @staticmethod
+    def _resolve_compaction_schema(
+        base_schema: pa.Schema,
+        records: Sequence[dict[str, Any]],
+    ) -> pa.Schema:
+        schema = base_schema
+        for col in ("itunes_preview_url", "genre", "cover_url"):
+            if not any(r.get(col) is not None for r in records):
+                continue
+            if col not in schema.names:
+                schema = schema.append(pa.field(col, pa.string()))
+            else:
+                idx = schema.get_field_index(col)
+                if pa.types.is_null(schema.field(idx).type):
+                    schema = schema.set(idx, pa.field(col, pa.string()))
+        return schema
+
+    @staticmethod
+    def _merge_delta_items(
+        older: _TrackDeltaItem | None,
+        newer: _TrackDeltaItem | None,
+    ) -> _TrackDeltaItem | None:
+        if older is None:
+            return newer
+        if newer is None:
+            return older
+        first, second = (older, newer) if newer.seq >= older.seq else (newer, older)
+        return _TrackDeltaItem(
+            preview_url=second.preview_url or first.preview_url,
+            genre=second.genre or first.genre,
+            cover_url=second.cover_url or first.cover_url,
+            seq=max(first.seq, second.seq),
+        )
+
+    @classmethod
+    def _lookup_track_delta(
+        cls,
+        delta_map: dict[str | tuple[str, str], _TrackDeltaItem],
+        spotify_id: str,
+        title: str,
+        artist: str,
+    ) -> _TrackDeltaItem | None:
+        by_sid = delta_map.get(spotify_id) if spotify_id else None
+        by_title = delta_map.get((title, artist)) if title and artist else None
+        return cls._merge_delta_items(by_title, by_sid)
+
     def _read_deltas_from_blobs(
         self, blobs: Sequence[storage.Blob]
     ) -> dict[str | tuple[str, str], _TrackDeltaItem]:
         delta_map: dict[str | tuple[str, str], _TrackDeltaItem] = {}
+        seq = 0
         for b in blobs:
             try:
                 content = b.download_as_bytes()
@@ -260,19 +314,27 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
                 for row in table.to_pylist():
                     preview = row.get("itunes_preview_url") or row.get("preview_url")
                     genre = row.get("genre")
-                    if not preview and not genre:
+                    cover_url = row.get("cover_url")
+                    if not preview and not genre and not cover_url:
                         continue
+                    seq += 1
                     sid = str(row.get("spotify_id") or "").strip()
                     title = str(row.get("title") or "").strip().lower()
                     artist = str(row.get("artist") or "").strip().lower()
-                    item = _TrackDeltaItem(
+                    existing = self._lookup_track_delta(delta_map, sid, title, artist)
+                    incoming = _TrackDeltaItem(
                         preview_url=str(preview) if preview else None,
                         genre=str(genre) if genre else None,
+                        cover_url=str(cover_url) if cover_url else None,
+                        seq=seq,
                     )
+                    merged = self._merge_delta_items(existing, incoming)
+                    if merged is None:
+                        continue
                     if sid:
-                        delta_map[sid] = item
+                        delta_map[sid] = merged
                     if title and artist:
-                        delta_map[(title, artist)] = item
+                        delta_map[(title, artist)] = merged
             except (pa.ArrowInvalid, ValueError, KeyError, RuntimeError) as exc:
                 logger.debug("Skipping unreadable delta blob %s: %s", b.name, exc)
                 continue
@@ -285,18 +347,21 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
     ) -> CatalogSourceTrack:
         title = (track.title or "").strip().lower()
         artist = (track.artist or "").strip().lower()
-        delta = None
-        if track.spotify_id and track.spotify_id in delta_map:
-            delta = delta_map[track.spotify_id]
-        elif (title, artist) in delta_map:
-            delta = delta_map[(title, artist)]
+        delta = self._lookup_track_delta(
+            delta_map, str(track.spotify_id or "").strip(), title, artist
+        )
 
         if delta is None:
             return track
 
         new_preview = delta.preview_url or track.itunes_preview_url
         new_genre = delta.genre or track.genre
-        if new_preview == track.itunes_preview_url and new_genre == track.genre:
+        new_cover = delta.cover_url or track.cover_url
+        if (
+            new_preview == track.itunes_preview_url
+            and new_genre == track.genre
+            and new_cover == track.cover_url
+        ):
             return track
 
         return CatalogSourceTrack(
@@ -307,7 +372,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             album=track.album,
             country=track.country,
             release_year=track.release_year,
-            cover_url=track.cover_url,
+            cover_url=new_cover,
             spotify_id=track.spotify_id,
             itunes_preview_url=new_preview,
             explicit=track.explicit,
