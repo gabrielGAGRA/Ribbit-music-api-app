@@ -192,3 +192,63 @@ def test_get_playlist_deck_filters_explicit_tracks_for_minors() -> None:
     result = use_case.execute(playlist_id=10, user_id=3)
 
     assert [t.track_id for t in result.items] == [1]
+
+
+def test_get_playlist_deck_uses_reference_playlist_when_present() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="hash",
+        display_name="User",
+        age=25,
+        plan_id=1,
+    )
+    source_t1 = Track(
+        track_id=11,
+        title="Source 1",
+        artist="Artist",
+        duration_seconds=180,
+        genre="Rock",
+    )
+    source_t2 = Track(
+        track_id=12,
+        title="Source 2",
+        artist="Artist",
+        duration_seconds=200,
+        genre="Rock",
+    )
+    deck = Playlist(
+        playlist_id=20,
+        user_id=1,
+        name="Deck from source",
+        source_playlist_id=7,
+        max_duration_seconds=1000,
+    )
+    source_playlist = Playlist(
+        playlist_id=7,
+        user_id=1,
+        name="Reference",
+        initial_tracks=[source_t1, source_t2],
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.side_effect = lambda pid: (
+        source_playlist if pid == 7 else deck
+    )
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = []
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+    )
+
+    result = use_case.execute(playlist_id=20, user_id=1)
+
+    assert [t.track_id for t in result.items] == [11, 12]
+    track_repo.list_active.assert_not_called()

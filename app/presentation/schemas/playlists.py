@@ -26,15 +26,17 @@ class TrackResponse(BaseModel):
 class DeckPlaylistRequest(BaseModel):
     """Payload for generating a dynamic deck playlist."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str = Field(min_length=1, max_length=100)
     duration_minutes: int | None = Field(default=None, ge=1, le=600)
-    genre: str | None = None
-    year: int | None = Field(default=None, ge=1900, le=2100)
-    artist: str | None = None
-    country: str | None = None
+    genre: str | list[str] | None = None
+    year: int | list[int] | None = None
+    artist: str | list[str] | None = None
+    country: str | list[str] | None = None
     description: str | None = Field(default=None, max_length=500)
+    reference_playlist_id: int | None = None
+    source_playlist_id: int | None = None
 
 
 class SwipeAddTrackRequest(BaseModel):
@@ -64,6 +66,7 @@ class PlaylistResponse(BaseModel):
     tracks: list[TrackResponse] = Field(default_factory=list)
     max_duration_seconds: int | None = None
     deck_filters: str | None = None
+    source_playlist_id: int | None = None
     total_duration_seconds: int = 0
 
 

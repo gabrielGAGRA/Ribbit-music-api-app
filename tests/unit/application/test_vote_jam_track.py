@@ -5,11 +5,15 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.application.dtos.jam_dtos import VoteJamTrackCommand
+from app.application.ports.repositories.interaction_repository import (
+    InteractionRepositoryPort,
+)
 from app.application.ports.repositories.jam_repository import JamRepositoryPort
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.vote_jam_track import VoteJamTrackUseCase
 from app.domain.exceptions import BusinessRuleViolationError, EntityNotFoundError
+from app.domain.models.interaction import Interaction, InteractionAction
 from app.domain.models.jam import Jam, JamQueueItem
 from app.domain.models.track import Track
 from app.domain.models.user import User
@@ -101,6 +105,61 @@ def test_vote_jam_track_increments_existing_queue_item_points() -> None:
     assert result is existing_item
     assert result.vote_points == 4
     jam_repo.save_queue_item.assert_called_once_with(existing_item)
+
+
+def test_vote_jam_track_records_user_interaction_for_deck_exclusion() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=22,
+        plan_id=1,
+    )
+    jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
+    track = Track(
+        track_id=100,
+        title="Hop",
+        artist="Frog",
+        duration_seconds=180,
+        genre="Rock",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.find_queue_item.return_value = None
+    jam_repo.save_queue_item.side_effect = lambda item: item
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = track
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.save.return_value = Interaction(
+        user_id=1,
+        track_id=100,
+        action=InteractionAction.LIKE,
+        source="jam",
+    )
+
+    use_case = VoteJamTrackUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+    command = VoteJamTrackCommand(jam_id=10, track_id=100, user_id=1, action="like")
+
+    use_case.execute(command)
+
+    interaction_repo.save.assert_called_once()
+    saved_interaction = interaction_repo.save.call_args.args[0]
+    assert saved_interaction.user_id == 1
+    assert saved_interaction.track_id == 100
+    assert saved_interaction.action == InteractionAction.LIKE
+    assert saved_interaction.source == "jam"
 
 
 def test_vote_jam_track_minor_blocked_from_explicit_track_raises_business_rule_error() -> (

@@ -24,6 +24,7 @@ class Interaction:
     action: InteractionAction
     created_at: datetime | None = None
     source: str | None = None
+    jam_id: int | None = None
 
     @property
     def is_positive(self) -> bool:

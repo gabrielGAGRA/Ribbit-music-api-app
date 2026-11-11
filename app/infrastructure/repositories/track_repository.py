@@ -230,13 +230,13 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         rows = cursor.fetchall()
         return [_row_to_track(r) for r in rows]
 
-    def find_by_filters(
+    def find_by_filters(  # noqa: C901
         self,
         *,
-        artist: str | None = None,
-        album: str | None = None,
-        genre: str | None = None,
-        year: int | None = None,
+        artist: str | Sequence[str] | None = None,
+        album: str | Sequence[str] | None = None,
+        genre: str | Sequence[str] | None = None,
+        year: int | Sequence[int] | None = None,
         query: str | None = None,
         limit: int = 50,
         offset: int = 0,
@@ -244,24 +244,49 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         conditions = ["is_deleted = 0"]
         params: list[object] = []
 
+        def normalize_sequence(value: str | Sequence[str] | None) -> list[str]:
+            if value is None:
+                return []
+            if isinstance(value, str):
+                return [value.strip()] if value.strip() else []
+            return [str(item).strip() for item in value if str(item).strip()]
+
         if query:
             like_term = f"%{query.lower()}%"
             conditions.append(
                 "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
             )
             params.extend([like_term, like_term, like_term])
-        if artist:
-            conditions.append("lower(artist) LIKE ?")
-            params.append(f"%{artist.lower()}%")
-        if album:
-            conditions.append("lower(album) LIKE ?")
-            params.append(f"%{album.lower()}%")
-        if genre:
-            conditions.append("lower(genre) = ?")
-            params.append(genre.lower())
-        if year is not None:
-            conditions.append("release_year = ?")
-            params.append(year)
+
+        artist_values = normalize_sequence(artist)
+        if artist_values:
+            artist_clauses = " OR ".join("lower(artist) LIKE ?" for _ in artist_values)
+            conditions.append(f"({artist_clauses})")
+            params.extend(f"%{value.lower()}%" for value in artist_values)
+
+        album_values = normalize_sequence(album)
+        if album_values:
+            album_clauses = " OR ".join("lower(album) LIKE ?" for _ in album_values)
+            conditions.append(f"({album_clauses})")
+            params.extend(f"%{value.lower()}%" for value in album_values)
+
+        genre_values = normalize_sequence(genre)
+        if genre_values:
+            genre_clauses = " OR ".join("lower(genre) = ?" for _ in genre_values)
+            conditions.append(f"({genre_clauses})")
+            params.extend(value.lower() for value in genre_values)
+
+        year_values = (
+            [year]
+            if isinstance(year, int)
+            else [int(item) for item in year if str(item).strip()]
+            if year is not None
+            else []
+        )
+        if year_values:
+            placeholders = ",".join("?" for _ in year_values)
+            conditions.append(f"release_year IN ({placeholders})")
+            params.extend(year_values)
 
         where_clause = " AND ".join(conditions)
         sql = f"SELECT * FROM tracks WHERE {where_clause} ORDER BY track_id ASC LIMIT ? OFFSET ?"  # noqa: S608

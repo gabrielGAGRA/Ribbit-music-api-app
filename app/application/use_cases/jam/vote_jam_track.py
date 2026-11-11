@@ -7,8 +7,12 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     PermissionDeniedError,
 )
+from app.domain.models.interaction import Interaction, InteractionAction
 from app.domain.models.jam import JamQueueItem
 lazy from app.application.dtos.jam_dtos import VoteJamTrackCommand
+lazy from app.application.ports.repositories.interaction_repository import (
+    InteractionRepositoryPort,
+)
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -23,6 +27,7 @@ class VoteJamTrackUseCase:
     jam_repo: JamRepositoryPort
     user_repo: UserRepositoryPort
     track_repo: TrackRepositoryPort
+    interaction_repo: InteractionRepositoryPort | None = None
 
     def _compute_vote_points(self, command: VoteJamTrackCommand) -> tuple[int, bool]:
         norm_action = (command.action or "like").strip().lower()
@@ -70,6 +75,30 @@ class VoteJamTrackUseCase:
         )
         return self.jam_repo.save_queue_item(new_item)
 
+    def _record_interaction(
+        self, jam_id: int, user_id: int, track_id: int, action: str
+    ) -> None:
+        if self.interaction_repo is None:
+            return
+
+        norm_action = (action or "like").strip().lower()
+        if norm_action in ("superlike", "amada"):
+            interaction_action = InteractionAction.SUPERLIKE
+        elif norm_action in ("dislike", "deslike", "rejeitada", "rejeitar"):
+            interaction_action = InteractionAction.DISLIKE
+        else:
+            interaction_action = InteractionAction.LIKE
+
+        self.interaction_repo.save(
+            Interaction(
+                user_id=user_id,
+                track_id=track_id,
+                action=interaction_action,
+                source="jam",
+                jam_id=jam_id,
+            )
+        )
+
     def _maybe_auto_advance(self, jam: Jam) -> None:
         if jam.current_track_id is not None or jam.jam_id is None:
             return
@@ -114,6 +143,9 @@ class VoteJamTrackUseCase:
         self._check_duration_cap(jam, track)
 
         saved_item = self._save_vote(command.jam_id, command.track_id, vote_points)
+        self._record_interaction(
+            command.jam_id, command.user_id, command.track_id, command.action
+        )
 
         if is_superlike:
             jam.superlikes_used += 1

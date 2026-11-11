@@ -51,6 +51,7 @@ class Jam:
             host_user_id=host_user_id,
             room_name=room_name,
             room_code=room_code or cls.generate_room_code(),
+            current_track_id=None,
             duration_minutes=duration_minutes,
             max_superlikes=max_superlikes,
             skip_votes_threshold=skip_votes_threshold,

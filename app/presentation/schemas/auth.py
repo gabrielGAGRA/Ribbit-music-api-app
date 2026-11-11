@@ -19,6 +19,8 @@ class UserResponse(BaseModel):
     spotify_id: str | None = None
     primary_account_id: int | None = None
     blocked_genres: list[str] | frozenset[str] | set[str] | None = None
+    favorite_genres: list[str] | frozenset[str] | set[str] | None = None
+    preferred_theme: str = "light"
     is_admin: bool = False
     created_at: datetime | None = None
 
@@ -35,6 +37,8 @@ class RegisterUserRequest(BaseModel):
     plan_id: int | None = None
     birth_date: str | None = None
     blocked_genres: list[str] = Field(default_factory=list)
+    favorite_genres: list[str] = Field(default_factory=list)
+    preferred_theme: str = Field(default="light")
 
 
 class LoginRequest(BaseModel):
