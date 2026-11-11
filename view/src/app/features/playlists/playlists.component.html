@@ -200,11 +200,25 @@
             <img [src]="currentQueueSong().image" [alt]="'Capa de ' + currentQueueSong().title" />
             <div class="queue-card-shade"></div>
             <div class="queue-card-info">
-              <strong>{{ currentQueueSong().title }}</strong>
-              <span
-                >{{ currentQueueSong().artist }} ·
-                <small>{{ currentQueueSong().genre }}</small></span
-              >
+              <div class="queue-card-heading">
+                <div>
+                  <strong>{{ currentQueueSong().title }}</strong>
+                  <span
+                    >{{ currentQueueSong().artist }} ·
+                    <small>{{ currentQueueSong().genre }}</small></span
+                  >
+                </div>
+                <button
+                  type="button"
+                  class="preview-play"
+                  (click)="toggleQueueCardPlay()"
+                  [attr.aria-label]="
+                    player.isPlaying() ? 'Pausar demonstração' : 'Reproduzir demonstração'
+                  "
+                >
+                  <app-icon [name]="player.isPlaying() ? 'pause' : 'play'" [size]="19" />
+                </button>
+              </div>
             </div>
           </div>
 

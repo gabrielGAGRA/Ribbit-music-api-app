@@ -281,6 +281,19 @@
   border-color: #1db954;
 }
 
+.queue-card-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.queue-card-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 @media (hover: none) {
   .hero-play-badge {
     opacity: 1;
