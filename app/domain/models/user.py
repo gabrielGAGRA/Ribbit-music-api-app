@@ -189,3 +189,50 @@ class User:
                 raise ValueError("Password hash cannot be blank.")
             self.password_hash = password_hash
         return self
+
+    DEFAULT_GENRE_WEIGHT: ClassVar[float] = 1.0
+
+    def is_favorite_genre(self, track: Track) -> bool:
+        normalized_favorites = {
+            self._normalize_genre(genre)
+            for genre in self.favorite_genres
+            if genre and genre.strip()
+        }
+        if not normalized_favorites or not track.genre.strip():
+            return False
+
+        track_genre = self._normalize_genre(track.genre)
+        if track_genre in normalized_favorites:
+            return True
+
+        genre_tokens = self._genre_tokens(track.genre)
+        if not genre_tokens:
+            return False
+
+        for favorite in normalized_favorites:
+            fav_tokens = self._genre_tokens(favorite)
+            if fav_tokens and any(
+                genre_tokens[index : index + len(fav_tokens)] == fav_tokens
+                for index in range(len(genre_tokens) - len(fav_tokens) + 1)
+            ):
+                return True
+        return False
+
+    def recommendation_weight(
+        self,
+        track: Track,
+        *,
+        favorite_multiplier: float | None = None,
+    ) -> float:
+        if not self.can_listen(track):
+            return 0.0
+        if self.is_favorite_genre(track):
+            return (
+                DEFAULT_FAVORITE_WEIGHT_MULTIPLIER
+                if favorite_multiplier is None
+                else favorite_multiplier
+            )
+        return self.DEFAULT_GENRE_WEIGHT
+
+
+DEFAULT_FAVORITE_WEIGHT_MULTIPLIER: float = 3.0

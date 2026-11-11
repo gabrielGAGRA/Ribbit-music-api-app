@@ -354,3 +354,243 @@ def test_compact_catalog_merges_genre_from_delta() -> None:
     nirvana_record = next(r for r in records if r["artist"] == "Nirvana")
     assert nirvana_record["genre"] == "Alternative Rock"
     assert nirvana_record["itunes_preview_url"] == "https://itunes.com/nirvana.mp3"
+
+
+def test_write_fetch_and_compact_track_delta_handles_cover_url() -> None:
+    base_parquet = _build_test_parquet_bytes()
+
+    delta_data = {
+        "title": ["Smells Like Teen Spirit"],
+        "artist": ["Nirvana"],
+        "itunes_preview_url": [None],
+        "genre": [None],
+        "cover_url": ["https://is1-ssl.mzstatic.com/image/100x100bb.jpg"],
+        "spotify_id": ["spot-2"],
+        "updated_at": ["2026-11-10T23:30:00Z"],
+    }
+    sink = io.BytesIO()
+    pq.write_table(pa.Table.from_pydict(delta_data), sink)
+    delta_bytes = sink.getvalue()
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+
+    mock_delta_blob = MagicMock()
+    mock_delta_blob.name = "Songs/deltas/delta_cover.parquet"
+    mock_delta_blob.download_as_bytes.return_value = delta_bytes
+
+    mock_client.list_blobs.return_value = [mock_delta_blob]
+
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_as_bytes.return_value = base_parquet
+
+    mock_version_blob = MagicMock()
+    mock_version_blob.exists.return_value = True
+    mock_version_blob.download_as_text.return_value = '{"version": 1}'
+
+    mock_write_blob = MagicMock()
+
+    def blob_side_effect(name: str) -> MagicMock:
+        if name == "Songs/songs_final.parquet":
+            return mock_base_blob
+        if name == "Songs/catalog_version.json":
+            return mock_version_blob
+        return mock_write_blob
+
+    mock_bucket.blob.side_effect = blob_side_effect
+    mock_client.bucket.return_value = mock_bucket
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+    )
+
+    # 1. Write delta with cover_url
+    adapter.write_track_delta(
+        title="Smells Like Teen Spirit",
+        artist="Nirvana",
+        cover_url="https://is1-ssl.mzstatic.com/image/100x100bb.jpg",
+        spotify_id="spot-2",
+    )
+    written_table = pq.read_table(
+        io.BytesIO(mock_write_blob.upload_from_string.call_args[0][0])
+    )
+    assert (
+        written_table.to_pylist()[0]["cover_url"]
+        == "https://is1-ssl.mzstatic.com/image/100x100bb.jpg"
+    )
+
+    # 2. Fetch tracks merges pending delta cover_url
+    fetched = adapter.fetch_tracks()
+    nirvana_fetched = next(t for t in fetched if t.artist == "Nirvana")
+    assert (
+        nirvana_fetched.cover_url == "https://is1-ssl.mzstatic.com/image/100x100bb.jpg"
+    )
+
+    # 3. Compact catalog persists cover_url into base Parquet
+    new_version = adapter.compact_catalog()
+    assert new_version == 2
+    compacted_table = pq.read_table(
+        io.BytesIO(mock_base_blob.upload_from_string.call_args[0][0])
+    )
+    nirvana_compacted = next(
+        r for r in compacted_table.to_pylist() if r["artist"] == "Nirvana"
+    )
+    assert (
+        nirvana_compacted["cover_url"]
+        == "https://is1-ssl.mzstatic.com/image/100x100bb.jpg"
+    )
+
+
+def _parquet_bytes(data: dict[str, list[object]]) -> bytes:
+    sink = io.BytesIO()
+    pq.write_table(pa.Table.from_pydict(data), sink)
+    return sink.getvalue()
+
+
+@pytest.mark.parametrize(
+    "base_data",
+    [
+        # All-null cover_url column (pa.null() schema type)
+        {
+            "title": ["Song One", "Song Two"],
+            "artist": ["Artist One", "Artist Two"],
+            "itunes_preview_url": [None, None],
+            "genre": ["Rock", "Pop"],
+            "cover_url": [None, None],
+            "spotify_id": ["spot-1", "spot-2"],
+        },
+        # Missing cover_url column entirely
+        {
+            "title": ["Song One", "Song Two"],
+            "artist": ["Artist One", "Artist Two"],
+            "itunes_preview_url": [None, None],
+            "genre": ["Rock", "Pop"],
+            "spotify_id": ["spot-1", "spot-2"],
+        },
+    ],
+)
+def test_compact_catalog_handles_null_and_missing_cover_url_column(
+    base_data: dict[str, list[object]],
+) -> None:
+    base_parquet = _parquet_bytes(base_data)
+    delta_bytes = _parquet_bytes(
+        {
+            "title": ["Song One"],
+            "artist": ["Artist One"],
+            "itunes_preview_url": [None],
+            "genre": [None],
+            "cover_url": ["https://is1-ssl.mzstatic.com/image/100x100bb.jpg"],
+            "spotify_id": ["spot-1"],
+            "updated_at": ["2026-11-10T23:35:00Z"],
+        }
+    )
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    mock_delta_blob = MagicMock()
+    mock_delta_blob.name = "Songs/deltas/delta_null_col.parquet"
+    mock_delta_blob.download_as_bytes.return_value = delta_bytes
+    mock_client.list_blobs.return_value = [mock_delta_blob]
+
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_as_bytes.return_value = base_parquet
+    mock_version_blob = MagicMock()
+    mock_version_blob.exists.return_value = False
+
+    def blob_side_effect(name: str) -> MagicMock:
+        if name == "Songs/songs_final.parquet":
+            return mock_base_blob
+        if name == "Songs/catalog_version.json":
+            return mock_version_blob
+        return MagicMock()
+
+    mock_bucket.blob.side_effect = blob_side_effect
+    mock_client.bucket.return_value = mock_bucket
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+    )
+    new_version = adapter.compact_catalog()
+    assert new_version == 2
+
+    compacted_table = pq.read_table(
+        io.BytesIO(mock_base_blob.upload_from_string.call_args[0][0])
+    )
+    row_one = next(r for r in compacted_table.to_pylist() if r["title"] == "Song One")
+    assert row_one["cover_url"] == "https://is1-ssl.mzstatic.com/image/100x100bb.jpg"
+
+
+def test_fetch_and_compact_merge_split_key_deltas_across_blobs() -> None:
+    base_parquet = _build_test_parquet_bytes()
+    blob_1_bytes = _parquet_bytes(
+        {
+            "title": ["Smells Like Teen Spirit"],
+            "artist": ["Nirvana"],
+            "itunes_preview_url": ["https://itunes.com/nirvana-new.m4a"],
+            "genre": [None],
+            "cover_url": [None],
+            "spotify_id": ["spot-2"],
+            "updated_at": ["2026-11-10T23:35:00Z"],
+        }
+    )
+    blob_2_bytes = _parquet_bytes(
+        {
+            "title": ["Smells Like Teen Spirit"],
+            "artist": ["Nirvana"],
+            "itunes_preview_url": [None],
+            "genre": [None],
+            "cover_url": ["https://is1-ssl.mzstatic.com/image/nirvana.jpg"],
+            "spotify_id": [None],
+            "updated_at": ["2026-11-10T23:36:00Z"],
+        }
+    )
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    blob_1 = MagicMock()
+    blob_1.name = "Songs/deltas/delta_1.parquet"
+    blob_1.download_as_bytes.return_value = blob_1_bytes
+    blob_2 = MagicMock()
+    blob_2.name = "Songs/deltas/delta_2.parquet"
+    blob_2.download_as_bytes.return_value = blob_2_bytes
+    mock_client.list_blobs.return_value = [blob_1, blob_2]
+
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_as_bytes.return_value = base_parquet
+    mock_version_blob = MagicMock()
+    mock_version_blob.exists.return_value = False
+
+    def blob_side_effect(name: str) -> MagicMock:
+        if name == "Songs/songs_final.parquet":
+            return mock_base_blob
+        if name == "Songs/catalog_version.json":
+            return mock_version_blob
+        return MagicMock()
+
+    mock_bucket.blob.side_effect = blob_side_effect
+    mock_client.bucket.return_value = mock_bucket
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+    )
+
+    fetched = adapter.fetch_tracks()
+    nirvana = next(t for t in fetched if t.artist == "Nirvana")
+    assert nirvana.itunes_preview_url == "https://itunes.com/nirvana-new.m4a"
+    assert nirvana.cover_url == "https://is1-ssl.mzstatic.com/image/nirvana.jpg"
+
+    adapter.compact_catalog()
+    compacted_table = pq.read_table(
+        io.BytesIO(mock_base_blob.upload_from_string.call_args[0][0])
+    )
+    nirvana_row = next(
+        r for r in compacted_table.to_pylist() if r["artist"] == "Nirvana"
+    )
+    assert nirvana_row["itunes_preview_url"] == "https://itunes.com/nirvana-new.m4a"
+    assert nirvana_row["cover_url"] == "https://is1-ssl.mzstatic.com/image/nirvana.jpg"
