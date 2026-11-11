@@ -39,6 +39,22 @@ class BlockedGenresRequest(BaseModel):
     blocked_genres: str | list[str]
 
 
+class FavoriteGenresRequest(BaseModel):
+    """Payload to update favorite music genres."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    favorite_genres: str | list[str]
+
+
+class ThemePreferenceRequest(BaseModel):
+    """Payload to update the user's preferred interface theme."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    preferred_theme: str
+
+
 class AddFamilyMemberRequest(BaseModel):
     """Payload to link or provision a dependent profile under a primary account."""
 
@@ -79,7 +95,9 @@ __all__ = [
     "AnnualStatsResponse",
     "BlockedGenresRequest",
     "ChangePlanRequest",
+    "FavoriteGenresRequest",
     "LinkSpotifyRequest",
+    "ThemePreferenceRequest",
     "UpdateProfileRequest",
     "UserProfileResponse",
 ]

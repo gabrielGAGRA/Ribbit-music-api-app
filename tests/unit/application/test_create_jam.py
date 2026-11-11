@@ -35,6 +35,7 @@ def test_create_jam_success_strips_room_name_and_saves_jam() -> None:
     assert result.host_user_id == 7
     assert result.room_name == "Late Night Pond"
     assert result.is_active is True
+    assert result.current_track_id is None
     assert len(result.room_code) == 6 and result.room_code.isdigit()
     user_repo.find_by_id.assert_called_once_with(7)
     jam_repo.save.assert_called_once_with(result)

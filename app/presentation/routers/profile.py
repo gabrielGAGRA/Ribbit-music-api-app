@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.application.dtos import UpdateProfileCommand
 from app.application.use_cases.user import (
@@ -22,8 +22,10 @@ from app.application.use_cases.user import (
     UpdateBlockedGenresUseCase,
     UpdateProfileUseCase,
 )
+from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.interaction import InteractionAction
 from app.presentation.dependencies import provide, require_user
+from app.presentation.dependencies.container import get_container
 from app.presentation.schemas import (
     ActionSuccessResponse,
     AddFamilyMemberRequest,
@@ -31,9 +33,11 @@ from app.presentation.schemas import (
     BlockedGenresRequest,
     ChangeInteractionRequest,
     ChangePlanRequest,
+    FavoriteGenresRequest,
     InteractionResponse,
     LinkSpotifyRequest,
     PlanResponse,
+    ThemePreferenceRequest,
     UpdateProfileRequest,
     UserProfileResponse,
     UserResponse,
@@ -205,6 +209,60 @@ def update_blocked_genres(
         blocked_genres=blocked_list,
     )
     return UserResponse.model_validate(user)
+
+
+@router.get("/api/profile/favorite-genres", response_model=list[str])
+def list_favorite_genres(
+    request: Request,
+    user_id: Annotated[int, Depends(require_user)],
+) -> list[str]:
+    user = get_container(request).user_repo.find_by_id(user_id)
+    if user is None:
+        raise EntityNotFoundError(f"User with ID {user_id} not found.")
+    return sorted(user.favorite_genres)
+
+
+@router.put("/api/profile/favorite-genres", response_model=UserResponse)
+def update_favorite_genres(
+    req: FavoriteGenresRequest,
+    request: Request,
+    user_id: Annotated[int, Depends(require_user)],
+) -> UserResponse:
+    user = get_container(request).user_repo.find_by_id(user_id)
+    if user is None:
+        raise EntityNotFoundError(f"User with ID {user_id} not found.")
+    if isinstance(req.favorite_genres, str):
+        favorite_list = [g.strip() for g in req.favorite_genres.split(",") if g.strip()]
+    else:
+        favorite_list = [str(g).strip() for g in req.favorite_genres if str(g).strip()]
+    user.update_favorite_genres(favorite_list)
+    saved = get_container(request).user_repo.save(user)
+    return UserResponse.model_validate(saved)
+
+
+@router.get("/api/profile/theme", response_model=str)
+def get_preferred_theme(
+    request: Request,
+    user_id: Annotated[int, Depends(require_user)],
+) -> str:
+    user = get_container(request).user_repo.find_by_id(user_id)
+    if user is None:
+        raise EntityNotFoundError(f"User with ID {user_id} not found.")
+    return user.preferred_theme
+
+
+@router.put("/api/profile/theme", response_model=UserResponse)
+def update_preferred_theme(
+    req: ThemePreferenceRequest,
+    request: Request,
+    user_id: Annotated[int, Depends(require_user)],
+) -> UserResponse:
+    user = get_container(request).user_repo.find_by_id(user_id)
+    if user is None:
+        raise EntityNotFoundError(f"User with ID {user_id} not found.")
+    user.update_preferred_theme(req.preferred_theme)
+    saved = get_container(request).user_repo.save(user)
+    return UserResponse.model_validate(saved)
 
 
 # --- Family Plan Routes ---

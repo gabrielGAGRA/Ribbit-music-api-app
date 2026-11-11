@@ -83,5 +83,7 @@ class RegisterUserUseCase:
             is_admin=False,
             birth_date=birth_date_str,
             blocked_genres=frozenset(command.blocked_genres),
+            favorite_genres=frozenset(command.favorite_genres),
+            preferred_theme=command.preferred_theme,
         )
         return self.user_repo.save(new_user)

@@ -46,6 +46,8 @@ def register(
             plan_id=req.plan_id,
             birth_date=req.birth_date,
             blocked_genres=tuple(req.blocked_genres),
+            favorite_genres=tuple(req.favorite_genres),
+            preferred_theme=req.preferred_theme,
         )
     )
     if user.user_id is None:

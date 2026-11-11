@@ -15,6 +15,8 @@ class RegisterUserCommand:
     plan_id: int | None = None
     birth_date: str | None = None
     blocked_genres: tuple[str, ...] = ()
+    favorite_genres: tuple[str, ...] = ()
+    preferred_theme: str = "light"
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -10,16 +10,27 @@ from app.domain.models.user import User
 
 def _row_to_user(row: sqlite3.Row) -> User:
     keys = row.keys()
-    blocked_raw = row["blocked_genres"]
+    blocked_raw = row["blocked_genres"] if "blocked_genres" in keys else None
     blocked_genres = (
         frozenset(g.strip() for g in blocked_raw.split(",") if g.strip())
         if blocked_raw
+        else frozenset()
+    )
+    favorite_raw = row["favorite_genres"] if "favorite_genres" in keys else None
+    favorite_genres = (
+        frozenset(g.strip() for g in favorite_raw.split(",") if g.strip())
+        if favorite_raw
         else frozenset()
     )
     created_at = (
         datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
     )
     birth_date = row["birth_date"] if "birth_date" in keys else None
+    preferred_theme = (
+        row["preferred_theme"]
+        if "preferred_theme" in keys and row["preferred_theme"]
+        else "light"
+    )
     return User(
         user_id=row["user_id"],
         email=row["email"],
@@ -30,6 +41,8 @@ def _row_to_user(row: sqlite3.Row) -> User:
         spotify_id=row["spotify_id"],
         primary_account_id=row["primary_account_id"],
         blocked_genres=blocked_genres,
+        favorite_genres=favorite_genres,
+        preferred_theme=preferred_theme,
         is_admin=bool(row["is_admin"]),
         created_at=created_at,
         birth_date=birth_date,
@@ -62,6 +75,9 @@ class SQLiteUserRepository(UserRepositoryPort):
         blocked_str = (
             ",".join(sorted(user.blocked_genres)) if user.blocked_genres else None
         )
+        favorite_str = (
+            ",".join(sorted(user.favorite_genres)) if user.favorite_genres else None
+        )
         if user.user_id is not None:
             cursor = self.conn.execute(
                 "SELECT user_id FROM users WHERE user_id = ?",
@@ -79,6 +95,8 @@ class SQLiteUserRepository(UserRepositoryPort):
                         plan_id = ?,
                         primary_account_id = ?,
                         blocked_genres = ?,
+                        favorite_genres = ?,
+                        preferred_theme = ?,
                         is_admin = ?,
                         birth_date = ?
                     WHERE user_id = ?
@@ -92,6 +110,8 @@ class SQLiteUserRepository(UserRepositoryPort):
                         user.plan_id,
                         user.primary_account_id,
                         blocked_str,
+                        favorite_str,
+                        user.preferred_theme,
                         1 if user.is_admin else 0,
                         user.birth_date,
                         user.user_id,
@@ -106,9 +126,9 @@ class SQLiteUserRepository(UserRepositoryPort):
             """
             INSERT INTO users (
                 email, password_hash, spotify_id, display_name, age,
-                plan_id, primary_account_id, blocked_genres,
-                is_admin, created_at, birth_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                plan_id, primary_account_id, blocked_genres, favorite_genres,
+                preferred_theme, is_admin, created_at, birth_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user.email.lower().strip(),
@@ -119,6 +139,8 @@ class SQLiteUserRepository(UserRepositoryPort):
                 user.plan_id,
                 user.primary_account_id,
                 blocked_str,
+                favorite_str,
+                user.preferred_theme,
                 1 if user.is_admin else 0,
                 created_at_str,
                 user.birth_date,
