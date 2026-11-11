@@ -2,8 +2,10 @@
 
 import contextlib
 from dataclasses import dataclass
+lazy import random
 
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import EntityNotFoundError, ExternalServiceError
+from app.domain.services.recommendation import select_weighted_track
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
@@ -23,6 +25,8 @@ class GetNextDiscoveryTrackUseCase:
     interaction_repo: InteractionRepositoryPort
     track_preview_port: TrackPreviewPort | None = None
     catalog_file_port: TrackCatalogFilePort | None = None
+    candidate_pool_size: int = 100
+    rng: random.Random | None = None
 
     def execute(self, user_id: int) -> Track | None:
         user = self.user_repo.find_by_id(user_id)
@@ -40,19 +44,23 @@ class GetNextDiscoveryTrackUseCase:
             ),
             block_explicit=is_minor,
             excluded_ids=interacted_ids,
-            limit=1,
+            limit=self.candidate_pool_size,
         )
 
-        if not candidates:
+        track = select_weighted_track(candidates, user, rng=self.rng)
+        if track is None:
             return None
-
-        track = candidates[0]
         needs_preview = not track.itunes_preview_url
         needs_genre = not track.genre
-        if (needs_preview or needs_genre) and self.track_preview_port is not None:
-            preview = self.track_preview_port.find_preview(
-                f"{track.artist} {track.title}"
-            )
+        needs_cover = not track.cover_url
+        if (
+            needs_preview or needs_genre or needs_cover
+        ) and self.track_preview_port is not None:
+            preview = None
+            with contextlib.suppress(ExternalServiceError):
+                preview = self.track_preview_port.find_preview(
+                    f"{track.artist} {track.title}"
+                )
             if preview:
                 changed = False
                 if needs_preview and preview.preview_url:
@@ -60,6 +68,9 @@ class GetNextDiscoveryTrackUseCase:
                     changed = True
                 if needs_genre and preview.genre:
                     track.genre = str(preview.genre)
+                    changed = True
+                if needs_cover and preview.cover_url:
+                    track.cover_url = str(preview.cover_url)
                     changed = True
                 if changed:
                     self.track_repo.save(track)
@@ -70,6 +81,7 @@ class GetNextDiscoveryTrackUseCase:
                                 artist=track.artist,
                                 preview_url=track.itunes_preview_url,
                                 genre=track.genre,
+                                cover_url=track.cover_url,
                                 spotify_id=track.spotify_id,
                             )
 

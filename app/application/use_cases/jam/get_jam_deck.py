@@ -6,6 +6,7 @@ from app.application.dtos.jam_dtos import GetJamDeckCommand
 from app.application.dtos.playlist_dtos import PlaylistDeckResult
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models.interaction import InteractionAction
+from app.domain.services.recommendation import order_tracks_by_weighted_seed
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
@@ -168,9 +169,15 @@ class GetJamDeckUseCase:
             and t.track_id not in excluded_ids
             and not t.is_deleted
             and user.can_listen(t)
-            and not (cursor is not None and t.track_id <= cursor)
         ]
-        eligible.sort(key=lambda t: t.track_id or 0)
+        eligible = self._order_and_slice_cursor(
+            jam=jam,
+            user=user,
+            jam_id=t_jam_id,
+            user_id=eff_user_id,
+            eligible=eligible,
+            cursor=cursor,
+        )
 
         has_more = len(eligible) > page_limit
         items = eligible[:page_limit]
@@ -179,3 +186,46 @@ class GetJamDeckUseCase:
         return PlaylistDeckResult(
             items=items, next_cursor=next_cursor, has_more=has_more
         )
+
+    def _order_and_slice_cursor(
+        self,
+        *,
+        jam: Jam,
+        user: User,
+        jam_id: int,
+        user_id: int,
+        eligible: list[Track],
+        cursor: int | None,
+    ) -> list[Track]:
+        source = (jam.deck_source or "livre").strip().lower()
+        if source == "livre":
+            pool = eligible
+            if cursor is not None and all(t.track_id != cursor for t in eligible):
+                cursor_track = self.track_repo.find_by_id(cursor)
+                if (
+                    isinstance(cursor_track, Track)
+                    and cursor_track.track_id == cursor
+                    and not cursor_track.is_deleted
+                    and user.can_listen(cursor_track)
+                ):
+                    pool = [*eligible, cursor_track]
+
+            ordered = order_tracks_by_weighted_seed(
+                pool,
+                user,
+                seed_key=f"jam:{jam_id}:user:{user_id}",
+            )
+            if cursor is None:
+                return ordered
+            for index, track in enumerate(ordered):
+                if track.track_id == cursor:
+                    return ordered[index + 1 :]
+            return [t for t in ordered if (t.track_id or 0) > cursor]
+
+        filtered = [
+            t
+            for t in eligible
+            if not (cursor is not None and (t.track_id or 0) <= cursor)
+        ]
+        filtered.sort(key=lambda t: t.track_id or 0)
+        return filtered
