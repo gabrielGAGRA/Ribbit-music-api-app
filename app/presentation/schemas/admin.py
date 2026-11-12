@@ -123,12 +123,25 @@ class TrackGenreResponse(BaseModel):
     genre: str
 
 
+class RegisterAdminRequest(BaseModel):
+    """Payload to register a new administrator."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+    password: str = Field(min_length=6)
+    display_name: str = Field(min_length=2, max_length=50)
+    age: int = Field(default=30, ge=18)
+    birth_date: str | None = None
+
+
 __all__ = [
     "AudienceReportResponse",
     "BlockTrackRequest",
     "CompactCatalogResponse",
     "ExecutiveDashboardResponse",
     "PlanResponse",
+    "RegisterAdminRequest",
     "SyncCatalogVersionResponse",
     "TrackBlockResponse",
     "TrackExplicitResponse",

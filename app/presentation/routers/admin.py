@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app.application.dtos import (
     AuthenticateAdminCommand,
+    RegisterAdministratorCommand,
     UpdateSubscriptionPlanCommand,
 )
 from app.application.use_cases.admin import (
@@ -17,6 +18,7 @@ from app.application.use_cases.admin import (
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
+    RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
@@ -36,6 +38,7 @@ from app.presentation.schemas.admin import (
     CompactCatalogResponse,
     ExecutiveDashboardResponse,
     PlanResponse,
+    RegisterAdminRequest,
     SyncCatalogVersionResponse,
     TrackBlockResponse,
     TrackExplicitResponse,
@@ -144,6 +147,31 @@ def list_administrators(
 ) -> list[UserResponse]:
     admins = use_case.execute()
     return [UserResponse.model_validate(a) for a in admins]
+
+
+@router.post(
+    "/administrators",
+    response_model=UserResponse,
+    status_code=201,
+)
+def register_administrator(
+    req: RegisterAdminRequest,
+    admin_id: Annotated[int, Depends(require_admin)],
+    use_case: Annotated[
+        RegisterAdministratorUseCase, Depends(provide(RegisterAdministratorUseCase))
+    ],
+) -> UserResponse:
+    user = use_case.execute(
+        RegisterAdministratorCommand(
+            creator_admin_id=admin_id,
+            email=req.email,
+            password=req.password,
+            display_name=req.display_name,
+            age=req.age,
+            birth_date=req.birth_date,
+        )
+    )
+    return UserResponse.model_validate(user)
 
 
 @router.put(

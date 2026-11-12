@@ -4,6 +4,7 @@ from app.application.dtos.admin_dtos import (
     AudienceReportResult,
     AuditLogEntryResult,
     ExecutiveDashboardResult,
+    RegisterAdministratorCommand,
     UpdateSubscriptionPlanCommand,
     UserPlanSummaryResult,
 )
@@ -57,6 +58,7 @@ __all__ = [
     "PlaylistWithTracksResult",
     "PublishReviewCommand",
     "RecordSwipeCommand",
+    "RegisterAdministratorCommand",
     "RegisterUserCommand",
     "ReleaseYearStat",
     "SearchTracksCommand",
