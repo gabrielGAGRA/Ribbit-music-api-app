@@ -1,34 +1,114 @@
 """SQLite connection management and row factory utilities."""
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 lazy from collections.abc import Generator
 
 DEFAULT_DATABASE_PATH = "local.db"
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
 
 
-def create_connection(database_path: str = DEFAULT_DATABASE_PATH) -> sqlite3.Connection:
-    """Creates a new SQLite connection with foreign keys enabled and Row factory configured."""
-    conn = sqlite3.connect(database_path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+class ThreadSafeConnection:
+    """Thread-safe proxy wrapper around sqlite3.Connection with reentrant locking."""
+
+    __slots__ = ("_conn", "_lock")
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        object.__setattr__(self, "_conn", conn)
+        object.__setattr__(self, "_lock", threading.RLock())
+
+    def execute(self, sql: str, parameters: Any = ()) -> sqlite3.Cursor:
+        with self._lock:
+            return self._conn.execute(sql, parameters)
+
+    def executemany(self, sql: str, seq_of_parameters: Any) -> sqlite3.Cursor:
+        with self._lock:
+            return self._conn.executemany(sql, seq_of_parameters)
+
+    def executescript(self, sql_script: str) -> sqlite3.Cursor:
+        with self._lock:
+            return self._conn.executescript(sql_script)
+
+    def commit(self) -> None:
+        with self._lock:
+            self._conn.commit()
+
+    def rollback(self) -> None:
+        with self._lock:
+            self._conn.rollback()
+
+    def cursor(self) -> sqlite3.Cursor:
+        with self._lock:
+            return self._conn.cursor()
+
+    def close(self) -> None:
+        with self._lock:
+            self._conn.close()
+
+    def create_function(
+        self, name: str, narg: int, func: Any, *args: Any, **kwargs: Any
+    ) -> None:
+        with self._lock:
+            self._conn.create_function(name, narg, func, *args, **kwargs)
+
+    def __enter__(self) -> ThreadSafeConnection:
+        self._lock.acquire()
+        self._conn.__enter__()
+        return self
+
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> Any:
+        try:
+            return self._conn.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self._lock.release()
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._conn, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        setattr(self._conn, name, value)
+
+
+def create_connection(
+    database_path: str = DEFAULT_DATABASE_PATH,
+    *,
+    thread_safe: bool = True,
+) -> sqlite3.Connection:
+    """Creates a configured SQLite connection with foreign keys, busy timeout, and WAL enabled."""
+    raw_conn = sqlite3.connect(database_path, check_same_thread=False)
+    raw_conn.row_factory = sqlite3.Row
+    raw_conn.execute("PRAGMA foreign_keys = ON;")
+    raw_conn.execute("PRAGMA busy_timeout = 5000;")
+    if database_path != ":memory:" and not database_path.startswith("file:"):
+        raw_conn.execute("PRAGMA journal_mode = WAL;")
+
+    if thread_safe:
+        return ThreadSafeConnection(raw_conn)  # type: ignore[return-value]
+    return raw_conn
 
 
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Generator[sqlite3.Cursor]:
     """Context manager executing block inside an explicit transaction."""
-    cursor = conn.cursor()
+    lock = getattr(conn, "_lock", None)
+    if lock is not None:
+        lock.acquire()
     try:
-        yield cursor
-        conn.commit()
-    except Exception:
-        conn.rollback()
-        raise
+        cursor = conn.cursor()
+        try:
+            yield cursor
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
     finally:
-        cursor.close()
+        if lock is not None:
+            lock.release()
 
 
 __all__ = [
