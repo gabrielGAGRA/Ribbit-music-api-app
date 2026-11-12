@@ -245,7 +245,7 @@ def test_register_user_underage_birth_date_raises_business_rule_violation() -> N
 
     with pytest.raises(
         BusinessRuleViolationError,
-        match="Cadastro direto permitido apenas para maiores de 18 anos",
+        match="Direct registration only permitted for users 18 years or older",
     ):
         use_case.execute(command)
 
@@ -268,7 +268,9 @@ def test_register_user_future_birth_date_raises_business_rule_violation() -> Non
         birth_date="2099-01-01",
     )
 
-    with pytest.raises(BusinessRuleViolationError, match="não pode estar no futuro"):
+    with pytest.raises(
+        BusinessRuleViolationError, match="Birth date cannot be in the future"
+    ):
         use_case.execute(command)
 
 
@@ -292,6 +294,6 @@ def test_register_user_underage_age_without_birth_date_raises_violation() -> Non
 
     with pytest.raises(
         BusinessRuleViolationError,
-        match="Cadastro direto permitido apenas para maiores de 18 anos",
+        match="Direct registration only permitted for users 18 years or older",
     ):
         use_case.execute(command)

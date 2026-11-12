@@ -18,6 +18,9 @@ from app.application.use_cases.user.delete_user_account import (
 from app.application.use_cases.user.get_annual_stats import (
     GetAnnualListeningStatsUseCase,
 )
+from app.application.use_cases.user.get_preferred_theme import (
+    GetPreferredThemeUseCase,
+)
 from app.application.use_cases.user.get_user_profile import (
     GetUserProfileUseCase,
 )
@@ -30,6 +33,9 @@ from app.application.use_cases.user.list_blocked_genres import (
 from app.application.use_cases.user.list_family_members import (
     ListFamilyMembersUseCase,
 )
+from app.application.use_cases.user.list_favorite_genres import (
+    ListFavoriteGenresUseCase,
+)
 from app.application.use_cases.user.list_plans import ListPlansUseCase
 from app.application.use_cases.user.list_user_interactions import (
     ListUserInteractionsUseCase,
@@ -40,6 +46,12 @@ from app.application.use_cases.user.remove_family_member import (
 from app.application.use_cases.user.update_blocked_genres import (
     UpdateBlockedGenresUseCase,
 )
+from app.application.use_cases.user.update_favorite_genres import (
+    UpdateFavoriteGenresUseCase,
+)
+from app.application.use_cases.user.update_preferred_theme import (
+    UpdatePreferredThemeUseCase,
+)
 from app.application.use_cases.user.update_profile import UpdateProfileUseCase
 
 __all__ = [
@@ -49,13 +61,17 @@ __all__ = [
     "ChangeTrackInteractionUseCase",
     "DeleteUserAccountUseCase",
     "GetAnnualListeningStatsUseCase",
+    "GetPreferredThemeUseCase",
     "GetUserProfileUseCase",
     "LinkSpotifyAccountUseCase",
     "ListBlockedGenresUseCase",
     "ListFamilyMembersUseCase",
+    "ListFavoriteGenresUseCase",
     "ListPlansUseCase",
     "ListUserInteractionsUseCase",
     "RemoveFamilyMemberUseCase",
     "UpdateBlockedGenresUseCase",
+    "UpdateFavoriteGenresUseCase",
+    "UpdatePreferredThemeUseCase",
     "UpdateProfileUseCase",
 ]

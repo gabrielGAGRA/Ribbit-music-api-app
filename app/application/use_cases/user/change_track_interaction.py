@@ -45,9 +45,7 @@ class ChangeTrackInteractionUseCase:
             if not track or track.is_deleted:
                 raise EntityNotFoundError("Track not found or inactive.")
             if user.is_track_restricted_for_minor(track):
-                raise BusinessRuleViolationError(
-                    "Música bloqueada para usuários menores de idade."
-                )
+                raise BusinessRuleViolationError("Track is restricted for minor users.")
 
         interaction = self.interaction_repo.find_by_user_and_track(user_id, track_id)
         if not interaction:

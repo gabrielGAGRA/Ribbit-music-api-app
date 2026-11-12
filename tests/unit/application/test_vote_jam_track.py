@@ -458,3 +458,156 @@ def test_vote_jam_track_auto_advances_when_no_current_track() -> None:
     assert result.track_id == 100
     assert jam.current_track_id == 100
     jam_repo.remove_track_from_queue.assert_called_once_with(10, 100)
+
+
+def test_vote_jam_track_with_action_aliases() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=22,
+        plan_id=1,
+    )
+    jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
+    track = Track(
+        track_id=100, title="Hop", artist="Frog", duration_seconds=180, genre="Rock"
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.find_queue_item.return_value = None
+    jam_repo.save_queue_item.side_effect = lambda item: item
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = track
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.find_by_user_and_track.return_value = None
+
+    use_case = VoteJamTrackUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+
+    # Vote with alias "amada" (superlike)
+    command = VoteJamTrackCommand(jam_id=10, track_id=100, user_id=1, action="amada")
+    result = use_case.execute(command)
+
+    assert result.vote_points == 2
+    interaction_repo.save.assert_called_once()
+    saved = interaction_repo.save.call_args.args[0]
+    assert saved.action == InteractionAction.SUPERLIKE
+
+
+def test_vote_jam_track_preserves_existing_global_like_on_jam_dislike() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=22,
+        plan_id=1,
+    )
+    jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
+    track = Track(
+        track_id=100, title="Hop", artist="Frog", duration_seconds=180, genre="Rock"
+    )
+    existing_interaction = Interaction(
+        interaction_id=42,
+        user_id=1,
+        track_id=100,
+        action=InteractionAction.LIKE,
+        source="discovery",
+        jam_id=None,
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.find_queue_item.return_value = None
+    jam_repo.save_queue_item.side_effect = lambda item: item
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = track
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.find_by_user_and_track.return_value = existing_interaction
+
+    use_case = VoteJamTrackUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+
+    # Dislike in jam must not overwrite/corrupt global discovery like
+    command = VoteJamTrackCommand(
+        jam_id=10, track_id=100, user_id=1, action="rejeitada"
+    )
+    use_case.execute(command)
+
+    interaction_repo.save.assert_not_called()
+    assert existing_interaction.action == InteractionAction.LIKE
+    assert existing_interaction.source == "discovery"
+
+
+def test_vote_jam_track_upgrades_existing_like_to_superlike_preserving_source() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=22,
+        plan_id=1,
+    )
+    jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
+    track = Track(
+        track_id=100, title="Hop", artist="Frog", duration_seconds=180, genre="Rock"
+    )
+    existing_interaction = Interaction(
+        interaction_id=42,
+        user_id=1,
+        track_id=100,
+        action=InteractionAction.LIKE,
+        source="discovery",
+        jam_id=None,
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.find_queue_item.return_value = None
+    jam_repo.save_queue_item.side_effect = lambda item: item
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = track
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.find_by_user_and_track.return_value = existing_interaction
+
+    use_case = VoteJamTrackUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+
+    command = VoteJamTrackCommand(
+        jam_id=10, track_id=100, user_id=1, action="superlike"
+    )
+    use_case.execute(command)
+
+    interaction_repo.save.assert_called_once_with(existing_interaction)
+    assert existing_interaction.action == InteractionAction.SUPERLIKE
+    assert existing_interaction.source == "discovery"
+    assert existing_interaction.jam_id is None

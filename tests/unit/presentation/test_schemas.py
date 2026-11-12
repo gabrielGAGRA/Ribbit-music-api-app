@@ -133,11 +133,30 @@ def test_deck_playlist_request_enforces_field_constraints(
         )
 
 
-@pytest.mark.parametrize("year", [1899, 2101])
-def test_deck_playlist_request_accepts_any_integer_year(year: int) -> None:
-    request = DeckPlaylistRequest(name="Valid", duration_minutes=30, year=year)
+@pytest.mark.parametrize("year", [1899, 2101, [1980, 1899], [2101]])
+def test_deck_playlist_request_rejects_out_of_range_year(
+    year: int | list[int],
+) -> None:
+    with pytest.raises(ValidationError):
+        DeckPlaylistRequest(name="Valid", duration_minutes=30, year=year)
 
+
+@pytest.mark.parametrize("year", [1900, 2024, 2100, [1900, 2024, 2100]])
+def test_deck_playlist_request_accepts_valid_range_year(
+    year: int | list[int],
+) -> None:
+    request = DeckPlaylistRequest(name="Valid", duration_minutes=30, year=year)
     assert request.year == year
+
+
+def test_deck_playlist_request_resolves_reference_playlist_id_alias() -> None:
+    req_by_source = DeckPlaylistRequest(name="Valid", source_playlist_id=12)
+    assert req_by_source.source_playlist_id == 12
+    assert req_by_source.reference_playlist_id == 12
+
+    req_by_ref = DeckPlaylistRequest(name="Valid", reference_playlist_id=34)
+    assert req_by_ref.source_playlist_id == 34
+    assert req_by_ref.reference_playlist_id == 34
 
 
 @pytest.mark.parametrize(

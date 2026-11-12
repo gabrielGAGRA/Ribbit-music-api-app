@@ -135,7 +135,7 @@ def test_flow_1_authentication_and_age_gate(client: TestClient) -> None:
         },
     )
     assert minor_resp.status_code == 400
-    assert "18 anos" in minor_resp.text
+    assert "18 years" in minor_resp.text
 
     # 2. Future birth date rejected with 400
     future_resp = client.post(
@@ -149,7 +149,7 @@ def test_flow_1_authentication_and_age_gate(client: TestClient) -> None:
         },
     )
     assert future_resp.status_code == 400
-    assert "futuro" in future_resp.text
+    assert "future" in future_resp.text.lower()
 
     # 3. Adult registration succeeds
     adult_user, headers = _register_and_login(
@@ -352,7 +352,7 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
         },
     )
     assert overflow_res.status_code == 400
-    assert "atingido" in overflow_res.text.lower()
+    assert "reached" in overflow_res.text.lower()
 
     # 5. Cancel subscription plan unlinks dependents and reverts them to Free
     cancel_res = client.delete("/api/profile/plan", headers=headers)
@@ -825,7 +825,7 @@ def test_flow_7_admin_console(client: TestClient) -> None:
         json={"is_admin": False},
     )
     assert self_demote.status_code == 400
-    assert "revogar" in self_demote.text.lower()
+    assert "revoke" in self_demote.text.lower()
 
     # 6. Block / unblock track
     # Block Bohemian Rhapsody

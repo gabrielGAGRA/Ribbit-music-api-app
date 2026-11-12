@@ -66,7 +66,7 @@ class TestSyncTracks:
 
         (track,) = use_case.execute(SyncTracksFromSpotifyCommand(query="x"))
 
-        assert track.genre == "Desconhecido"
+        assert track.genre == "Unknown"
 
     def test_existing_track_keeps_curated_fields(self) -> None:
         existing = Track(

@@ -71,18 +71,20 @@ class AddTrackToPlaylistUseCase:
                 "Track addition exceeds maximum playlist duration."
             )
 
-        norm_action = (command.action or "like").strip().lower()
-        if norm_action not in ("like", "curtida", "superlike", "amada"):
+        try:
+            interaction_action = InteractionAction.parse(
+                command.action, default=InteractionAction.LIKE
+            )
+        except ValueError as exc:
+            raise BusinessRuleViolationError(
+                "Only likes and superlikes can be added to the playlist."
+            ) from exc
+        if not interaction_action.is_positive:
             raise BusinessRuleViolationError(
                 "Only likes and superlikes can be added to the playlist."
             )
 
         if self.interaction_repo is not None:
-            interaction_action = (
-                InteractionAction.SUPERLIKE
-                if norm_action in ("superlike", "amada")
-                else InteractionAction.LIKE
-            )
             self.interaction_repo.save(
                 Interaction(
                     user_id=command.user_id,

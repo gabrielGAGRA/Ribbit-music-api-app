@@ -24,7 +24,7 @@ def _row_to_jam(row: sqlite3.Row) -> Jam:
         if "accumulated_duration_seconds" in keys
         else 0
     )
-    deck_source = row["deck_source"] if "deck_source" in keys else "livre"
+    deck_source = row["deck_source"] if "deck_source" in keys else "free"
     source_playlist_id = (
         row["source_playlist_id"] if "source_playlist_id" in keys else None
     )

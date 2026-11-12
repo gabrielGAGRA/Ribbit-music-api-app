@@ -41,9 +41,7 @@ class PublishReviewUseCase:
             )
 
         if user.is_track_restricted_for_minor(track):
-            raise BusinessRuleViolationError(
-                "Música bloqueada para usuários menores de idade."
-            )
+            raise BusinessRuleViolationError("Track is restricted for minor users.")
 
         existing = self.review_repo.find_active_by_user_and_track(
             command.user_id, command.track_id
