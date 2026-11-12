@@ -1,0 +1,48 @@
+services:
+  gcs-emulator:
+    image: fsouza/fake-gcs-server:latest
+    container_name: ribbit-gcs-emulator
+    command: ["-scheme", "http", "-port", "4443"]
+    ports:
+      - "4443:4443"
+    volumes:
+      - gcs-data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: ribbit-backend
+    restart: unless-stopped
+    depends_on:
+      - gcs-emulator
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_PATH=/data/local.db
+      - GCS_BUCKET_NAME=ribbit-catalog-local
+      - GCS_TRACKS_FILE_PATH=Songs/songs_final.parquet
+      - STORAGE_EMULATOR_HOST=http://gcs-emulator:4443
+    command: >
+      sh -c "python scripts/bootstrap_local_gcs.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    volumes:
+      - sqlite-data:/data
+      - ./scripts:/workspace/scripts
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: ribbit-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "4200:4200"
+    environment:
+      - API_PROXY_TARGET=http://backend:8000
+
+volumes:
+  sqlite-data:
+  gcs-data:
