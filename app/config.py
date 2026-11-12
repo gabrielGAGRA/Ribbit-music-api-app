@@ -6,6 +6,9 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
+_DEFAULT_DEV_SECRET_KEY = "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
+_DEFAULT_DEV_ADMIN_PASSWORD = "RibbitLocal2026!"  # noqa: S105
+
 
 class Settings(BaseModel):
     """Configuration settings data model containing fields only."""
@@ -26,18 +29,17 @@ class Settings(BaseModel):
     app_version: str = "0.1.0"
     environment: str = "development"
     log_level: str = "INFO"
-    secret_key: str = "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
+    secret_key: str = _DEFAULT_DEV_SECRET_KEY
     token_expiration_seconds: int = 43200
     admin_email: str = "admin@ribbit.example.com"
-    admin_password: str = "RibbitLocal2026!"  # noqa: S105
+    admin_password: str = _DEFAULT_DEV_ADMIN_PASSWORD
     gcs_bucket_name: str | None = None
     gcs_tracks_file_path: str = "Songs/songs_final.parquet"
 
     @model_validator(mode="after")
     def _validate_production_secret_key(self) -> Self:  # noqa: N804
         if self.environment.lower() == "production" and (
-            not self.secret_key
-            or self.secret_key == "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
+            not self.secret_key or self.secret_key == _DEFAULT_DEV_SECRET_KEY
         ):
             raise RuntimeError("RIBBIT_SECRET_KEY must be configured in production.")
         return self
@@ -65,12 +67,11 @@ def load_settings() -> Settings:
     secret_key = (
         os.getenv("RIBBIT_SECRET_KEY")
         or os.getenv("SECRET_KEY")
-        or "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
+        or _DEFAULT_DEV_SECRET_KEY
     )
 
     if environment.lower() == "production" and (
-        not secret_key
-        or secret_key == "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
+        not secret_key or secret_key == _DEFAULT_DEV_SECRET_KEY
     ):
         raise RuntimeError("RIBBIT_SECRET_KEY must be configured in production.")
 
@@ -87,7 +88,7 @@ def load_settings() -> Settings:
     admin_password = (
         os.getenv("RIBBIT_ADMIN_PASSWORD")
         or os.getenv("ADMIN_PASSWORD")
-        or "RibbitLocal2026!"  # noqa: S105
+        or _DEFAULT_DEV_ADMIN_PASSWORD
     )
 
     return Settings(

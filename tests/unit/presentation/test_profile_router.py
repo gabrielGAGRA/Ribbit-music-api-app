@@ -398,7 +398,7 @@ def test_get_profile_includes_recent_interactions() -> None:
 def test_profile_router_keeps_canonical_and_legacy_history_routes() -> None:
     from app.presentation.routers.profile import router
 
-    paths = [route.path for route in router.routes]  # type: ignore[attr-defined]
+    paths = [getattr(route, "path", None) for route in router.routes]
     assert "/api/profile/me" in paths
     assert "/api/plans" in paths
     assert "/api/profile/plan" in paths
