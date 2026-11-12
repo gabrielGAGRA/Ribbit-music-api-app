@@ -40,6 +40,7 @@ from app.application.use_cases.admin import (
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
     PromoteUserToAdminUseCase,
+    RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
@@ -243,6 +244,7 @@ class Container:
     get_audience_report_use_case: GetAudienceReportUseCase
     get_audit_logs_use_case: GetAuditLogsUseCase
     promote_user_to_admin_use_case: PromoteUserToAdminUseCase
+    register_administrator_use_case: RegisterAdministratorUseCase
     catalog_file_port: TrackCatalogFilePort | None = None
     ingest_tracks_from_catalog_use_case: IngestTracksFromCatalogUseCase | None = None
     compact_catalog_use_case: CompactCatalogUseCase | None = None
@@ -542,7 +544,18 @@ def build_container(
         ),
         list_users_with_plans_use_case=ListUsersWithPlansUseCase(user_repo, plan_repo),
         list_administrators_use_case=ListAdministratorsUseCase(user_repo),
-        update_admin_role_use_case=UpdateAdminRoleUseCase(user_repo),
+        update_admin_role_use_case=UpdateAdminRoleUseCase(
+            user_repo=user_repo,
+            eligible_emails=settings.admin_eligible_emails,
+            audit_log_repo=audit_log_repo,
+        ),
+        register_administrator_use_case=RegisterAdministratorUseCase(
+            user_repo=user_repo,
+            plan_repo=plan_repo,
+            password_hasher=password_hasher,
+            audit_log_repo=audit_log_repo,
+            eligible_emails=settings.admin_eligible_emails,
+        ),
         update_subscription_plan_use_case=UpdateSubscriptionPlanUseCase(
             plan_repo, user_repo=user_repo
         ),

@@ -31,6 +31,9 @@ from app.application.use_cases.admin.list_users_with_plans import (
 from app.application.use_cases.admin.promote_user_to_admin import (
     PromoteUserToAdminUseCase,
 )
+from app.application.use_cases.admin.register_administrator import (
+    RegisterAdministratorUseCase,
+)
 from app.application.use_cases.admin.sync_catalog_version import (
     SyncCatalogVersionResult,
     SyncCatalogVersionUseCase,
@@ -62,6 +65,7 @@ __all__ = [
     "ListBlockedTracksUseCase",
     "ListUsersWithPlansUseCase",
     "PromoteUserToAdminUseCase",
+    "RegisterAdministratorUseCase",
     "SyncCatalogVersionResult",
     "SyncCatalogVersionUseCase",
     "UpdateAdminRoleUseCase",

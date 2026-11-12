@@ -33,6 +33,11 @@ class Settings(BaseModel):
     token_expiration_seconds: int = 43200
     admin_email: str = "admin@ribbit.example.com"
     admin_password: str = _DEFAULT_DEV_ADMIN_PASSWORD
+    admin_eligible_emails: tuple[str, ...] = (
+        "admin@ribbit.example.com",
+        "gabriel.agra@usp.br",
+        "fernando.seraco@usp.br",
+    )
     gcs_bucket_name: str | None = None
     gcs_tracks_file_path: str = "Songs/songs_final.parquet"
 
@@ -90,6 +95,19 @@ def load_settings() -> Settings:
         or os.getenv("ADMIN_PASSWORD")
         or _DEFAULT_DEV_ADMIN_PASSWORD
     )
+    raw_eligible = os.getenv("RIBBIT_ADMIN_ELIGIBLE_EMAILS") or os.getenv(
+        "ADMIN_ELIGIBLE_EMAILS"
+    )
+    if raw_eligible:
+        admin_eligible_emails = tuple(
+            e.strip().lower() for e in raw_eligible.split(",") if e.strip()
+        )
+    else:
+        admin_eligible_emails = (
+            "admin@ribbit.example.com",
+            "gabriel.agra@usp.br",
+            "fernando.seraco@usp.br",
+        )
 
     return Settings(
         database_path=db_path,
@@ -111,6 +129,7 @@ def load_settings() -> Settings:
         token_expiration_seconds=token_expiration,
         admin_email=admin_email,
         admin_password=admin_password,
+        admin_eligible_emails=admin_eligible_emails,
         gcs_bucket_name=os.getenv("GCS_BUCKET_NAME") or None,
         gcs_tracks_file_path=os.getenv(
             "GCS_TRACKS_FILE_PATH", "Songs/songs_final.parquet"
