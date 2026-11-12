@@ -129,6 +129,7 @@ from app.infrastructure.repositories import (
     SQLiteReviewRepository,
     SQLiteTrackRepository,
     SQLiteUserRepository,
+    SQLiteUserStatsRepository,
     create_connection,
 )
 from app.infrastructure.repositories.seed import seed_database
@@ -380,6 +381,8 @@ def build_container(
         else None
     )
 
+    user_stats_repo = SQLiteUserStatsRepository(conn)
+
     return Container(
         settings=settings,
         connection=conn,
@@ -523,7 +526,7 @@ def build_container(
             user_repo, plan_repo, interaction_repo, track_repo=track_repo
         ),
         get_annual_listening_stats_use_case=GetAnnualListeningStatsUseCase(
-            user_repo, plan_repo, interaction_repo, track_repo
+            user_repo, plan_repo, user_stats_repo
         ),
         link_spotify_account_use_case=LinkSpotifyAccountUseCase(user_repo),
         # Spotify
