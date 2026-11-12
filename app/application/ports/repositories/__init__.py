@@ -18,6 +18,9 @@ from app.application.ports.repositories.track_repository import (
     TrackRepositoryPort,
 )
 from app.application.ports.repositories.user_repository import UserRepositoryPort
+from app.application.ports.repositories.user_stats_repository import (
+    UserStatsRepositoryPort,
+)
 
 __all__ = [
     "AuditLogRepositoryPort",
@@ -28,4 +31,5 @@ __all__ = [
     "ReviewRepositoryPort",
     "TrackRepositoryPort",
     "UserRepositoryPort",
+    "UserStatsRepositoryPort",
 ]

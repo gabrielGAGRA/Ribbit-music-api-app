@@ -186,20 +186,50 @@ def test_get_annual_stats_returns_mapped_stats_response() -> None:
     mock_use_case = MagicMock(spec=GetAnnualListeningStatsUseCase)
     mock_use_case.execute.return_value = {
         "user_id": 10,
-        "estimated_listening_hours": 42.5,
-        "total_likes": 120,
-        "top_genres": ["indie", "rock"],
-        "top_artists": ["Frog Band"],
+        "year": 2026,
+        "available_years": [2026, 2025],
+        "total_interactions": 150,
+        "total_likes": 90,
+        "total_superlikes": 30,
+        "total_dislikes": 30,
+        "positive_rate": 0.8,
+        "top_genres": [
+            {
+                "genre": "indie",
+                "likes": 50,
+                "superlikes": 20,
+                "dislikes": 5,
+                "total_positive": 70,
+            }
+        ],
+        "top_artists": [
+            {
+                "artist": "Frog Band",
+                "likes": 40,
+                "superlikes": 15,
+                "dislikes": 0,
+                "total_positive": 55,
+            }
+        ],
+        "by_interaction_year": [],
+        "by_month": [],
+        "by_release_year": [],
+        "by_source": [],
+        "total_reviews": 4,
+        "average_rating": 4.5,
+        "total_playlists": 3,
+        "total_jams_participated": 2,
     }
 
-    res = get_annual_stats(user_id=10, use_case=mock_use_case)
+    res = get_annual_stats(user_id=10, use_case=mock_use_case, year=2026)
 
     assert res.user_id == 10
-    assert res.estimated_listening_hours == 42.5
-    assert res.total_likes == 120
-    assert res.top_genres == ["indie", "rock"]
-    assert res.top_artists == ["Frog Band"]
-    mock_use_case.execute.assert_called_once_with(user_id=10)
+    assert res.year == 2026
+    assert res.total_likes == 90
+    assert res.total_superlikes == 30
+    assert res.top_genres[0].genre == "indie"
+    assert res.top_artists[0].artist == "Frog Band"
+    mock_use_case.execute.assert_called_once_with(user_id=10, year=2026)
 
 
 def test_change_interaction_converts_action_and_returns_interaction() -> None:

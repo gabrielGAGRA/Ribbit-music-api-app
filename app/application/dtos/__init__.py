@@ -30,13 +30,20 @@ from app.application.dtos.review_dtos import (
 )
 from app.application.dtos.user_dtos import (
     AnnualStatsResult,
+    ArtistStat,
+    GenreStat,
+    MonthlyInteractionStat,
+    ReleaseYearStat,
+    SourceStat,
     UpdateProfileCommand,
     UserProfileResult,
+    YearlyInteractionStat,
 )
 
 __all__ = [
     "AddTrackToPlaylistCommand",
     "AnnualStatsResult",
+    "ArtistStat",
     "AudienceReportResult",
     "AuditLogEntryResult",
     "AuthenticateAdminCommand",
@@ -44,16 +51,21 @@ __all__ = [
     "CreateDeckPlaylistCommand",
     "CreateJamCommand",
     "ExecutiveDashboardResult",
+    "GenreStat",
     "JamStateResult",
+    "MonthlyInteractionStat",
     "PlaylistWithTracksResult",
     "PublishReviewCommand",
     "RecordSwipeCommand",
     "RegisterUserCommand",
+    "ReleaseYearStat",
     "SearchTracksCommand",
+    "SourceStat",
     "UpdateProfileCommand",
     "UpdateSubscriptionPlanCommand",
     "UserPlanSummaryResult",
     "UserProfileResult",
     "VoteJamTrackCommand",
     "VoteSkipJamTrackCommand",
+    "YearlyInteractionStat",
 ]

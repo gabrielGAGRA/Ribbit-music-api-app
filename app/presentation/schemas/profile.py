@@ -78,26 +78,106 @@ class UserProfileResponse(BaseModel):
     recent_interactions: list[InteractionResponse] = Field(default_factory=list)
 
 
+class GenreStatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    genre: str
+    likes: int
+    superlikes: int
+    dislikes: int
+    total_positive: int
+
+
+class ArtistStatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    artist: str
+    likes: int
+    superlikes: int
+    dislikes: int
+    total_positive: int
+
+
+class YearlyInteractionStatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    year: int
+    likes: int
+    superlikes: int
+    dislikes: int
+    total: int
+
+
+class MonthlyInteractionStatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    month: int
+    likes: int
+    superlikes: int
+    dislikes: int
+    total: int
+
+
+class ReleaseYearStatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    release_year: int
+    likes: int
+    superlikes: int
+    total_positive: int
+
+
+class SourceStatResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    source: str
+    likes: int
+    superlikes: int
+    dislikes: int
+    total: int
+
+
 class AnnualStatsResponse(BaseModel):
     """Aggregated listening statistics and retrospective metrics for a user."""
 
     model_config = ConfigDict(from_attributes=True)
 
     user_id: int
-    estimated_listening_hours: float
-    total_likes: int
-    top_genres: list[str] = Field(default_factory=list)
-    top_artists: list[str] = Field(default_factory=list)
+    year: int | None = None
+    available_years: list[int] = Field(default_factory=list)
+    total_interactions: int = 0
+    total_likes: int = 0
+    total_superlikes: int = 0
+    total_dislikes: int = 0
+    positive_rate: float = 0.0
+    top_genres: list[GenreStatResponse] = Field(default_factory=list)
+    top_artists: list[ArtistStatResponse] = Field(default_factory=list)
+    by_interaction_year: list[YearlyInteractionStatResponse] = Field(
+        default_factory=list
+    )
+    by_month: list[MonthlyInteractionStatResponse] = Field(default_factory=list)
+    by_release_year: list[ReleaseYearStatResponse] = Field(default_factory=list)
+    by_source: list[SourceStatResponse] = Field(default_factory=list)
+    total_reviews: int = 0
+    average_rating: float = 0.0
+    total_playlists: int = 0
+    total_jams_participated: int = 0
 
 
 __all__ = [
     "AddFamilyMemberRequest",
     "AnnualStatsResponse",
+    "ArtistStatResponse",
     "BlockedGenresRequest",
     "ChangePlanRequest",
     "FavoriteGenresRequest",
+    "GenreStatResponse",
     "LinkSpotifyRequest",
+    "MonthlyInteractionStatResponse",
+    "ReleaseYearStatResponse",
+    "SourceStatResponse",
     "ThemePreferenceRequest",
     "UpdateProfileRequest",
     "UserProfileResponse",
+    "YearlyInteractionStatResponse",
 ]
