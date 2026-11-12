@@ -54,9 +54,9 @@ class SaveSearchTrackLikeUseCase:
             raise BusinessRuleViolationError("Playlist repository is not configured.")
         playlist = self.playlist_repo.find_by_id(playlist_id)
         if not playlist:
-            raise EntityNotFoundError("Playlist não encontrada.")
+            raise EntityNotFoundError("Playlist not found.")
         if not playlist.is_owned_by(user_id):
-            raise ForbiddenError("A playlist não pertence a este usuário.")
+            raise ForbiddenError("Playlist does not belong to this user.")
         if track.track_id is None or all(
             existing.track_id != track.track_id for existing in playlist.tracks
         ):
@@ -77,12 +77,10 @@ class SaveSearchTrackLikeUseCase:
 
         track = self.track_repo.find_by_id(tid)
         if not track or track.is_deleted:
-            raise EntityNotFoundError("Música não encontrada ou inativa.")
+            raise EntityNotFoundError("Track not found or inactive.")
 
         if user.is_track_restricted_for_minor(track):
-            raise BusinessRuleViolationError(
-                "Música bloqueada para usuários menores de idade."
-            )
+            raise BusinessRuleViolationError("Track is restricted for minor users.")
 
         if pid is not None:
             self._add_to_playlist(uid, pid, track)

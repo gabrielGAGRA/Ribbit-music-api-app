@@ -20,8 +20,13 @@ class CreateDeckPlaylistCommand:
     description: str | None = None
     deck_filters: str | dict[str, Any] | None = None
     populate_tracks: bool = True
-    reference_playlist_id: int | None = None
     source_playlist_id: int | None = None
+    reference_playlist_id: int | None = None
+
+    def __post_init__(self) -> None:
+        effective = self.source_playlist_id or self.reference_playlist_id
+        if self.source_playlist_id != effective:
+            object.__setattr__(self, "source_playlist_id", effective)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

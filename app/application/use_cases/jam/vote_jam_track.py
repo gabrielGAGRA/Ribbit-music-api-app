@@ -34,8 +34,8 @@ class VoteJamTrackUseCase:
     interaction_repo: InteractionRepositoryPort | None = None
 
     def _compute_vote_points(self, command: VoteJamTrackCommand) -> tuple[int, bool]:
-        norm_action = (command.action or "like").strip().lower()
-        is_superlike = norm_action in ("superlike", "amada") or command.points >= 2
+        action = InteractionAction.parse(command.action, default=InteractionAction.LIKE)
+        is_superlike = action == InteractionAction.SUPERLIKE or command.points >= 2
         vote_points = (
             2 if is_superlike else (command.points if command.points == 1 else 1)
         )
@@ -80,18 +80,45 @@ class VoteJamTrackUseCase:
         return self.jam_repo.save_queue_item(new_item)
 
     def _record_interaction(
-        self, jam_id: int, user_id: int, track_id: int, action: str
+        self,
+        jam_id: int,
+        user_id: int,
+        track_id: int,
+        action: str | InteractionAction | None,
+        *,
+        is_superlike: bool = False,
     ) -> None:
         if self.interaction_repo is None:
             return
 
-        norm_action = (action or "like").strip().lower()
-        if norm_action in ("superlike", "amada"):
-            interaction_action = InteractionAction.SUPERLIKE
-        elif norm_action in ("dislike", "deslike", "rejeitada", "rejeitar"):
-            interaction_action = InteractionAction.DISLIKE
-        else:
-            interaction_action = InteractionAction.LIKE
+        interaction_action = (
+            InteractionAction.SUPERLIKE
+            if is_superlike
+            else InteractionAction.parse(action, default=InteractionAction.LIKE)
+        )
+
+        existing = (
+            self.interaction_repo.find_by_user_and_track(user_id, track_id)
+            if hasattr(self.interaction_repo, "find_by_user_and_track")
+            else None
+        )
+        if isinstance(existing, Interaction):
+            if existing.is_positive:
+                if not interaction_action.is_positive:
+                    return
+                if (
+                    interaction_action == InteractionAction.SUPERLIKE
+                    and existing.action != InteractionAction.SUPERLIKE
+                ):
+                    existing.change_action(InteractionAction.SUPERLIKE)
+                    self.interaction_repo.save(existing)
+                return
+
+            if interaction_action.is_positive:
+                existing.change_action(interaction_action)
+                self.interaction_repo.save(existing)
+                return
+            return
 
         self.interaction_repo.save(
             Interaction(
@@ -148,7 +175,11 @@ class VoteJamTrackUseCase:
 
         saved_item = self._save_vote(command.jam_id, command.track_id, vote_points)
         self._record_interaction(
-            command.jam_id, command.user_id, command.track_id, command.action
+            command.jam_id,
+            command.user_id,
+            command.track_id,
+            command.action,
+            is_superlike=is_superlike,
         )
 
         if is_superlike:

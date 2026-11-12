@@ -37,15 +37,11 @@ class RegisterUserUseCase:
             try:
                 bdate = date.fromisoformat(birth_date_str)
             except (ValueError, TypeError) as exc:
-                raise BusinessRuleViolationError(
-                    "Data de nascimento inválida."
-                ) from exc
+                raise BusinessRuleViolationError("Invalid birth date.") from exc
 
             today = datetime.now(tz=UTC).date()
             if bdate > today:
-                raise BusinessRuleViolationError(
-                    "Data de nascimento não pode estar no futuro."
-                )
+                raise BusinessRuleViolationError("Birth date cannot be in the future.")
 
             age = (
                 today.year
@@ -54,11 +50,11 @@ class RegisterUserUseCase:
             )
 
         if age is None or age < 0:
-            raise BusinessRuleViolationError("Data de nascimento inválida.")
+            raise BusinessRuleViolationError("Invalid birth date.")
 
         if User.is_age_minor(age):
             raise BusinessRuleViolationError(
-                "Cadastro direto permitido apenas para maiores de 18 anos."
+                "Direct registration only permitted for users 18 years or older."
             )
 
         plan_id = command.plan_id

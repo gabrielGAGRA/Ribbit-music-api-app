@@ -34,9 +34,7 @@ class UpdateAdminRoleUseCase:
             effective_is_admin = is_admin
 
         if effective_admin_id == effective_target_id and not effective_is_admin:
-            raise BusinessRuleViolationError(
-                "Administrador não pode revogar o próprio acesso."
-            )
+            raise BusinessRuleViolationError("Administrator cannot revoke own access.")
 
         user = self.user_repo.find_by_id(effective_target_id)
         if not user:

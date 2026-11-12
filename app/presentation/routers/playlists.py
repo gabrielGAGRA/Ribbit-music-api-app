@@ -249,7 +249,7 @@ def create_deck_playlist(
             country=req.country,
             description=req.description,
             populate_tracks=False,
-            reference_playlist_id=req.reference_playlist_id or req.source_playlist_id,
+            source_playlist_id=req.source_playlist_id,
         )
     )
     return _build_playlist_response(playlist)

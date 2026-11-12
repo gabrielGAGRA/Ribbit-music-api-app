@@ -27,12 +27,24 @@ class Jam:
     superlikes_used: int = 0
     skip_votes_threshold: int = 3
     accumulated_duration_seconds: int = 0
-    deck_source: str = "livre"
+    deck_source: str = "free"
     source_playlist_id: int | None = None
+
+    @staticmethod
+    def _normalize_deck_source(source: str | None) -> str:
+        s = (source or "free").strip().lower()
+        if s in ("free", "livre"):
+            return "free"
+        if s in ("likes", "curtidas"):
+            return "likes"
+        if s == "playlist":
+            return "playlist"
+        return s
 
     def __post_init__(self) -> None:
         if not self.room_name.strip():
             raise ValueError("Jam room name cannot be blank.")
+        self.deck_source = self._normalize_deck_source(self.deck_source)
 
     @classmethod
     def create(
@@ -44,7 +56,7 @@ class Jam:
         duration_minutes: int = 60,
         max_superlikes: int = 10,
         skip_votes_threshold: int = 3,
-        deck_source: str = "livre",
+        deck_source: str = "free",
         source_playlist_id: int | None = None,
     ) -> Self:
         return cls(
