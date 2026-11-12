@@ -1,10 +1,10 @@
 """Composition root: inlines infrastructure, use case construction, and router mounting."""
 
 import logging
-import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
+lazy import sqlite3
 lazy from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
@@ -129,6 +129,7 @@ from app.infrastructure.repositories import (
     SQLiteReviewRepository,
     SQLiteTrackRepository,
     SQLiteUserRepository,
+    create_connection,
 )
 from app.infrastructure.repositories.seed import seed_database
 from app.infrastructure.security import HMACTokenService, PBKDF2PasswordHasher
@@ -313,12 +314,11 @@ def build_container(
     connection: sqlite3.Connection | None = None,
 ) -> Container:
     """Builds and wires all application infrastructure and use cases into a Container."""
-    if connection is not None:
-        conn = connection
-    else:
-        conn = sqlite3.connect(settings.database_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
+    conn = (
+        connection
+        if connection is not None
+        else create_connection(settings.database_path)
+    )
     password_hasher = PBKDF2PasswordHasher(iterations=settings.password_hash_iterations)
     token_service = HMACTokenService(
         secret_key=settings.secret_key,
