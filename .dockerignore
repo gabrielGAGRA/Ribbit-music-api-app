@@ -1,0 +1,15 @@
+.git
+.venv
+node_modules
+.angular
+dist
+coverage
+.pytest_cache
+.ruff_cache
+local
+*.db
+*.sqlite
+*.sqlite3
+__pycache__
+*.pyc
+*.pyo
