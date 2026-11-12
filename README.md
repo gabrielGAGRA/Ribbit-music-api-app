@@ -104,11 +104,25 @@ O projeto é composto por duas frentes:
 
 ## Como Executar
 
-### 1. Pré-requisitos
-- **NPM**: gerenciador de pacotes incluído com o Node.
+### Opção 1: Com Docker Compose (Recomendado - 100% Local)
+
+Com o Docker instalado, você pode subir o frontend, o backend e o emulador de armazenamento em nuvem (GCS local) com persistência em volumes e sem precisar de credenciais de nuvem:
+
+```bash
+docker compose up --build
+```
+
+- **Frontend**: [http://localhost:4200](http://localhost:4200)
+- **Backend API**: [http://localhost:8000](http://localhost:8000) (documentação interativa em `/docs`)
+- **Emulador GCS**: [http://localhost:4443](http://localhost:4443)
+
+### Opção 2: Execução Manual sem Docker
+
+#### 1. Pré-requisitos
+- **NPM**: gerenciador de pacotes incluído com o Node (v22 recomendada).
 - **Python 3.15 ou superior**: necessário para executar o backend.
 
-### 2. Iniciar o Backend
+#### 2. Iniciar o Backend
 Na raiz do repositório, crie e ative o ambiente virtual, instale as dependências e inicie a API:
 ```powershell
 py -3.15 -m venv .venv
@@ -119,13 +133,13 @@ python -m uvicorn app.main:app --reload
 
 O backend ficará disponível em `http://127.0.0.1:8000`, e a documentação interativa da API em `http://127.0.0.1:8000/docs`.
 
-### 3. Instalação das Dependências do Frontend
+#### 3. Instalação das Dependências do Frontend
 Na raiz do repositório, instale as dependências executando:
 ```bash
 npm install
 ```
 
-### 4. Iniciar o Frontend em Desenvolvimento
+#### 4. Iniciar o Frontend em Desenvolvimento
 Inicie o servidor de desenvolvimento a partir da raiz:
 ```bash
 npm run dev:web
