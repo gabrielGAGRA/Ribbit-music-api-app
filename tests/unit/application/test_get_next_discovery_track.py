@@ -1,5 +1,6 @@
 """Unit tests for GetNextDiscoveryTrackUseCase."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +13,7 @@ from app.application.ports.repositories.user_repository import UserRepositoryPor
 from app.application.use_cases.discovery.get_next_discovery_track import (
     GetNextDiscoveryTrackUseCase,
 )
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import EntityNotFoundError, ExternalServiceError
 from app.domain.models.track import Track
 from app.domain.models.user import User
 
@@ -286,6 +287,80 @@ def test_get_next_discovery_track_enriches_genre_and_writes_track_delta() -> Non
     )
 
 
+def test_get_next_discovery_track_enriches_unknown_genre_and_writes_track_delta() -> (
+    None
+):
+    from app.application.ports.services.catalog_source import (
+        TrackCatalogFilePort,
+    )
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+    )
+    track_with_unknown_genre = Track(
+        track_id=16,
+        title="Pond Echoes",
+        artist="DJ Toad",
+        duration_seconds=180,
+        genre="Unknown",
+        itunes_preview_url="https://preview.itunes.apple.com/echo.m4a",
+        spotify_id="spot-16",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [track_with_unknown_genre]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = TrackPreview(
+        external_id="ext-16",
+        title="Pond Echoes",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/echo.m4a",
+        cover_url=None,
+        genre="Ambient",
+    )
+
+    catalog_port = MagicMock(spec=TrackCatalogFilePort)
+
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+        catalog_file_port=catalog_port,
+    )
+
+    result = use_case.execute(user_id=1)
+
+    assert result is not None
+    assert result.genre == "Ambient"
+    track_repo.save.assert_called_once_with(track_with_unknown_genre)
+    catalog_port.write_track_delta.assert_called_once_with(
+        title="Pond Echoes",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/echo.m4a",
+        genre="Ambient",
+        cover_url=None,
+        spotify_id="spot-16",
+    )
+
+
 def test_get_next_discovery_track_enriches_missing_cover_url_and_writes_delta() -> None:
     from app.application.ports.services.catalog_source import (
         TrackCatalogFilePort,
@@ -486,3 +561,76 @@ def test_get_next_discovery_track_weights_favorite_genres_and_enriches_only_sele
         if (picked := use_case.execute(user_id=1)) and picked.track_id == 1
     )
     assert rock_picks >= 130
+
+
+def test_get_next_discovery_track_catches_and_logs_external_service_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.application.ports.services.catalog_source import (
+        TrackCatalogFilePort,
+    )
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+    )
+    track = Track(
+        track_id=15,
+        title="Pond Jump",
+        artist="DJ Toad",
+        duration_seconds=180,
+        genre="Unknown",
+        itunes_preview_url="https://preview.itunes.apple.com/preview.m4a",
+        spotify_id="spot-15",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [track]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = TrackPreview(
+        external_id="ext-15",
+        title="Pond Jump",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/preview.m4a",
+        cover_url=None,
+        genre="Hip-Hop",
+    )
+
+    catalog_port = MagicMock(spec=TrackCatalogFilePort)
+    catalog_port.write_track_delta.side_effect = ExternalServiceError(
+        "GCS network timeout"
+    )
+
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+        catalog_file_port=catalog_port,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = use_case.execute(user_id=1)
+
+    assert result is not None
+    assert result.genre == "Hip-Hop"
+    track_repo.save.assert_called_once_with(track)
+    assert (
+        "Failed to write track delta for track 15: GCS network timeout" in caplog.text
+    )
