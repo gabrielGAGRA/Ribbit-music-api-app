@@ -71,7 +71,7 @@ def test_record_interaction_uses_authenticated_user_id() -> None:
 def test_discovery_router_exposes_one_route_per_action() -> None:
     from app.presentation.routers.discovery import router
 
-    paths = [route.path for route in router.routes]  # type: ignore[attr-defined]
+    paths = [getattr(route, "path", None) for route in router.routes]
     assert paths == [
         "/api/discovery/next",
         "/api/discovery/interact",

@@ -279,12 +279,12 @@ class TestThreadSafetyAndInvalidation:
         )
         auth = SpotifyAuth(creds, session)
         assert auth.get_access_token() == "AT1"
+        assert len(session.calls) == 1
 
         auth.invalidate_access_token()
-        assert auth._access_token is None  # noqa: SLF001
-        assert auth._refresh_token == "RT1"  # noqa: SLF001
         # Calling get_access_token should use refresh token to get new AT2
         assert auth.get_access_token() == "AT2"
+        assert len(session.calls) == 2
 
     def test_concurrent_get_access_token_is_thread_safe(self) -> None:
         import concurrent.futures
