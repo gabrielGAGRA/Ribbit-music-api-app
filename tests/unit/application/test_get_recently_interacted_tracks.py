@@ -83,7 +83,9 @@ def test_get_recently_interacted_tracks_returns_paired_active_tracks() -> None:
         103: track_deleted,
     }
     track_repo = MagicMock(spec=TrackRepositoryPort)
-    track_repo.find_by_id.side_effect = track_map.get
+    track_repo.find_by_ids.side_effect = lambda ids: {
+        tid: track_map[tid] for tid in ids if tid in track_map
+    }
 
     use_case = GetRecentlyInteractedTracksUseCase(
         user_repo=user_repo,
@@ -97,6 +99,7 @@ def test_get_recently_interacted_tracks_returns_paired_active_tracks() -> None:
     assert results[0].track == track_1
     assert results[1].interaction == inter_2
     assert results[1].track == track_2
+    track_repo.find_by_ids.assert_called_once_with([101, 102, 103])
 
 
 def test_get_recently_interacted_tracks_user_not_found_raises_entity_not_found() -> (

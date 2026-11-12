@@ -6,7 +6,11 @@ from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
 )
-from app.domain.models.interaction import Interaction, InteractionAction
+from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 lazy from app.application.dtos.discovery_dtos import RecordSwipeCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
@@ -68,6 +72,6 @@ class RecordSwipeInteractionUseCase:
             user_id=command.user_id,
             track_id=command.track_id,
             action=action_enum,
-            source="discovery",
+            source=InteractionSource.DISCOVERY,
         )
         return self.interaction_repo.save(interaction)

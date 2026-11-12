@@ -7,7 +7,11 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     PermissionDeniedError,
 )
-from app.domain.models.interaction import Interaction, InteractionAction
+from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 from app.domain.models.jam import JamQueueItem
 lazy from app.application.dtos.jam_dtos import VoteJamTrackCommand
 lazy from app.application.ports.repositories.interaction_repository import (
@@ -94,7 +98,7 @@ class VoteJamTrackUseCase:
                 user_id=user_id,
                 track_id=track_id,
                 action=interaction_action,
-                source="jam",
+                source=InteractionSource.JAM,
                 jam_id=jam_id,
             )
         )
