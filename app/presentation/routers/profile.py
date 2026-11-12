@@ -146,8 +146,9 @@ def get_annual_stats(
         GetAnnualListeningStatsUseCase,
         Depends(provide(GetAnnualListeningStatsUseCase)),
     ],
+    year: Annotated[int | None, Query(ge=1900, le=2100)] = None,
 ) -> AnnualStatsResponse:
-    stats = use_case.execute(user_id=user_id)
+    stats = use_case.execute(user_id=user_id, year=year)
     return AnnualStatsResponse.model_validate(stats)
 
 
