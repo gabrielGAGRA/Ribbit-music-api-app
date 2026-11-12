@@ -42,6 +42,106 @@ def _row_to_track(row: sqlite3.Row) -> Track:
     )
 
 
+def _normalize_string_sequence(value: str | Sequence[str] | None) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return [cleaned] if cleaned else []
+    cleaned_items: list[str] = []
+    for item in value:
+        cleaned = (item if isinstance(item, str) else str(item)).strip()
+        if cleaned:
+            cleaned_items.append(cleaned)
+    return cleaned_items
+
+
+def _normalize_year_sequence(value: int | Sequence[int] | None) -> list[int]:
+    if value is None:
+        return []
+    if isinstance(value, int):
+        return [value]
+    results: list[int] = []
+    for item in value:
+        if isinstance(item, int):
+            results.append(item)
+        else:
+            try:
+                results.append(int(str(item).strip()))
+            except TypeError, ValueError:
+                continue
+    return results
+
+
+def _append_like_clause(
+    conditions: list[str],
+    params: list[object],
+    column: str,
+    values: list[str],
+) -> None:
+    if not values:
+        return
+    clauses = " OR ".join(f"lower({column}) LIKE ?" for _ in values)
+    conditions.append(f"({clauses})")
+    params.extend(f"%{v.lower()}%" for v in values)
+
+
+def _append_exact_clause(
+    conditions: list[str],
+    params: list[object],
+    column: str,
+    values: list[str],
+) -> None:
+    if not values:
+        return
+    clauses = " OR ".join(f"lower({column}) = ?" for _ in values)
+    conditions.append(f"({clauses})")
+    params.extend(v.lower() for v in values)
+
+
+def _append_in_clause(
+    conditions: list[str],
+    params: list[object],
+    column: str,
+    values: list[int],
+) -> None:
+    if not values:
+        return
+    placeholders = ",".join("?" for _ in values)
+    conditions.append(f"{column} IN ({placeholders})")
+    params.extend(values)
+
+
+def _build_filter_conditions(
+    *,
+    artist: str | Sequence[str] | None,
+    album: str | Sequence[str] | None,
+    genre: str | Sequence[str] | None,
+    year: int | Sequence[int] | None,
+    query: str | None,
+) -> tuple[list[str], list[object]]:
+    conditions: list[str] = ["is_deleted = 0"]
+    params: list[object] = []
+
+    if query:
+        like_term = f"%{query.lower()}%"
+        conditions.append(
+            "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
+        )
+        params.extend([like_term, like_term, like_term])
+
+    _append_like_clause(
+        conditions, params, "artist", _normalize_string_sequence(artist)
+    )
+    _append_like_clause(conditions, params, "album", _normalize_string_sequence(album))
+    _append_exact_clause(conditions, params, "genre", _normalize_string_sequence(genre))
+    _append_in_clause(
+        conditions, params, "release_year", _normalize_year_sequence(year)
+    )
+
+    return conditions, params
+
+
 class SQLiteTrackRepository(TrackRepositoryPort):
     """SQLite adapter implementing TrackRepositoryPort."""
 
@@ -230,7 +330,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         rows = cursor.fetchall()
         return [_row_to_track(r) for r in rows]
 
-    def find_by_filters(  # noqa: C901
+    def find_by_filters(
         self,
         *,
         artist: str | Sequence[str] | None = None,
@@ -241,53 +341,13 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         limit: int = 50,
         offset: int = 0,
     ) -> list[Track]:
-        conditions = ["is_deleted = 0"]
-        params: list[object] = []
-
-        def normalize_sequence(value: str | Sequence[str] | None) -> list[str]:
-            if value is None:
-                return []
-            if isinstance(value, str):
-                return [value.strip()] if value.strip() else []
-            return [str(item).strip() for item in value if str(item).strip()]
-
-        if query:
-            like_term = f"%{query.lower()}%"
-            conditions.append(
-                "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
-            )
-            params.extend([like_term, like_term, like_term])
-
-        artist_values = normalize_sequence(artist)
-        if artist_values:
-            artist_clauses = " OR ".join("lower(artist) LIKE ?" for _ in artist_values)
-            conditions.append(f"({artist_clauses})")
-            params.extend(f"%{value.lower()}%" for value in artist_values)
-
-        album_values = normalize_sequence(album)
-        if album_values:
-            album_clauses = " OR ".join("lower(album) LIKE ?" for _ in album_values)
-            conditions.append(f"({album_clauses})")
-            params.extend(f"%{value.lower()}%" for value in album_values)
-
-        genre_values = normalize_sequence(genre)
-        if genre_values:
-            genre_clauses = " OR ".join("lower(genre) = ?" for _ in genre_values)
-            conditions.append(f"({genre_clauses})")
-            params.extend(value.lower() for value in genre_values)
-
-        year_values = (
-            [year]
-            if isinstance(year, int)
-            else [int(item) for item in year if str(item).strip()]
-            if year is not None
-            else []
+        conditions, params = _build_filter_conditions(
+            artist=artist,
+            album=album,
+            genre=genre,
+            year=year,
+            query=query,
         )
-        if year_values:
-            placeholders = ",".join("?" for _ in year_values)
-            conditions.append(f"release_year IN ({placeholders})")
-            params.extend(year_values)
-
         where_clause = " AND ".join(conditions)
         sql = f"SELECT * FROM tracks WHERE {where_clause} ORDER BY track_id ASC LIMIT ? OFFSET ?"  # noqa: S608
         params.extend([limit, offset])
