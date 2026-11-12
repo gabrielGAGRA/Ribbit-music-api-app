@@ -29,10 +29,18 @@ class CreateJamUseCase:
         if not host:
             raise EntityNotFoundError(f"Host user {command.host_user_id} not found.")
 
-        deck_source = (command.deck_source or "livre").strip().lower()
-        if deck_source not in ("livre", "curtidas", "playlist"):
+        source = (command.deck_source or "free").strip().lower()
+        mapping = {
+            "free": "free",
+            "livre": "free",
+            "likes": "likes",
+            "curtidas": "likes",
+            "playlist": "playlist",
+        }
+        deck_source = mapping.get(source)
+        if deck_source is None:
             raise BusinessRuleViolationError(
-                "Deck source must be 'livre', 'curtidas', or 'playlist'."
+                "Deck source must be 'free', 'likes', or 'playlist'."
             )
 
         if deck_source == "playlist":

@@ -314,3 +314,25 @@ def test_user_update_profile_success_and_validation() -> None:
 
     with pytest.raises(ValueError, match="Password hash cannot be blank"):
         user.update_profile(password_hash="   ")
+
+
+def test_user_restricted_genre_terms() -> None:
+    adult = User(
+        user_id=1,
+        email="adult@example.com",
+        password_hash="hash",
+        display_name="Adult",
+        age=20,
+        plan_id=1,
+    )
+    assert adult.restricted_genre_terms() == ()
+
+    minor = User(
+        user_id=2,
+        email="minor@example.com",
+        password_hash="hash",
+        display_name="Minor",
+        age=16,
+        plan_id=1,
+    )
+    assert minor.restricted_genre_terms() == ("funk", "hip hop", "rap", "trap")

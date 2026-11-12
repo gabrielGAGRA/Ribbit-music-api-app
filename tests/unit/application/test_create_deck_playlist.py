@@ -13,7 +13,7 @@ from app.application.ports.repositories.user_repository import UserRepositoryPor
 from app.application.use_cases.playlist.create_deck_playlist import (
     CreateDeckPlaylistUseCase,
 )
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models.track import Track
 from app.domain.models.user import User
 
@@ -149,6 +149,54 @@ def test_create_deck_playlist_filters_explicit_tracks_for_minor_and_falls_back_i
     )
 
 
+def test_create_deck_playlist_preserves_reference_playlist_id() -> None:
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+    )
+    source = Track(
+        track_id=7,
+        title="Reference Track",
+        artist="Artist",
+        duration_seconds=180,
+        genre="Rock",
+    )
+    reference_playlist = MagicMock()
+    reference_playlist.tracks = [source]
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = []
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.save.side_effect = lambda p: p
+    playlist_repo.find_by_id.return_value = reference_playlist
+
+    use_case = CreateDeckPlaylistUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        playlist_repo=playlist_repo,
+    )
+    command = CreateDeckPlaylistCommand(
+        user_id=1,
+        name="From Reference",
+        source_playlist_id=42,
+        duration_minutes=3,
+    )
+
+    result = use_case.execute(command)
+
+    assert result.source_playlist_id == 42
+    assert result.tracks == (source,)
+    playlist_repo.find_by_id.assert_called_once_with(42)
+
+
 def test_create_deck_playlist_user_not_found_raises_entity_not_found() -> None:
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = None
@@ -162,3 +210,119 @@ def test_create_deck_playlist_user_not_found_raises_entity_not_found() -> None:
 
     with pytest.raises(EntityNotFoundError, match="User with ID 999 not found"):
         use_case.execute(command)
+
+
+def test_create_deck_playlist_reference_not_owned_raises_permission_denied() -> None:
+    user = User(
+        user_id=1,
+        email="user1@ribbit.com",
+        password_hash="pw",
+        display_name="User 1",
+        age=25,
+        plan_id=1,
+    )
+    reference_playlist = MagicMock()
+    reference_playlist.is_owned_by.return_value = False
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = reference_playlist
+
+    use_case = CreateDeckPlaylistUseCase(
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+        playlist_repo=playlist_repo,
+    )
+    command = CreateDeckPlaylistCommand(
+        user_id=1,
+        name="Foreign Deck",
+        source_playlist_id=99,
+    )
+
+    with pytest.raises(
+        PermissionDeniedError, match="playlist does not belong to this user"
+    ):
+        use_case.execute(command)
+
+
+def test_create_deck_playlist_reference_not_found_raises_entity_not_found() -> None:
+    user = User(
+        user_id=1,
+        email="user1@ribbit.com",
+        password_hash="pw",
+        display_name="User 1",
+        age=25,
+        plan_id=1,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = None
+
+    use_case = CreateDeckPlaylistUseCase(
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+        playlist_repo=playlist_repo,
+    )
+    command = CreateDeckPlaylistCommand(
+        user_id=1,
+        name="Missing Reference Deck",
+        source_playlist_id=404,
+    )
+
+    with pytest.raises(EntityNotFoundError, match="Playlist with ID 404 not found"):
+        use_case.execute(command)
+
+
+def test_create_deck_playlist_filters_blocked_genres_for_user_from_reference() -> None:
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+        blocked_genres={"Metal"},
+    )
+    allowed_track = Track(
+        track_id=1,
+        title="Rock Anthem",
+        artist="RockBand",
+        duration_seconds=200,
+        genre="Rock",
+    )
+    blocked_track = Track(
+        track_id=2,
+        title="Heavy Riff",
+        artist="MetalBand",
+        duration_seconds=210,
+        genre="Metal",
+    )
+    reference_playlist = MagicMock()
+    reference_playlist.tracks = [allowed_track, blocked_track]
+    reference_playlist.is_owned_by.return_value = True
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.save.side_effect = lambda p: p
+    playlist_repo.find_by_id.return_value = reference_playlist
+
+    use_case = CreateDeckPlaylistUseCase(
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+        playlist_repo=playlist_repo,
+    )
+    command = CreateDeckPlaylistCommand(
+        user_id=1,
+        name="Cleaned Deck",
+        source_playlist_id=10,
+    )
+
+    result = use_case.execute(command)
+
+    assert result.tracks == (allowed_track,)

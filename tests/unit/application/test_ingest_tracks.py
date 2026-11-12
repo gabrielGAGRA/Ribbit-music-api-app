@@ -153,3 +153,57 @@ def test_ingest_tracks_updates_missing_genre() -> None:
     track = repo.find_by_spotify_id("spot-x")
     assert track is not None
     assert track.genre == "Synthwave"
+
+
+def test_ingest_tracks_updates_unknown_genre_and_retains_known_genre() -> None:
+    conn = _create_in_memory_db()
+    repo = SQLiteTrackRepository(conn)
+
+    mock_catalog = MagicMock(spec=TrackCatalogFilePort)
+    mock_catalog.fetch_tracks.return_value = [
+        CatalogSourceTrack(
+            title="Song Unknown Genre",
+            artist="Artist U",
+            duration_seconds=200,
+            genre="Unknown",
+            spotify_id="spot-u",
+        ),
+    ]
+
+    use_case = IngestTracksFromCatalogUseCase(
+        track_repo=repo,
+        catalog_file_port=mock_catalog,
+    )
+    res1 = use_case.execute()
+    assert res1.inserted == 1
+
+    mock_catalog.fetch_tracks.return_value = [
+        CatalogSourceTrack(
+            title="Song Unknown Genre",
+            artist="Artist U",
+            duration_seconds=200,
+            genre="Synthwave",
+            spotify_id="spot-u",
+        ),
+    ]
+    res2 = use_case.execute()
+    assert res2.updated == 1
+
+    track = repo.find_by_spotify_id("spot-u")
+    assert track is not None
+    assert track.genre == "Synthwave"
+
+    mock_catalog.fetch_tracks.return_value = [
+        CatalogSourceTrack(
+            title="Song Unknown Genre",
+            artist="Artist U",
+            duration_seconds=200,
+            genre="Unknown",
+            spotify_id="spot-u",
+        ),
+    ]
+    res3 = use_case.execute()
+    assert res3.updated == 0
+    track_after = repo.find_by_spotify_id("spot-u")
+    assert track_after is not None
+    assert track_after.genre == "Synthwave"

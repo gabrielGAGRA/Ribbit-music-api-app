@@ -10,14 +10,18 @@ from app.infrastructure.security.password_hasher import PBKDF2PasswordHasher
 _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "users": {
         "birth_date": "TEXT",
+        "favorite_genres": "TEXT",
+        "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
     },
     "playlists": {
         "max_duration_seconds": "INTEGER",
         "deck_filters": "TEXT",
         "cover_image_url": "TEXT",
+        "source_playlist_id": "INTEGER",
     },
     "interactions": {
         "source": "TEXT",
+        "jam_id": "INTEGER",
     },
     "jams": {
         "duration_minutes": "INTEGER NOT NULL DEFAULT 60",
@@ -25,7 +29,7 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "superlikes_used": "INTEGER NOT NULL DEFAULT 0",
         "skip_votes_threshold": "INTEGER NOT NULL DEFAULT 3",
         "accumulated_duration_seconds": "INTEGER NOT NULL DEFAULT 0",
-        "deck_source": "TEXT NOT NULL DEFAULT 'livre'",
+        "deck_source": "TEXT NOT NULL DEFAULT 'free'",
         "source_playlist_id": "INTEGER",
     },
 }
@@ -54,14 +58,7 @@ def migrate_additive_columns(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def seed_database(
-    conn: sqlite3.Connection,
-    settings: Settings | None = None,
-    password_hasher: PBKDF2PasswordHasher | None = None,
-) -> None:
-    """Populates standard plans, default admin user, and sample catalog tracks."""
-    migrate_additive_columns(conn)
-
+def _seed_plans(conn: sqlite3.Connection) -> int:
     standard_plans = [
         {"name": "Free", "monthly_price": 0.00, "max_profiles": 1},
         {"name": "Individual", "monthly_price": 14.90, "max_profiles": 1},
@@ -80,10 +77,19 @@ def seed_database(
             )
     conn.commit()
 
-    resolved_settings = settings or load_settings()
-    admin_email = resolved_settings.admin_email.lower().strip()
-    admin_password = resolved_settings.admin_password
+    free_plan = conn.execute("SELECT plan_id FROM plans WHERE name = 'Free'").fetchone()
+    if not free_plan:
+        raise RuntimeError("Free plan not found for admin seed.")
+    return free_plan["plan_id"] if isinstance(free_plan, sqlite3.Row) else free_plan[0]
 
+
+def _seed_default_admin(
+    conn: sqlite3.Connection,
+    admin_email: str,
+    hashed_pw: str,
+    free_plan_id: int,
+    now_str: str,
+) -> None:
     row = conn.execute(
         "SELECT user_id, is_admin FROM users WHERE lower(email) = ?",
         (admin_email,),
@@ -95,21 +101,6 @@ def seed_database(
                 f"Seed account {admin_email} exists without administrative role."
             )
     else:
-        free_plan = conn.execute(
-            "SELECT plan_id FROM plans WHERE name = 'Free'"
-        ).fetchone()
-        if not free_plan:
-            raise RuntimeError("Free plan not found for admin seed.")
-        free_plan_id = (
-            free_plan["plan_id"] if isinstance(free_plan, sqlite3.Row) else free_plan[0]
-        )
-
-        hasher = password_hasher or PBKDF2PasswordHasher(
-            iterations=resolved_settings.password_hash_iterations
-        )
-        hashed_pw = hasher.hash_password(admin_password)
-        now_str = datetime.now(UTC).isoformat()
-
         conn.execute(
             """
             INSERT INTO users (
@@ -126,6 +117,89 @@ def seed_database(
             ),
         )
         conn.commit()
+
+
+def _seed_eligible_admins(
+    conn: sqlite3.Connection,
+    eligible_emails: tuple[str, ...],
+    admin_email: str,
+    hashed_pw: str,
+    free_plan_id: int,
+    now_str: str,
+) -> None:
+    for eligible_email in eligible_emails:
+        norm_email = eligible_email.lower().strip()
+        if not norm_email or norm_email == admin_email:
+            continue
+        admin_row = conn.execute(
+            "SELECT user_id, is_admin FROM users WHERE lower(email) = ?",
+            (norm_email,),
+        ).fetchone()
+        if admin_row:
+            is_adm = bool(
+                admin_row["is_admin"]
+                if isinstance(admin_row, sqlite3.Row)
+                else admin_row[1]
+            )
+            if not is_adm:
+                raise RuntimeError(
+                    f"Seed account {norm_email} exists without administrative role."
+                )
+        else:
+            if "gabriel.agra" in norm_email:
+                display_name = "Gabriel Agra"
+            elif "fernando.seraco" in norm_email:
+                display_name = "Fernando Seraco"
+            else:
+                display_name = norm_email.split("@")[0].replace(".", " ").title()
+
+            conn.execute(
+                """
+                INSERT INTO users (
+                    email, password_hash, display_name, age, plan_id, is_admin, created_at
+                ) VALUES (?, ?, ?, ?, ?, 1, ?)
+                """,
+                (
+                    norm_email,
+                    hashed_pw,
+                    display_name,
+                    30,
+                    free_plan_id,
+                    now_str,
+                ),
+            )
+            conn.commit()
+
+
+def seed_database(
+    conn: sqlite3.Connection,
+    settings: Settings | None = None,
+    password_hasher: PBKDF2PasswordHasher | None = None,
+) -> None:
+    """Populates standard plans, default admin user, and sample catalog tracks."""
+    migrate_additive_columns(conn)
+
+    free_plan_id = _seed_plans(conn)
+
+    resolved_settings = settings or load_settings()
+    admin_email = resolved_settings.admin_email.lower().strip()
+    admin_password = resolved_settings.admin_password
+
+    hasher = password_hasher or PBKDF2PasswordHasher(
+        iterations=resolved_settings.password_hash_iterations
+    )
+    hashed_pw = hasher.hash_password(admin_password)
+    now_str = datetime.now(UTC).isoformat()
+
+    _seed_default_admin(conn, admin_email, hashed_pw, free_plan_id, now_str)
+    _seed_eligible_admins(
+        conn,
+        resolved_settings.admin_eligible_emails,
+        admin_email,
+        hashed_pw,
+        free_plan_id,
+        now_str,
+    )
 
     sample_tracks = [
         {

@@ -39,7 +39,7 @@
           "options": {
             "host": "0.0.0.0",
             "port": 4200,
-            "proxyConfig": "view/proxy.conf.json"
+            "proxyConfig": "view/proxy.conf.mjs"
           },
           "configurations": {
             "production": {

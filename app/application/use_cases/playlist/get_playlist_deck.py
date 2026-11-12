@@ -1,11 +1,14 @@
 """Use case for retrieving candidate tracks for a playlist deck."""
 
-import json
 from dataclasses import dataclass
 
 from app.application.dtos.playlist_dtos import (
     GetPlaylistDeckCommand,
     PlaylistDeckResult,
+)
+from app.application.use_cases.playlist.deck_filter_helpers import (
+    extract_deck_filters_tuple,
+    matches_track_filters,
 )
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models.interaction import InteractionAction
@@ -17,6 +20,7 @@ lazy from app.application.ports.repositories.playlist_repository import (
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.domain.models.playlist import Playlist
 lazy from app.domain.models.track import Track
 lazy from app.domain.models.user import User
 
@@ -59,39 +63,16 @@ class GetPlaylistDeckUseCase:
             return playlist_id, user_id, limit, cursor_id
         raise ValueError("playlist_id must be provided.")
 
-    def _extract_filters(
-        self, deck_filters: str | None
-    ) -> tuple[str | None, str | None, int | None, str | None]:
-        if not deck_filters:
-            return None, None, None, None
-        try:
-            filters = json.loads(deck_filters)
-            if not isinstance(filters, dict):
-                return None, None, None, None
-        except ValueError, TypeError:
-            return None, None, None, None
-
-        genre = str(filters.get("genre") or filters.get("genero") or "").strip() or None
-        artist = (
-            str(filters.get("artist") or filters.get("artista") or "").strip() or None
-        )
-        year_raw = filters.get("year") or filters.get("ano")
-        year = int(year_raw) if year_raw is not None else None
-        country = (
-            str(filters.get("country") or filters.get("pais") or "").strip() or None
-        )
-        return genre, artist, year, country
-
     def _is_track_eligible(
         self,
         track: Track,
         user: User,
         excluded_ids: set[int],
         remaining_duration: int | None,
-        genre_filter: str | None,
-        year_filter: int | None,
-        artist_filter: str | None,
-        country_filter: str | None,
+        genre_filter: list[str] | None,
+        year_filter: list[int] | None,
+        artist_filter: list[str] | None,
+        country_filter: list[str] | None,
         cursor: int | None,
     ) -> bool:
         if track.track_id is None or track.track_id in excluded_ids:
@@ -103,18 +84,59 @@ class GetPlaylistDeckUseCase:
             and track.duration_seconds > remaining_duration
         ):
             return False
-        if genre_filter and track.genre.strip().lower() != genre_filter.lower():
-            return False
-        if year_filter is not None and track.release_year != year_filter:
-            return False
-        if artist_filter and artist_filter.lower() not in track.artist.lower():
-            return False
-        if (
-            country_filter
-            and country_filter.lower() not in (track.country or "").lower()
+        if not matches_track_filters(
+            track,
+            genre=genre_filter,
+            year=year_filter,
+            artist=artist_filter,
+            country=country_filter,
         ):
             return False
         return not (cursor is not None and track.track_id <= cursor)
+
+    def _resolve_excluded_ids(self, playlist: Playlist, eff_user_id: int) -> set[int]:
+        excluded_ids = {t.track_id for t in playlist.tracks if t.track_id is not None}
+        if self.interaction_repo:
+            rejected = self.interaction_repo.list_by_user(
+                eff_user_id, action=InteractionAction.DISLIKE
+            )
+            excluded_ids.update(i.track_id for i in rejected)
+        return excluded_ids
+
+    def _fetch_candidates(
+        self,
+        *,
+        source_playlist_id: int | None,
+        genre_f: list[str] | None,
+        artist_f: list[str] | None,
+        year_f: list[int] | None,
+        user: User,
+        excluded_ids: set[int],
+    ) -> list[Track]:
+        candidates: list[Track] = []
+        if source_playlist_id is not None:
+            source_playlist = self.playlist_repo.find_by_id(source_playlist_id)
+            if source_playlist is not None:
+                candidates = list(source_playlist.tracks)
+
+        if not candidates and (genre_f or artist_f or year_f):
+            candidates = self.track_repo.find_by_filters(
+                artist=artist_f,
+                genre=genre_f,
+                year=year_f,
+                limit=100,
+            )
+
+        if not candidates:
+            candidates = self.track_repo.list_active(
+                limit=100,
+                excluded_genres=list(user.blocked_genres),
+                excluded_genre_terms=user.restricted_genre_terms(),
+                block_explicit=user.is_minor(),
+                excluded_ids=list(excluded_ids),
+            )
+
+        return candidates
 
     def execute(
         self,
@@ -147,38 +169,19 @@ class GetPlaylistDeckUseCase:
             if remaining <= 0:
                 return PlaylistDeckResult(items=[], next_cursor=None, has_more=False)
 
-        excluded_ids = {t.track_id for t in playlist.tracks if t.track_id is not None}
-        if self.interaction_repo:
-            rejected = self.interaction_repo.list_by_user(
-                eff_user_id, action=InteractionAction.DISLIKE
-            )
-            excluded_ids.update(i.track_id for i in rejected)
-
-        genre_f, artist_f, year_f, country_f = self._extract_filters(
+        excluded_ids = self._resolve_excluded_ids(playlist, eff_user_id)
+        genre_f, artist_f, year_f, country_f = extract_deck_filters_tuple(
             playlist.deck_filters
         )
 
-        candidates: list[Track] = []
-        if genre_f or artist_f or year_f:
-            candidates = self.track_repo.find_by_filters(
-                artist=artist_f,
-                genre=genre_f,
-                year=year_f,
-                limit=100,
-            )
-
-        if not candidates:
-            candidates = self.track_repo.list_active(
-                limit=100,
-                excluded_genres=list(user.blocked_genres),
-                excluded_genre_terms=(
-                    tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
-                    if user.is_minor()
-                    else ()
-                ),
-                block_explicit=not user.is_adult,
-                excluded_ids=list(excluded_ids),
-            )
+        candidates = self._fetch_candidates(
+            source_playlist_id=playlist.source_playlist_id,
+            genre_f=genre_f,
+            artist_f=artist_f,
+            year_f=year_f,
+            user=user,
+            excluded_ids=excluded_ids,
+        )
 
         eligible = [
             t

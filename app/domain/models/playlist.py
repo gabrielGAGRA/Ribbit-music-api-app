@@ -21,6 +21,7 @@ class Playlist:
     created_at: datetime | None = None
     max_duration_seconds: int | None = None
     deck_filters: str | None = None
+    source_playlist_id: int | None = None
     initial_tracks: InitVar[Sequence[Track]] = ()
     _tracks: list[Track] = field(init=False, default_factory=list, repr=False)
 

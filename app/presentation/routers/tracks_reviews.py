@@ -18,7 +18,6 @@ from app.application.use_cases.review import (
     SaveSearchTrackLikeUseCase,
     SearchTracksUseCase,
 )
-from app.domain.exceptions import EntityNotFoundError
 from app.presentation.dependencies import (
     get_container,
     provide,
@@ -201,14 +200,12 @@ def get_community_feed(
 @router.get("/api/reviews/track/{track_id}", response_model=list[ReviewResponse])
 def get_track_reviews(
     track_id: int,
-    request: Request,
     use_case: Annotated[
         GetTrackReviewsUseCase, Depends(provide(GetTrackReviewsUseCase))
     ],
+    *args: object,
+    **kwargs: object,
 ) -> list[ReviewResponse]:
-    track = get_container(request).track_repo.find_by_id(track_id)
-    if not track or track.is_deleted:
-        raise EntityNotFoundError(f"Track with ID {track_id} not found or inactive.")
     reviews = use_case.execute(track_id=track_id)
     return [ReviewResponse.model_validate(r) for r in reviews]
 

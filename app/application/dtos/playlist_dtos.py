@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+lazy from collections.abc import Iterator, Sequence
 
 lazy from app.domain.models.playlist import Playlist
 lazy from app.domain.models.track import Track
@@ -12,13 +13,20 @@ class CreateDeckPlaylistCommand:
     user_id: int
     name: str
     duration_minutes: int | None = None
-    genre: str | None = None
-    year: int | None = None
-    artist: str | None = None
-    country: str | None = None
+    genre: str | Sequence[str] | None = None
+    year: int | Sequence[int] | None = None
+    artist: str | Sequence[str] | None = None
+    country: str | Sequence[str] | None = None
     description: str | None = None
     deck_filters: str | dict[str, Any] | None = None
     populate_tracks: bool = True
+    source_playlist_id: int | None = None
+    reference_playlist_id: int | None = None
+
+    def __post_init__(self) -> None:
+        effective = self.source_playlist_id or self.reference_playlist_id
+        if self.source_playlist_id != effective:
+            object.__setattr__(self, "source_playlist_id", effective)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -35,7 +43,7 @@ class PlaylistDeckResult:
     next_cursor: int | None = None
     has_more: bool = False
 
-    def __iter__(self):  # type: ignore[no-untyped-def]
+    def __iter__(self) -> Iterator[object]:
         return iter((self.items, self.next_cursor, self.has_more))
 
 

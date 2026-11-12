@@ -45,20 +45,10 @@ class TrackCatalogFilePort(Protocol):
         artist: str,
         preview_url: str | None = None,
         genre: str | None = None,
+        cover_url: str | None = None,
         spotify_id: str | None = None,
     ) -> None:
         """Writes a lightweight micro-delta file to remote storage for enriched track metadata."""
-        ...
-
-    def write_preview_delta(
-        self,
-        *,
-        title: str,
-        artist: str,
-        preview_url: str,
-        spotify_id: str | None = None,
-    ) -> None:
-        """Writes a lightweight micro-delta file to remote storage for an enriched preview URL."""
         ...
 
     def compact_catalog(self) -> int:

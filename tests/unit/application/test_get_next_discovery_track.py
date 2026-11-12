@@ -1,5 +1,6 @@
 """Unit tests for GetNextDiscoveryTrackUseCase."""
 
+import logging
 from unittest.mock import MagicMock
 
 import pytest
@@ -12,7 +13,7 @@ from app.application.ports.repositories.user_repository import UserRepositoryPor
 from app.application.use_cases.discovery.get_next_discovery_track import (
     GetNextDiscoveryTrackUseCase,
 )
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import EntityNotFoundError, ExternalServiceError
 from app.domain.models.track import Track
 from app.domain.models.user import User
 
@@ -62,7 +63,7 @@ def test_get_next_discovery_track_for_adult_passes_preferences_and_returns_track
         excluded_genre_terms=(),
         block_explicit=False,
         excluded_ids=[1, 2, 3],
-        limit=1,
+        limit=100,
     )
 
 
@@ -108,7 +109,7 @@ def test_get_next_discovery_track_for_minor_blocks_explicit_tracks() -> None:
         excluded_genre_terms=("funk", "hip hop", "rap", "trap"),
         block_explicit=True,
         excluded_ids=[],
-        limit=1,
+        limit=100,
     )
 
 
@@ -281,5 +282,355 @@ def test_get_next_discovery_track_enriches_genre_and_writes_track_delta() -> Non
         artist="DJ Toad",
         preview_url="https://preview.itunes.apple.com/preview.m4a",
         genre="Hip-Hop",
+        cover_url=None,
         spotify_id="spot-15",
+    )
+
+
+def test_get_next_discovery_track_enriches_unknown_genre_and_writes_track_delta() -> (
+    None
+):
+    from app.application.ports.services.catalog_source import (
+        TrackCatalogFilePort,
+    )
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+    )
+    track_with_unknown_genre = Track(
+        track_id=16,
+        title="Pond Echoes",
+        artist="DJ Toad",
+        duration_seconds=180,
+        genre="Unknown",
+        itunes_preview_url="https://preview.itunes.apple.com/echo.m4a",
+        spotify_id="spot-16",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [track_with_unknown_genre]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = TrackPreview(
+        external_id="ext-16",
+        title="Pond Echoes",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/echo.m4a",
+        cover_url=None,
+        genre="Ambient",
+    )
+
+    catalog_port = MagicMock(spec=TrackCatalogFilePort)
+
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+        catalog_file_port=catalog_port,
+    )
+
+    result = use_case.execute(user_id=1)
+
+    assert result is not None
+    assert result.genre == "Ambient"
+    track_repo.save.assert_called_once_with(track_with_unknown_genre)
+    catalog_port.write_track_delta.assert_called_once_with(
+        title="Pond Echoes",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/echo.m4a",
+        genre="Ambient",
+        cover_url=None,
+        spotify_id="spot-16",
+    )
+
+
+def test_get_next_discovery_track_enriches_missing_cover_url_and_writes_delta() -> None:
+    from app.application.ports.services.catalog_source import (
+        TrackCatalogFilePort,
+    )
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+    )
+    track_without_cover = Track(
+        track_id=16,
+        title="Lily Pad Waltz",
+        artist="DJ Toad",
+        duration_seconds=180,
+        genre="Jazz",
+        cover_url=None,
+        itunes_preview_url="https://preview.itunes.apple.com/waltz.m4a",
+        spotify_id="spot-16",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [track_without_cover]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = TrackPreview(
+        external_id="ext-16",
+        title="Lily Pad Waltz",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/waltz.m4a",
+        cover_url="https://is1-ssl.mzstatic.com/image/100x100bb.jpg",
+        genre="Jazz",
+    )
+
+    catalog_port = MagicMock(spec=TrackCatalogFilePort)
+
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+        catalog_file_port=catalog_port,
+    )
+
+    result = use_case.execute(user_id=1)
+
+    assert result is not None
+    assert result.cover_url == "https://is1-ssl.mzstatic.com/image/100x100bb.jpg"
+    track_repo.save.assert_called_once_with(track_without_cover)
+    catalog_port.write_track_delta.assert_called_once_with(
+        title="Lily Pad Waltz",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/waltz.m4a",
+        genre="Jazz",
+        cover_url="https://is1-ssl.mzstatic.com/image/100x100bb.jpg",
+        spotify_id="spot-16",
+    )
+
+
+def test_get_next_discovery_track_returns_track_when_preview_lookup_raises_external_error() -> (
+    None
+):
+    from app.application.ports.services.music_service import TrackPreviewPort
+    from app.domain.exceptions import ExternalServiceError
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+    )
+    track = Track(
+        track_id=17,
+        title="Rainy Reed",
+        artist="DJ Toad",
+        duration_seconds=200,
+        genre="Ambient",
+        cover_url=None,
+        itunes_preview_url="https://preview.itunes.apple.com/reed.m4a",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [track]
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.side_effect = ExternalServiceError(
+        "iTunes timeout", service_name="iTunes"
+    )
+
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+    )
+
+    result = use_case.execute(user_id=1)
+
+    assert result is track
+    track_repo.save.assert_not_called()
+
+
+def test_get_next_discovery_track_weights_favorite_genres_and_enriches_only_selected() -> (
+    None
+):
+    import random
+
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+        favorite_genres=frozenset({"rock"}),
+    )
+    rock_track = Track(
+        track_id=1,
+        title="Amphibian Anthem",
+        artist="Rock Frog",
+        duration_seconds=200,
+        genre="Rock",
+        itunes_preview_url=None,
+    )
+    pop_track = Track(
+        track_id=2,
+        title="Bubble Pop",
+        artist="Pop Frog",
+        duration_seconds=190,
+        genre="Pop",
+        itunes_preview_url=None,
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [rock_track, pop_track]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = TrackPreview(
+        external_id="ext-1",
+        title="Amphibian Anthem",
+        artist="Rock Frog",
+        preview_url="https://preview.itunes.apple.com/rock.m4a",
+        cover_url=None,
+    )
+
+    rng = random.Random(7)  # noqa: S311
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+        rng=rng,
+    )
+
+    # First draw: preview enrichment must run ONLY once (for the 1 chosen track)
+    first_pick = use_case.execute(user_id=1)
+    assert first_pick in (rock_track, pop_track)
+    assert preview_service.find_preview.call_count == 1
+
+    # Across 200 draws with 3:1 weight, rock_track should be selected majority of the time
+    rock_picks = sum(
+        1
+        for _ in range(200)
+        if (picked := use_case.execute(user_id=1)) and picked.track_id == 1
+    )
+    assert rock_picks >= 130
+
+
+def test_get_next_discovery_track_catches_and_logs_external_service_error(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    from app.application.ports.services.catalog_source import (
+        TrackCatalogFilePort,
+    )
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+    )
+    track = Track(
+        track_id=15,
+        title="Pond Jump",
+        artist="DJ Toad",
+        duration_seconds=180,
+        genre="Unknown",
+        itunes_preview_url="https://preview.itunes.apple.com/preview.m4a",
+        spotify_id="spot-15",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [track]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = TrackPreview(
+        external_id="ext-15",
+        title="Pond Jump",
+        artist="DJ Toad",
+        preview_url="https://preview.itunes.apple.com/preview.m4a",
+        cover_url=None,
+        genre="Hip-Hop",
+    )
+
+    catalog_port = MagicMock(spec=TrackCatalogFilePort)
+    catalog_port.write_track_delta.side_effect = ExternalServiceError(
+        "GCS network timeout"
+    )
+
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+        catalog_file_port=catalog_port,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = use_case.execute(user_id=1)
+
+    assert result is not None
+    assert result.genre == "Hip-Hop"
+    track_repo.save.assert_called_once_with(track)
+    assert (
+        "Failed to write track delta for track 15: GCS network timeout" in caplog.text
     )

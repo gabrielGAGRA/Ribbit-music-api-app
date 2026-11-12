@@ -214,14 +214,14 @@ def test_jam_repository_columns_and_participants(conn: sqlite3.Connection) -> No
         duration_minutes=90,
         max_superlikes=15,
         skip_votes_threshold=4,
-        deck_source="curtidas",
+        deck_source="likes",
     )
     saved_jam = jam_repo.save(jam)
     assert saved_jam.jam_id is not None
     assert saved_jam.duration_minutes == 90
     assert saved_jam.max_superlikes == 15
     assert saved_jam.skip_votes_threshold == 4
-    assert saved_jam.deck_source == "curtidas"
+    assert saved_jam.deck_source == "likes"
     assert saved_jam.accumulated_duration_seconds == 0
 
     # Host is automatically recognized as participant

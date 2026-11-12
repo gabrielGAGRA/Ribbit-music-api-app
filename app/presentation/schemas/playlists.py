@@ -1,6 +1,6 @@
 """Playlist and track presentation schemas."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class TrackResponse(BaseModel):
@@ -26,15 +26,34 @@ class TrackResponse(BaseModel):
 class DeckPlaylistRequest(BaseModel):
     """Payload for generating a dynamic deck playlist."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     name: str = Field(min_length=1, max_length=100)
     duration_minutes: int | None = Field(default=None, ge=1, le=600)
-    genre: str | None = None
-    year: int | None = Field(default=None, ge=1900, le=2100)
-    artist: str | None = None
-    country: str | None = None
+    genre: str | list[str] | None = None
+    year: int | list[int] | None = None
+    artist: str | list[str] | None = None
+    country: str | list[str] | None = None
     description: str | None = Field(default=None, max_length=500)
+    source_playlist_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("source_playlist_id", "reference_playlist_id"),
+    )
+
+    @field_validator("year")
+    @classmethod
+    def validate_year(cls, value: int | list[int] | None) -> int | list[int] | None:
+        if value is None:
+            return None
+        years = [value] if isinstance(value, int) else value
+        for y in years:
+            if not (1900 <= y <= 2100):
+                raise ValueError(f"Year must be between 1900 and 2100, got {y}.")
+        return value
+
+    @property
+    def reference_playlist_id(self) -> int | None:
+        return self.source_playlist_id
 
 
 class SwipeAddTrackRequest(BaseModel):
@@ -64,6 +83,7 @@ class PlaylistResponse(BaseModel):
     tracks: list[TrackResponse] = Field(default_factory=list)
     max_duration_seconds: int | None = None
     deck_filters: str | None = None
+    source_playlist_id: int | None = None
     total_duration_seconds: int = 0
 
 

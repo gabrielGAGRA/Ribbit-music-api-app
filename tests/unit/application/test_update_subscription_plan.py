@@ -125,7 +125,9 @@ def test_update_subscription_plan_duplicate_name_raises_duplicate_entity_error()
     use_case = UpdateSubscriptionPlanUseCase(plan_repo=plan_repo)
     command = UpdateSubscriptionPlanCommand(plan_id=2, new_name="Family")
 
-    with pytest.raises(DuplicateEntityError, match="Já existe um plano com esse nome"):
+    with pytest.raises(
+        DuplicateEntityError, match="A plan with this name already exists"
+    ):
         use_case.execute(command)
 
 
@@ -182,6 +184,6 @@ def test_update_subscription_plan_capacity_below_active_dependents_raises_error(
 
     with pytest.raises(
         BusinessRuleViolationError,
-        match="O limite não pode ser menor que os perfis já vinculados",
+        match="Plan profile limit cannot be less than currently linked member profiles",
     ):
         use_case.execute(command)

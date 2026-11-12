@@ -5,7 +5,13 @@ from datetime import UTC, datetime
 import pytest
 
 from app.domain.exceptions import BusinessRuleViolationError
-from app.domain.models import Interaction, InteractionAction, Playlist, Track
+from app.domain.models import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+    Playlist,
+    Track,
+)
 
 
 def test_track_construction_and_defaults() -> None:
@@ -89,6 +95,33 @@ def test_interaction_action_enum_values_and_is_positive() -> None:
     assert InteractionAction.DISLIKE.is_positive is False
 
 
+def test_interaction_action_parse_and_aliases() -> None:
+    assert InteractionAction.parse("like") is InteractionAction.LIKE
+    assert InteractionAction.parse("curtida") is InteractionAction.LIKE
+    assert InteractionAction.parse("superlike") is InteractionAction.SUPERLIKE
+    assert InteractionAction.parse("amada") is InteractionAction.SUPERLIKE
+    assert InteractionAction.parse("dislike") is InteractionAction.DISLIKE
+    assert InteractionAction.parse("deslike") is InteractionAction.DISLIKE
+    assert InteractionAction.parse("rejeitada") is InteractionAction.DISLIKE
+    assert InteractionAction.parse("rejeitar") is InteractionAction.DISLIKE
+    assert InteractionAction.parse(InteractionAction.LIKE) is InteractionAction.LIKE
+    assert (
+        InteractionAction.parse(None, default=InteractionAction.LIKE)
+        is InteractionAction.LIKE
+    )
+    assert (
+        InteractionAction.parse("", default=InteractionAction.DISLIKE)
+        is InteractionAction.DISLIKE
+    )
+
+    with pytest.raises(ValueError, match="Invalid interaction action"):
+        InteractionAction.parse("unknown_action")
+    with pytest.raises(ValueError, match="cannot be None"):
+        InteractionAction.parse(None)
+    with pytest.raises(ValueError, match="cannot be empty"):
+        InteractionAction.parse("")
+
+
 def test_interaction_construction_and_action_transitions() -> None:
     now = datetime.now(tz=UTC)
     interaction = Interaction(
@@ -112,6 +145,22 @@ def test_interaction_construction_and_action_transitions() -> None:
     interaction.change_action(InteractionAction.LIKE)
     assert interaction.action is InteractionAction.LIKE
     assert interaction.is_positive is True
+
+
+def test_interaction_source_enum_values() -> None:
+    assert InteractionSource.DISCOVERY == "discovery"
+    assert InteractionSource.JAM == "jam"
+    assert InteractionSource.PLAYLIST == "playlist"
+    assert InteractionSource.SEARCH == "search"
+    assert InteractionSource.PROFILE == "profile"
+
+    interaction = Interaction(
+        user_id=1,
+        track_id=10,
+        action=InteractionAction.LIKE,
+        source=InteractionSource.DISCOVERY,
+    )
+    assert interaction.source == InteractionSource.DISCOVERY
 
 
 def test_playlist_construction_ownership_and_immutable_tracks_view() -> None:

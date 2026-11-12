@@ -1,9 +1,12 @@
 """Use case for fetching the next track candidate for swipe discovery."""
 
 import contextlib
+import logging
 from dataclasses import dataclass
+lazy import random
 
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import EntityNotFoundError, ExternalServiceError
+from app.domain.services.recommendation import select_weighted_track
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
@@ -23,54 +26,66 @@ class GetNextDiscoveryTrackUseCase:
     interaction_repo: InteractionRepositoryPort
     track_preview_port: TrackPreviewPort | None = None
     catalog_file_port: TrackCatalogFilePort | None = None
+    candidate_pool_size: int = 100
+    rng: random.Random | None = None
 
     def execute(self, user_id: int) -> Track | None:
         user = self.user_repo.find_by_id(user_id)
         if not user:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
-        is_minor = user.is_minor()
         blocked_genres = tuple(user.blocked_genres)
         interacted_ids = self.interaction_repo.list_interacted_track_ids(user_id)
 
         candidates = self.track_repo.list_active(
             excluded_genres=blocked_genres,
-            excluded_genre_terms=(
-                tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS)) if is_minor else ()
-            ),
-            block_explicit=is_minor,
+            excluded_genre_terms=user.restricted_genre_terms(),
+            block_explicit=user.is_minor(),
             excluded_ids=interacted_ids,
-            limit=1,
+            limit=self.candidate_pool_size,
         )
 
-        if not candidates:
+        track = select_weighted_track(candidates, user, rng=self.rng)
+        if track is None:
             return None
-
-        track = candidates[0]
         needs_preview = not track.itunes_preview_url
-        needs_genre = not track.genre
-        if (needs_preview or needs_genre) and self.track_preview_port is not None:
-            preview = self.track_preview_port.find_preview(
-                f"{track.artist} {track.title}"
-            )
+        needs_genre = not track.has_known_genre()
+        needs_cover = not track.cover_url
+        if (
+            needs_preview or needs_genre or needs_cover
+        ) and self.track_preview_port is not None:
+            preview = None
+            with contextlib.suppress(ExternalServiceError):
+                preview = self.track_preview_port.find_preview(
+                    f"{track.artist} {track.title}"
+                )
             if preview:
-                changed = False
-                if needs_preview and preview.preview_url:
-                    track.itunes_preview_url = str(preview.preview_url)
-                    changed = True
-                if needs_genre and preview.genre:
-                    track.genre = str(preview.genre)
-                    changed = True
+                changed = track.merge_missing_metadata(
+                    itunes_preview_url=str(preview.preview_url)
+                    if needs_preview and preview.preview_url
+                    else None,
+                    genre=str(preview.genre) if needs_genre and preview.genre else None,
+                    cover_url=str(preview.cover_url)
+                    if needs_cover and preview.cover_url
+                    else None,
+                )
                 if changed:
                     self.track_repo.save(track)
                     if self.catalog_file_port is not None:
-                        with contextlib.suppress(Exception):
+                        try:
                             self.catalog_file_port.write_track_delta(
                                 title=track.title,
                                 artist=track.artist,
                                 preview_url=track.itunes_preview_url,
                                 genre=track.genre,
+                                cover_url=track.cover_url,
                                 spotify_id=track.spotify_id,
+                            )
+                        except ExternalServiceError as exc:
+                            logging.getLogger(__name__).warning(
+                                "Failed to write track delta for track %s: %s",
+                                track.track_id,
+                                exc,
                             )
 
         return track

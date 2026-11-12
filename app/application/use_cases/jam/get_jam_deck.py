@@ -6,6 +6,7 @@ from app.application.dtos.jam_dtos import GetJamDeckCommand
 from app.application.dtos.playlist_dtos import PlaylistDeckResult
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models.interaction import InteractionAction
+from app.domain.services.recommendation import order_tracks_by_weighted_seed
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
@@ -66,13 +67,13 @@ class GetJamDeckUseCase:
         user_id: int,
         excluded_ids: set[int],
     ) -> list[Track]:
-        source = (jam.deck_source or "livre").strip().lower()
+        source = (jam.deck_source or "free").strip().lower()
 
         if source == "playlist" and jam.source_playlist_id and self.playlist_repo:
             playlist = self.playlist_repo.find_by_id(jam.source_playlist_id)
             return list(playlist.tracks) if playlist else []
 
-        if source == "curtidas" and self.interaction_repo:
+        if source in ("likes", "curtidas") and self.interaction_repo:
             likes = self.interaction_repo.list_by_user(user_id)
             fav_ids = [
                 i.track_id
@@ -87,12 +88,8 @@ class GetJamDeckUseCase:
         return self.track_repo.list_active(
             limit=100,
             excluded_genres=list(user.blocked_genres),
-            excluded_genre_terms=(
-                tuple(sorted(user.MINOR_RESTRICTED_GENRE_TERMS))
-                if user.is_minor()
-                else ()
-            ),
-            block_explicit=not user.is_adult,
+            excluded_genre_terms=user.restricted_genre_terms(),
+            block_explicit=user.is_minor(),
             excluded_ids=list(excluded_ids),
         )
 
@@ -121,17 +118,46 @@ class GetJamDeckUseCase:
                 "User must join the Jam room before requesting deck candidates."
             )
 
-        excluded_ids = {item.track_id for item in self.jam_repo.list_queue(t_jam_id)}
+        source = (jam.deck_source or "free").strip().lower()
+        excluded_ids = set()
         if jam.current_track_id is not None:
             excluded_ids.add(jam.current_track_id)
 
+        queued_items = self.jam_repo.list_queue(t_jam_id)
+        queued_ids = [
+            item.track_id
+            for item in queued_items
+            if item.track_id is not None and item.track_id != jam.current_track_id
+        ]
+
         if self.interaction_repo is not None:
-            rejected = self.interaction_repo.list_by_user(
-                eff_user_id, action=InteractionAction.DISLIKE
+            interacted = self.interaction_repo.list_by_user(eff_user_id)
+            excluded_ids.update(
+                i.track_id
+                for i in interacted
+                if i.source == "jam"
+                and (
+                    i.jam_id == t_jam_id
+                    or (i.jam_id is None and source not in ("likes", "curtidas"))
+                )
             )
-            excluded_ids.update(i.track_id for i in rejected)
+            excluded_ids.update(
+                i.track_id for i in interacted if i.action == InteractionAction.DISLIKE
+            )
 
         candidates = self._fetch_candidates(jam, user, eff_user_id, excluded_ids)
+
+        queue_tracks_by_id = self.track_repo.find_by_ids(queued_ids)
+        queued_tracks = [
+            queue_tracks_by_id[track_id]
+            for track_id in queued_ids
+            if track_id in queue_tracks_by_id and track_id not in excluded_ids
+        ]
+        for queued_track in queued_tracks:
+            if queued_track.track_id is not None and all(
+                candidate.track_id != queued_track.track_id for candidate in candidates
+            ):
+                candidates.append(queued_track)
 
         eligible = [
             t
@@ -140,9 +166,15 @@ class GetJamDeckUseCase:
             and t.track_id not in excluded_ids
             and not t.is_deleted
             and user.can_listen(t)
-            and not (cursor is not None and t.track_id <= cursor)
         ]
-        eligible.sort(key=lambda t: t.track_id or 0)
+        eligible = self._order_and_slice_cursor(
+            jam=jam,
+            user=user,
+            jam_id=t_jam_id,
+            user_id=eff_user_id,
+            eligible=eligible,
+            cursor=cursor,
+        )
 
         has_more = len(eligible) > page_limit
         items = eligible[:page_limit]
@@ -151,3 +183,46 @@ class GetJamDeckUseCase:
         return PlaylistDeckResult(
             items=items, next_cursor=next_cursor, has_more=has_more
         )
+
+    def _order_and_slice_cursor(
+        self,
+        *,
+        jam: Jam,
+        user: User,
+        jam_id: int,
+        user_id: int,
+        eligible: list[Track],
+        cursor: int | None,
+    ) -> list[Track]:
+        source = (jam.deck_source or "free").strip().lower()
+        if source in ("free", "livre"):
+            pool = eligible
+            if cursor is not None and all(t.track_id != cursor for t in eligible):
+                cursor_track = self.track_repo.find_by_id(cursor)
+                if (
+                    isinstance(cursor_track, Track)
+                    and cursor_track.track_id == cursor
+                    and not cursor_track.is_deleted
+                    and user.can_listen(cursor_track)
+                ):
+                    pool = [*eligible, cursor_track]
+
+            ordered = order_tracks_by_weighted_seed(
+                pool,
+                user,
+                seed_key=f"jam:{jam_id}:user:{user_id}",
+            )
+            if cursor is None:
+                return ordered
+            for index, track in enumerate(ordered):
+                if track.track_id == cursor:
+                    return ordered[index + 1 :]
+            return [t for t in ordered if (t.track_id or 0) > cursor]
+
+        filtered = [
+            t
+            for t in eligible
+            if not (cursor is not None and (t.track_id or 0) <= cursor)
+        ]
+        filtered.sort(key=lambda t: t.track_id or 0)
+        return filtered

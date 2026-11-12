@@ -21,6 +21,7 @@ from app.application.use_cases.admin import (
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
     PromoteUserToAdminUseCase,
+    RegisterAdministratorUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
@@ -151,6 +152,7 @@ ALL_USE_CASES = [
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     PromoteUserToAdminUseCase,
+    RegisterAdministratorUseCase,
 ]
 
 

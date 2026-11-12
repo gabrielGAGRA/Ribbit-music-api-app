@@ -219,3 +219,76 @@ def test_seed_database_raises_if_admin_email_exists_without_admin_role() -> None
             seed_database(conn, settings=settings)
     finally:
         conn.close()
+
+
+def test_seed_database_populates_eligible_administrators() -> None:
+    conn = create_connection(":memory:")
+    try:
+        settings = Settings(
+            admin_email="admin@ribbit.example.com",
+            admin_eligible_emails=(
+                "admin@ribbit.example.com",
+                "gabriel.agra@usp.br",
+                "fernando.seraco@usp.br",
+            ),
+        )
+        hasher = PBKDF2PasswordHasher(iterations=10_000)
+
+        seed_database(conn, settings=settings, password_hasher=hasher)
+
+        gabriel = conn.execute(
+            "SELECT email, display_name, is_admin FROM users WHERE email = 'gabriel.agra@usp.br'"
+        ).fetchone()
+        assert gabriel is not None
+        assert gabriel["is_admin"] == 1
+        assert gabriel["display_name"] == "Gabriel Agra"
+
+        fernando = conn.execute(
+            "SELECT email, display_name, is_admin FROM users WHERE email = 'fernando.seraco@usp.br'"
+        ).fetchone()
+        assert fernando is not None
+        assert fernando["is_admin"] == 1
+        assert fernando["display_name"] == "Fernando Seraco"
+    finally:
+        conn.close()
+
+
+def test_seed_database_raises_if_eligible_admin_exists_without_admin_role() -> None:
+    conn = create_connection(":memory:")
+    try:
+        settings = Settings(
+            admin_email="admin@ribbit.example.com",
+            admin_eligible_emails=(
+                "admin@ribbit.example.com",
+                "gabriel.agra@usp.br",
+            ),
+        )
+        migrate_additive_columns(conn)
+
+        conn.execute(
+            "INSERT INTO plans (name, monthly_price, max_profiles) VALUES ('Free', 0, 1)"
+        )
+        conn.execute(
+            """
+            INSERT INTO users (
+                email, password_hash, display_name, age, plan_id, is_admin, created_at
+            ) VALUES (?, ?, ?, ?, ?, 0, ?)
+            """,
+            (
+                "gabriel.agra@usp.br",
+                "hash",
+                "Gabriel Impostor",
+                25,
+                1,
+                "2026-01-01T00:00:00Z",
+            ),
+        )
+        conn.commit()
+
+        with pytest.raises(
+            RuntimeError,
+            match="Seed account gabriel.agra@usp.br exists without administrative role",
+        ):
+            seed_database(conn, settings=settings)
+    finally:
+        conn.close()

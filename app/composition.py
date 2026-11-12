@@ -1,10 +1,10 @@
 """Composition root: inlines infrastructure, use case construction, and router mounting."""
 
 import logging
-import sqlite3
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
+lazy import sqlite3
 lazy from collections.abc import AsyncGenerator
 
 import niquests
@@ -43,6 +43,7 @@ from app.application.use_cases.admin import (
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
     PromoteUserToAdminUseCase,
+    RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
@@ -58,6 +59,7 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.discovery import (
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    UndoLatestDiscoveryInteractionUseCase,
 )
 from app.application.use_cases.jam import (
     AdvanceJamPlaybackUseCase,
@@ -75,9 +77,11 @@ from app.application.use_cases.playlist import (
     CreateDeckPlaylistUseCase,
     DeletePlaylistUseCase,
     ExportPlaylistToSpotifyUseCase,
+    GetPlaylistCoverUseCase,
     GetPlaylistDeckUseCase,
     ListUserPlaylistsUseCase,
     RemoveTrackFromPlaylistUseCase,
+    UploadPlaylistCoverUseCase,
 )
 from app.application.use_cases.review import (
     DeleteReviewUseCase,
@@ -102,18 +106,21 @@ from app.application.use_cases.user import (
     ChangeTrackInteractionUseCase,
     DeleteUserAccountUseCase,
     GetAnnualListeningStatsUseCase,
+    GetPreferredThemeUseCase,
     GetUserProfileUseCase,
     LinkSpotifyAccountUseCase,
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
+    ListFavoriteGenresUseCase,
     ListPlansUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
+    UpdateFavoriteGenresUseCase,
+    UpdatePreferredThemeUseCase,
     UpdateProfileUseCase,
 )
 from app.config import Settings, load_settings
-from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters import (
     GCSTrackCatalogAdapter,
     ITunesAdapter,
@@ -132,6 +139,8 @@ from app.infrastructure.repositories import (
     SQLiteReviewRepository,
     SQLiteTrackRepository,
     SQLiteUserRepository,
+    SQLiteUserStatsRepository,
+    create_connection,
 )
 from app.infrastructure.repositories.seed import seed_database
 from app.infrastructure.security import HMACTokenService, PBKDF2PasswordHasher
@@ -181,6 +190,7 @@ class Container:
     # Discovery
     get_next_discovery_track_use_case: GetNextDiscoveryTrackUseCase
     record_swipe_interaction_use_case: RecordSwipeInteractionUseCase
+    undo_latest_discovery_interaction_use_case: UndoLatestDiscoveryInteractionUseCase
     # Playlist
     create_deck_playlist_use_case: CreateDeckPlaylistUseCase
     get_playlist_deck_use_case: GetPlaylistDeckUseCase
@@ -189,6 +199,8 @@ class Container:
     delete_playlist_use_case: DeletePlaylistUseCase
     export_playlist_to_spotify_use_case: ExportPlaylistToSpotifyUseCase
     list_user_playlists_use_case: ListUserPlaylistsUseCase
+    upload_playlist_cover_use_case: UploadPlaylistCoverUseCase
+    get_playlist_cover_use_case: GetPlaylistCoverUseCase
     # Jam
     create_jam_use_case: CreateJamUseCase
     join_jam_use_case: JoinJamUseCase
@@ -220,6 +232,10 @@ class Container:
     list_family_members_use_case: ListFamilyMembersUseCase
     list_blocked_genres_use_case: ListBlockedGenresUseCase
     update_blocked_genres_use_case: UpdateBlockedGenresUseCase
+    list_favorite_genres_use_case: ListFavoriteGenresUseCase
+    update_favorite_genres_use_case: UpdateFavoriteGenresUseCase
+    get_preferred_theme_use_case: GetPreferredThemeUseCase
+    update_preferred_theme_use_case: UpdatePreferredThemeUseCase
     list_user_interactions_use_case: ListUserInteractionsUseCase
     change_track_interaction_use_case: ChangeTrackInteractionUseCase
     get_annual_listening_stats_use_case: GetAnnualListeningStatsUseCase
@@ -243,6 +259,7 @@ class Container:
     get_audience_report_use_case: GetAudienceReportUseCase
     get_audit_logs_use_case: GetAuditLogsUseCase
     promote_user_to_admin_use_case: PromoteUserToAdminUseCase
+    register_administrator_use_case: RegisterAdministratorUseCase
     catalog_file_port: TrackCatalogFilePort | None = None
     ingest_tracks_from_catalog_use_case: IngestTracksFromCatalogUseCase | None = None
     compact_catalog_use_case: CompactCatalogUseCase | None = None
@@ -317,12 +334,11 @@ def build_container(
     connection: sqlite3.Connection | None = None,
 ) -> Container:
     """Builds and wires all application infrastructure and use cases into a Container."""
-    if connection is not None:
-        conn = connection
-    else:
-        conn = sqlite3.connect(settings.database_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
+    conn = (
+        connection
+        if connection is not None
+        else create_connection(settings.database_path)
+    )
     password_hasher = PBKDF2PasswordHasher(iterations=settings.password_hash_iterations)
     token_service = HMACTokenService(
         secret_key=settings.secret_key,
@@ -397,6 +413,7 @@ def build_container(
         user_spotify_credentials,
         session=niquests.Session(),
     )
+    user_stats_repo = SQLiteUserStatsRepository(conn)
 
     return Container(
         settings=settings,
@@ -449,6 +466,9 @@ def build_container(
         record_swipe_interaction_use_case=RecordSwipeInteractionUseCase(
             user_repo, track_repo, interaction_repo
         ),
+        undo_latest_discovery_interaction_use_case=UndoLatestDiscoveryInteractionUseCase(
+            user_repo, plan_repo, interaction_repo
+        ),
         # Playlist
         create_deck_playlist_use_case=CreateDeckPlaylistUseCase(
             user_repo, track_repo, playlist_repo
@@ -457,7 +477,7 @@ def build_container(
             user_repo, playlist_repo, track_repo, interaction_repo
         ),
         add_track_to_playlist_use_case=AddTrackToPlaylistUseCase(
-            user_repo, track_repo, playlist_repo
+            user_repo, track_repo, playlist_repo, interaction_repo=interaction_repo
         ),
         remove_track_from_playlist_use_case=RemoveTrackFromPlaylistUseCase(
             user_repo, playlist_repo
@@ -467,6 +487,12 @@ def build_container(
             user_repo, playlist_repo, music_service
         ),
         list_user_playlists_use_case=ListUserPlaylistsUseCase(user_repo, playlist_repo),
+        upload_playlist_cover_use_case=UploadPlaylistCoverUseCase(
+            playlist_repo=playlist_repo
+        ),
+        get_playlist_cover_use_case=GetPlaylistCoverUseCase(
+            playlist_repo=playlist_repo
+        ),
         # Jam
         create_jam_use_case=CreateJamUseCase(
             jam_repo, user_repo, playlist_repo=playlist_repo
@@ -480,7 +506,9 @@ def build_container(
             interaction_repo=interaction_repo,
         ),
         get_jam_state_use_case=GetJamStateUseCase(jam_repo, user_repo, track_repo),
-        vote_jam_track_use_case=VoteJamTrackUseCase(jam_repo, user_repo, track_repo),
+        vote_jam_track_use_case=VoteJamTrackUseCase(
+            jam_repo, user_repo, track_repo, interaction_repo=interaction_repo
+        ),
         vote_skip_jam_track_use_case=VoteSkipJamTrackUseCase(
             jam_repo, user_repo, track_repo
         ),
@@ -534,14 +562,18 @@ def build_container(
         list_family_members_use_case=ListFamilyMembersUseCase(user_repo),
         list_blocked_genres_use_case=ListBlockedGenresUseCase(user_repo),
         update_blocked_genres_use_case=UpdateBlockedGenresUseCase(user_repo, plan_repo),
+        list_favorite_genres_use_case=ListFavoriteGenresUseCase(user_repo),
+        update_favorite_genres_use_case=UpdateFavoriteGenresUseCase(user_repo),
+        get_preferred_theme_use_case=GetPreferredThemeUseCase(user_repo),
+        update_preferred_theme_use_case=UpdatePreferredThemeUseCase(user_repo),
         list_user_interactions_use_case=ListUserInteractionsUseCase(
             user_repo, interaction_repo, track_repo
         ),
         change_track_interaction_use_case=ChangeTrackInteractionUseCase(
-            user_repo, plan_repo, interaction_repo
+            user_repo, plan_repo, interaction_repo, track_repo=track_repo
         ),
         get_annual_listening_stats_use_case=GetAnnualListeningStatsUseCase(
-            user_repo, plan_repo, interaction_repo, track_repo
+            user_repo, plan_repo, user_stats_repo
         ),
         link_spotify_account_use_case=LinkSpotifyAccountUseCase(user_repo),
         # Spotify
@@ -557,7 +589,18 @@ def build_container(
         ),
         list_users_with_plans_use_case=ListUsersWithPlansUseCase(user_repo, plan_repo),
         list_administrators_use_case=ListAdministratorsUseCase(user_repo),
-        update_admin_role_use_case=UpdateAdminRoleUseCase(user_repo),
+        update_admin_role_use_case=UpdateAdminRoleUseCase(
+            user_repo=user_repo,
+            eligible_emails=settings.admin_eligible_emails,
+            audit_log_repo=audit_log_repo,
+        ),
+        register_administrator_use_case=RegisterAdministratorUseCase(
+            user_repo=user_repo,
+            plan_repo=plan_repo,
+            password_hasher=password_hasher,
+            audit_log_repo=audit_log_repo,
+            eligible_emails=settings.admin_eligible_emails,
+        ),
         update_subscription_plan_use_case=UpdateSubscriptionPlanUseCase(
             plan_repo, user_repo=user_repo
         ),
@@ -607,13 +650,6 @@ def create_app(
         settings=resolved_settings,
         password_hasher=container.password_hasher,
     )
-    if container.ingest_tracks_from_catalog_use_case is not None:
-        try:
-            container.ingest_tracks_from_catalog_use_case.execute()
-        except (ExternalServiceError, RuntimeError) as exc:
-            logging.getLogger("app").warning(
-                "Initial GCS tracks ingestion skipped or failed: %s", exc
-            )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:

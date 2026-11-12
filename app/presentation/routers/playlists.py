@@ -17,13 +17,15 @@ from app.application.use_cases.playlist import (
     CreateDeckPlaylistUseCase,
     DeletePlaylistUseCase,
     ExportPlaylistToSpotifyUseCase,
+    GetPlaylistCoverUseCase,
     GetPlaylistDeckUseCase,
     ListUserPlaylistsUseCase,
     RemoveTrackFromPlaylistUseCase,
+    UploadPlaylistCoverUseCase,
 )
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.presentation.dependencies.auth import require_user
-from app.presentation.dependencies.container import get_container
+from app.presentation.dependencies.container import get_container, provide
 from app.presentation.schemas.common import ActionSuccessResponse
 from app.presentation.schemas.playlists import (
     DeckPlaylistRequest,
@@ -183,55 +185,39 @@ async def upload_playlist_image(
     playlist_id: int,
     request: Request,
     current_user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        UploadPlaylistCoverUseCase,
+        Depends(provide(UploadPlaylistCoverUseCase)),
+    ],
 ) -> PlaylistResponse:
-    container = get_container(request)
-    playlist = container.playlist_repo.find_by_id(playlist_id)
-    if playlist is None:
-        raise EntityNotFoundError(entity_name="Playlist", entity_id=playlist_id)
-    if not playlist.is_owned_by(current_user_id):
-        raise PermissionDeniedError(
-            "Access denied: playlist does not belong to this user."
-        )
-
     content_type = (
         request.headers.get("content-type", "").split(";", maxsplit=1)[0].lower()
     )
     image_data = await _read_limited_image(request)
     cover_image_url = f"/api/playlists/{playlist_id}/image"
-    saved = container.playlist_repo.save_cover_image(
+    playlist = use_case.execute(
         playlist_id=playlist_id,
+        user_id=current_user_id,
         content_type=content_type,
         image_data=image_data,
         cover_image_url=cover_image_url,
     )
-    if not saved:
-        raise EntityNotFoundError(entity_name="Playlist", entity_id=playlist_id)
-
-    updated = container.playlist_repo.find_by_id(playlist_id)
-    if updated is None:
-        raise EntityNotFoundError(entity_name="Playlist", entity_id=playlist_id)
-    return _build_playlist_response(updated)
+    return _build_playlist_response(playlist)
 
 
 @router.get("/{playlist_id}/image")
 def get_playlist_image(
     playlist_id: int,
-    request: Request,
     current_user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        GetPlaylistCoverUseCase,
+        Depends(provide(GetPlaylistCoverUseCase)),
+    ],
 ) -> Response:
-    container = get_container(request)
-    playlist = container.playlist_repo.find_by_id(playlist_id)
-    if playlist is None:
-        raise EntityNotFoundError(entity_name="Playlist", entity_id=playlist_id)
-    if not playlist.is_owned_by(current_user_id):
-        raise PermissionDeniedError(
-            "Access denied: playlist does not belong to this user."
-        )
-
-    image = container.playlist_repo.get_cover_image(playlist_id)
-    if image is None:
-        raise EntityNotFoundError("Playlist cover image not found.")
-    content_type, image_data = image
+    content_type, image_data = use_case.execute(
+        playlist_id=playlist_id,
+        user_id=current_user_id,
+    )
     return Response(
         content=image_data,
         media_type=content_type,
@@ -250,7 +236,7 @@ def create_deck_playlist(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         CreateDeckPlaylistUseCase, Depends(get_create_deck_playlist_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> PlaylistResponse:
     playlist = use_case.execute(
         CreateDeckPlaylistCommand(
@@ -263,6 +249,7 @@ def create_deck_playlist(
             country=req.country,
             description=req.description,
             populate_tracks=False,
+            source_playlist_id=req.source_playlist_id,
         )
     )
     return _build_playlist_response(playlist)
@@ -272,11 +259,11 @@ def create_deck_playlist(
 def get_playlist_deck(
     playlist_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
-    cursor_id: Annotated[int | None, Query(gt=0)] = None,
     use_case: Annotated[
         GetPlaylistDeckUseCase, Depends(get_get_playlist_deck_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    cursor_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> PaginatedTracksResponse:
     page_limit = limit if isinstance(limit, int) else 20
     cursor_val = cursor_id if isinstance(cursor_id, int) else None
@@ -302,7 +289,7 @@ def swipe_add_track(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         AddTrackToPlaylistUseCase, Depends(get_add_track_to_playlist_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> ActionSuccessResponse:
     use_case.execute(
         AddTrackToPlaylistCommand(
@@ -340,7 +327,7 @@ def remove_track(
     use_case: Annotated[
         RemoveTrackFromPlaylistUseCase,
         Depends(get_remove_track_from_playlist_use_case),
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
         RemoveTrackFromPlaylistCommand(
@@ -356,9 +343,7 @@ def remove_track(
 def delete_playlist(
     playlist_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[
-        DeletePlaylistUseCase, Depends(get_delete_playlist_use_case)
-    ] = None,  # type: ignore[assignment]
+    use_case: Annotated[DeletePlaylistUseCase, Depends(get_delete_playlist_use_case)],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
         DeletePlaylistCommand(
@@ -374,7 +359,7 @@ def list_playlists(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         ListUserPlaylistsUseCase, Depends(get_list_user_playlists_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> list[PlaylistResponse]:
     playlists = use_case.execute(user_id=current_user_id)
     return [_build_playlist_response(p) for p in playlists]
@@ -390,7 +375,7 @@ def export_playlist_to_spotify(
     use_case: Annotated[
         ExportPlaylistToSpotifyUseCase,
         Depends(get_export_playlist_to_spotify_use_case),
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> PlaylistResponse:
     playlist = use_case.execute(
         user_id=current_user_id,

@@ -58,10 +58,10 @@ class SearchTracksUseCase:
             for ct in catalog_tracks:
                 candidate = Track(
                     title=ct.title or query_term,
-                    artist=ct.artist or "Artista desconhecido",
+                    artist=ct.artist or "Unknown Artist",
                     album=ct.album,
                     duration_seconds=180,
-                    genre="Desconhecido",
+                    genre="Unknown",
                     spotify_id=str(ct.external_id) if ct.external_id else None,
                     itunes_preview_url=ct.preview_url,
                 )

@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS users (
     plan_id INTEGER NOT NULL REFERENCES plans(plan_id),
     primary_account_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
     blocked_genres TEXT,
+    favorite_genres TEXT,
+    preferred_theme TEXT NOT NULL DEFAULT 'light',
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     birth_date TEXT
@@ -52,6 +54,7 @@ CREATE TABLE IF NOT EXISTS interactions (
     action TEXT NOT NULL,
     created_at TEXT NOT NULL,
     source TEXT,
+    jam_id INTEGER REFERENCES jams(jam_id) ON DELETE SET NULL,
     CONSTRAINT uq_interactions_user_track UNIQUE (user_id, track_id)
 );
 
@@ -65,7 +68,8 @@ CREATE TABLE IF NOT EXISTS playlists (
     created_at TEXT NOT NULL,
     max_duration_seconds INTEGER,
     deck_filters TEXT,
-    cover_image_url TEXT
+    cover_image_url TEXT,
+    source_playlist_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS playlist_images (
@@ -96,7 +100,7 @@ CREATE TABLE IF NOT EXISTS jams (
     superlikes_used INTEGER NOT NULL DEFAULT 0,
     skip_votes_threshold INTEGER NOT NULL DEFAULT 3,
     accumulated_duration_seconds INTEGER NOT NULL DEFAULT 0,
-    deck_source TEXT NOT NULL DEFAULT 'livre',
+    deck_source TEXT NOT NULL DEFAULT 'free',
     source_playlist_id INTEGER
 );
 
