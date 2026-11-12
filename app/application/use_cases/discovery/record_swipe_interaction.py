@@ -6,24 +6,17 @@ from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
 )
-from app.domain.models.interaction import Interaction, InteractionAction
+from app.domain.models.interaction import (
+    Interaction,
+    InteractionAction,
+    InteractionSource,
+)
 lazy from app.application.dtos.discovery_dtos import RecordSwipeCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
-
-_ACTION_SYNONYMS: dict[str, InteractionAction] = {
-    "like": InteractionAction.LIKE,
-    "curtida": InteractionAction.LIKE,
-    "superlike": InteractionAction.SUPERLIKE,
-    "amada": InteractionAction.SUPERLIKE,
-    "dislike": InteractionAction.DISLIKE,
-    "deslike": InteractionAction.DISLIKE,
-    "rejeitada": InteractionAction.DISLIKE,
-    "rejeitar": InteractionAction.DISLIKE,
-}
 
 
 @dataclass(slots=True, frozen=True)
@@ -46,28 +39,23 @@ class RecordSwipeInteractionUseCase:
             )
 
         if user.is_track_restricted_for_minor(track):
-            raise BusinessRuleViolationError(
-                "Música bloqueada para usuários menores de idade."
-            )
+            raise BusinessRuleViolationError("Track is restricted for minor users.")
 
         if track.genre.strip().casefold() in user.blocked_genres:
-            raise BusinessRuleViolationError("Gênero bloqueado pelo usuário.")
+            raise BusinessRuleViolationError("Genre is blocked by user.")
 
-        if isinstance(command.action, InteractionAction):
-            action_enum = command.action
-        else:
-            action_str = str(command.action).strip().lower()
-            action_enum = _ACTION_SYNONYMS.get(action_str)
-            if not action_enum:
-                raise BusinessRuleViolationError(
-                    f"Ação inválida '{command.action}'. Válidas: like, superlike, dislike."
-                )
+        try:
+            action_enum = InteractionAction.parse(command.action)
+        except ValueError as exc:
+            raise BusinessRuleViolationError(
+                f"Invalid action '{command.action}'. Valid: like, superlike, dislike."
+            ) from exc
 
         interaction = Interaction(
             interaction_id=None,
             user_id=command.user_id,
             track_id=command.track_id,
             action=action_enum,
-            source="discovery",
+            source=InteractionSource.DISCOVERY,
         )
         return self.interaction_repo.save(interaction)

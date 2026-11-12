@@ -418,7 +418,7 @@ def test_add_family_member_provisioning_duplicate_email_raises_duplicate_entity(
 
     use_case = AddFamilyMemberUseCase(user_repo=user_repo, plan_repo=plan_repo)
 
-    with pytest.raises(DuplicateEntityError, match="já está em uso"):
+    with pytest.raises(DuplicateEntityError, match="is already in use"):
         use_case.execute(
             primary_user_id=1,
             email="taken@test.com",
@@ -453,7 +453,7 @@ def test_add_family_member_provisioning_future_birth_date_raises_violation() -> 
 
     use_case = AddFamilyMemberUseCase(user_repo=user_repo, plan_repo=plan_repo)
 
-    with pytest.raises(BusinessRuleViolationError, match="não pode estar no futuro"):
+    with pytest.raises(BusinessRuleViolationError, match="cannot be in the future"):
         use_case.execute(
             primary_user_id=1,
             email="future@test.com",

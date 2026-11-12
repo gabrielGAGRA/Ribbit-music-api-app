@@ -88,7 +88,7 @@ def test_login_returns_authentication_result() -> None:
 def test_auth_router_exposes_only_english_routes() -> None:
     from app.presentation.routers.auth import router
 
-    paths = [route.path for route in router.routes]  # type: ignore[attr-defined]
+    paths = [getattr(route, "path", None) for route in router.routes]
     assert paths == ["/api/auth/register", "/api/auth/login", "/api/auth/google"]
 
 

@@ -63,12 +63,22 @@ export class PlaylistsComponent {
     this.currentTab.set(tab);
     if (tab === 'queue') {
       this.selectedPlaylist.set(null);
+      this.player.loadTrack(this.currentQueueSong().previewUrl);
     }
   }
 
   decideQueue(add: boolean): void {
     this.state.decideQueue(add);
     this.queueDrag.set(0);
+    this.player.loadTrack(this.currentQueueSong().previewUrl);
+  }
+
+  toggleQueueCardPlay(): void {
+    const song = this.currentQueueSong();
+    if (this.player.activePreviewUrl() !== (song.previewUrl ?? null)) {
+      this.player.loadTrack(song.previewUrl);
+    }
+    this.player.togglePlay();
   }
 
   getSong(index: number): Song {
@@ -184,6 +194,8 @@ export class PlaylistsComponent {
   }
 
   onQueuePointerDown(event: PointerEvent): void {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button')) return;
     this.queuePointerStart = event.clientX;
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }

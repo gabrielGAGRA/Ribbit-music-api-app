@@ -98,8 +98,6 @@ class UpdateAdminRoleRequest(BaseModel):
 
 
 class CompactCatalogResponse(BaseModel):
-    """Response returned upon consolidating micro-deltas into the main catalog."""
-
     model_config = ConfigDict(from_attributes=True)
 
     new_version: int
@@ -107,8 +105,6 @@ class CompactCatalogResponse(BaseModel):
 
 
 class SyncCatalogVersionResponse(BaseModel):
-    """Response returned upon checking and syncing local database against remote catalog version."""
-
     model_config = ConfigDict(from_attributes=True)
 
     synced: bool
@@ -117,18 +113,26 @@ class SyncCatalogVersionResponse(BaseModel):
 
 
 class UpdateTrackGenreRequest(BaseModel):
-    """Payload to alter a track genre."""
-
-    genre: str
+    genre: str = Field(min_length=1)
 
 
 class TrackGenreResponse(BaseModel):
-    """Response returned upon updating genre on a track."""
-
     model_config = ConfigDict(from_attributes=True)
 
     track_id: int
     genre: str
+
+
+class RegisterAdminRequest(BaseModel):
+    """Payload to register a new administrator."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+    password: str = Field(min_length=6)
+    display_name: str = Field(min_length=2, max_length=50)
+    age: int = Field(default=30, ge=18)
+    birth_date: str | None = None
 
 
 __all__ = [
@@ -137,6 +141,7 @@ __all__ = [
     "CompactCatalogResponse",
     "ExecutiveDashboardResponse",
     "PlanResponse",
+    "RegisterAdminRequest",
     "SyncCatalogVersionResponse",
     "TrackBlockResponse",
     "TrackExplicitResponse",

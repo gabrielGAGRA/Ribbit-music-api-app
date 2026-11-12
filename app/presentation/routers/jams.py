@@ -92,6 +92,7 @@ def get_vote_jam_track_use_case(request: Request) -> VoteJamTrackUseCase:
             jam_repo=container.jam_repo,
             user_repo=container.user_repo,
             track_repo=container.track_repo,
+            interaction_repo=container.interaction_repo,
         )
 
 
@@ -158,7 +159,7 @@ def get_jam_state_use_case(request: Request) -> GetJamStateUseCase:
 def create_jam(
     req: CreateJamRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[CreateJamUseCase, Depends(get_create_jam_use_case)] = None,  # type: ignore[assignment]
+    use_case: Annotated[CreateJamUseCase, Depends(get_create_jam_use_case)],
 ) -> JamResponse:
     jam = use_case.execute(
         CreateJamCommand(
@@ -178,7 +179,7 @@ def create_jam(
 def join_jam(
     req: JoinJamRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[JoinJamUseCase, Depends(get_join_jam_use_case)] = None,  # type: ignore[assignment]
+    use_case: Annotated[JoinJamUseCase, Depends(get_join_jam_use_case)],
 ) -> JamResponse:
     jam = use_case.execute(room_code=req.room_code, user_id=current_user_id)
     return JamResponse.model_validate(jam)
@@ -188,7 +189,7 @@ def join_jam(
 def get_jam_state(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[GetJamStateUseCase, Depends(get_jam_state_use_case)] = None,  # type: ignore[assignment]
+    use_case: Annotated[GetJamStateUseCase, Depends(get_jam_state_use_case)],
 ) -> JamStateResponse:
     state = use_case.execute(jam_id=jam_id, user_id=current_user_id)
     if isinstance(state, dict):
@@ -222,9 +223,7 @@ def vote_jam_track(
     jam_id: int,
     req: VoteJamTrackRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[
-        VoteJamTrackUseCase, Depends(get_vote_jam_track_use_case)
-    ] = None,  # type: ignore[assignment]
+    use_case: Annotated[VoteJamTrackUseCase, Depends(get_vote_jam_track_use_case)],
 ) -> JamQueueItemResponse:
     queue_item = use_case.execute(
         VoteJamTrackCommand(
@@ -242,10 +241,10 @@ def vote_jam_track(
 def skip_jam_track(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    req: SkipJamTrackRequest | None = None,
     use_case: Annotated[
         VoteSkipJamTrackUseCase, Depends(get_vote_skip_jam_track_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
+    req: SkipJamTrackRequest | None = None,
 ) -> SkipVoteResponse:
     req_track_id = req.track_id if req else None
     result = use_case.execute(
@@ -291,9 +290,9 @@ def skip_jam_track(
 def get_jam_deck(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[GetJamDeckUseCase, Depends(get_jam_deck_use_case)],
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     cursor_id: Annotated[int | None, Query(gt=0)] = None,
-    use_case: Annotated[GetJamDeckUseCase, Depends(get_jam_deck_use_case)] = None,  # type: ignore[assignment]
 ) -> PaginatedTracksResponse:
     page_limit = limit if isinstance(limit, int) else 20
     cursor_val = cursor_id if isinstance(cursor_id, int) else None
@@ -317,9 +316,7 @@ def save_queue_track(
     jam_id: int,
     req: SaveQueueTrackRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[
-        SaveQueueTrackUseCase, Depends(get_save_queue_track_use_case)
-    ] = None,  # type: ignore[assignment]
+    use_case: Annotated[SaveQueueTrackUseCase, Depends(get_save_queue_track_use_case)],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
         SaveQueueTrackCommand(
@@ -336,7 +333,7 @@ def save_queue_track(
 def close_jam(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[CloseJamUseCase, Depends(get_close_jam_use_case)] = None,  # type: ignore[assignment]
+    use_case: Annotated[CloseJamUseCase, Depends(get_close_jam_use_case)],
 ) -> JamResponse:
     jam = use_case.execute(
         CloseJamCommand(
@@ -353,7 +350,7 @@ def advance_jam_playback(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         AdvanceJamPlaybackUseCase, Depends(get_advance_jam_playback_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> JamResponse:
     jam = use_case.execute(
         jam_id=jam_id,

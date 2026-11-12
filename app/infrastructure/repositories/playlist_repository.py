@@ -8,6 +8,7 @@ from app.application.ports.repositories.playlist_repository import (
 )
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.playlist import Playlist
+from app.infrastructure.repositories.connection import transaction
 from app.infrastructure.repositories.track_repository import _row_to_track
 lazy from app.domain.models.track import Track
 
@@ -21,6 +22,9 @@ def _row_to_playlist(row: sqlite3.Row, tracks: list[Track]) -> Playlist:
         row["max_duration_seconds"] if "max_duration_seconds" in keys else None
     )
     deck_filters = row["deck_filters"] if "deck_filters" in keys else None
+    source_playlist_id = (
+        row["source_playlist_id"] if "source_playlist_id" in keys else None
+    )
     return Playlist(
         playlist_id=row["playlist_id"],
         user_id=row["user_id"],
@@ -32,6 +36,7 @@ def _row_to_playlist(row: sqlite3.Row, tracks: list[Track]) -> Playlist:
         created_at=created_at,
         max_duration_seconds=max_duration,
         deck_filters=deck_filters,
+        source_playlist_id=source_playlist_id,
         initial_tracks=tracks,
     )
 
@@ -111,7 +116,8 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                         cover_image_url = ?,
                         is_exported = ?,
                         max_duration_seconds = ?,
-                        deck_filters = ?
+                        deck_filters = ?,
+                        source_playlist_id = ?
                     WHERE playlist_id = ?
                     """,
                     (
@@ -122,6 +128,7 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                         1 if playlist.is_exported else 0,
                         playlist.max_duration_seconds,
                         playlist.deck_filters,
+                        playlist.source_playlist_id,
                         playlist.playlist_id,
                     ),
                 )
@@ -149,8 +156,9 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
             """
             INSERT INTO playlists (
                 user_id, name, description, spotify_playlist_id, is_exported,
-                created_at, max_duration_seconds, deck_filters, cover_image_url
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                created_at, max_duration_seconds, deck_filters, cover_image_url,
+                source_playlist_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 playlist.user_id,
@@ -162,6 +170,7 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                 playlist.max_duration_seconds,
                 playlist.deck_filters,
                 playlist.cover_image_url,
+                playlist.source_playlist_id,
             ),
         )
         new_id = cursor.lastrowid
@@ -187,30 +196,30 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
         image_data: bytes,
         cover_image_url: str,
     ) -> bool:
-        exists = self.conn.execute(
-            "SELECT 1 FROM playlists WHERE playlist_id = ?",
-            (playlist_id,),
-        ).fetchone()
-        if exists is None:
-            return False
+        with transaction(self.conn) as cursor:
+            exists = cursor.execute(
+                "SELECT 1 FROM playlists WHERE playlist_id = ?",
+                (playlist_id,),
+            ).fetchone()
+            if exists is None:
+                return False
 
-        updated_at = datetime.now(UTC).isoformat()
-        self.conn.execute(
-            """
-            INSERT INTO playlist_images (playlist_id, content_type, image_data, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(playlist_id) DO UPDATE SET
-                content_type = excluded.content_type,
-                image_data = excluded.image_data,
-                updated_at = excluded.updated_at
-            """,
-            (playlist_id, content_type, image_data, updated_at),
-        )
-        self.conn.execute(
-            "UPDATE playlists SET cover_image_url = ? WHERE playlist_id = ?",
-            (cover_image_url, playlist_id),
-        )
-        self.conn.commit()
+            updated_at = datetime.now(UTC).isoformat()
+            cursor.execute(
+                """
+                INSERT INTO playlist_images (playlist_id, content_type, image_data, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(playlist_id) DO UPDATE SET
+                    content_type = excluded.content_type,
+                    image_data = excluded.image_data,
+                    updated_at = excluded.updated_at
+                """,
+                (playlist_id, content_type, image_data, updated_at),
+            )
+            cursor.execute(
+                "UPDATE playlists SET cover_image_url = ? WHERE playlist_id = ?",
+                (cover_image_url, playlist_id),
+            )
         return True
 
     def get_cover_image(self, playlist_id: int) -> tuple[str, bytes] | None:

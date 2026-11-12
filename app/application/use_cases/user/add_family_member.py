@@ -73,12 +73,12 @@ class AddFamilyMemberUseCase:
         current_dependents = self.user_repo.list_dependents(primary_user.user_id)
         if len(current_dependents) + 1 >= plan.max_profiles:
             raise BusinessRuleViolationError(
-                f"Limite máximo de {plan.max_profiles} perfis do plano Família atingido."
+                f"Family plan profile limit of {plan.max_profiles} reached."
             )
 
         email_clean = email.strip().lower()
         if self.user_repo.find_by_email(email_clean):
-            raise DuplicateEntityError(f"E-mail {email_clean} já está em uso.")
+            raise DuplicateEntityError(f"Email {email_clean} is already in use.")
 
         birth_date_str = birth_date.strip() if birth_date else None
         age = 0
@@ -86,15 +86,11 @@ class AddFamilyMemberUseCase:
             try:
                 bdate = date.fromisoformat(birth_date_str)
             except (ValueError, TypeError) as exc:
-                raise BusinessRuleViolationError(
-                    "Data de nascimento inválida."
-                ) from exc
+                raise BusinessRuleViolationError("Invalid birth date.") from exc
 
             today = datetime.now(tz=UTC).date()
             if bdate > today:
-                raise BusinessRuleViolationError(
-                    "Data de nascimento não pode estar no futuro."
-                )
+                raise BusinessRuleViolationError("Birth date cannot be in the future.")
             age = (
                 today.year
                 - bdate.year
@@ -169,4 +165,4 @@ class AddFamilyMemberUseCase:
                 birth_date=birth_date,
             )
 
-        raise BusinessRuleViolationError("Dados do membro da família incompletos.")
+        raise BusinessRuleViolationError("Family member details are incomplete.")

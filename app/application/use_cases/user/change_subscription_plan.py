@@ -26,7 +26,7 @@ class ChangeSubscriptionPlanUseCase:
 
         if user.primary_account_id is not None:
             raise PermissionDeniedError(
-                "Dependentes não podem alterar o plano do titular."
+                "Dependents cannot change the primary account subscription."
             )
 
         new_plan = self.plan_repo.find_by_id(new_plan_id)
@@ -36,7 +36,7 @@ class ChangeSubscriptionPlanUseCase:
         dependents = self.user_repo.list_dependents(user_id)
         if dependents and new_plan.max_profiles < len(dependents) + 1:
             raise BusinessRuleViolationError(
-                "O novo plano não comporta os membros vinculados."
+                "The new plan cannot accommodate currently linked members."
             )
 
         user.change_plan(new_plan_id)

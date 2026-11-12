@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 
 from app.application.dtos import (
     AuthenticateAdminCommand,
+    RegisterAdministratorCommand,
     UpdateSubscriptionPlanCommand,
 )
 from app.application.use_cases.admin import (
@@ -17,6 +18,7 @@ from app.application.use_cases.admin import (
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
+    RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
@@ -36,6 +38,7 @@ from app.presentation.schemas.admin import (
     CompactCatalogResponse,
     ExecutiveDashboardResponse,
     PlanResponse,
+    RegisterAdminRequest,
     SyncCatalogVersionResponse,
     TrackBlockResponse,
     TrackExplicitResponse,
@@ -53,36 +56,6 @@ from app.presentation.schemas.tracks_reviews import (
 )
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Console"])
-
-
-def _get_list_administrators_use_case(
-    request: Request,
-) -> ListAdministratorsUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(ListAdministratorsUseCase)
-    except KeyError:
-        return ListAdministratorsUseCase(user_repo=container.user_repo)
-
-
-def _get_update_admin_role_use_case(
-    request: Request,
-) -> UpdateAdminRoleUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(UpdateAdminRoleUseCase)
-    except KeyError:
-        return UpdateAdminRoleUseCase(user_repo=container.user_repo)
-
-
-def _get_list_blocked_tracks_use_case(
-    request: Request,
-) -> ListBlockedTracksUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(ListBlockedTracksUseCase)
-    except KeyError:
-        return ListBlockedTracksUseCase(track_repo=container.track_repo)
 
 
 def _get_compact_catalog_use_case(
@@ -168,12 +141,37 @@ def get_audience_report(
 )
 def list_administrators(
     use_case: Annotated[
-        ListAdministratorsUseCase, Depends(_get_list_administrators_use_case)
+        ListAdministratorsUseCase, Depends(provide(ListAdministratorsUseCase))
     ],
     admin_id: Annotated[int, Depends(require_admin)] = 0,
 ) -> list[UserResponse]:
     admins = use_case.execute()
     return [UserResponse.model_validate(a) for a in admins]
+
+
+@router.post(
+    "/administrators",
+    response_model=UserResponse,
+    status_code=201,
+)
+def register_administrator(
+    req: RegisterAdminRequest,
+    admin_id: Annotated[int, Depends(require_admin)],
+    use_case: Annotated[
+        RegisterAdministratorUseCase, Depends(provide(RegisterAdministratorUseCase))
+    ],
+) -> UserResponse:
+    user = use_case.execute(
+        RegisterAdministratorCommand(
+            creator_admin_id=admin_id,
+            email=req.email,
+            password=req.password,
+            display_name=req.display_name,
+            age=req.age,
+            birth_date=req.birth_date,
+        )
+    )
+    return UserResponse.model_validate(user)
 
 
 @router.put(
@@ -185,7 +183,7 @@ def update_admin_role(
     req: UpdateAdminRoleRequest,
     admin_id: Annotated[int, Depends(require_admin)],
     use_case: Annotated[
-        UpdateAdminRoleUseCase, Depends(_get_update_admin_role_use_case)
+        UpdateAdminRoleUseCase, Depends(provide(UpdateAdminRoleUseCase))
     ],
 ) -> UserResponse:
     user = use_case.execute(
@@ -202,7 +200,7 @@ def update_admin_role(
 )
 def list_blocked_tracks(
     use_case: Annotated[
-        ListBlockedTracksUseCase, Depends(_get_list_blocked_tracks_use_case)
+        ListBlockedTracksUseCase, Depends(provide(ListBlockedTracksUseCase))
     ],
     admin_id: Annotated[int, Depends(require_admin)] = 0,
 ) -> list[CatalogTrackResponse]:

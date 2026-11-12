@@ -22,6 +22,7 @@ def _row_to_interaction(row: sqlite3.Row) -> Interaction:
         action=InteractionAction(row["action"]),
         created_at=created_at,
         source=row["source"] if "source" in keys else None,
+        jam_id=row["jam_id"] if "jam_id" in keys else None,
     )
 
 
@@ -46,12 +47,15 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
         created_at_str = (interaction.created_at or datetime.now(UTC)).isoformat()
         self.conn.execute(
             """
-            INSERT INTO interactions (user_id, track_id, action, created_at, source)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO interactions (
+                user_id, track_id, action, created_at, source, jam_id
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(user_id, track_id) DO UPDATE SET
                 action = excluded.action,
                 created_at = excluded.created_at,
-                source = excluded.source
+                source = excluded.source,
+                jam_id = excluded.jam_id
             """,
             (
                 interaction.user_id,
@@ -59,6 +63,7 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
                 interaction.action.value,
                 created_at_str,
                 interaction.source,
+                interaction.jam_id,
             ),
         )
         self.conn.commit()

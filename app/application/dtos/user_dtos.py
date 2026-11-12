@@ -33,31 +33,99 @@ class UserProfileResult:
     recent_interactions: list[Interaction] = field(default_factory=list)
 
     def __getitem__(self, item: str) -> Any:
-        if item in ("user", "usuario"):
+        if item == "user":
             return self.user
-        if item in ("plan", "plano"):
+        if item == "plan":
             return self.plan
-        if item in (
-            "recent_interactions",
-            "interacoes_recentes",
-            "ultimas_interacoes",
-        ):
+        if item == "recent_interactions":
             return self.recent_interactions
         raise KeyError(item)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
+class GenreStat:
+    genre: str
+    likes: int
+    superlikes: int
+    dislikes: int
+    total_positive: int
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ArtistStat:
+    artist: str
+    likes: int
+    superlikes: int
+    dislikes: int
+    total_positive: int
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class YearlyInteractionStat:
+    year: int
+    likes: int
+    superlikes: int
+    dislikes: int
+    total: int
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class MonthlyInteractionStat:
+    month: int
+    likes: int
+    superlikes: int
+    dislikes: int
+    total: int
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ReleaseYearStat:
+    release_year: int
+    likes: int
+    superlikes: int
+    total_positive: int
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class SourceStat:
+    source: str
+    likes: int
+    superlikes: int
+    dislikes: int
+    total: int
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
 class AnnualStatsResult:
     user_id: int
-    estimated_listening_hours: float
-    total_likes: int
-    top_genres: list[str]
-    top_artists: list[str]
+    year: int | None = None
+    available_years: list[int] = field(default_factory=list)
+    total_interactions: int = 0
+    total_likes: int = 0
+    total_superlikes: int = 0
+    total_dislikes: int = 0
+    positive_rate: float = 0.0
+    top_genres: list[GenreStat] = field(default_factory=list)
+    top_artists: list[ArtistStat] = field(default_factory=list)
+    by_interaction_year: list[YearlyInteractionStat] = field(default_factory=list)
+    by_month: list[MonthlyInteractionStat] = field(default_factory=list)
+    by_release_year: list[ReleaseYearStat] = field(default_factory=list)
+    by_source: list[SourceStat] = field(default_factory=list)
+    total_reviews: int = 0
+    average_rating: float = 0.0
+    total_playlists: int = 0
+    total_jams_participated: int = 0
 
 
 __all__ = [
     "AddFamilyMemberCommand",
     "AnnualStatsResult",
+    "ArtistStat",
+    "GenreStat",
+    "MonthlyInteractionStat",
+    "ReleaseYearStat",
+    "SourceStat",
     "UpdateProfileCommand",
     "UserProfileResult",
+    "YearlyInteractionStat",
 ]

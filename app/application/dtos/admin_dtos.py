@@ -50,10 +50,21 @@ class AuditLogEntryResult:
     status: str
 
 
+@dataclass(slots=True, frozen=True, kw_only=True)
+class RegisterAdministratorCommand:
+    creator_admin_id: int
+    email: str
+    password: str
+    display_name: str
+    age: int = 30
+    birth_date: str | None = None
+
+
 __all__ = [
     "AudienceReportResult",
     "AuditLogEntryResult",
     "ExecutiveDashboardResult",
+    "RegisterAdministratorCommand",
     "UpdateAdminRoleCommand",
     "UpdateSubscriptionPlanCommand",
     "UserPlanSummaryResult",

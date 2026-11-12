@@ -17,7 +17,7 @@ class ListUserInteractionsUseCase:
 
     user_repo: UserRepositoryPort
     interaction_repo: InteractionRepositoryPort
-    track_repo: TrackRepositoryPort | None = None
+    track_repo: TrackRepositoryPort
 
     def execute(
         self, user_id: int, action: InteractionAction | None = None
@@ -27,12 +27,11 @@ class ListUserInteractionsUseCase:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
         interactions = self.interaction_repo.list_by_user(user_id, action=action)
-        if self.track_repo is None:
-            return interactions
-
+        track_ids = [interaction.track_id for interaction in interactions]
+        tracks_by_id = self.track_repo.find_by_ids(track_ids)
         visible: list[Interaction] = []
         for interaction in interactions:
-            track = self.track_repo.find_by_id(interaction.track_id)
+            track = tracks_by_id.get(interaction.track_id)
             if (
                 track is not None
                 and not track.is_deleted

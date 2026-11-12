@@ -6,6 +6,7 @@ from fastapi import Request
 
 from app.application.dtos import (
     AuthenticateAdminCommand,
+    RegisterAdministratorCommand,
     UpdateSubscriptionPlanCommand,
 )
 from app.application.dtos.auth_dtos import AuthResult
@@ -17,6 +18,7 @@ from app.application.use_cases.admin import (
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
+    RegisterAdministratorUseCase,
     UpdateAdminRoleUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
@@ -33,12 +35,14 @@ from app.presentation.routers.admin import (
     list_plans,
     list_users,
     login_admin,
+    register_administrator,
     update_admin_role,
     update_plan,
     update_track_explicit,
 )
 from app.presentation.schemas.admin import (
     BlockTrackRequest,
+    RegisterAdminRequest,
     UpdateAdminRoleRequest,
     UpdatePlanAdminRequest,
     UpdateTrackExplicitRequest,
@@ -151,6 +155,43 @@ def test_list_administrators_router_returns_users() -> None:
     assert res[0].user_id == 1
     assert res[0].is_admin is True
     mock_use_case.execute.assert_called_once_with()
+
+
+def test_register_administrator_router_forwards_command() -> None:
+    mock_use_case = MagicMock(spec=RegisterAdministratorUseCase)
+    created_admin = User(
+        user_id=5,
+        email="gabriel.agra@usp.br",
+        password_hash="hashed_pw",
+        display_name="Gabriel Agra",
+        age=30,
+        plan_id=1,
+        is_admin=True,
+    )
+    mock_use_case.execute.return_value = created_admin
+    req = RegisterAdminRequest(
+        email="gabriel.agra@usp.br",
+        password="secretpassword",
+        display_name="Gabriel Agra",
+        age=30,
+    )
+
+    res = register_administrator(req=req, admin_id=1, use_case=mock_use_case)
+
+    assert res.user_id == 5
+    assert res.email == "gabriel.agra@usp.br"
+    assert res.display_name == "Gabriel Agra"
+    assert res.is_admin is True
+    mock_use_case.execute.assert_called_once_with(
+        RegisterAdministratorCommand(
+            creator_admin_id=1,
+            email="gabriel.agra@usp.br",
+            password="secretpassword",
+            display_name="Gabriel Agra",
+            age=30,
+            birth_date=None,
+        )
+    )
 
 
 def test_update_admin_role_router_updates_role() -> None:

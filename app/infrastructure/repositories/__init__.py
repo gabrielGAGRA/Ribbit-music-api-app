@@ -30,6 +30,9 @@ from app.infrastructure.repositories.track_repository import (
 from app.infrastructure.repositories.user_repository import (
     SQLiteUserRepository,
 )
+from app.infrastructure.repositories.user_stats_repository import (
+    SQLiteUserStatsRepository,
+)
 
 AuditLogRepository = SQLiteAuditLogRepository
 InteractionRepository = SQLiteInteractionRepository
@@ -39,6 +42,7 @@ PlaylistRepository = SQLitePlaylistRepository
 ReviewRepository = SQLiteReviewRepository
 TrackRepository = SQLiteTrackRepository
 UserRepository = SQLiteUserRepository
+UserStatsRepository = SQLiteUserStatsRepository
 
 __all__ = [
     "AuditLogRepository",
@@ -57,8 +61,10 @@ __all__ = [
     "SQLiteReviewRepository",
     "SQLiteTrackRepository",
     "SQLiteUserRepository",
+    "SQLiteUserStatsRepository",
     "TrackRepository",
     "UserRepository",
+    "UserStatsRepository",
     "create_connection",
     "transaction",
 ]

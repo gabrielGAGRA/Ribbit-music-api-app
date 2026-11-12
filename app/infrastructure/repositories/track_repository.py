@@ -9,6 +9,17 @@ from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.track import Track, TrackId
 
 
+def _sqlite_translate(value: str | None, from_chars: str, to_chars: str) -> str | None:
+    if value is None:
+        return None
+
+    translation_table = {
+        ord(char): to_chars[index] if index < len(to_chars) else None
+        for index, char in enumerate(from_chars)
+    }
+    return value.translate(translation_table)
+
+
 def _row_to_track(row: sqlite3.Row) -> Track:
     created_at = (
         datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
@@ -31,11 +42,112 @@ def _row_to_track(row: sqlite3.Row) -> Track:
     )
 
 
+def _normalize_string_sequence(value: str | Sequence[str] | None) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return [cleaned] if cleaned else []
+    cleaned_items: list[str] = []
+    for item in value:
+        cleaned = (item if isinstance(item, str) else str(item)).strip()
+        if cleaned:
+            cleaned_items.append(cleaned)
+    return cleaned_items
+
+
+def _normalize_year_sequence(value: int | Sequence[int] | None) -> list[int]:
+    if value is None:
+        return []
+    if isinstance(value, int):
+        return [value]
+    results: list[int] = []
+    for item in value:
+        if isinstance(item, int):
+            results.append(item)
+        else:
+            try:
+                results.append(int(str(item).strip()))
+            except TypeError, ValueError:
+                continue
+    return results
+
+
+def _append_like_clause(
+    conditions: list[str],
+    params: list[object],
+    column: str,
+    values: list[str],
+) -> None:
+    if not values:
+        return
+    clauses = " OR ".join(f"lower({column}) LIKE ?" for _ in values)
+    conditions.append(f"({clauses})")
+    params.extend(f"%{v.lower()}%" for v in values)
+
+
+def _append_exact_clause(
+    conditions: list[str],
+    params: list[object],
+    column: str,
+    values: list[str],
+) -> None:
+    if not values:
+        return
+    clauses = " OR ".join(f"lower({column}) = ?" for _ in values)
+    conditions.append(f"({clauses})")
+    params.extend(v.lower() for v in values)
+
+
+def _append_in_clause(
+    conditions: list[str],
+    params: list[object],
+    column: str,
+    values: list[int],
+) -> None:
+    if not values:
+        return
+    placeholders = ",".join("?" for _ in values)
+    conditions.append(f"{column} IN ({placeholders})")
+    params.extend(values)
+
+
+def _build_filter_conditions(
+    *,
+    artist: str | Sequence[str] | None,
+    album: str | Sequence[str] | None,
+    genre: str | Sequence[str] | None,
+    year: int | Sequence[int] | None,
+    query: str | None,
+) -> tuple[list[str], list[object]]:
+    conditions: list[str] = ["is_deleted = 0"]
+    params: list[object] = []
+
+    if query:
+        like_term = f"%{query.lower()}%"
+        conditions.append(
+            "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
+        )
+        params.extend([like_term, like_term, like_term])
+
+    _append_like_clause(
+        conditions, params, "artist", _normalize_string_sequence(artist)
+    )
+    _append_like_clause(conditions, params, "album", _normalize_string_sequence(album))
+    _append_exact_clause(conditions, params, "genre", _normalize_string_sequence(genre))
+    _append_in_clause(
+        conditions, params, "release_year", _normalize_year_sequence(year)
+    )
+
+    return conditions, params
+
+
 class SQLiteTrackRepository(TrackRepositoryPort):
     """SQLite adapter implementing TrackRepositoryPort."""
 
     def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
+        self.conn.create_function("TRANSLATE", 3, _sqlite_translate)
 
     def find_by_id(self, track_id: int) -> Track | None:
         cursor = self.conn.execute(
@@ -201,8 +313,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             params.extend(clean_genres)
 
         normalized_genre = (
-            "' ' || lower(replace(replace(replace(replace(genre, '-', ' '), "
-            "'/', ' '), '&', ' '), ',', ' ')) || ' '"
+            "' ' || lower(TRANSLATE(genre, '-/&,.;:()[]!', '            ')) || ' '"
         )
         if excluded_genre_terms:
             for term in excluded_genre_terms:
@@ -222,36 +333,21 @@ class SQLiteTrackRepository(TrackRepositoryPort):
     def find_by_filters(
         self,
         *,
-        artist: str | None = None,
-        album: str | None = None,
-        genre: str | None = None,
-        year: int | None = None,
+        artist: str | Sequence[str] | None = None,
+        album: str | Sequence[str] | None = None,
+        genre: str | Sequence[str] | None = None,
+        year: int | Sequence[int] | None = None,
         query: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Track]:
-        conditions = ["is_deleted = 0"]
-        params: list[object] = []
-
-        if query:
-            like_term = f"%{query.lower()}%"
-            conditions.append(
-                "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
-            )
-            params.extend([like_term, like_term, like_term])
-        if artist:
-            conditions.append("lower(artist) LIKE ?")
-            params.append(f"%{artist.lower()}%")
-        if album:
-            conditions.append("lower(album) LIKE ?")
-            params.append(f"%{album.lower()}%")
-        if genre:
-            conditions.append("lower(genre) = ?")
-            params.append(genre.lower())
-        if year is not None:
-            conditions.append("release_year = ?")
-            params.append(year)
-
+        conditions, params = _build_filter_conditions(
+            artist=artist,
+            album=album,
+            genre=genre,
+            year=year,
+            query=query,
+        )
         where_clause = " AND ".join(conditions)
         sql = f"SELECT * FROM tracks WHERE {where_clause} ORDER BY track_id ASC LIMIT ? OFFSET ?"  # noqa: S608
         params.extend([limit, offset])
@@ -286,7 +382,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         return _row_to_track(row) if row else None
 
     def list_blocked(self) -> list[Track]:
-
         cursor = self.conn.execute(
             "SELECT * FROM tracks WHERE is_deleted = 1 ORDER BY track_id ASC"
         )

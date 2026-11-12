@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends
 
 from app.application.dtos import RecordSwipeCommand
 from app.application.use_cases.discovery import (
@@ -11,7 +11,7 @@ from app.application.use_cases.discovery import (
     UndoLatestDiscoveryInteractionUseCase,
 )
 from app.domain.models.interaction import InteractionAction
-from app.presentation.dependencies import get_container, provide, require_user
+from app.presentation.dependencies import provide, require_user
 from app.presentation.schemas import (
     InteractionRequest,
     InteractionResponse,
@@ -20,17 +20,6 @@ from app.presentation.schemas import (
 )
 
 router = APIRouter(tags=["Discovery"])
-
-
-def get_undo_discovery_interaction_use_case(
-    request: Request,
-) -> UndoLatestDiscoveryInteractionUseCase:
-    container = get_container(request)
-    return UndoLatestDiscoveryInteractionUseCase(
-        user_repo=container.user_repo,
-        plan_repo=container.plan_repo,
-        interaction_repo=container.interaction_repo,
-    )
 
 
 @router.get("/api/discovery/next", response_model=TrackResponse | None)
@@ -75,7 +64,7 @@ def undo_latest_discovery_interaction(
     user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         UndoLatestDiscoveryInteractionUseCase,
-        Depends(get_undo_discovery_interaction_use_case),
+        Depends(provide(UndoLatestDiscoveryInteractionUseCase)),
     ],
 ) -> UndoInteractionResponse:
     interaction = use_case.execute(user_id=user_id)

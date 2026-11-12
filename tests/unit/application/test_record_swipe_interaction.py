@@ -214,9 +214,7 @@ def test_record_swipe_interaction_minor_on_explicit_track_raises_violation() -> 
         action=InteractionAction.LIKE,
     )
 
-    with pytest.raises(
-        BusinessRuleViolationError, match="bloqueada para usuários menores"
-    ):
+    with pytest.raises(BusinessRuleViolationError, match="restricted for minor users"):
         use_case.execute(command)
 
     interaction_repo.save.assert_not_called()
@@ -260,9 +258,7 @@ def test_record_swipe_interaction_blocked_genre_raises_violation() -> None:
         action=InteractionAction.LIKE,
     )
 
-    with pytest.raises(
-        BusinessRuleViolationError, match="Gênero bloqueado pelo usuário"
-    ):
+    with pytest.raises(BusinessRuleViolationError, match="Genre is blocked by user"):
         use_case.execute(command)
 
     interaction_repo.save.assert_not_called()

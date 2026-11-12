@@ -12,14 +12,18 @@ from app.application.use_cases.user import (
     ChangeTrackInteractionUseCase,
     DeleteUserAccountUseCase,
     GetAnnualListeningStatsUseCase,
+    GetPreferredThemeUseCase,
     GetUserProfileUseCase,
     LinkSpotifyAccountUseCase,
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
+    ListFavoriteGenresUseCase,
     ListPlansUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
+    UpdateFavoriteGenresUseCase,
+    UpdatePreferredThemeUseCase,
     UpdateProfileUseCase,
 )
 from app.domain.models.interaction import InteractionAction
@@ -31,9 +35,11 @@ from app.presentation.schemas import (
     BlockedGenresRequest,
     ChangeInteractionRequest,
     ChangePlanRequest,
+    FavoriteGenresRequest,
     InteractionResponse,
     LinkSpotifyRequest,
     PlanResponse,
+    ThemePreferenceRequest,
     UpdateProfileRequest,
     UserProfileResponse,
     UserResponse,
@@ -140,8 +146,9 @@ def get_annual_stats(
         GetAnnualListeningStatsUseCase,
         Depends(provide(GetAnnualListeningStatsUseCase)),
     ],
+    year: Annotated[int | None, Query(ge=1900, le=2100)] = None,
 ) -> AnnualStatsResponse:
-    stats = use_case.execute(user_id=user_id)
+    stats = use_case.execute(user_id=user_id, year=year)
     return AnnualStatsResponse.model_validate(stats)
 
 
@@ -203,6 +210,60 @@ def update_blocked_genres(
     user = use_case.execute(
         user_id=user_id,
         blocked_genres=blocked_list,
+    )
+    return UserResponse.model_validate(user)
+
+
+@router.get("/api/profile/favorite-genres", response_model=list[str])
+def list_favorite_genres(
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        ListFavoriteGenresUseCase, Depends(provide(ListFavoriteGenresUseCase))
+    ],
+) -> list[str]:
+    return use_case.execute(user_id=user_id)
+
+
+@router.put("/api/profile/favorite-genres", response_model=UserResponse)
+def update_favorite_genres(
+    req: FavoriteGenresRequest,
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        UpdateFavoriteGenresUseCase, Depends(provide(UpdateFavoriteGenresUseCase))
+    ],
+) -> UserResponse:
+    if isinstance(req.favorite_genres, str):
+        favorite_list = [g.strip() for g in req.favorite_genres.split(",") if g.strip()]
+    else:
+        favorite_list = [str(g).strip() for g in req.favorite_genres if str(g).strip()]
+    user = use_case.execute(
+        user_id=user_id,
+        favorite_genres=favorite_list,
+    )
+    return UserResponse.model_validate(user)
+
+
+@router.get("/api/profile/theme", response_model=str)
+def get_preferred_theme(
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        GetPreferredThemeUseCase, Depends(provide(GetPreferredThemeUseCase))
+    ],
+) -> str:
+    return use_case.execute(user_id=user_id)
+
+
+@router.put("/api/profile/theme", response_model=UserResponse)
+def update_preferred_theme(
+    req: ThemePreferenceRequest,
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        UpdatePreferredThemeUseCase, Depends(provide(UpdatePreferredThemeUseCase))
+    ],
+) -> UserResponse:
+    user = use_case.execute(
+        user_id=user_id,
+        preferred_theme=req.preferred_theme,
     )
     return UserResponse.model_validate(user)
 
