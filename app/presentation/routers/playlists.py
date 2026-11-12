@@ -236,7 +236,7 @@ def create_deck_playlist(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         CreateDeckPlaylistUseCase, Depends(get_create_deck_playlist_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> PlaylistResponse:
     playlist = use_case.execute(
         CreateDeckPlaylistCommand(
@@ -259,11 +259,11 @@ def create_deck_playlist(
 def get_playlist_deck(
     playlist_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
-    cursor_id: Annotated[int | None, Query(gt=0)] = None,
     use_case: Annotated[
         GetPlaylistDeckUseCase, Depends(get_get_playlist_deck_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
+    limit: Annotated[int | None, Query(ge=1, le=100)] = None,
+    cursor_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> PaginatedTracksResponse:
     page_limit = limit if isinstance(limit, int) else 20
     cursor_val = cursor_id if isinstance(cursor_id, int) else None
@@ -289,7 +289,7 @@ def swipe_add_track(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         AddTrackToPlaylistUseCase, Depends(get_add_track_to_playlist_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> ActionSuccessResponse:
     use_case.execute(
         AddTrackToPlaylistCommand(
@@ -327,7 +327,7 @@ def remove_track(
     use_case: Annotated[
         RemoveTrackFromPlaylistUseCase,
         Depends(get_remove_track_from_playlist_use_case),
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
         RemoveTrackFromPlaylistCommand(
@@ -343,9 +343,7 @@ def remove_track(
 def delete_playlist(
     playlist_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[
-        DeletePlaylistUseCase, Depends(get_delete_playlist_use_case)
-    ] = None,  # type: ignore[assignment]
+    use_case: Annotated[DeletePlaylistUseCase, Depends(get_delete_playlist_use_case)],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
         DeletePlaylistCommand(
@@ -361,7 +359,7 @@ def list_playlists(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         ListUserPlaylistsUseCase, Depends(get_list_user_playlists_use_case)
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> list[PlaylistResponse]:
     playlists = use_case.execute(user_id=current_user_id)
     return [_build_playlist_response(p) for p in playlists]
@@ -377,7 +375,7 @@ def export_playlist_to_spotify(
     use_case: Annotated[
         ExportPlaylistToSpotifyUseCase,
         Depends(get_export_playlist_to_spotify_use_case),
-    ] = None,  # type: ignore[assignment]
+    ],
 ) -> PlaylistResponse:
     playlist = use_case.execute(
         user_id=current_user_id,

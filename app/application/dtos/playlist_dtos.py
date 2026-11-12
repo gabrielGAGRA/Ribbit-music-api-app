@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
+lazy from collections.abc import Iterator
 
 lazy from app.domain.models.playlist import Playlist
 lazy from app.domain.models.track import Track
@@ -37,7 +38,7 @@ class PlaylistDeckResult:
     next_cursor: int | None = None
     has_more: bool = False
 
-    def __iter__(self):  # type: ignore[no-untyped-def]
+    def __iter__(self) -> Iterator[object]:
         return iter((self.items, self.next_cursor, self.has_more))
 
 
