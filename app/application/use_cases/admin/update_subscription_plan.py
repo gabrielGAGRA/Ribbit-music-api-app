@@ -34,7 +34,7 @@ class UpdateSubscriptionPlanUseCase:
                 dependents = self.user_repo.list_dependents(user.user_id)
                 if len(dependents) + 1 > max_profiles:
                     raise BusinessRuleViolationError(
-                        "O limite não pode ser menor que os perfis já vinculados."
+                        "Plan profile limit cannot be less than currently linked member profiles."
                     )
 
     def execute(self, command: UpdateSubscriptionPlanCommand) -> Plan:
@@ -48,14 +48,14 @@ class UpdateSubscriptionPlanUseCase:
         if command.new_name is not None:
             cleaned = command.new_name.strip()
             if not cleaned:
-                raise BusinessRuleViolationError("O nome do plano é obrigatório.")
+                raise BusinessRuleViolationError("Plan name is required.")
             existing = self.plan_repo.find_by_name(cleaned)
             if (
                 existing is not None
                 and isinstance(getattr(existing, "plan_id", None), int)
                 and existing.plan_id != command.plan_id
             ):
-                raise DuplicateEntityError("Já existe um plano com esse nome.")
+                raise DuplicateEntityError("A plan with this name already exists.")
             plan.update_name(cleaned)
 
         if command.max_profiles is not None:

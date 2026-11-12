@@ -14,7 +14,7 @@ class CreateJamRequest(BaseModel):
     duration_minutes: int = Field(default=60, gt=0)
     max_superlikes: int = Field(default=10, ge=0)
     skip_votes_threshold: int = Field(default=3, gt=0)
-    deck_source: str = "livre"
+    deck_source: str = "free"
     source_playlist_id: int | None = None
 
 
@@ -103,7 +103,7 @@ class JamResponse(BaseModel):
     superlikes_used: int = 0
     skip_votes_threshold: int = 3
     accumulated_duration_seconds: int = 0
-    deck_source: str = "livre"
+    deck_source: str = "free"
     source_playlist_id: int | None = None
 
 

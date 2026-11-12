@@ -33,15 +33,11 @@ class UserProfileResult:
     recent_interactions: list[Interaction] = field(default_factory=list)
 
     def __getitem__(self, item: str) -> Any:
-        if item in ("user", "usuario"):
+        if item == "user":
             return self.user
-        if item in ("plan", "plano"):
+        if item == "plan":
             return self.plan
-        if item in (
-            "recent_interactions",
-            "interacoes_recentes",
-            "ultimas_interacoes",
-        ):
+        if item == "recent_interactions":
             return self.recent_interactions
         raise KeyError(item)
 

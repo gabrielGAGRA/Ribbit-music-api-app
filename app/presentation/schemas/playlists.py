@@ -1,6 +1,6 @@
 """Playlist and track presentation schemas."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
 class TrackResponse(BaseModel):
@@ -35,8 +35,25 @@ class DeckPlaylistRequest(BaseModel):
     artist: str | list[str] | None = None
     country: str | list[str] | None = None
     description: str | None = Field(default=None, max_length=500)
-    reference_playlist_id: int | None = None
-    source_playlist_id: int | None = None
+    source_playlist_id: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("source_playlist_id", "reference_playlist_id"),
+    )
+
+    @field_validator("year")
+    @classmethod
+    def validate_year(cls, value: int | list[int] | None) -> int | list[int] | None:
+        if value is None:
+            return None
+        years = [value] if isinstance(value, int) else value
+        for y in years:
+            if not (1900 <= y <= 2100):
+                raise ValueError(f"Year must be between 1900 and 2100, got {y}.")
+        return value
+
+    @property
+    def reference_playlist_id(self) -> int | None:
+        return self.source_playlist_id
 
 
 class SwipeAddTrackRequest(BaseModel):

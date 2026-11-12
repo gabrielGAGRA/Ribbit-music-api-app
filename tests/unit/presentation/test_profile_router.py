@@ -10,14 +10,18 @@ from app.application.use_cases.user import (
     ChangeTrackInteractionUseCase,
     DeleteUserAccountUseCase,
     GetAnnualListeningStatsUseCase,
+    GetPreferredThemeUseCase,
     GetUserProfileUseCase,
     LinkSpotifyAccountUseCase,
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
+    ListFavoriteGenresUseCase,
     ListPlansUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
+    UpdateFavoriteGenresUseCase,
+    UpdatePreferredThemeUseCase,
     UpdateProfileUseCase,
 )
 from app.domain.models import Interaction, InteractionAction, Plan, User
@@ -28,14 +32,18 @@ from app.presentation.routers.profile import (
     change_plan,
     delete_account,
     get_annual_stats,
+    get_preferred_theme,
     get_profile,
     link_spotify,
     list_blocked_genres,
     list_family_members,
+    list_favorite_genres,
     list_interactions,
     list_plans,
     remove_family_member,
     update_blocked_genres,
+    update_favorite_genres,
+    update_preferred_theme,
     update_profile,
 )
 from app.presentation.schemas import (
@@ -43,7 +51,9 @@ from app.presentation.schemas import (
     BlockedGenresRequest,
     ChangeInteractionRequest,
     ChangePlanRequest,
+    FavoriteGenresRequest,
     LinkSpotifyRequest,
+    ThemePreferenceRequest,
     UpdateProfileRequest,
 )
 
@@ -286,6 +296,75 @@ def test_update_blocked_genres_accepts_list_of_strings() -> None:
     )
 
 
+def test_list_favorite_genres_returns_genre_strings() -> None:
+    mock_use_case = MagicMock(spec=ListFavoriteGenresUseCase)
+    mock_use_case.execute.return_value = ["electronic", "indie", "rock"]
+
+    res = list_favorite_genres(user_id=10, use_case=mock_use_case)
+
+    assert res == ["electronic", "indie", "rock"]
+    mock_use_case.execute.assert_called_once_with(user_id=10)
+
+
+def test_update_favorite_genres_parses_comma_separated_string() -> None:
+    mock_use_case = MagicMock(spec=UpdateFavoriteGenresUseCase)
+    user = _sample_user(10)
+    user.update_favorite_genres(["rock", "pop"])
+    mock_use_case.execute.return_value = user
+    req = FavoriteGenresRequest(favorite_genres=" rock , pop ,  ")
+
+    res = update_favorite_genres(req=req, user_id=10, use_case=mock_use_case)
+
+    assert res.user_id == 10
+    mock_use_case.execute.assert_called_once_with(
+        user_id=10,
+        favorite_genres=["rock", "pop"],
+    )
+
+
+def test_update_favorite_genres_accepts_list_of_strings() -> None:
+    mock_use_case = MagicMock(spec=UpdateFavoriteGenresUseCase)
+    user = _sample_user(10)
+    user.update_favorite_genres(["jazz", "metal"])
+    mock_use_case.execute.return_value = user
+    req = FavoriteGenresRequest(favorite_genres=[" jazz ", "metal", " "])
+
+    res = update_favorite_genres(req=req, user_id=10, use_case=mock_use_case)
+
+    assert res.user_id == 10
+    mock_use_case.execute.assert_called_once_with(
+        user_id=10,
+        favorite_genres=["jazz", "metal"],
+    )
+
+
+def test_get_preferred_theme_returns_theme_string() -> None:
+    mock_use_case = MagicMock(spec=GetPreferredThemeUseCase)
+    mock_use_case.execute.return_value = "dark"
+
+    res = get_preferred_theme(user_id=10, use_case=mock_use_case)
+
+    assert res == "dark"
+    mock_use_case.execute.assert_called_once_with(user_id=10)
+
+
+def test_update_preferred_theme_forwards_parameter_and_returns_user() -> None:
+    mock_use_case = MagicMock(spec=UpdatePreferredThemeUseCase)
+    user = _sample_user(10)
+    user.update_preferred_theme("dark")
+    mock_use_case.execute.return_value = user
+    req = ThemePreferenceRequest(preferred_theme="dark")
+
+    res = update_preferred_theme(req=req, user_id=10, use_case=mock_use_case)
+
+    assert res.user_id == 10
+    assert res.preferred_theme == "dark"
+    mock_use_case.execute.assert_called_once_with(
+        user_id=10,
+        preferred_theme="dark",
+    )
+
+
 def test_list_family_members_returns_dependent_users() -> None:
     mock_use_case = MagicMock(spec=ListFamilyMembersUseCase)
     dependent = _sample_user(11, plan_id=3)
@@ -404,6 +483,8 @@ def test_profile_router_keeps_canonical_and_legacy_history_routes() -> None:
     assert "/api/profile/plan" in paths
     assert "/api/profile/account" in paths
     assert "/api/profile/blocked-genres" in paths
+    assert "/api/profile/favorite-genres" in paths
+    assert "/api/profile/theme" in paths
     assert "/api/profile/interactions" in paths
     assert "/api/profile/history" not in paths
     assert "/api/profile/family/members" in paths

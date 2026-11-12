@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query
 
 from app.application.dtos import UpdateProfileCommand
 from app.application.use_cases.user import (
@@ -12,20 +12,22 @@ from app.application.use_cases.user import (
     ChangeTrackInteractionUseCase,
     DeleteUserAccountUseCase,
     GetAnnualListeningStatsUseCase,
+    GetPreferredThemeUseCase,
     GetUserProfileUseCase,
     LinkSpotifyAccountUseCase,
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
+    ListFavoriteGenresUseCase,
     ListPlansUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
+    UpdateFavoriteGenresUseCase,
+    UpdatePreferredThemeUseCase,
     UpdateProfileUseCase,
 )
-from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.interaction import InteractionAction
 from app.presentation.dependencies import provide, require_user
-from app.presentation.dependencies.container import get_container
 from app.presentation.schemas import (
     ActionSuccessResponse,
     AddFamilyMemberRequest,
@@ -213,56 +215,56 @@ def update_blocked_genres(
 
 @router.get("/api/profile/favorite-genres", response_model=list[str])
 def list_favorite_genres(
-    request: Request,
     user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        ListFavoriteGenresUseCase, Depends(provide(ListFavoriteGenresUseCase))
+    ],
 ) -> list[str]:
-    user = get_container(request).user_repo.find_by_id(user_id)
-    if user is None:
-        raise EntityNotFoundError(f"User with ID {user_id} not found.")
-    return sorted(user.favorite_genres)
+    return use_case.execute(user_id=user_id)
 
 
 @router.put("/api/profile/favorite-genres", response_model=UserResponse)
 def update_favorite_genres(
     req: FavoriteGenresRequest,
-    request: Request,
     user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        UpdateFavoriteGenresUseCase, Depends(provide(UpdateFavoriteGenresUseCase))
+    ],
 ) -> UserResponse:
-    user = get_container(request).user_repo.find_by_id(user_id)
-    if user is None:
-        raise EntityNotFoundError(f"User with ID {user_id} not found.")
     if isinstance(req.favorite_genres, str):
         favorite_list = [g.strip() for g in req.favorite_genres.split(",") if g.strip()]
     else:
         favorite_list = [str(g).strip() for g in req.favorite_genres if str(g).strip()]
-    user.update_favorite_genres(favorite_list)
-    saved = get_container(request).user_repo.save(user)
-    return UserResponse.model_validate(saved)
+    user = use_case.execute(
+        user_id=user_id,
+        favorite_genres=favorite_list,
+    )
+    return UserResponse.model_validate(user)
 
 
 @router.get("/api/profile/theme", response_model=str)
 def get_preferred_theme(
-    request: Request,
     user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        GetPreferredThemeUseCase, Depends(provide(GetPreferredThemeUseCase))
+    ],
 ) -> str:
-    user = get_container(request).user_repo.find_by_id(user_id)
-    if user is None:
-        raise EntityNotFoundError(f"User with ID {user_id} not found.")
-    return user.preferred_theme
+    return use_case.execute(user_id=user_id)
 
 
 @router.put("/api/profile/theme", response_model=UserResponse)
 def update_preferred_theme(
     req: ThemePreferenceRequest,
-    request: Request,
     user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        UpdatePreferredThemeUseCase, Depends(provide(UpdatePreferredThemeUseCase))
+    ],
 ) -> UserResponse:
-    user = get_container(request).user_repo.find_by_id(user_id)
-    if user is None:
-        raise EntityNotFoundError(f"User with ID {user_id} not found.")
-    user.update_preferred_theme(req.preferred_theme)
-    saved = get_container(request).user_repo.save(user)
-    return UserResponse.model_validate(saved)
+    user = use_case.execute(
+        user_id=user_id,
+        preferred_theme=req.preferred_theme,
+    )
+    return UserResponse.model_validate(user)
 
 
 # --- Family Plan Routes ---
