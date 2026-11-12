@@ -95,6 +95,33 @@ def test_interaction_action_enum_values_and_is_positive() -> None:
     assert InteractionAction.DISLIKE.is_positive is False
 
 
+def test_interaction_action_parse_and_aliases() -> None:
+    assert InteractionAction.parse("like") is InteractionAction.LIKE
+    assert InteractionAction.parse("curtida") is InteractionAction.LIKE
+    assert InteractionAction.parse("superlike") is InteractionAction.SUPERLIKE
+    assert InteractionAction.parse("amada") is InteractionAction.SUPERLIKE
+    assert InteractionAction.parse("dislike") is InteractionAction.DISLIKE
+    assert InteractionAction.parse("deslike") is InteractionAction.DISLIKE
+    assert InteractionAction.parse("rejeitada") is InteractionAction.DISLIKE
+    assert InteractionAction.parse("rejeitar") is InteractionAction.DISLIKE
+    assert InteractionAction.parse(InteractionAction.LIKE) is InteractionAction.LIKE
+    assert (
+        InteractionAction.parse(None, default=InteractionAction.LIKE)
+        is InteractionAction.LIKE
+    )
+    assert (
+        InteractionAction.parse("", default=InteractionAction.DISLIKE)
+        is InteractionAction.DISLIKE
+    )
+
+    with pytest.raises(ValueError, match="Invalid interaction action"):
+        InteractionAction.parse("unknown_action")
+    with pytest.raises(ValueError, match="cannot be None"):
+        InteractionAction.parse(None)
+    with pytest.raises(ValueError, match="cannot be empty"):
+        InteractionAction.parse("")
+
+
 def test_interaction_construction_and_action_transitions() -> None:
     now = datetime.now(tz=UTC)
     interaction = Interaction(

@@ -121,7 +121,8 @@ def test_cancel_subscription_plan_by_dependent_raises_permission_denied() -> Non
     use_case = CancelSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
 
     with pytest.raises(
-        PermissionDeniedError, match="Dependentes não podem cancelar o plano"
+        PermissionDeniedError,
+        match="Dependents cannot cancel the primary account subscription",
     ):
         use_case.execute(user_id=2)
 

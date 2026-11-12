@@ -23,7 +23,7 @@ class CancelSubscriptionPlanUseCase:
 
         if user.primary_account_id is not None:
             raise PermissionDeniedError(
-                "Dependentes não podem cancelar o plano do titular."
+                "Dependents cannot cancel the primary account subscription."
             )
 
         free_plan = self.plan_repo.find_by_name(Plan.DEFAULT_FREE_PLAN_NAME)

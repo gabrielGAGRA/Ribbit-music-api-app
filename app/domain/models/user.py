@@ -99,10 +99,6 @@ class User:
             return ()
         return tuple(sorted(self.MINOR_RESTRICTED_GENRE_TERMS))
 
-    idade_atual = current_age
-    eh_menor_de_idade = is_minor
-    idade_indica_menor = is_age_minor
-
     def can_listen(self, track: Track) -> bool:
         genre = self._normalize_genre(track.genre)
         return (

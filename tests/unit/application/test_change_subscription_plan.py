@@ -99,7 +99,8 @@ def test_change_subscription_plan_by_dependent_raises_permission_denied() -> Non
     use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
 
     with pytest.raises(
-        PermissionDeniedError, match="Dependentes não podem alterar o plano"
+        PermissionDeniedError,
+        match="Dependents cannot change the primary account subscription",
     ):
         use_case.execute(user_id=2, new_plan_id=1)
 
@@ -148,7 +149,8 @@ def test_change_subscription_plan_capacity_exceeded_raises_violation() -> None:
     use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
 
     with pytest.raises(
-        BusinessRuleViolationError, match="não comporta os membros vinculados"
+        BusinessRuleViolationError,
+        match="The new plan cannot accommodate currently linked members",
     ):
         use_case.execute(user_id=1, new_plan_id=1)
 

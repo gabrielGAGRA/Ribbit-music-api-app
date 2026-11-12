@@ -99,14 +99,18 @@ from app.application.use_cases.user import (
     ChangeTrackInteractionUseCase,
     DeleteUserAccountUseCase,
     GetAnnualListeningStatsUseCase,
+    GetPreferredThemeUseCase,
     GetUserProfileUseCase,
     LinkSpotifyAccountUseCase,
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
+    ListFavoriteGenresUseCase,
     ListPlansUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
+    UpdateFavoriteGenresUseCase,
+    UpdatePreferredThemeUseCase,
     UpdateProfileUseCase,
 )
 from app.config import Settings, load_settings
@@ -212,6 +216,10 @@ class Container:
     list_family_members_use_case: ListFamilyMembersUseCase
     list_blocked_genres_use_case: ListBlockedGenresUseCase
     update_blocked_genres_use_case: UpdateBlockedGenresUseCase
+    list_favorite_genres_use_case: ListFavoriteGenresUseCase
+    update_favorite_genres_use_case: UpdateFavoriteGenresUseCase
+    get_preferred_theme_use_case: GetPreferredThemeUseCase
+    update_preferred_theme_use_case: UpdatePreferredThemeUseCase
     list_user_interactions_use_case: ListUserInteractionsUseCase
     change_track_interaction_use_case: ChangeTrackInteractionUseCase
     get_annual_listening_stats_use_case: GetAnnualListeningStatsUseCase
@@ -504,6 +512,10 @@ def build_container(
         list_family_members_use_case=ListFamilyMembersUseCase(user_repo),
         list_blocked_genres_use_case=ListBlockedGenresUseCase(user_repo),
         update_blocked_genres_use_case=UpdateBlockedGenresUseCase(user_repo, plan_repo),
+        list_favorite_genres_use_case=ListFavoriteGenresUseCase(user_repo),
+        update_favorite_genres_use_case=UpdateFavoriteGenresUseCase(user_repo),
+        get_preferred_theme_use_case=GetPreferredThemeUseCase(user_repo),
+        update_preferred_theme_use_case=UpdatePreferredThemeUseCase(user_repo),
         list_user_interactions_use_case=ListUserInteractionsUseCase(
             user_repo, interaction_repo, track_repo
         ),

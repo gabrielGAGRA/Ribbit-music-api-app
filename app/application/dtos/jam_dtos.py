@@ -16,8 +16,20 @@ class CreateJamCommand:
     duration_minutes: int = 60
     max_superlikes: int = 10
     skip_votes_threshold: int = 3
-    deck_source: str = "livre"
+    deck_source: str = "free"
     source_playlist_id: int | None = None
+
+    def __post_init__(self) -> None:
+        source = (self.deck_source or "free").strip().lower()
+        if source in ("free", "livre"):
+            canonical = "free"
+        elif source in ("likes", "curtidas"):
+            canonical = "likes"
+        elif source == "playlist":
+            canonical = "playlist"
+        else:
+            canonical = source
+        object.__setattr__(self, "deck_source", canonical)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

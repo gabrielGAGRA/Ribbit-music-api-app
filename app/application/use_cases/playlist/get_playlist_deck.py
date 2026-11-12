@@ -1,11 +1,14 @@
 """Use case for retrieving candidate tracks for a playlist deck."""
 
-import json
 from dataclasses import dataclass
 
 from app.application.dtos.playlist_dtos import (
     GetPlaylistDeckCommand,
     PlaylistDeckResult,
+)
+from app.application.use_cases.playlist.deck_filter_helpers import (
+    extract_deck_filters_tuple,
+    matches_track_filters,
 )
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models.interaction import InteractionAction
@@ -60,66 +63,6 @@ class GetPlaylistDeckUseCase:
             return playlist_id, user_id, limit, cursor_id
         raise ValueError("playlist_id must be provided.")
 
-    @staticmethod
-    def _coerce_string_list(value: object | None) -> list[str]:
-        if value is None:
-            return []
-        if isinstance(value, (list, tuple, set)):
-            values: list[str] = []
-            for item in value:
-                values.extend(GetPlaylistDeckUseCase._coerce_string_list(item))
-            return values
-        text = str(value).strip()
-        if not text:
-            return []
-        return [part.strip() for part in text.split(",") if part.strip()]
-
-    @staticmethod
-    def _coerce_int_list(value: object | None) -> list[int]:
-        values: list[int] = []
-        if value is None:
-            return values
-        if isinstance(value, (list, tuple, set)):
-            for item in value:
-                values.extend(GetPlaylistDeckUseCase._coerce_int_list(item))
-            return values
-        try:
-            if str(value).strip():
-                values.append(int(str(value).strip()))
-        except TypeError, ValueError:
-            return []
-        return values
-
-    @staticmethod
-    def _matches_any(value: str | None, expected: list[str]) -> bool:
-        if not expected:
-            return True
-        haystack = (value or "").strip().casefold()
-        return any(part.casefold() in haystack for part in expected)
-
-    def _extract_filters(
-        self, deck_filters: str | None
-    ) -> tuple[list[str] | None, list[str] | None, list[int] | None, list[str] | None]:
-        if not deck_filters:
-            return None, None, None, None
-        try:
-            filters = json.loads(deck_filters)
-            if not isinstance(filters, dict):
-                return None, None, None, None
-        except ValueError, TypeError:
-            return None, None, None, None
-
-        genre_values = self._coerce_string_list(filters.get("genre"))
-        artist_values = self._coerce_string_list(filters.get("artist"))
-        year_values = self._coerce_int_list(filters.get("year"))
-        country_values = self._coerce_string_list(filters.get("country"))
-        return (
-            genre_values or None,
-            artist_values or None,
-            year_values or None,
-            country_values or None,
-        )
-
     def _is_track_eligible(
         self,
         track: Track,
@@ -141,13 +84,13 @@ class GetPlaylistDeckUseCase:
             and track.duration_seconds > remaining_duration
         ):
             return False
-        if genre_filter and not self._matches_any(track.genre, genre_filter):
-            return False
-        if year_filter is not None and track.release_year not in year_filter:
-            return False
-        if artist_filter and not self._matches_any(track.artist, artist_filter):
-            return False
-        if country_filter and not self._matches_any(track.country, country_filter):
+        if not matches_track_filters(
+            track,
+            genre=genre_filter,
+            year=year_filter,
+            artist=artist_filter,
+            country=country_filter,
+        ):
             return False
         return not (cursor is not None and track.track_id <= cursor)
 
@@ -227,7 +170,7 @@ class GetPlaylistDeckUseCase:
                 return PlaylistDeckResult(items=[], next_cursor=None, has_more=False)
 
         excluded_ids = self._resolve_excluded_ids(playlist, eff_user_id)
-        genre_f, artist_f, year_f, country_f = self._extract_filters(
+        genre_f, artist_f, year_f, country_f = extract_deck_filters_tuple(
             playlist.deck_filters
         )
 

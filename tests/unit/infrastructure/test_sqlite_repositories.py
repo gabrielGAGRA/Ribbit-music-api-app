@@ -936,3 +936,22 @@ def test_playlist_jam_review_interaction_updates_and_missing_cases(
     )
     assert len(dislike_interactions) == 1
     assert dislike_interactions[0].track_id == t2.track_id
+
+    # Deleting a Jam sets jam_id to NULL on interactions instead of cascading deletion
+    jam_for_fk = jam_repo.save(Jam(host_user_id=user.user_id, room_name="FK Test Jam"))
+    interaction_with_jam = interaction_repo.save(
+        Interaction(
+            user_id=user.user_id,
+            track_id=t1.track_id,
+            action=InteractionAction.LIKE,
+            source="jam",
+            jam_id=jam_for_fk.jam_id,
+        )
+    )
+    assert interaction_with_jam.jam_id == jam_for_fk.jam_id
+    conn.execute("DELETE FROM jams WHERE jam_id = ?", (jam_for_fk.jam_id,))
+    conn.commit()
+    persisted = interaction_repo.find_by_user_and_track(user.user_id, t1.track_id)
+    assert persisted is not None
+    assert persisted.jam_id is None
+    assert persisted.action == InteractionAction.LIKE

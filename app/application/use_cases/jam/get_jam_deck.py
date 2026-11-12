@@ -67,13 +67,13 @@ class GetJamDeckUseCase:
         user_id: int,
         excluded_ids: set[int],
     ) -> list[Track]:
-        source = (jam.deck_source or "livre").strip().lower()
+        source = (jam.deck_source or "free").strip().lower()
 
         if source == "playlist" and jam.source_playlist_id and self.playlist_repo:
             playlist = self.playlist_repo.find_by_id(jam.source_playlist_id)
             return list(playlist.tracks) if playlist else []
 
-        if source == "curtidas" and self.interaction_repo:
+        if source in ("likes", "curtidas") and self.interaction_repo:
             likes = self.interaction_repo.list_by_user(user_id)
             fav_ids = [
                 i.track_id
@@ -118,7 +118,7 @@ class GetJamDeckUseCase:
                 "User must join the Jam room before requesting deck candidates."
             )
 
-        source = (jam.deck_source or "livre").strip().lower()
+        source = (jam.deck_source or "free").strip().lower()
         excluded_ids = set()
         if jam.current_track_id is not None:
             excluded_ids.add(jam.current_track_id)
@@ -137,7 +137,8 @@ class GetJamDeckUseCase:
                 for i in interacted
                 if i.source == "jam"
                 and (
-                    i.jam_id == t_jam_id or (i.jam_id is None and source != "curtidas")
+                    i.jam_id == t_jam_id
+                    or (i.jam_id is None and source not in ("likes", "curtidas"))
                 )
             )
             excluded_ids.update(
@@ -193,8 +194,8 @@ class GetJamDeckUseCase:
         eligible: list[Track],
         cursor: int | None,
     ) -> list[Track]:
-        source = (jam.deck_source or "livre").strip().lower()
-        if source == "livre":
+        source = (jam.deck_source or "free").strip().lower()
+        if source in ("free", "livre"):
             pool = eligible
             if cursor is not None and all(t.track_id != cursor for t in eligible):
                 cursor_track = self.track_repo.find_by_id(cursor)

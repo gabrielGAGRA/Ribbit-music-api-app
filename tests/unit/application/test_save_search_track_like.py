@@ -107,7 +107,7 @@ def test_save_search_track_like_blocks_explicit_for_minor() -> None:
         interaction_repo=MagicMock(spec=InteractionRepositoryPort),
     )
 
-    with pytest.raises(BusinessRuleViolationError, match="menores de idade"):
+    with pytest.raises(BusinessRuleViolationError, match="minor users"):
         use_case.execute(user_id_or_cmd=2, track_id=20)
 
 
@@ -149,7 +149,7 @@ def test_save_search_track_like_rejects_non_owned_playlist() -> None:
         playlist_repo=playlist_repo,
     )
 
-    with pytest.raises(ForbiddenError, match="não pertence a este usuário"):
+    with pytest.raises(ForbiddenError, match="does not belong to this user"):
         use_case.execute(user_id_or_cmd=1, track_id=10, playlist_id=99)
 
 
@@ -174,5 +174,5 @@ def test_save_search_track_like_track_not_found_raises_entity_not_found() -> Non
         interaction_repo=MagicMock(spec=InteractionRepositoryPort),
     )
 
-    with pytest.raises(EntityNotFoundError, match="não encontrada"):
+    with pytest.raises(EntityNotFoundError, match="Track not found or inactive"):
         use_case.execute(user_id_or_cmd=1, track_id=999)

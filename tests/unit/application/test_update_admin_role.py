@@ -17,7 +17,7 @@ def test_update_admin_role_prevents_self_demotion() -> None:
     use_case = UpdateAdminRoleUseCase(user_repo=user_repo)
 
     with pytest.raises(
-        BusinessRuleViolationError, match="não pode revogar o próprio acesso"
+        BusinessRuleViolationError, match="Administrator cannot revoke own access"
     ):
         use_case.execute(admin_id=1, target_user_id=1, is_admin=False)
 

@@ -38,7 +38,7 @@ def test_get_jam_deck_for_participant_returns_candidates() -> None:
         host_user_id=2,
         room_name="Party",
         is_active=True,
-        deck_source="livre",
+        deck_source="free",
     )
     t1 = Track(
         track_id=100, title="T1", artist="Artist", duration_seconds=180, genre="Rock"
@@ -83,7 +83,7 @@ def test_get_jam_deck_excludes_queue_and_current_track() -> None:
         host_user_id=2,
         room_name="Party",
         is_active=True,
-        deck_source="livre",
+        deck_source="free",
         current_track_id=100,
     )
     q_item = JamQueueItem(jam_id=10, track_id=200, initial_vote_points=1)
@@ -193,7 +193,7 @@ def test_get_jam_deck_keeps_favorites_based_candidates_when_not_jam_interactions
         host_user_id=2,
         room_name="Party",
         is_active=True,
-        deck_source="curtidas",
+        deck_source="likes",
     )
     t1 = Track(
         track_id=100, title="Liked", artist="Artist", duration_seconds=180, genre="Rock"
@@ -273,7 +273,7 @@ def test_get_jam_deck_keeps_unvoted_queue_tracks_plus_base_candidates() -> None:
         host_user_id=2,
         room_name="Party",
         is_active=True,
-        deck_source="curtidas",
+        deck_source="likes",
         current_track_id=1000,
     )
     profile_track = Track(
@@ -408,7 +408,7 @@ def test_get_jam_deck_livre_weights_favorite_genres_and_paginates_deterministica
         host_user_id=2,
         room_name="Party",
         is_active=True,
-        deck_source="livre",
+        deck_source="free",
     )
     candidates = [
         Track(
@@ -474,7 +474,7 @@ def test_get_jam_deck_livre_cursor_pagination_when_cursor_track_was_queued_or_ex
         host_user_id=2,
         room_name="Party",
         is_active=True,
-        deck_source="livre",
+        deck_source="free",
     )
     candidates = [
         Track(

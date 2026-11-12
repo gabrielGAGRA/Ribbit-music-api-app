@@ -36,7 +36,7 @@ class SyncTracksFromSpotifyCommand:
     query: str
     limit: int = 10
     offset: int = 0
-    genre: str = "Desconhecido"
+    genre: str = "Unknown"
 
     def __post_init__(self) -> None:
         if not 1 <= self.limit <= 10:
@@ -60,7 +60,7 @@ class SyncPlaylistFromSpotifyCommand:
     user_id: int
     spotify_playlist_id: str
     max_items: int = 100
-    genre: str = "Desconhecido"
+    genre: str = "Unknown"
 
     def __post_init__(self) -> None:
         if self.max_items <= 0:
