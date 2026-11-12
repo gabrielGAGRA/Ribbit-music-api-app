@@ -183,23 +183,18 @@ class User:
     DEFAULT_GENRE_WEIGHT: ClassVar[float] = 1.0
 
     def is_favorite_genre(self, track: Track) -> bool:
-        normalized_favorites = {
-            self._normalize_genre(genre)
-            for genre in self.favorite_genres
-            if genre and genre.strip()
-        }
-        if not normalized_favorites or not track.genre.strip():
+        if not self.favorite_genres or not track.genre.strip():
             return False
 
         track_genre = self._normalize_genre(track.genre)
-        if track_genre in normalized_favorites:
+        if track_genre in self.favorite_genres:
             return True
 
         genre_tokens = self._genre_tokens(track.genre)
         if not genre_tokens:
             return False
 
-        for favorite in normalized_favorites:
+        for favorite in self.favorite_genres:
             fav_tokens = self._genre_tokens(favorite)
             if fav_tokens and any(
                 genre_tokens[index : index + len(fav_tokens)] == fav_tokens

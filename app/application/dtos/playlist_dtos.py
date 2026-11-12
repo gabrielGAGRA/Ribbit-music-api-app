@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Any
-lazy from collections.abc import Iterator
+lazy from collections.abc import Iterator, Sequence
 
 lazy from app.domain.models.playlist import Playlist
 lazy from app.domain.models.track import Track
@@ -13,10 +13,10 @@ class CreateDeckPlaylistCommand:
     user_id: int
     name: str
     duration_minutes: int | None = None
-    genre: str | list[str] | None = None
-    year: int | list[int] | None = None
-    artist: str | list[str] | None = None
-    country: str | list[str] | None = None
+    genre: str | Sequence[str] | None = None
+    year: int | Sequence[int] | None = None
+    artist: str | Sequence[str] | None = None
+    country: str | Sequence[str] | None = None
     description: str | None = None
     deck_filters: str | dict[str, Any] | None = None
     populate_tracks: bool = True
