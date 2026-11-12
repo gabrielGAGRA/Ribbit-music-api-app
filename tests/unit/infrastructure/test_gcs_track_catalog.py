@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+from google.api_core.exceptions import GoogleAPIError
 from google.cloud import storage
 
 from app.application.ports.services.catalog_source import TrackCatalogFilePort
@@ -114,6 +115,31 @@ def test_fetch_tracks_raises_external_service_error_on_download_failure() -> Non
     assert "bucket_name" not in exc_info.value.details
     assert "file_path" not in exc_info.value.details
     assert "missing.parquet" not in str(exc_info.value)
+
+
+def test_fetch_tracks_tolerates_delta_loading_failure() -> None:
+    parquet_bytes = _build_test_parquet_bytes()
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    mock_blob = MagicMock()
+    mock_blob.download_as_bytes.return_value = parquet_bytes
+    mock_bucket.blob.return_value = mock_blob
+    mock_client.bucket.return_value = mock_bucket
+    mock_client.list_blobs.side_effect = GoogleAPIError(
+        "GCS list_blobs connection error"
+    )
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="tracks_v1.parquet",
+        storage_client=mock_client,
+    )
+
+    tracks = adapter.fetch_tracks()
+    assert len(tracks) == 2
+    assert tracks[0].title == "Bohemian Rhapsody"
+    assert tracks[1].title == "Smells Like Teen Spirit"
 
 
 def test_parse_parquet_bytes_raises_external_service_error_on_corrupt_bytes() -> None:

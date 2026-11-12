@@ -12,6 +12,7 @@ lazy from collections.abc import Sequence
 
 import pyarrow as pa
 import pyarrow.parquet as pq
+from google.api_core.exceptions import GoogleAPIError
 from google.cloud import storage
 
 from app.application.ports.services.catalog_source import (
@@ -62,9 +63,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         try:
             self._storage_client = storage.Client()
         except Exception as exc:
-            logger.error(  # noqa: TRY400
-                "Failed to initialize GCP Cloud Storage client: %s", exc
-            )
+            logger.exception("Failed to initialize GCP Cloud Storage client")
             raise ExternalServiceError(
                 "Failed to initialize cloud storage client.",
                 service_name="GCP_GCS",
@@ -86,11 +85,10 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             blob = bucket.blob(self._file_path)
             content_bytes = blob.download_as_bytes(timeout=self._timeout)
         except Exception as exc:
-            logger.error(  # noqa: TRY400
-                "Failed to download '%s' from GCS bucket '%s': %s",
+            logger.exception(
+                "Failed to download '%s' from GCS bucket '%s'",
                 self._file_path,
                 self._bucket_name,
-                exc,
             )
             raise ExternalServiceError(
                 "Failed to download catalog tracks from cloud storage.",
@@ -149,10 +147,9 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         except ExternalServiceError:
             raise
         except Exception as exc:
-            logger.error(  # noqa: TRY400
-                "Failed to write track delta to GCS bucket '%s': %s",
+            logger.exception(
+                "Failed to write track delta to GCS bucket '%s'",
                 self._bucket_name,
-                exc,
             )
             raise ExternalServiceError(
                 "Failed to write track delta to cloud storage.",
@@ -184,7 +181,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         for b in blobs:
             try:
                 b.delete(timeout=self._timeout)
-            except Exception as exc:  # noqa: BLE001
+            except (GoogleAPIError, RuntimeError, OSError) as exc:
                 logger.warning(
                     "Failed to delete processed delta blob '%s' from GCS bucket '%s': %s",
                     b.name,
@@ -246,10 +243,9 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         except ExternalServiceError:
             raise
         except Exception as exc:
-            logger.error(  # noqa: TRY400
-                "Failed to compact catalog in GCS bucket '%s': %s",
+            logger.exception(
+                "Failed to compact catalog in GCS bucket '%s'",
                 self._bucket_name,
-                exc,
             )
             raise ExternalServiceError(
                 "Failed to compact catalog in cloud storage.",
@@ -278,10 +274,9 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         except ExternalServiceError:
             raise
         except Exception as exc:
-            logger.error(  # noqa: TRY400
-                "Failed to read catalog version from GCS bucket '%s': %s",
+            logger.exception(
+                "Failed to read catalog version from GCS bucket '%s'",
                 self._bucket_name,
-                exc,
             )
             raise ExternalServiceError(
                 "Failed to read catalog version from cloud storage.",
@@ -313,7 +308,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             )
             delta_blobs = [b for b in blobs if b.name.endswith(".parquet")]
             return self._read_deltas_from_blobs(delta_blobs)
-        except Exception as exc:  # noqa: BLE001
+        except (GoogleAPIError, OSError) as exc:
             logger.warning("Failed to load pending catalog deltas: %s", exc)
             return {}
 
@@ -444,10 +439,9 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             table = pq.read_table(buffer)
             records: list[dict[str, Any]] = table.to_pylist()
         except Exception as exc:
-            logger.error(  # noqa: TRY400
-                "Failed to parse Parquet content from '%s': %s",
+            logger.exception(
+                "Failed to parse Parquet content from '%s'",
                 self._file_path,
-                exc,
             )
             raise ExternalServiceError(
                 "Failed to parse Parquet content from catalog file.",
