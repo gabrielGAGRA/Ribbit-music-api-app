@@ -4,6 +4,9 @@ from dataclasses import dataclass
 
 from app.domain.exceptions import BusinessRuleViolationError, EntityNotFoundError
 lazy from app.application.dtos.admin_dtos import UpdateAdminRoleCommand
+lazy from app.application.ports.repositories.audit_log_repository import (
+    AuditLogRepositoryPort,
+)
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.domain.models.user import User
 
@@ -13,6 +16,8 @@ class UpdateAdminRoleUseCase:
     """Updates user is_admin status while preventing administrator self-demotion."""
 
     user_repo: UserRepositoryPort
+    eligible_emails: tuple[str, ...] = ()
+    audit_log_repo: AuditLogRepositoryPort | None = None
 
     def execute(
         self,
@@ -40,8 +45,20 @@ class UpdateAdminRoleUseCase:
         if not user:
             raise EntityNotFoundError(f"User with ID {effective_target_id} not found.")
 
+        if effective_is_admin:
+            normalized_eligible = {e.strip().lower() for e in self.eligible_emails}
+            if user.email.strip().lower() not in normalized_eligible:
+                raise BusinessRuleViolationError(
+                    f"User {user.email} is not eligible for administrative privileges."
+                )
+
         user.is_admin = effective_is_admin
-        return self.user_repo.save(user)
+        saved_user = self.user_repo.save(user)
+        if self.audit_log_repo is not None:
+            self.audit_log_repo.log_event(
+                f"ADMIN_ROLE_UPDATED:{user.email}:{effective_is_admin}", "OK"
+            )
+        return saved_user
 
 
 __all__ = ["UpdateAdminRoleUseCase"]
