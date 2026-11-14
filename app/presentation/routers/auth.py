@@ -6,16 +6,19 @@ from fastapi import APIRouter, Depends, status
 
 from app.application.dtos import (
     AuthenticateUserCommand,
+    AuthenticateWithGoogleCommand,
     RegisterUserCommand,
 )
 from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.auth import (
     AuthenticateUserUseCase,
+    AuthenticateWithGoogleUseCase,
     RegisterUserUseCase,
 )
 from app.presentation.dependencies import provide
 from app.presentation.schemas import (
     AuthResponse,
+    GoogleLoginRequest,
     LoginRequest,
     RegisterUserRequest,
     UserResponse,
@@ -70,6 +73,20 @@ def login(
     result = use_case.execute(
         AuthenticateUserCommand(email=req.email, password=req.password)
     )
+    return AuthResponse(
+        access_token=result.access_token,
+        user=UserResponse.model_validate(result.user),
+    )
+
+
+@router.post("/google", response_model=AuthResponse)
+def login_with_google(
+    req: GoogleLoginRequest,
+    use_case: Annotated[
+        AuthenticateWithGoogleUseCase, Depends(provide(AuthenticateWithGoogleUseCase))
+    ],
+) -> AuthResponse:
+    result = use_case.execute(AuthenticateWithGoogleCommand(id_token=req.id_token))
     return AuthResponse(
         access_token=result.access_token,
         user=UserResponse.model_validate(result.user),

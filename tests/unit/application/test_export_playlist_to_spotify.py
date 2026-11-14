@@ -13,9 +13,9 @@ from app.application.use_cases.playlist.export_playlist_to_spotify import (
     ExportPlaylistToSpotifyUseCase,
 )
 from app.domain.exceptions import (
-    BusinessRuleViolationError,
     EntityNotFoundError,
     PermissionDeniedError,
+    SpotifyConnectionRequiredError,
 )
 from app.domain.models.playlist import Playlist
 from app.domain.models.track import Track
@@ -84,7 +84,7 @@ def test_export_playlist_to_spotify_success_marks_exported_and_saves() -> None:
     playlist_repo.save.assert_called_once_with(playlist)
 
 
-def test_export_playlist_to_spotify_unlinked_account_raises_business_rule_error() -> (
+def test_export_playlist_to_spotify_unlinked_account_raises_connection_required_error() -> (
     None
 ):
     user_without_spotify = User(
@@ -108,10 +108,56 @@ def test_export_playlist_to_spotify_unlinked_account_raises_business_rule_error(
         export_port=export_port,
     )
 
-    with pytest.raises(BusinessRuleViolationError, match="linked Spotify account"):
+    with pytest.raises(SpotifyConnectionRequiredError) as exc_info:
         use_case.execute(user_id=1, playlist_id=5)
 
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"
     export_port.export_playlist.assert_not_called()
+
+
+def test_export_playlist_to_spotify_succeeds_without_spotify_premium() -> None:
+    user_free_spotify = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=25,
+        plan_id=1,
+        spotify_id="spotify_free_user",
+        spotify_premium=False,
+    )
+    playlist = Playlist(
+        playlist_id=5,
+        user_id=1,
+        name="Free Spotify Playlist",
+        initial_tracks=[],
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user_free_spotify
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+    playlist_repo.save.side_effect = lambda p: p
+
+    export_port = MagicMock(spec=PlaylistExportPort)
+    export_port.export_playlist.return_value = "spotify_pl_free"
+
+    use_case = ExportPlaylistToSpotifyUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        export_port=export_port,
+    )
+
+    result = use_case.execute(user_id=1, playlist_id=5)
+
+    assert result.is_exported is True
+    assert result.spotify_playlist_id == "spotify_pl_free"
+    export_port.export_playlist.assert_called_once_with(
+        account_id="spotify_free_user",
+        name="Free Spotify Playlist",
+        track_ids=[],
+    )
 
 
 def test_export_playlist_to_spotify_idor_non_owner_raises_permission_denied() -> None:

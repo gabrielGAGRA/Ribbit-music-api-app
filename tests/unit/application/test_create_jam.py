@@ -8,7 +8,11 @@ from app.application.dtos.jam_dtos import CreateJamCommand
 from app.application.ports.repositories.jam_repository import JamRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.create_jam import CreateJamUseCase
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import (
+    EntityNotFoundError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
+)
 from app.domain.models.user import User
 
 
@@ -20,6 +24,8 @@ def test_create_jam_success_strips_room_name_and_saves_jam() -> None:
         display_name="DJ Frog",
         age=24,
         plan_id=2,
+        spotify_id="spotify_host_7",
+        spotify_premium=True,
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = host
@@ -65,6 +71,8 @@ def test_create_jam_registers_host_as_participant() -> None:
         display_name="DJ Frog",
         age=24,
         plan_id=2,
+        spotify_id="spotify_host_7",
+        spotify_premium=True,
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = host
@@ -94,6 +102,8 @@ def test_create_jam_invalid_deck_source_raises_business_rule_error() -> None:
         display_name="DJ Frog",
         age=24,
         plan_id=2,
+        spotify_id="spotify_host_7",
+        spotify_premium=True,
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = host
@@ -106,6 +116,43 @@ def test_create_jam_invalid_deck_source_raises_business_rule_error() -> None:
 
     with pytest.raises(BusinessRuleViolationError, match="Deck source must be"):
         use_case.execute(command)
+
+
+def test_create_jam_requires_spotify_connection_and_premium() -> None:
+    unlinked_host = User(
+        user_id=7,
+        email="host@ribbit.com",
+        password_hash="pw",
+        display_name="DJ Frog",
+        age=24,
+        plan_id=2,
+        spotify_id=None,
+        spotify_premium=False,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = unlinked_host
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+
+    use_case = CreateJamUseCase(jam_repo=jam_repo, user_repo=user_repo)
+    command = CreateJamCommand(host_user_id=7, room_name="Pond")
+
+    with pytest.raises(SpotifyConnectionRequiredError):
+        use_case.execute(command)
+
+    linked_free_host = User(
+        user_id=7,
+        email="host@ribbit.com",
+        password_hash="pw",
+        display_name="DJ Frog",
+        age=24,
+        plan_id=2,
+        spotify_id="spotify_host_7",
+        spotify_premium=False,
+    )
+    user_repo.find_by_id.return_value = linked_free_host
+    with pytest.raises(SpotifyPremiumRequiredError):
+        use_case.execute(command)
+    jam_repo.save.assert_not_called()
 
 
 def test_create_jam_playlist_source_validates_host_ownership() -> None:
@@ -122,6 +169,8 @@ def test_create_jam_playlist_source_validates_host_ownership() -> None:
         display_name="DJ Frog",
         age=24,
         plan_id=2,
+        spotify_id="spotify_host_7",
+        spotify_premium=True,
     )
     # Playlist belongs to user 99, not host 7
     other_playlist = Playlist(playlist_id=12, user_id=99, name="Other's list")

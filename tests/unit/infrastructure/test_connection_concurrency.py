@@ -17,7 +17,7 @@ def test_create_connection_applies_pragmas_and_thread_safe_wrapper(tmp_path) -> 
     assert row_fk[0] == 1
 
     row_timeout = conn.execute("PRAGMA busy_timeout;").fetchone()
-    assert row_timeout[0] == 5000
+    assert row_timeout[0] == 30000
 
     row_journal = conn.execute("PRAGMA journal_mode;").fetchone()
     assert row_journal[0].upper() == "WAL"

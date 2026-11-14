@@ -62,3 +62,26 @@ def test_link_spotify_account_updates_and_saves_user() -> None:
 
     assert updated_user.spotify_id == "sp_user_abc"
     user_repo.save.assert_called_once_with(user)
+
+
+def test_link_spotify_account_changing_id_resets_spotify_premium() -> None:
+    user = User(
+        user_id=1,
+        email="user@test.com",
+        password_hash="hash",
+        display_name="User",
+        age=20,
+        plan_id=1,
+        spotify_id="sp_old_premium",
+        spotify_premium=True,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    user_repo.save.side_effect = lambda u: u
+
+    use_case = LinkSpotifyAccountUseCase(user_repo=user_repo)
+    updated_user = use_case.execute(user_id=1, spotify_id="sp_new_unverified")
+
+    assert updated_user.spotify_id == "sp_new_unverified"
+    assert updated_user.spotify_premium is False
+    user_repo.save.assert_called_once_with(user)

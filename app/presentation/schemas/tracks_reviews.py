@@ -30,6 +30,10 @@ class ReviewResponse(BaseModel):
     likes_count: int = 0
     is_deleted: bool = False
     created_at: datetime | None = None
+    author_name: str | None = None
+    track_title: str | None = None
+    track_artist: str | None = None
+    track_image: str | None = None
 
 
 class CatalogTrackResponse(BaseModel):

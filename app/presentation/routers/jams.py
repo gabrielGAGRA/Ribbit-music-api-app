@@ -93,6 +93,7 @@ def get_vote_jam_track_use_case(request: Request) -> VoteJamTrackUseCase:
             user_repo=container.user_repo,
             track_repo=container.track_repo,
             interaction_repo=container.interaction_repo,
+            spotify_queue=getattr(container, "spotify_host_queue", None),
         )
 
 
@@ -105,6 +106,7 @@ def get_vote_skip_jam_track_use_case(request: Request) -> VoteSkipJamTrackUseCas
             jam_repo=container.jam_repo,
             user_repo=container.user_repo,
             track_repo=container.track_repo,
+            spotify_queue=getattr(container, "spotify_host_queue", None),
         )
 
 
@@ -116,6 +118,8 @@ def get_advance_jam_playback_use_case(request: Request) -> AdvanceJamPlaybackUse
         return AdvanceJamPlaybackUseCase(
             jam_repo=container.jam_repo,
             track_repo=container.track_repo,
+            user_repo=container.user_repo,
+            spotify_queue=getattr(container, "spotify_host_queue", None),
         )
 
 

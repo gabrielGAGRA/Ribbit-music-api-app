@@ -89,4 +89,39 @@ def test_auth_router_exposes_only_english_routes() -> None:
     from app.presentation.routers.auth import router
 
     paths = [getattr(route, "path", None) for route in router.routes]
-    assert paths == ["/api/auth/register", "/api/auth/login"]
+    assert paths == ["/api/auth/register", "/api/auth/login", "/api/auth/google"]
+
+
+def test_auth_router_google_login_success() -> None:
+    from app.application.dtos.auth_dtos import (
+        AuthenticateWithGoogleCommand,
+        AuthResult,
+    )
+    from app.application.use_cases.auth.authenticate_with_google import (
+        AuthenticateWithGoogleUseCase,
+    )
+    from app.presentation.routers.auth import login_with_google
+    from app.presentation.schemas.auth import GoogleLoginRequest
+
+    mock_use_case = MagicMock(spec=AuthenticateWithGoogleUseCase)
+    mock_use_case.execute.return_value = AuthResult(
+        user=User(
+            user_id=12,
+            email="google@ribbit.com",
+            password_hash="oauth_dummy",
+            display_name="Google User",
+            plan_id=1,
+        ),
+        access_token="google_access_jwt",
+    )
+
+    response = login_with_google(
+        req=GoogleLoginRequest(id_token="valid_id_token"),
+        use_case=mock_use_case,
+    )
+
+    assert response.access_token == "google_access_jwt"
+    assert response.user.email == "google@ribbit.com"
+    mock_use_case.execute.assert_called_once_with(
+        AuthenticateWithGoogleCommand(id_token="valid_id_token")
+    )

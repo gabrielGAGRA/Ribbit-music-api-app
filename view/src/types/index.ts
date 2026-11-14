@@ -169,6 +169,7 @@ export interface UserApiDto {
   readonly plan_id: number;
   readonly birth_date?: string | null;
   readonly spotify_id?: string | null;
+  readonly spotify_premium?: boolean | null;
   readonly primary_account_id?: number | null;
   readonly blocked_genres?: readonly string[] | null;
   readonly is_admin: boolean;
@@ -264,6 +265,10 @@ export interface ReviewApiDto {
   readonly likes_count: number;
   readonly is_deleted: boolean;
   readonly created_at?: string | null;
+  readonly author_name?: string | null;
+  readonly track_title?: string | null;
+  readonly track_artist?: string | null;
+  readonly track_image?: string | null;
 }
 
 export interface RecentInteractedTrackApiDto {

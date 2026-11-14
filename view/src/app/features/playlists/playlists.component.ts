@@ -1,6 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import type { Playlist, Song } from '@ribbit/shared-types';
-import { toApiError } from '../../core/api-error';
+import {
+  isSpotifyConnectionRequiredError,
+  isSpotifyError,
+  toApiError,
+} from '../../core/api-error';
 import { AudioPlayerService } from '../../core/audio-player.service';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -142,9 +146,17 @@ export class PlaylistsComponent {
     const p = this.selectedPlaylist();
     if (!p) return;
 
+    if (!this.state.isSpotifyLinked()) {
+      this.state.promptSpotifyConnection(
+        'Conecte sua conta do Spotify nas configurações para exportar suas playlists.',
+      );
+      return;
+    }
+
     this.isExportingSpotify.set(true);
     if (p.playlistId === undefined || !readAuthToken()) {
       this.state.notify('Vincule uma playlist salva no servidor para exportar ao Spotify.');
+      this.isExportingSpotify.set(false);
       return;
     }
 
@@ -156,6 +168,13 @@ export class PlaylistsComponent {
       },
       error: (err: unknown) => {
         this.isExportingSpotify.set(false);
+        if (
+          isSpotifyConnectionRequiredError(err) ||
+          (!this.state.isSpotifyLinked() && isSpotifyError(err))
+        ) {
+          this.state.promptSpotifyConnection(toApiError(err).message);
+          return;
+        }
         this.state.notify(toApiError(err).message);
       },
     });

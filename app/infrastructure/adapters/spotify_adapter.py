@@ -56,7 +56,10 @@ class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
     def search_tracks(
         self, query: str, limit: int = 5, offset: int = 0, market: str | None = None
     ) -> list[CatalogTrack]:
-        return self._require_catalog().search_tracks(query, limit, offset, market)
+        clamped_limit = min(max(1, limit), 10)
+        return self._require_catalog().search_tracks(
+            query, clamped_limit, offset, market
+        )
 
     def get_track(self, track_id: str, market: str | None = None) -> CatalogTrack:
         return self._require_catalog().get_track(track_id, market)

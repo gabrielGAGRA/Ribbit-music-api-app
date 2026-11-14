@@ -35,6 +35,7 @@ class ITunesAdapter(TrackPreviewPort):
                 results = data.get("results", [])
                 if results:
                     first = results[0]
+                    raw_year = str(first.get("releaseDate") or "")[:4]
                     return TrackPreview(
                         external_id=str(first.get("trackId")),
                         title=first.get("trackName"),
@@ -42,6 +43,9 @@ class ITunesAdapter(TrackPreviewPort):
                         preview_url=first.get("previewUrl"),
                         cover_url=first.get("artworkUrl100"),
                         genre=first.get("primaryGenreName"),
+                        country=first.get("country"),
+                        album=first.get("collectionName"),
+                        release_year=int(raw_year) if raw_year.isdigit() else None,
                     )
                 return None
             raise ExternalServiceError(
