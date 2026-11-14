@@ -61,6 +61,7 @@ def test_transaction_context_manager_rolls_back_on_error() -> None:
 def test_load_settings_defaults_and_env_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
     for key in (
         "PASSWORD_HASH_ITERATIONS",
         "DATABASE_PATH",
@@ -142,7 +143,11 @@ async def test_create_app_with_external_connection_does_not_close_it_on_shutdown
     prev_propagate = app_logger.propagate
     prev_handlers = list(app_logger.handlers)
     try:
-        settings = Settings(database_path=":memory:", app_title="Ribbit External Conn")
+        settings = Settings(
+            database_path=":memory:",
+            app_title="Ribbit External Conn",
+            password_hash_iterations=1_000,
+        )
         app = create_app(settings=settings, connection=conn)
 
         async with app.router.lifespan_context(app):
@@ -155,4 +160,69 @@ async def test_create_app_with_external_connection_does_not_close_it_on_shutdown
         app_logger.setLevel(prev_level)
         app_logger.propagate = prev_propagate
         app_logger.handlers = prev_handlers
+        conn.close()
+
+
+def test_sync_catalog_on_first_startup_runs_only_before_first_sync() -> None:
+    from unittest.mock import MagicMock
+
+    from app.application.use_cases.admin.sync_catalog_version import (
+        SyncCatalogVersionResult,
+    )
+    from app.composition import _sync_catalog_on_first_startup
+    from app.infrastructure.repositories.seed import seed_database
+
+    conn = create_connection(":memory:")
+    try:
+        seed_database(conn)
+        sync_uc = MagicMock()
+        sync_uc.execute.return_value = SyncCatalogVersionResult(
+            synced=True, version=1, message="Local catalog updated to version 1."
+        )
+        container = MagicMock(
+            connection=conn,
+            sync_catalog_version_use_case=sync_uc,
+        )
+        logger = logging.getLogger("test_startup_sync")
+
+        _sync_catalog_on_first_startup(container, logger)
+        sync_uc.execute.assert_called_once_with()
+
+        from app.infrastructure.repositories import SQLiteAuditLogRepository
+
+        SQLiteAuditLogRepository(conn).log_event(
+            event="catalog.synced.v1",
+            status="success",
+        )
+
+        sync_uc.reset_mock()
+        _sync_catalog_on_first_startup(container, logger)
+        sync_uc.execute.assert_not_called()
+    finally:
+        conn.close()
+
+
+def test_sync_catalog_on_first_startup_skips_gracefully_on_external_error() -> None:
+    from unittest.mock import MagicMock
+
+    from app.composition import _sync_catalog_on_first_startup
+    from app.domain.exceptions import ExternalServiceError
+    from app.infrastructure.repositories.seed import seed_database
+
+    conn = create_connection(":memory:")
+    try:
+        seed_database(conn)
+        sync_uc = MagicMock()
+        sync_uc.execute.side_effect = ExternalServiceError(
+            "No GCS credentials", service_name="GCP_GCS"
+        )
+        container = MagicMock(
+            connection=conn,
+            sync_catalog_version_use_case=sync_uc,
+        )
+        logger = logging.getLogger("test_startup_sync")
+
+        _sync_catalog_on_first_startup(container, logger)
+        sync_uc.execute.assert_called_once_with()
+    finally:
         conn.close()

@@ -22,6 +22,7 @@ from app.application.ports.services.music_service import (
 from app.application.ports.services.password_hasher import PasswordHasherPort
 from app.application.ports.services.spotify import (
     SpotifyAuthPort,
+    SpotifyHostQueuePort,
     SpotifyPlaylistsPort,
     SpotifyQueuePort,
     SpotifyUserProfile,
@@ -41,6 +42,7 @@ __all__ = [
     "PlaylistSourcePort",
     "ProviderPlaylist",
     "SpotifyAuthPort",
+    "SpotifyHostQueuePort",
     "SpotifyPlaylistsPort",
     "SpotifyQueuePort",
     "SpotifyUserProfile",

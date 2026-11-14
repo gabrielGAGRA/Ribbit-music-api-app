@@ -42,10 +42,12 @@ class SpotifyUserProfileAdapter(SpotifyUserProfilePort):
         if not user_id:
             raise SpotifyAuthError("Spotify profile response missing 'id' field.")
 
+        raw_product = data.get("product")
         return SpotifyUserProfile(
             id=user_id,
             display_name=data.get("display_name") or user_id,
             email=data.get("email"),
+            product=raw_product if isinstance(raw_product, str) else None,
         )
 
 

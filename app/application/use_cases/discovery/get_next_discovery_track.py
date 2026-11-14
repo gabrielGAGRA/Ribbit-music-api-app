@@ -80,6 +80,15 @@ class GetNextDiscoveryTrackUseCase:
                                 genre=track.genre,
                                 cover_url=track.cover_url,
                                 spotify_id=track.spotify_id,
+                                album=track.album,
+                                duration_seconds=track.duration_seconds,
+                                country=track.country,
+                                release_year=track.release_year,
+                                explicit=track.explicit,
+                                is_deleted=track.is_deleted,
+                                created_at=track.created_at.isoformat()
+                                if track.created_at
+                                else None,
                             )
                         except ExternalServiceError as exc:
                             logging.getLogger(__name__).warning(

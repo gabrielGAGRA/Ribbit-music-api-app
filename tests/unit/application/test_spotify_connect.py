@@ -35,6 +35,7 @@ def test_get_spotify_authorize_url_calls_auth_port() -> None:
     called_scopes, called_state = mock_auth.get_authorize_url.call_args[0]
     assert "user-read-private" in called_scopes
     assert "user-modify-playback-state" in called_scopes
+    assert "user-read-currently-playing" in called_scopes
     assert called_state == "random_state"
 
 
@@ -55,11 +56,14 @@ def test_connect_spotify_account_success() -> None:
     user_repo.save.side_effect = lambda u: u
 
     spotify_auth.exchange_code.return_value = SpotifyTokens(
-        access_token="tok_123", expires_in=3600
+        access_token="tok_123",
+        refresh_token="ref_456",
+        expires_in=3600,
     )
     spotify_profile.get_current_user_profile.return_value = SpotifyUserProfile(
         id="spotify_id_999",
         display_name="Spotify User 999",
+        product="premium",
     )
 
     use_case = ConnectSpotifyAccountUseCase(
@@ -70,6 +74,48 @@ def test_connect_spotify_account_success() -> None:
 
     updated = use_case.execute(user_id=10, code="auth_code_xyz")
     assert updated.spotify_id == "spotify_id_999"
+    assert updated.spotify_premium is True
+    assert updated.spotify_access_token == "tok_123"
+    assert updated.spotify_refresh_token == "ref_456"
+    assert updated.spotify_token_expires_at is not None
+    user_repo.save.assert_called_once_with(user)
+
+
+def test_connect_spotify_account_downgrades_when_profile_is_not_premium() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    spotify_auth = MagicMock(spec=SpotifyAuthPort)
+    spotify_profile = MagicMock(spec=SpotifyUserProfilePort)
+
+    user = User(
+        user_id=10,
+        email="user10@example.com",
+        password_hash="pw",
+        display_name="User Ten",
+        plan_id=1,
+        spotify_id="spotify_id_999",
+        spotify_premium=True,
+    )
+    user_repo.find_by_id.return_value = user
+    user_repo.find_by_spotify_id.return_value = user
+    user_repo.save.side_effect = lambda u: u
+
+    spotify_auth.exchange_code.return_value = SpotifyTokens(
+        access_token="tok_123", expires_in=3600
+    )
+    spotify_profile.get_current_user_profile.return_value = SpotifyUserProfile(
+        id="spotify_id_999",
+        display_name="Spotify User 999",
+        product="free",
+    )
+
+    use_case = ConnectSpotifyAccountUseCase(
+        user_repo=user_repo,
+        spotify_auth=spotify_auth,
+        spotify_profile=spotify_profile,
+    )
+
+    updated = use_case.execute(user_id=10, code="auth_code_xyz")
+    assert updated.spotify_premium is False
     user_repo.save.assert_called_once_with(user)
 
 

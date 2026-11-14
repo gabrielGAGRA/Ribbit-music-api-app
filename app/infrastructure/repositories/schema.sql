@@ -12,6 +12,10 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     spotify_id TEXT UNIQUE,
+    spotify_premium INTEGER NOT NULL DEFAULT 0,
+    spotify_access_token TEXT,
+    spotify_refresh_token TEXT,
+    spotify_token_expires_at TEXT,
     display_name TEXT NOT NULL,
     age INTEGER,
     plan_id INTEGER NOT NULL REFERENCES plans(plan_id),
@@ -46,6 +50,8 @@ CREATE TABLE IF NOT EXISTS tracks (
 CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
+CREATE INDEX IF NOT EXISTS idx_tracks_spotify_id ON tracks(spotify_id);
+CREATE INDEX IF NOT EXISTS idx_tracks_title_artist ON tracks(lower(title), lower(artist));
 
 CREATE TABLE IF NOT EXISTS interactions (
     interaction_id INTEGER PRIMARY KEY AUTOINCREMENT,

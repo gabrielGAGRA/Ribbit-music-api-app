@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from app.application.dtos.jam_dtos import GetJamDeckCommand
 from app.application.dtos.playlist_dtos import PlaylistDeckResult
+from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models.interaction import InteractionAction
 from app.domain.services.recommendation import order_tracks_by_weighted_seed
@@ -108,6 +109,7 @@ class GetJamDeckUseCase:
         user = self.user_repo.find_by_id(eff_user_id)
         if not user:
             raise EntityNotFoundError(f"User with ID {eff_user_id} not found.")
+        require_spotify_premium(user)
 
         jam = self.jam_repo.find_by_id(t_jam_id)
         if not jam or not jam.is_active:

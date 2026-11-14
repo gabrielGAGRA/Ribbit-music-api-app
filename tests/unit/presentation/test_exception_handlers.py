@@ -16,6 +16,8 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     ExternalServiceError,
     PermissionDeniedError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
 )
 from app.presentation.exception_handlers import (
     ERROR_STATUS_MAP,
@@ -38,6 +40,14 @@ from app.presentation.exception_handlers import (
         ),
         (
             PermissionDeniedError("Admin only"),
+            status.HTTP_403_FORBIDDEN,
+        ),
+        (
+            SpotifyConnectionRequiredError("Link required"),
+            status.HTTP_403_FORBIDDEN,
+        ),
+        (
+            SpotifyPremiumRequiredError("Premium required"),
             status.HTTP_403_FORBIDDEN,
         ),
         (

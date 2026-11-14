@@ -207,3 +207,94 @@ def test_search_tracks_spotify_fallback_when_db_empty(mock_user: User) -> None:
     assert results[0].title == "External Track"
     music_service.search_tracks.assert_called_once_with("External Track", limit=50)
     track_repo.save.assert_called_once()
+
+
+def test_search_tracks_spotify_fallback_enriches_itunes_and_writes_full_delta(
+    mock_user: User,
+) -> None:
+    from app.application.ports.services.catalog_source import TrackCatalogFilePort
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = mock_user
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = []
+    track_repo.save.side_effect = lambda t: Track(
+        track_id=101,
+        title=t.title,
+        artist=t.artist,
+        album=t.album,
+        duration_seconds=t.duration_seconds,
+        genre=t.genre,
+        country=t.country,
+        release_year=t.release_year,
+        cover_url=t.cover_url,
+        spotify_id=t.spotify_id,
+        itunes_preview_url=t.itunes_preview_url,
+        explicit=t.explicit,
+    )
+
+    music_service = MagicMock(spec=TrackCatalogPort)
+    music_service.search_tracks.return_value = [
+        CatalogTrack(
+            external_id="sp-new-1",
+            title="Fresh Song",
+            artist="Fresh Artist",
+            album="Fresh Album",
+            preview_url=None,
+            duration_ms=215_000,
+            cover_url=None,
+            release_year=2024,
+            explicit=True,
+        )
+    ]
+
+    preview_port = MagicMock(spec=TrackPreviewPort)
+    preview_port.find_preview.return_value = TrackPreview(
+        external_id="it-1",
+        title="Fresh Song",
+        artist="Fresh Artist",
+        preview_url="https://itunes.example.com/fresh.m4a",
+        cover_url="https://itunes.example.com/fresh.jpg",
+        genre="Indie",
+        country="USA",
+    )
+
+    catalog_file_port = MagicMock(spec=TrackCatalogFilePort)
+
+    use_case = SearchTracksUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        music_service=music_service,
+        track_preview_port=preview_port,
+        catalog_file_port=catalog_file_port,
+    )
+    results = use_case.execute(SearchTracksCommand(user_id=1, query="Fresh Song"))
+
+    assert len(results) == 1
+    saved = results[0]
+    assert saved.duration_seconds == 215
+    assert saved.genre == "Indie"
+    assert saved.country == "USA"
+    assert saved.explicit is True
+    assert saved.cover_url == "https://itunes.example.com/fresh.jpg"
+    assert saved.itunes_preview_url == "https://itunes.example.com/fresh.m4a"
+    assert saved.release_year == 2024
+
+    catalog_file_port.write_track_delta.assert_called_once()
+    delta_kwargs = catalog_file_port.write_track_delta.call_args.kwargs
+    assert delta_kwargs["title"] == "Fresh Song"
+    assert delta_kwargs["artist"] == "Fresh Artist"
+    assert delta_kwargs["album"] == "Fresh Album"
+    assert delta_kwargs["duration_seconds"] == 215
+    assert delta_kwargs["genre"] == "Indie"
+    assert delta_kwargs["country"] == "USA"
+    assert delta_kwargs["explicit"] is True
+    assert delta_kwargs["release_year"] == 2024
+    assert delta_kwargs["cover_url"] == "https://itunes.example.com/fresh.jpg"
+    assert delta_kwargs["preview_url"] == "https://itunes.example.com/fresh.m4a"
+    assert delta_kwargs["spotify_id"] == "sp-new-1"

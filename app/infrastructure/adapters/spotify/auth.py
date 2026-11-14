@@ -150,6 +150,20 @@ class SpotifyAuth(SpotifyAuthPort):
             self._access_token = None
             self._expires_at = 0.0
 
+    def seed_tokens(
+        self,
+        access_token: str,
+        expires_in_seconds: float,
+        *,
+        refresh_token: str | None = None,
+    ) -> None:
+        """Populates in-memory token state from persisted user OAuth tokens."""
+        with self._lock:
+            self._access_token = access_token
+            self._expires_at = self._clock() + max(0.0, expires_in_seconds)
+            if refresh_token is not None:
+                self._refresh_token = refresh_token
+
     def clear_tokens(self) -> None:
         with self._lock:
             self._access_token = None

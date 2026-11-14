@@ -33,6 +33,8 @@ describe('JamsComponent', () => {
 
   it('should join jam room via POST /api/jams/join when authenticated and switch to swipe view', () => {
     writeAuthToken('jwt-jam-token');
+    state.spotifyId.set('spot_3');
+    state.spotifyPremium.set(true);
     expect(state.jamState().active).toBe(false);
 
     component.joinJam('RIBBIT-123');
@@ -107,5 +109,34 @@ describe('JamsComponent', () => {
     expect(globalStyles).toMatch(
       /@media\s*\(max-width:\s*768px\)[\s\S]*\.join-panel form\s*\{[^}]*flex-direction:\s*column/,
     );
+  });
+
+  it('prompts spotify connection modal when unlinked user tries to open jam modal', () => {
+    state.spotifyId.set(null);
+    component.openJamModal();
+    expect(state.activeModal()).toBe('spotify-connect');
+    expect(state.spotifyPromptReason()).toContain('Conecte sua conta do Spotify');
+  });
+
+  it('shows warning notification when linked non-premium user tries to open jam modal', () => {
+    state.spotifyId.set('spot_user_1');
+    state.spotifyPremium.set(false);
+    component.openJamModal();
+    expect(state.activeModal()).toBeNull();
+    expect(state.toast()).toContain('Spotify Premium é necessária');
+  });
+
+  it('prompts spotify connection modal when unlinked user tries to join jam', () => {
+    state.spotifyId.set(null);
+    component.joinJam('123456');
+    expect(state.activeModal()).toBe('spotify-connect');
+  });
+
+  it('shows warning notification when linked non-premium user tries to join jam', () => {
+    state.spotifyId.set('spot_user_1');
+    state.spotifyPremium.set(false);
+    component.joinJam('123456');
+    expect(state.activeModal()).toBeNull();
+    expect(state.toast()).toContain('Spotify Premium é necessária');
   });
 });

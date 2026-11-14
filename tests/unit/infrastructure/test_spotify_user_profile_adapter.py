@@ -17,6 +17,7 @@ def test_get_current_user_profile_successful() -> None:
         "id": "spotify_user_99",
         "display_name": "Spotify Tester",
         "email": "spotify_user@example.com",
+        "product": "premium",
     }
     mock_session.get.return_value = mock_response
 
@@ -26,6 +27,26 @@ def test_get_current_user_profile_successful() -> None:
     assert profile.id == "spotify_user_99"
     assert profile.display_name == "Spotify Tester"
     assert profile.email == "spotify_user@example.com"
+    assert profile.product == "premium"
+    assert profile.is_premium is True
+
+
+def test_get_current_user_profile_free_or_missing_product_is_not_premium() -> None:
+    mock_session = MagicMock(spec=niquests.Session)
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "id": "spotify_free_1",
+        "display_name": "Free User",
+        "product": "free",
+    }
+    mock_session.get.return_value = mock_response
+
+    adapter = SpotifyUserProfileAdapter(session=mock_session)
+    assert adapter.get_current_user_profile("tok").is_premium is False
+
+    mock_response.json.return_value = {"id": "spotify_open_1"}
+    assert adapter.get_current_user_profile("tok").is_premium is False
 
 
 def test_get_current_user_profile_blank_token_raises_error() -> None:

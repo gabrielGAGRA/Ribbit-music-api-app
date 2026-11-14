@@ -5,7 +5,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.application.use_cases.jam.get_jam_state import GetJamStateUseCase
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import (
+    EntityNotFoundError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
+)
 from app.domain.models import Jam, JamQueueItem, Track, User
 
 
@@ -17,6 +21,7 @@ def test_get_jam_state_batch_fetches_tracks() -> None:
         display_name="Adult",
         age=20,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -92,6 +97,7 @@ def test_get_jam_state_filters_explicit_tracks_for_minors() -> None:
         display_name="Minor",
         age=14,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -170,3 +176,45 @@ def test_get_jam_state_jam_not_found() -> None:
     )
     with pytest.raises(EntityNotFoundError):
         use_case.execute(jam_id=999, user_id=1)
+
+
+def test_get_jam_state_requires_spotify_premium() -> None:
+    user_repo = MagicMock()
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@test.com",
+        password_hash="pw",
+        display_name="Free",
+        age=22,
+        plan_id=1,
+        spotify_id="spot_1",
+        spotify_premium=False,
+    )
+    use_case = GetJamStateUseCase(
+        jam_repo=MagicMock(),
+        user_repo=user_repo,
+        track_repo=MagicMock(),
+    )
+    with pytest.raises(SpotifyPremiumRequiredError):
+        use_case.execute(jam_id=1, user_id=1)
+
+
+def test_get_jam_state_requires_spotify_connection_when_unlinked() -> None:
+    user_repo = MagicMock()
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@test.com",
+        password_hash="pw",
+        display_name="Free",
+        age=22,
+        plan_id=1,
+        spotify_id=None,
+        spotify_premium=False,
+    )
+    use_case = GetJamStateUseCase(
+        jam_repo=MagicMock(),
+        user_repo=user_repo,
+        track_repo=MagicMock(),
+    )
+    with pytest.raises(SpotifyConnectionRequiredError):
+        use_case.execute(jam_id=1, user_id=1)

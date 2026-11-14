@@ -18,6 +18,7 @@ class GetSpotifyAuthorizeUrlUseCase:
         "playlist-modify-private",
         "user-read-playback-state",
         "user-modify-playback-state",
+        "user-read-currently-playing",
     )
 
     spotify_auth: SpotifyAuthPort

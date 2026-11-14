@@ -284,6 +284,13 @@ def test_get_next_discovery_track_enriches_genre_and_writes_track_delta() -> Non
         genre="Hip-Hop",
         cover_url=None,
         spotify_id="spot-15",
+        album=None,
+        duration_seconds=180,
+        country=None,
+        release_year=None,
+        explicit=False,
+        is_deleted=False,
+        created_at=None,
     )
 
 
@@ -358,6 +365,13 @@ def test_get_next_discovery_track_enriches_unknown_genre_and_writes_track_delta(
         genre="Ambient",
         cover_url=None,
         spotify_id="spot-16",
+        album=None,
+        duration_seconds=180,
+        country=None,
+        release_year=None,
+        explicit=False,
+        is_deleted=False,
+        created_at=None,
     )
 
 
@@ -431,6 +445,13 @@ def test_get_next_discovery_track_enriches_missing_cover_url_and_writes_delta() 
         genre="Jazz",
         cover_url="https://is1-ssl.mzstatic.com/image/100x100bb.jpg",
         spotify_id="spot-16",
+        album=None,
+        duration_seconds=180,
+        country=None,
+        release_year=None,
+        explicit=False,
+        is_deleted=False,
+        created_at=None,
     )
 
 

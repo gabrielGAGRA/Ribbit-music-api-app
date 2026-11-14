@@ -11,6 +11,7 @@ from app.domain.exceptions import (
     SpotifyAuthError,
     SpotifyError,
     SpotifyForbiddenError,
+    SpotifyPremiumRequiredError,
     SpotifyQuotaExceededError,
 )
 from app.infrastructure.adapters.spotify.auth import HTTP_TIMEOUT_SECONDS, SpotifyAuth
@@ -107,21 +108,54 @@ class SpotifyHttpClient:
         if status == HTTPStatus.NO_CONTENT:
             return None
         if status >= HTTPStatus.BAD_REQUEST:
-            SpotifyHttpClient._raise_for_status(status)
+            SpotifyHttpClient._raise_for_status(status, response)
         try:
             return response.json()
         except ValueError:
             return None
 
     @staticmethod
-    def _raise_for_status(status: int) -> None:
-        details = {"status_code": status}
+    def _parse_error_payload(
+        response: niquests.Response | None,
+    ) -> tuple[str | None, str | None]:
+        if response is None:
+            return None, None
+        try:
+            payload = response.json()
+        except (ValueError, AttributeError):  # fmt: skip
+            return None, None
+        if not isinstance(payload, Mapping):
+            return None, None
+        error = payload.get("error")
+        if not isinstance(error, Mapping):
+            return None, None
+        reason = error.get("reason")
+        message = error.get("message")
+        return (
+            reason.strip() if isinstance(reason, str) and reason.strip() else None,
+            message.strip() if isinstance(message, str) and message.strip() else None,
+        )
+
+    @staticmethod
+    def _raise_for_status(
+        status: int, response: niquests.Response | None = None
+    ) -> None:
+        details: dict[str, Any] = {"status_code": status}
         if status == HTTPStatus.UNAUTHORIZED:
             raise SpotifyAuthError(
                 "Spotify rejected the access token; re-authorize the user",
                 details=details,
             )
         if status == HTTPStatus.FORBIDDEN:
+            reason, message = SpotifyHttpClient._parse_error_payload(response)
+            if (reason and reason.casefold() == "premium_required") or (
+                reason is None and message and "premium required" in message.casefold()
+            ):
+                details["reason"] = reason or "PREMIUM_REQUIRED"
+                raise SpotifyPremiumRequiredError(
+                    "Spotify denied access: Premium subscription required",
+                    details=details,
+                )
             raise SpotifyForbiddenError(
                 "Spotify denied access: scope missing, user not allowlisted, or no Premium",
                 details=details,
@@ -130,11 +164,8 @@ class SpotifyHttpClient:
 
     @staticmethod
     def _raise_if_quota_exceeded(response: niquests.Response) -> None:
-        try:
-            error = response.json().get("error")
-        except (ValueError, AttributeError):  # fmt: skip
-            return
-        if isinstance(error, dict) and error.get("reason") == "QUOTA_EXCEEDED":
+        reason, _ = SpotifyHttpClient._parse_error_payload(response)
+        if reason == "QUOTA_EXCEEDED":
             raise SpotifyQuotaExceededError("Spotify Development-mode quota exceeded")
 
     @staticmethod

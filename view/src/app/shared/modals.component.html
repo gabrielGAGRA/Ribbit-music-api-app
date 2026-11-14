@@ -476,6 +476,28 @@
         </button>
       }
 
+      <!-- Modal: spotify-connect (Aviso de necessidade de vincular Spotify) -->
+      @if (state.activeModal() === 'spotify-connect') {
+        <span class="modal-symbol">
+          <app-icon name="sparkles" [size]="28" />
+        </span>
+        <h2>Conecte sua conta do Spotify</h2>
+        <p>{{ state.spotifyPromptReason() }}</p>
+        <div class="info-note">
+          Para sincronizar o Pond em tempo real, conecte sua conta do Spotify nas configurações.
+        </div>
+        <button class="primary-button full-width" (click)="goToSettingsFromSpotify()">
+          Ir para Configurações <app-icon name="arrow" [size]="17" />
+        </button>
+        <button
+          type="button"
+          class="outline-button full-width checkout-cancel"
+          (click)="closeModal()"
+        >
+          Agora não
+        </button>
+      }
+
       <!-- Modal: playlist-view -->
       @if (isPlaylistViewModal()) {
         <span class="modal-symbol">

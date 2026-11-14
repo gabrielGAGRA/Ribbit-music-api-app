@@ -134,6 +134,28 @@ class PermissionDeniedError(DomainError):
         super().__init__(message, details=details)
 
 
+class SpotifyConnectionRequiredError(SpotifyAuthError, PermissionDeniedError):
+    """User has not connected their Spotify account."""
+
+    def __init__(
+        self,
+        message: str = "Conecte sua conta do Spotify para utilizar este recurso.",
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message=message, details=details)
+
+
+class SpotifyPremiumRequiredError(SpotifyForbiddenError, PermissionDeniedError):
+    """Spotify or Ribbit denied access because Spotify Premium is required."""
+
+    def __init__(
+        self,
+        message: str = "Spotify Premium account is required for this feature.",
+        details: Mapping[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message, details=details)
+
+
 UnauthorizedError = AuthenticationRequiredError
 ForbiddenError = PermissionDeniedError
 
@@ -148,8 +170,10 @@ __all__ = [
     "ForbiddenError",
     "PermissionDeniedError",
     "SpotifyAuthError",
+    "SpotifyConnectionRequiredError",
     "SpotifyError",
     "SpotifyForbiddenError",
+    "SpotifyPremiumRequiredError",
     "SpotifyQuotaExceededError",
     "UnauthorizedError",
 ]

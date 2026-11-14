@@ -17,6 +17,7 @@ class UserResponse(BaseModel):
     plan_id: int
     birth_date: str | None = None
     spotify_id: str | None = None
+    spotify_premium: bool = False
     primary_account_id: int | None = None
     blocked_genres: list[str] | frozenset[str] | set[str] | None = None
     favorite_genres: list[str] | frozenset[str] | set[str] | None = None
