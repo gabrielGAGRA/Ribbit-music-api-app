@@ -87,6 +87,8 @@ def test_migrate_additive_columns_upgrades_legacy_tables() -> None:
         keys = row.keys()
         assert "birth_date" in keys
         assert row["birth_date"] is None
+        assert "spotify_premium" in keys
+        assert row["spotify_premium"] == 0
         assert row["display_name"] == "Legacy User"
 
         # Verify playlists has its new filtering and cover columns

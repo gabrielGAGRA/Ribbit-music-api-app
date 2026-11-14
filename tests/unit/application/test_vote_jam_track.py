@@ -12,7 +12,12 @@ from app.application.ports.repositories.jam_repository import JamRepositoryPort
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.vote_jam_track import VoteJamTrackUseCase
-from app.domain.exceptions import BusinessRuleViolationError, EntityNotFoundError
+from app.domain.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
+)
 from app.domain.models.interaction import Interaction, InteractionAction
 from app.domain.models.jam import Jam, JamQueueItem
 from app.domain.models.track import Track
@@ -27,6 +32,7 @@ def test_vote_jam_track_adds_new_queue_item_when_not_in_queue() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -71,6 +77,7 @@ def test_vote_jam_track_increments_existing_queue_item_points() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -115,6 +122,7 @@ def test_vote_jam_track_records_user_interaction_for_deck_exclusion() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -172,6 +180,7 @@ def test_vote_jam_track_minor_blocked_from_explicit_track_raises_business_rule_e
         display_name="Tadpole",
         age=15,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     explicit_track = Track(
@@ -214,6 +223,7 @@ def test_vote_jam_track_blocked_genre_raises_business_rule_error() -> None:
         age=25,
         plan_id=1,
         blocked_genres=frozenset({"metal"}),
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     metal_track = Track(
@@ -267,6 +277,7 @@ def test_vote_jam_track_inactive_or_missing_jam_raises_entity_not_found() -> Non
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     inactive_jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=False)
 
@@ -295,6 +306,7 @@ def test_vote_jam_track_deleted_track_raises_entity_not_found() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     deleted_track = Track(
@@ -334,6 +346,7 @@ def test_vote_jam_track_superlike_limit_reached_raises_error() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     # Jam has max 2 superlikes, and 2 already used
     jam = Jam(
@@ -377,6 +390,7 @@ def test_vote_jam_track_duration_cap_exceeded_raises_error() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     # Jam: 1 minute = 60s max. Track is 180s.
     jam = Jam(
@@ -418,6 +432,7 @@ def test_vote_jam_track_auto_advances_when_no_current_track() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -468,6 +483,7 @@ def test_vote_jam_track_with_action_aliases() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -513,6 +529,7 @@ def test_vote_jam_track_preserves_existing_global_like_on_jam_dislike() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -567,6 +584,7 @@ def test_vote_jam_track_upgrades_existing_like_to_superlike_preserving_source() 
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -611,3 +629,37 @@ def test_vote_jam_track_upgrades_existing_like_to_superlike_preserving_source() 
     assert existing_interaction.action == InteractionAction.SUPERLIKE
     assert existing_interaction.source == "discovery"
     assert existing_interaction.jam_id is None
+
+
+def test_vote_jam_track_requires_spotify_premium() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=22,
+        plan_id=1,
+        spotify_id="spot_1",
+        spotify_premium=False,
+    )
+    use_case = VoteJamTrackUseCase(
+        jam_repo=MagicMock(spec=JamRepositoryPort),
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+    )
+    with pytest.raises(SpotifyPremiumRequiredError):
+        use_case.execute(VoteJamTrackCommand(jam_id=10, track_id=100, user_id=1))
+
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=22,
+        plan_id=1,
+        spotify_id=None,
+        spotify_premium=False,
+    )
+    with pytest.raises(SpotifyConnectionRequiredError):
+        use_case.execute(VoteJamTrackCommand(jam_id=10, track_id=100, user_id=1))

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from app.application.dtos.jam_dtos import JamStateResult
+from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import EntityNotFoundError
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
@@ -22,6 +23,7 @@ class GetJamStateUseCase:
         user = self.user_repo.find_by_id(user_id)
         if not user:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
+        require_spotify_premium(user)
 
         jam = self.jam_repo.find_by_id(jam_id)
         if not jam:

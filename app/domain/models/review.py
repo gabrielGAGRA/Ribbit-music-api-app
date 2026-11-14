@@ -20,6 +20,10 @@ class ReviewComment:
     initial_likes_count: InitVar[int] = 0
     is_deleted: bool = False
     created_at: datetime | None = None
+    author_name: str | None = None
+    track_title: str | None = None
+    track_artist: str | None = None
+    track_image: str | None = None
     _rating: int = field(init=False, repr=False)
     _likes_count: int = field(init=False, repr=False)
 

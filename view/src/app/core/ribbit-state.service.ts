@@ -17,7 +17,13 @@ import type {
   SubscriptionPlan,
   UserApiDto,
 } from '@ribbit/shared-types';
-import { isPremiumRequiredError, toApiError } from './api-error';
+import {
+  isPremiumRequiredError,
+  isSpotifyConnectionRequiredError,
+  isSpotifyError,
+  isSpotifyPremiumRequiredError,
+  toApiError,
+} from './api-error';
 import { mapApiActionToDecision, mapJamStateDto, mapTrackDtoToSong } from './api-mappers';
 import { AudioPlayerService } from './audio-player.service';
 import { AuthSessionNotifier } from './auth-session.notifier';
@@ -120,6 +126,7 @@ export class RibbitStateService implements OnDestroy {
   readonly currentPlanId = signal<number>(this.initialUser?.plan_id ?? 1);
   readonly currentPlan = signal<string>('Free');
   readonly spotifyId = signal<string | null>(this.initialUser?.spotify_id ?? null);
+  readonly spotifyPremium = signal<boolean>(Boolean(this.initialUser?.spotify_premium));
 
   readonly toast = signal<string>('');
   readonly activePage = signal<string>('discover');
@@ -129,6 +136,9 @@ export class RibbitStateService implements OnDestroy {
 
   readonly upgradePromptReason = signal<string>(
     'Este recurso faz parte dos planos pagos do Ribbit.',
+  );
+  readonly spotifyPromptReason = signal<string>(
+    'Conecte sua conta do Spotify para utilizar o Pond.',
   );
   readonly pendingCheckoutPlan = signal<SubscriptionPlan | null>(null);
 
@@ -439,6 +449,14 @@ export class RibbitStateService implements OnDestroy {
     this.setModal('upgrade');
   }
 
+  /** Surfaces a connection notice modal directing users to /settings when Spotify connection is required. */
+  promptSpotifyConnection(reason?: string): void {
+    if (reason) {
+      this.spotifyPromptReason.set(reason);
+    }
+    this.setModal('spotify-connect');
+  }
+
   /** Links or unlinks a Spotify account via POST /api/profile/link-spotify. */
   toggleSpotifyLink(): void {
     const uid = this.userId();
@@ -646,6 +664,18 @@ export class RibbitStateService implements OnDestroy {
         this.notify(`Jam "${jamDto.room_name}" criada! Código: ${jamDto.room_code}`);
       },
       error: (err: unknown) => {
+        if (
+          isSpotifyConnectionRequiredError(err) ||
+          (!this.isSpotifyLinked() && isSpotifyError(err))
+        ) {
+          this.promptSpotifyConnection(toApiError(err).message);
+          return;
+        }
+        if (isSpotifyPremiumRequiredError(err) || isSpotifyError(err)) {
+          this.setModal(null);
+          this.notify(toApiError(err).message);
+          return;
+        }
         if (isPremiumRequiredError(err)) {
           this.promptPlanUpgrade(toApiError(err).message);
           return;
@@ -665,6 +695,22 @@ export class RibbitStateService implements OnDestroy {
         this.notify(`Você entrou na Jam (${jamDto.room_code})! Deslize para pontuar.`);
       },
       error: (err: unknown) => {
+        if (
+          isSpotifyConnectionRequiredError(err) ||
+          (!this.isSpotifyLinked() && isSpotifyError(err))
+        ) {
+          this.promptSpotifyConnection(toApiError(err).message);
+          return;
+        }
+        if (isSpotifyPremiumRequiredError(err) || isSpotifyError(err)) {
+          this.setModal(null);
+          this.notify(toApiError(err).message);
+          return;
+        }
+        if (isPremiumRequiredError(err)) {
+          this.promptPlanUpgrade(toApiError(err).message);
+          return;
+        }
         this.notify(toApiError(err).message);
       },
     });
@@ -887,6 +933,7 @@ export class RibbitStateService implements OnDestroy {
     this.userName.set(user.display_name);
     this.currentPlanId.set(user.plan_id);
     this.spotifyId.set(user.spotify_id ?? null);
+    this.spotifyPremium.set(Boolean(user.spotify_premium));
     this.blockedGenres.set(user.blocked_genres ? [...user.blocked_genres] : []);
   }
 

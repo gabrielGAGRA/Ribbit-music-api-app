@@ -1,6 +1,7 @@
 """Use case for exchanging Spotify authorization code and linking Spotify ID to user."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 
 from app.domain.exceptions import BusinessRuleViolationError, EntityNotFoundError
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -35,6 +36,18 @@ class ConnectSpotifyAccountUseCase:
             )
 
         user.link_spotify(profile.id)
+        user.update_spotify_premium(profile.is_premium)
+        expires_in = getattr(tokens, "expires_in", None)
+        expires_at = (
+            datetime.now(UTC) + timedelta(seconds=max(0, int(expires_in)))
+            if expires_in is not None
+            else None
+        )
+        user.update_spotify_tokens(
+            access_token=tokens.access_token,
+            refresh_token=getattr(tokens, "refresh_token", None),
+            expires_at=expires_at,
+        )
         return self.user_repo.save(user)
 
 

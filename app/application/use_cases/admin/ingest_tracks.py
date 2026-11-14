@@ -27,6 +27,40 @@ class IngestTracksFromCatalogUseCase:
     catalog_file_port: TrackCatalogFilePort
 
     def execute(self) -> IngestTracksResult:
+        iter_batches = getattr(self.catalog_file_port, "iter_track_batches", None)
+        bulk_upsert = getattr(self.track_repo, "bulk_upsert_tracks", None)
+        if callable(iter_batches) and callable(bulk_upsert):
+            total_processed = 0
+            inserted_count = 0
+            updated_count = 0
+            for batch in iter_batches():
+                batch_list = list(batch)
+                total_processed += len(batch_list)
+                domain_tracks = [
+                    Track(
+                        title=item.title,
+                        artist=item.artist,
+                        duration_seconds=item.duration_seconds,
+                        genre=item.genre or "Unknown",
+                        album=item.album,
+                        country=item.country,
+                        release_year=item.release_year,
+                        cover_url=item.cover_url,
+                        spotify_id=item.spotify_id,
+                        itunes_preview_url=item.itunes_preview_url,
+                        explicit=item.explicit,
+                    )
+                    for item in batch_list
+                ]
+                ins, upd = bulk_upsert(domain_tracks)
+                inserted_count += ins
+                updated_count += upd
+            return IngestTracksResult(
+                total_processed=total_processed,
+                inserted=inserted_count,
+                updated=updated_count,
+            )
+
         source_tracks = self.catalog_file_port.fetch_tracks()
         inserted_count = 0
         updated_count = 0

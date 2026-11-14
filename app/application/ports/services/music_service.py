@@ -18,6 +18,7 @@ class CatalogTrack:
     duration_ms: int | None = None
     cover_url: str | None = None
     release_year: int | None = None
+    explicit: bool = False
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -28,6 +29,9 @@ class TrackPreview:
     preview_url: str | None
     cover_url: str | None
     genre: str | None = None
+    country: str | None = None
+    album: str | None = None
+    release_year: int | None = None
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

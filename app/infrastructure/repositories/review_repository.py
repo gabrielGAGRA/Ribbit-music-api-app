@@ -12,6 +12,11 @@ def _row_to_review(row: sqlite3.Row) -> ReviewComment:
     created_at = (
         datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
     )
+    keys = row.keys() if hasattr(row, "keys") else ()
+    author_name = row["author_name"] if "author_name" in keys else None
+    track_title = row["track_title"] if "track_title" in keys else None
+    track_artist = row["track_artist"] if "track_artist" in keys else None
+    track_image = row["track_image"] if "track_image" in keys else None
     return ReviewComment(
         review_id=row["review_id"],
         user_id=row["user_id"],
@@ -21,6 +26,10 @@ def _row_to_review(row: sqlite3.Row) -> ReviewComment:
         initial_likes_count=int(row["likes_count"]),
         is_deleted=bool(row["is_deleted"]),
         created_at=created_at,
+        author_name=author_name,
+        track_title=track_title,
+        track_artist=track_artist,
+        track_image=track_image,
     )
 
 
@@ -32,7 +41,18 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
 
     def find_by_id(self, review_id: int) -> ReviewComment | None:
         cursor = self.conn.execute(
-            "SELECT * FROM reviews WHERE review_id = ?",
+            """
+            SELECT
+                r.*,
+                u.display_name AS author_name,
+                t.title AS track_title,
+                t.artist AS track_artist,
+                t.cover_url AS track_image
+            FROM reviews r
+            LEFT JOIN users u ON u.user_id = r.user_id
+            LEFT JOIN tracks t ON t.track_id = r.track_id
+            WHERE r.review_id = ?
+            """,
             (review_id,),
         )
         row = cursor.fetchone()
@@ -94,9 +114,17 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
     def list_by_track(self, track_id: int, limit: int) -> list[ReviewComment]:
         cursor = self.conn.execute(
             """
-            SELECT * FROM reviews
-            WHERE track_id = ? AND is_deleted = 0
-            ORDER BY created_at DESC
+            SELECT
+                r.*,
+                u.display_name AS author_name,
+                t.title AS track_title,
+                t.artist AS track_artist,
+                t.cover_url AS track_image
+            FROM reviews r
+            LEFT JOIN users u ON u.user_id = r.user_id
+            LEFT JOIN tracks t ON t.track_id = r.track_id
+            WHERE r.track_id = ? AND r.is_deleted = 0
+            ORDER BY r.created_at DESC
             LIMIT ?
             """,
             (track_id, limit),
@@ -108,9 +136,17 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         min_date_str = (datetime.now(UTC) - timedelta(days=days)).isoformat()
         cursor = self.conn.execute(
             """
-            SELECT * FROM reviews
-            WHERE is_deleted = 0 AND created_at >= ?
-            ORDER BY likes_count DESC, created_at DESC
+            SELECT
+                r.*,
+                u.display_name AS author_name,
+                t.title AS track_title,
+                t.artist AS track_artist,
+                t.cover_url AS track_image
+            FROM reviews r
+            LEFT JOIN users u ON u.user_id = r.user_id
+            LEFT JOIN tracks t ON t.track_id = r.track_id
+            WHERE r.is_deleted = 0 AND r.created_at >= ?
+            ORDER BY r.likes_count DESC, r.created_at DESC
             LIMIT ?
             """,
             (min_date_str, limit),
@@ -141,8 +177,16 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
     ) -> ReviewComment | None:
         cursor = self.conn.execute(
             """
-            SELECT * FROM reviews
-            WHERE user_id = ? AND track_id = ? AND is_deleted = 0
+            SELECT
+                r.*,
+                u.display_name AS author_name,
+                t.title AS track_title,
+                t.artist AS track_artist,
+                t.cover_url AS track_image
+            FROM reviews r
+            LEFT JOIN users u ON u.user_id = r.user_id
+            LEFT JOIN tracks t ON t.track_id = r.track_id
+            WHERE r.user_id = ? AND r.track_id = ? AND r.is_deleted = 0
             """,
             (user_id, track_id),
         )

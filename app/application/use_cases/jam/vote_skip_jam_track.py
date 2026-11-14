@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from app.application.dtos.jam_dtos import SkipVoteResult, VoteSkipJamTrackCommand
+from app.application.use_cases.jam._spotify_sync import sync_advance_track
+from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
@@ -12,6 +14,7 @@ from app.domain.exceptions import (
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
 
 if TYPE_CHECKING:
     from app.domain.models.jam import Jam
@@ -24,6 +27,7 @@ class VoteSkipJamTrackUseCase:
     jam_repo: JamRepositoryPort
     user_repo: UserRepositoryPort
     track_repo: TrackRepositoryPort
+    spotify_queue: SpotifyHostQueuePort | None = None
 
     def _advance(self, jam: Jam) -> bool:
         if jam.jam_id is None:
@@ -52,6 +56,13 @@ class VoteSkipJamTrackUseCase:
         jam.current_track_id = winner.track_id
         self.jam_repo.remove_track_from_queue(jam.jam_id, winner.track_id)
         self.jam_repo.save(jam)
+        sync_advance_track(
+            self.spotify_queue,
+            self.user_repo,
+            jam,
+            self.track_repo,
+            winner.track_id,
+        )
         return True
 
     def _resolve_params(
@@ -135,6 +146,7 @@ class VoteSkipJamTrackUseCase:
         user = self.user_repo.find_by_id(eff_user_id)
         if not user:
             raise EntityNotFoundError(f"User with ID {eff_user_id} not found.")
+        require_spotify_premium(user)
 
         jam = self.jam_repo.find_by_id(jam_id)
         if not jam or not jam.is_active:

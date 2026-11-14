@@ -802,3 +802,85 @@ def test_gcs_adapter_custom_timeout_passed_to_io_calls() -> None:
     )
     adapter.fetch_tracks()
     mock_blob.download_as_bytes.assert_called_once_with(timeout=15.0)
+
+
+def test_write_track_delta_matches_tracks_schema_and_fetch_tracks_includes_new_track() -> (
+    None
+):
+    base_parquet = _build_test_parquet_bytes()
+
+    uploaded_deltas: list[bytes] = []
+
+    def upload_delta(data: bytes, **kwargs: Any) -> None:
+        uploaded_deltas.append(data)
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_as_bytes.return_value = base_parquet
+
+    mock_delta_upload_blob = MagicMock()
+    mock_delta_upload_blob.upload_from_string.side_effect = upload_delta
+
+    def blob_side_effect(name: str) -> MagicMock:
+        if name == "Songs/songs_final.parquet":
+            return mock_base_blob
+        return mock_delta_upload_blob
+
+    mock_bucket.blob.side_effect = blob_side_effect
+    mock_client.bucket.return_value = mock_bucket
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+    )
+    adapter.write_track_delta(
+        title="Brand New Track",
+        artist="New Artist",
+        preview_url="https://itunes.example.com/new.m4a",
+        genre="Synthwave",
+        cover_url="https://itunes.example.com/new.jpg",
+        spotify_id="sp-brand-new",
+        album="New Album",
+        duration_seconds=242,
+        country="Brazil",
+        release_year=2025,
+        explicit=False,
+        is_deleted=False,
+        created_at="2026-11-12T19:50:00+00:00",
+    )
+
+    assert len(uploaded_deltas) == 1
+    delta_table = pq.read_table(io.BytesIO(uploaded_deltas[0]))
+    assert delta_table.schema.names == [
+        "spotify_id",
+        "title",
+        "artist",
+        "album",
+        "duration_seconds",
+        "genre",
+        "country",
+        "release_year",
+        "cover_url",
+        "itunes_preview_url",
+        "explicit",
+        "is_deleted",
+        "created_at",
+    ]
+
+    mock_delta_blob = MagicMock()
+    mock_delta_blob.name = "Songs/deltas/delta_new.parquet"
+    mock_delta_blob.download_as_bytes.return_value = uploaded_deltas[0]
+    mock_client.list_blobs.return_value = [mock_delta_blob]
+
+    tracks = adapter.fetch_tracks()
+    new_track = next(t for t in tracks if t.spotify_id == "sp-brand-new")
+    assert new_track.title == "Brand New Track"
+    assert new_track.album == "New Album"
+    assert new_track.duration_seconds == 242
+    assert new_track.genre == "Synthwave"
+    assert new_track.country == "Brazil"
+    assert new_track.release_year == 2025
+    assert new_track.cover_url == "https://itunes.example.com/new.jpg"
+    assert new_track.itunes_preview_url == "https://itunes.example.com/new.m4a"

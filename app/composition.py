@@ -1,6 +1,7 @@
 """Composition root: inlines infrastructure, use case construction, and router mounting."""
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
@@ -121,6 +122,7 @@ from app.application.use_cases.user import (
     UpdateProfileUseCase,
 )
 from app.config import Settings, load_settings
+from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters import (
     GCSTrackCatalogAdapter,
     ITunesAdapter,
@@ -349,10 +351,8 @@ def build_container(
         SpotifyCredentials(
             client_id=settings.spotify_client_id,
             client_secret=settings.spotify_client_secret,
-            redirect_uri=settings.spotify_redirect_uri,
-            refresh_token=settings.spotify_refresh_token,
         )
-        if settings.spotify_client_id
+        if settings.spotify_client_id and settings.spotify_client_secret
         else None
     )
     music_service = SpotifyAdapter(spotify_credentials)
@@ -525,7 +525,11 @@ def build_container(
         close_jam_use_case=CloseJamUseCase(jam_repo),
         # Review
         search_tracks_use_case=SearchTracksUseCase(
-            user_repo, track_repo, music_service=music_service
+            user_repo,
+            track_repo,
+            music_service=music_service,
+            track_preview_port=preview_service,
+            catalog_file_port=catalog_adapter,
         ),
         publish_review_use_case=PublishReviewUseCase(
             user_repo, track_repo, review_repo
@@ -636,6 +640,84 @@ def _mount_presentation_routers(app: FastAPI) -> None:
         app.include_router(router)
 
 
+def _sync_catalog_on_first_startup(
+    container: Container, logger: logging.Logger
+) -> None:
+    """Ingests GCS catalog once on initial startup if no catalog sync has succeeded yet."""
+    if container.sync_catalog_version_use_case is None:
+        return
+    already_synced = (
+        container.connection.execute(
+            "SELECT 1 FROM audit_logs WHERE status = 'success' "
+            "AND event LIKE 'catalog.synced.v%' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+    if already_synced:
+        return
+    try:
+        result = container.sync_catalog_version_use_case.execute()
+    except ExternalServiceError as exc:
+        log_operational_event(
+            logger,
+            event="catalog.startup_sync.skipped",
+            status="warning",
+            message=f"Initial catalog sync skipped: {exc}",
+        )
+        return
+    log_operational_event(
+        logger,
+        event="catalog.startup_sync.completed",
+        status="success",
+        message=result.message,
+        synced=result.synced,
+        version=result.version,
+    )
+
+
+def _start_background_catalog_sync(
+    settings: Settings, container: Container, logger: logging.Logger
+) -> None:
+    """Runs initial catalog sync in a background daemon thread so startup stays instant."""
+    if container.sync_catalog_version_use_case is None:
+        return
+    already_synced = (
+        container.connection.execute(
+            "SELECT 1 FROM audit_logs WHERE status = 'success' "
+            "AND event LIKE 'catalog.synced.v%' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+    if already_synced:
+        return
+
+    catalog_adapter = container.catalog_file_port
+    if catalog_adapter is None:
+        return
+
+    def _worker() -> None:
+        conn = create_connection(settings.database_path)
+        try:
+            sync_uc = SyncCatalogVersionUseCase(
+                catalog_file_port=catalog_adapter,
+                ingest_use_case=IngestTracksFromCatalogUseCase(
+                    track_repo=SQLiteTrackRepository(conn),
+                    catalog_file_port=catalog_adapter,
+                ),
+                audit_log_repo=SQLiteAuditLogRepository(conn),
+            )
+            bg_container = Container.__new__(Container)
+            object.__setattr__(bg_container, "connection", conn)
+            object.__setattr__(bg_container, "sync_catalog_version_use_case", sync_uc)
+            _sync_catalog_on_first_startup(bg_container, logger)
+        finally:
+            conn.close()
+
+    threading.Thread(
+        target=_worker, name="gcs-initial-catalog-sync", daemon=True
+    ).start()
+
+
 def create_app(
     settings: Settings | None = None,
     connection: sqlite3.Connection | None = None,
@@ -666,6 +748,8 @@ def create_app(
             app_version=resolved_settings.app_version,
             environment=resolved_settings.environment,
         )
+        if owns_connection:
+            _start_background_catalog_sync(resolved_settings, container, logger)
         try:
             yield
         finally:

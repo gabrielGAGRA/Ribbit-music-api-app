@@ -47,29 +47,33 @@ O projeto é composto por duas frentes:
 
 #### 3. Playlists Inteligentes e Contextuais
 - **Montagem por Swipe**: Modo de adicionar músicas a uma playlist via gestos sem poluir a lista global de Curtidas.
+- **Exportação para o Spotify**: Exportação direta da playlist para a biblioteca externa do usuário mediante conexão de conta Spotify (disponível tanto para contas Spotify Free quanto Premium).
 - **Duração Exata**: Ajuste algorítmico da duração planejada com margem de erro máxima de $\pm 1$ minuto.
 - **Momentos de Evento**: Criação de blocos com durações e gêneros distintos para eventos complexos.
 - **Lineup de Festivais**: Geração de sugestões baseada em múltiplos artistas informados.
 - **Filtros Contextuais**: Playlists por localização/viagem, clima/vibe, época (década ou ano) e atividades específicas (treino, estudo).
 - **Modo Referência**: Geração automática com base em Curtidas, Amadas ou playlists prévias.
 
-#### 4. Jams Colaborativas
+#### 4. Jams Colaborativas (Pond)
 - Criação de salas em grupo com convite para amigos.
 - Sistema de pontuação coletiva por swipe: Like (+1), Deslike (0) e Superlike (+1 com destaque de prioridade).
 - Envio direto de faixas supercurtidas para o *deck* de um amigo participante.
 - Votação democrática para pular músicas da fila em reprodução.
 - Acompanhamento do tempo total e restante com margem de tolerância de $\pm 1$ minuto.
+- **Sincronização com Fila do Spotify**: Envio em segundo plano das faixas mais votadas diretamente para a fila de reprodução ativa do anfitrião no Spotify.
+- **Acesso ao Pond & Validação Spotify**: O recurso de reprodução colaborativa requer Spotify Premium, com tratamento de erros diferenciado na interface entre conta não conectada (modal guiando até as Configurações) e conta sem plano Premium (alerta informativo sem redirecionamento para o plano Ribbit).
 
 #### 5. Busca, Comunidade e Lançamentos
-- Busca universal por faixa, artista, álbum ou gênero.
+- Busca universal por faixa, artista, álbum ou gênero com enriquecimento dinâmico de capas de álbuns (`cover_url`) e fallback entre GCS, Spotify e iTunes.
 - Feed com suporte à avaliação imediata.
-- Publicação, edição e exclusão de comentários e avaliações comunitárias em cada música.
+- Publicação, edição e exclusão de comentários e avaliações comunitárias em cada música, exibindo metadados e capa da faixa avaliada.
 
 #### 6. Perfil e Dados
 - Gestão e edição de listas de Curtidas, Amadas, Rejeitadas e Artistas favoritos.
+- Conexão e desconexão de conta do Spotify com suporte a OAuth e PKCE.
 - Dashboard pessoal com artistas principais, gêneros predominantes, entre outras estatísticas.
 - Exclusão transparente de dados sob solicitação do usuário.
-- Edição do plano de assinatura
+- Edição do plano de assinatura.
 
 #### 7. Restrições de conteúdo para menores
 - Contas de menores não recebem nem podem interagir com faixas explícitas ou classificadas como Funk, Trap, Rap ou Hip Hop.

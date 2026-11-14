@@ -279,8 +279,13 @@ def test_user_admin_plan_spotify_and_blocked_genres_mutations() -> None:
     assert user.change_plan(3) is user
     assert user.plan_id == 3
 
+    assert user.spotify_premium is False
     assert user.link_spotify("  spotify_user_123  ") is user
     assert user.spotify_id == "spotify_user_123"
+    assert user.update_spotify_premium(True) is user
+    assert user.spotify_premium is True
+    assert user.update_spotify_premium(False) is user
+    assert user.spotify_premium is False
 
     with pytest.raises(ValueError, match="Spotify ID cannot be blank"):
         user.link_spotify("   ")
