@@ -62,12 +62,28 @@ export class JamsComponent {
   }
 
   openJamModal(): void {
+    if (!this.state.isSpotifyLinked()) {
+      this.state.promptSpotifyConnection('Conecte sua conta do Spotify para criar uma Jam no Pond.');
+      return;
+    }
+    if (!this.state.spotifyPremium()) {
+      this.state.notify('Uma conta Spotify Premium é necessária para criar uma Jam no Pond.');
+      return;
+    }
     this.state.setModal('jam');
   }
 
   joinJam(code: string): void {
     const cleaned = code.trim();
     if (!cleaned) return;
+    if (!this.state.isSpotifyLinked()) {
+      this.state.promptSpotifyConnection('Conecte sua conta do Spotify para entrar na Jam no Pond.');
+      return;
+    }
+    if (!this.state.spotifyPremium()) {
+      this.state.notify('Uma conta Spotify Premium é necessária para entrar na Jam no Pond.');
+      return;
+    }
     this.jamView.set('swipe');
     if (readAuthToken()) {
       this.state.joinJamRoom(cleaned);

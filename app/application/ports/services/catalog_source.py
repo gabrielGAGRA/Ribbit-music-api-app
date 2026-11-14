@@ -47,8 +47,15 @@ class TrackCatalogFilePort(Protocol):
         genre: str | None = None,
         cover_url: str | None = None,
         spotify_id: str | None = None,
+        album: str | None = None,
+        duration_seconds: int | None = None,
+        country: str | None = None,
+        release_year: int | None = None,
+        explicit: bool | None = None,
+        is_deleted: bool | None = None,
+        created_at: str | None = None,
     ) -> None:
-        """Writes a lightweight micro-delta file to remote storage for enriched track metadata."""
+        """Writes a lightweight micro-delta file to remote storage for track metadata."""
         ...
 
     def compact_catalog(self) -> int:

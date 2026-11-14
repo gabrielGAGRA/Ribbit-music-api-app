@@ -12,7 +12,11 @@ from app.application.ports.repositories.playlist_repository import (
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.get_jam_deck import GetJamDeckUseCase
-from app.domain.exceptions import PermissionDeniedError
+from app.domain.exceptions import (
+    PermissionDeniedError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
+)
 from app.domain.models import (
     Interaction,
     InteractionAction,
@@ -32,6 +36,7 @@ def test_get_jam_deck_for_participant_returns_candidates() -> None:
         display_name="Participant",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -77,6 +82,7 @@ def test_get_jam_deck_excludes_queue_and_current_track() -> None:
         display_name="Participant",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -136,6 +142,7 @@ def test_get_jam_deck_excludes_tracks_already_interacted_by_user() -> None:
         display_name="Participant",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=2, room_name="Party", is_active=True)
     t1 = Track(
@@ -187,6 +194,7 @@ def test_get_jam_deck_keeps_favorites_based_candidates_when_not_jam_interactions
         display_name="Participant",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -240,6 +248,7 @@ def test_get_jam_deck_non_participant_raises_permission_denied() -> None:
         display_name="Outsider",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=2, room_name="Private", is_active=True)
 
@@ -267,6 +276,7 @@ def test_get_jam_deck_keeps_unvoted_queue_tracks_plus_base_candidates() -> None:
         display_name="Participant",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -353,6 +363,7 @@ def test_get_jam_deck_playlist_source_pulls_from_configured_playlist() -> None:
         display_name="Host",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     t1 = Track(
         track_id=1, title="Song 1", artist="Artist", duration_seconds=180, genre="Rock"
@@ -402,6 +413,7 @@ def test_get_jam_deck_livre_weights_favorite_genres_and_paginates_deterministica
         age=25,
         plan_id=1,
         favorite_genres=frozenset({"rock"}),
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -468,6 +480,7 @@ def test_get_jam_deck_livre_cursor_pagination_when_cursor_track_was_queued_or_ex
         age=25,
         plan_id=1,
         favorite_genres=frozenset({"rock"}),
+        spotify_premium=True,
     )
     jam = Jam(
         jam_id=10,
@@ -524,3 +537,37 @@ def test_get_jam_deck_livre_cursor_pagination_when_cursor_track_was_queued_or_ex
     assert len(page2_ids) == 20
     assert set(page1_ids).isdisjoint(page2_ids)
     assert set(page1_ids + page2_ids) == set(range(1, 31))
+
+
+def test_get_jam_deck_requires_spotify_premium() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=25,
+        plan_id=1,
+        spotify_id="spot_1",
+        spotify_premium=False,
+    )
+    use_case = GetJamDeckUseCase(
+        jam_repo=MagicMock(spec=JamRepositoryPort),
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+    )
+    with pytest.raises(SpotifyPremiumRequiredError):
+        use_case.execute(jam_id=10, user_id=1)
+
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=25,
+        plan_id=1,
+        spotify_id=None,
+        spotify_premium=False,
+    )
+    with pytest.raises(SpotifyConnectionRequiredError):
+        use_case.execute(jam_id=10, user_id=1)

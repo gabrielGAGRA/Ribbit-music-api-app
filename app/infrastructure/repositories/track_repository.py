@@ -1,5 +1,6 @@
 """SQLite implementation of the track persistence port."""
 
+import re
 from datetime import UTC, datetime
 lazy import sqlite3
 lazy from collections.abc import Sequence
@@ -73,6 +74,16 @@ def _normalize_year_sequence(value: int | Sequence[int] | None) -> list[int]:
     return results
 
 
+_DIACRITIC_CHARS = re.compile(r"[aeioucáàãâäéèêëíìîïóòõôöúùûüçñ]", re.IGNORECASE)
+
+
+def _to_flexible_like(term: str) -> str:
+    cleaned = term.strip()
+    if len(cleaned) < 3:
+        return cleaned
+    return _DIACRITIC_CHARS.sub("_", cleaned)
+
+
 def _append_like_clause(
     conditions: list[str],
     params: list[object],
@@ -81,9 +92,17 @@ def _append_like_clause(
 ) -> None:
     if not values:
         return
-    clauses = " OR ".join(f"lower({column}) LIKE ?" for _ in values)
-    conditions.append(f"({clauses})")
-    params.extend(f"%{v.lower()}%" for v in values)
+    clauses: list[str] = []
+    for v in values:
+        exact = f"%{v.lower()}%"
+        flex = f"%{_to_flexible_like(v)}%"
+        if exact == flex:
+            clauses.append(f"lower({column}) LIKE ?")
+            params.append(exact)
+        else:
+            clauses.append(f"(lower({column}) LIKE ? OR {column} LIKE ?)")
+            params.extend([exact, flex])
+    conditions.append(f"({' OR '.join(clauses)})")
 
 
 def _append_exact_clause(
@@ -124,11 +143,21 @@ def _build_filter_conditions(
     params: list[object] = []
 
     if query:
-        like_term = f"%{query.lower()}%"
-        conditions.append(
-            "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
-        )
-        params.extend([like_term, like_term, like_term])
+        exact_like = f"%{query.lower()}%"
+        flex_like = f"%{_to_flexible_like(query)}%"
+        if exact_like == flex_like:
+            conditions.append(
+                "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
+            )
+            params.extend([exact_like, exact_like, exact_like])
+        else:
+            conditions.append(
+                "("
+                "lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?"
+                " OR artist LIKE ? OR title LIKE ?"
+                ")"
+            )
+            params.extend([exact_like, exact_like, exact_like, flex_like, flex_like])
 
     _append_like_clause(
         conditions, params, "artist", _normalize_string_sequence(artist)
@@ -387,6 +416,105 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         )
         rows = cursor.fetchall()
         return [_row_to_track(r) for r in rows]
+
+    @staticmethod
+    def _track_insert_tuple(t: Track, now_iso: str) -> tuple[object, ...]:
+        return (
+            t.spotify_id,
+            t.title,
+            t.artist,
+            t.album,
+            t.duration_seconds,
+            t.genre,
+            t.country,
+            t.release_year,
+            t.cover_url,
+            t.itunes_preview_url,
+            int(t.explicit),
+            int(t.is_deleted),
+            t.created_at.isoformat() if t.created_at else now_iso,
+        )
+
+    def _insert_track_rows(self, rows: list[tuple[object, ...]]) -> None:
+        if not rows:
+            return
+        self.conn.executemany(
+            """
+            INSERT INTO tracks (
+                spotify_id, title, artist, album, duration_seconds, genre,
+                country, release_year, cover_url, itunes_preview_url,
+                explicit, is_deleted, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+
+    def bulk_upsert_tracks(self, tracks: Sequence[Track]) -> tuple[int, int]:
+        """Inserts a batch of tracks in a single transaction using a temp staging table."""
+        if not tracks:
+            return 0, 0
+
+        now_iso = datetime.now(UTC).isoformat()
+        rows = [self._track_insert_tuple(t, now_iso) for t in tracks]
+        self.conn.execute(
+            """
+            CREATE TEMP TABLE IF NOT EXISTS _stage_tracks (
+                spotify_id TEXT,
+                title TEXT NOT NULL,
+                artist TEXT NOT NULL,
+                album TEXT,
+                duration_seconds INTEGER NOT NULL,
+                genre TEXT NOT NULL,
+                country TEXT,
+                release_year INTEGER,
+                cover_url TEXT,
+                itunes_preview_url TEXT,
+                explicit INTEGER NOT NULL,
+                is_deleted INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        self.conn.execute("DELETE FROM _stage_tracks")
+        self.conn.executemany(
+            """
+            INSERT INTO _stage_tracks (
+                spotify_id, title, artist, album, duration_seconds, genre,
+                country, release_year, cover_url, itunes_preview_url,
+                explicit, is_deleted, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows,
+        )
+        cursor = self.conn.execute(
+            """
+            INSERT INTO tracks (
+                spotify_id, title, artist, album, duration_seconds, genre,
+                country, release_year, cover_url, itunes_preview_url,
+                explicit, is_deleted, created_at
+            )
+            SELECT
+                s.spotify_id, s.title, s.artist, s.album, s.duration_seconds, s.genre,
+                s.country, s.release_year, s.cover_url, s.itunes_preview_url,
+                s.explicit, s.is_deleted, s.created_at
+            FROM _stage_tracks s
+            WHERE NOT (
+                s.spotify_id IS NOT NULL
+                AND EXISTS (
+                    SELECT 1 FROM tracks t WHERE t.spotify_id = s.spotify_id
+                )
+            )
+            AND NOT EXISTS (
+                SELECT 1 FROM tracks t
+                WHERE lower(t.title) = lower(s.title)
+                  AND lower(t.artist) = lower(s.artist)
+            )
+            """
+        )
+        inserted = max(cursor.rowcount, 0)
+        self.conn.execute("DELETE FROM _stage_tracks")
+        self.conn.commit()
+        return inserted, 0
 
 
 __all__ = ["SQLiteTrackRepository"]

@@ -1,12 +1,14 @@
 """Composition root: inlines infrastructure, use case construction, and router mounting."""
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 lazy import sqlite3
 lazy from collections.abc import AsyncGenerator
 
+import niquests
 from fastapi import FastAPI
 
 from app.application.ports.repositories import (
@@ -20,9 +22,11 @@ from app.application.ports.repositories import (
     UserRepositoryPort,
 )
 from app.application.ports.services import (
+    GoogleIdpVerifierPort,
     PasswordHasherPort,
     PlaylistExportPort,
     PlaylistSourcePort,
+    SpotifyUserProfilePort,
     TokenServicePort,
     TrackCatalogFilePort,
     TrackCatalogPort,
@@ -50,6 +54,7 @@ from app.application.use_cases.admin import (
 from app.application.use_cases.auth import (
     AuthenticateAdminUseCase,
     AuthenticateUserUseCase,
+    AuthenticateWithGoogleUseCase,
     RegisterUserUseCase,
 )
 from app.application.use_cases.discovery import (
@@ -90,6 +95,8 @@ from app.application.use_cases.review import (
     SearchTracksUseCase,
 )
 from app.application.use_cases.spotify import (
+    ConnectSpotifyAccountUseCase,
+    GetSpotifyAuthorizeUrlUseCase,
     SyncPlaylistFromSpotifyUseCase,
     SyncTracksFromSpotifyUseCase,
 )
@@ -115,12 +122,16 @@ from app.application.use_cases.user import (
     UpdateProfileUseCase,
 )
 from app.config import Settings, load_settings
+from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters import (
     GCSTrackCatalogAdapter,
     ITunesAdapter,
     SpotifyAdapter,
 )
+from app.infrastructure.adapters.google_auth_adapter import GoogleIdpVerifierAdapter
 from app.infrastructure.adapters.spotify import SpotifyCredentials
+from app.infrastructure.adapters.spotify.auth import SpotifyAuth
+from app.infrastructure.adapters.spotify.user_profile import SpotifyUserProfileAdapter
 from app.infrastructure.repositories import (
     SQLiteAuditLogRepository,
     SQLiteInteractionRepository,
@@ -147,6 +158,7 @@ from app.presentation.routers.discovery import router as discovery_router
 from app.presentation.routers.jams import router as jams_router
 from app.presentation.routers.playlists import router as playlists_router
 from app.presentation.routers.profile import router as profile_router
+from app.presentation.routers.spotify import router as spotify_router
 from app.presentation.routers.tracks_reviews import (
     router as tracks_reviews_router,
 )
@@ -170,7 +182,10 @@ class Container:
     jam_repo: SQLiteJamRepository
     review_repo: SQLiteReviewRepository
     audit_log_repo: SQLiteAuditLogRepository
+    google_verifier: GoogleIdpVerifierPort
+    spotify_user_profile: SpotifyUserProfilePort
     # Auth
+    authenticate_with_google_use_case: AuthenticateWithGoogleUseCase
     register_user_use_case: RegisterUserUseCase
     authenticate_user_use_case: AuthenticateUserUseCase
     authenticate_admin_use_case: AuthenticateAdminUseCase
@@ -228,6 +243,8 @@ class Container:
     get_annual_listening_stats_use_case: GetAnnualListeningStatsUseCase
     link_spotify_account_use_case: LinkSpotifyAccountUseCase
     # Spotify
+    get_spotify_authorize_url_use_case: GetSpotifyAuthorizeUrlUseCase
+    connect_spotify_account_use_case: ConnectSpotifyAccountUseCase
     sync_tracks_from_spotify_use_case: SyncTracksFromSpotifyUseCase
     sync_playlist_from_spotify_use_case: SyncPlaylistFromSpotifyUseCase
     # Admin
@@ -263,6 +280,8 @@ class Container:
 
         # Register interface protocols explicitly
         registry[TokenServicePort] = self.token_service
+        registry[GoogleIdpVerifierPort] = self.google_verifier
+        registry[SpotifyUserProfilePort] = self.spotify_user_profile
         registry[TrackPreviewPort] = self.preview_service
         registry[TrackCatalogPort] = self.music_service
         registry[PlaylistExportPort] = self.music_service
@@ -332,10 +351,8 @@ def build_container(
         SpotifyCredentials(
             client_id=settings.spotify_client_id,
             client_secret=settings.spotify_client_secret,
-            redirect_uri=settings.spotify_redirect_uri,
-            refresh_token=settings.spotify_refresh_token,
         )
-        if settings.spotify_client_id
+        if settings.spotify_client_id and settings.spotify_client_secret
         else None
     )
     music_service = SpotifyAdapter(spotify_credentials)
@@ -383,6 +400,19 @@ def build_container(
         else None
     )
 
+    google_verifier = GoogleIdpVerifierAdapter(
+        expected_client_id=settings.google_client_id,
+    )
+    spotify_user_profile = SpotifyUserProfileAdapter()
+    user_spotify_credentials = SpotifyCredentials(
+        client_id=settings.spotify_client_id or "dev_spotify_client",
+        client_secret=settings.spotify_client_secret or "dev_spotify_secret",
+        redirect_uri=settings.spotify_redirect_uri or "http://127.0.0.1:8888/callback",
+    )
+    user_spotify_auth = SpotifyAuth(
+        user_spotify_credentials,
+        session=niquests.Session(),
+    )
     user_stats_repo = SQLiteUserStatsRepository(conn)
 
     return Container(
@@ -400,6 +430,21 @@ def build_container(
         jam_repo=jam_repo,
         review_repo=review_repo,
         audit_log_repo=audit_log_repo,
+        google_verifier=google_verifier,
+        spotify_user_profile=spotify_user_profile,
+        authenticate_with_google_use_case=AuthenticateWithGoogleUseCase(
+            user_repo=user_repo,
+            token_service=token_service,
+            google_verifier=google_verifier,
+        ),
+        get_spotify_authorize_url_use_case=GetSpotifyAuthorizeUrlUseCase(
+            spotify_auth=user_spotify_auth,
+        ),
+        connect_spotify_account_use_case=ConnectSpotifyAccountUseCase(
+            user_repo=user_repo,
+            spotify_auth=user_spotify_auth,
+            spotify_profile=spotify_user_profile,
+        ),
         # Auth
         register_user_use_case=RegisterUserUseCase(
             user_repo, plan_repo, password_hasher
@@ -480,7 +525,11 @@ def build_container(
         close_jam_use_case=CloseJamUseCase(jam_repo),
         # Review
         search_tracks_use_case=SearchTracksUseCase(
-            user_repo, track_repo, music_service=music_service
+            user_repo,
+            track_repo,
+            music_service=music_service,
+            track_preview_port=preview_service,
+            catalog_file_port=catalog_adapter,
         ),
         publish_review_use_case=PublishReviewUseCase(
             user_repo, track_repo, review_repo
@@ -586,8 +635,87 @@ def _mount_presentation_routers(app: FastAPI) -> None:
         jams_router,
         tracks_reviews_router,
         admin_router,
+        spotify_router,
     ]:
         app.include_router(router)
+
+
+def _sync_catalog_on_first_startup(
+    container: Container, logger: logging.Logger
+) -> None:
+    """Ingests GCS catalog once on initial startup if no catalog sync has succeeded yet."""
+    if container.sync_catalog_version_use_case is None:
+        return
+    already_synced = (
+        container.connection.execute(
+            "SELECT 1 FROM audit_logs WHERE status = 'success' "
+            "AND event LIKE 'catalog.synced.v%' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+    if already_synced:
+        return
+    try:
+        result = container.sync_catalog_version_use_case.execute()
+    except ExternalServiceError as exc:
+        log_operational_event(
+            logger,
+            event="catalog.startup_sync.skipped",
+            status="warning",
+            message=f"Initial catalog sync skipped: {exc}",
+        )
+        return
+    log_operational_event(
+        logger,
+        event="catalog.startup_sync.completed",
+        status="success",
+        message=result.message,
+        synced=result.synced,
+        version=result.version,
+    )
+
+
+def _start_background_catalog_sync(
+    settings: Settings, container: Container, logger: logging.Logger
+) -> None:
+    """Runs initial catalog sync in a background daemon thread so startup stays instant."""
+    if container.sync_catalog_version_use_case is None:
+        return
+    already_synced = (
+        container.connection.execute(
+            "SELECT 1 FROM audit_logs WHERE status = 'success' "
+            "AND event LIKE 'catalog.synced.v%' LIMIT 1"
+        ).fetchone()
+        is not None
+    )
+    if already_synced:
+        return
+
+    catalog_adapter = container.catalog_file_port
+    if catalog_adapter is None:
+        return
+
+    def _worker() -> None:
+        conn = create_connection(settings.database_path)
+        try:
+            sync_uc = SyncCatalogVersionUseCase(
+                catalog_file_port=catalog_adapter,
+                ingest_use_case=IngestTracksFromCatalogUseCase(
+                    track_repo=SQLiteTrackRepository(conn),
+                    catalog_file_port=catalog_adapter,
+                ),
+                audit_log_repo=SQLiteAuditLogRepository(conn),
+            )
+            bg_container = Container.__new__(Container)
+            object.__setattr__(bg_container, "connection", conn)
+            object.__setattr__(bg_container, "sync_catalog_version_use_case", sync_uc)
+            _sync_catalog_on_first_startup(bg_container, logger)
+        finally:
+            conn.close()
+
+    threading.Thread(
+        target=_worker, name="gcs-initial-catalog-sync", daemon=True
+    ).start()
 
 
 def create_app(
@@ -620,6 +748,8 @@ def create_app(
             app_version=resolved_settings.app_version,
             environment=resolved_settings.environment,
         )
+        if owns_connection:
+            _start_background_catalog_sync(resolved_settings, container, logger)
         try:
             yield
         finally:

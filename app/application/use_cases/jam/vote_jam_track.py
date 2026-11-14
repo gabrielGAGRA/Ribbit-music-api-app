@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from app.application.use_cases.jam._spotify_sync import sync_enqueue_track
+from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
@@ -20,6 +22,7 @@ lazy from app.application.ports.repositories.interaction_repository import (
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
 lazy from app.domain.models.jam import Jam
 lazy from app.domain.models.track import Track
 
@@ -32,6 +35,7 @@ class VoteJamTrackUseCase:
     user_repo: UserRepositoryPort
     track_repo: TrackRepositoryPort
     interaction_repo: InteractionRepositoryPort | None = None
+    spotify_queue: SpotifyHostQueuePort | None = None
 
     def _compute_vote_points(self, command: VoteJamTrackCommand) -> tuple[int, bool]:
         action = InteractionAction.parse(command.action, default=InteractionAction.LIKE)
@@ -66,18 +70,20 @@ class VoteJamTrackUseCase:
                 "Track addition exceeds configured jam duration."
             )
 
-    def _save_vote(self, jam_id: int, track_id: int, vote_points: int) -> JamQueueItem:
+    def _save_vote(
+        self, jam_id: int, track_id: int, vote_points: int
+    ) -> tuple[JamQueueItem, bool]:
         existing_item = self.jam_repo.find_queue_item(jam_id, track_id)
         if existing_item is not None:
             existing_item.vote(vote_points)
-            return self.jam_repo.save_queue_item(existing_item)
+            return self.jam_repo.save_queue_item(existing_item), False
 
         new_item = JamQueueItem(
             jam_id=jam_id,
             track_id=track_id,
             initial_vote_points=vote_points,
         )
-        return self.jam_repo.save_queue_item(new_item)
+        return self.jam_repo.save_queue_item(new_item), True
 
     def _record_interaction(
         self,
@@ -144,6 +150,7 @@ class VoteJamTrackUseCase:
         user = self.user_repo.find_by_id(command.user_id)
         if not user:
             raise EntityNotFoundError(f"User with ID {command.user_id} not found.")
+        require_spotify_premium(user)
 
         jam = self.jam_repo.find_by_id(command.jam_id)
         if not jam or not jam.is_active:
@@ -173,7 +180,9 @@ class VoteJamTrackUseCase:
 
         self._check_duration_cap(jam, track)
 
-        saved_item = self._save_vote(command.jam_id, command.track_id, vote_points)
+        saved_item, is_new_item = self._save_vote(
+            command.jam_id, command.track_id, vote_points
+        )
         self._record_interaction(
             command.jam_id,
             command.user_id,
@@ -187,4 +196,6 @@ class VoteJamTrackUseCase:
             self.jam_repo.save(jam)
 
         self._maybe_auto_advance(jam)
+        if is_new_item:
+            sync_enqueue_track(self.spotify_queue, self.user_repo, jam, track)
         return saved_item

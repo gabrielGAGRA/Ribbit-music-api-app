@@ -15,7 +15,11 @@ from app.application.ports.repositories.playlist_repository import (
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.save_queue_track import SaveQueueTrackUseCase
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import (
+    EntityNotFoundError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
+)
 from app.domain.models import (
     InteractionAction,
     Jam,
@@ -34,6 +38,7 @@ def test_save_queue_track_saves_to_liked_and_adds_to_playlist() -> None:
         display_name="Participant",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=2, room_name="Jam", is_active=True)
     q_item = JamQueueItem(jam_id=10, track_id=50, initial_vote_points=1)
@@ -88,6 +93,7 @@ def test_save_queue_track_not_in_queue_raises_entity_not_found() -> None:
         display_name="Participant",
         age=25,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=2, room_name="Jam", is_active=True)
 
@@ -109,3 +115,47 @@ def test_save_queue_track_not_in_queue_raises_entity_not_found() -> None:
         EntityNotFoundError, match="Track does not belong to this Jam room queue"
     ):
         use_case.execute(SaveQueueTrackCommand(jam_id=10, user_id=1, track_id=999))
+
+
+def test_save_queue_track_requires_spotify_premium() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=25,
+        plan_id=1,
+        spotify_id="spot_1",
+        spotify_premium=False,
+    )
+    use_case = SaveQueueTrackUseCase(
+        jam_repo=MagicMock(spec=JamRepositoryPort),
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+        interaction_repo=MagicMock(spec=InteractionRepositoryPort),
+    )
+    with pytest.raises(SpotifyPremiumRequiredError):
+        use_case.execute(SaveQueueTrackCommand(jam_id=10, user_id=1, track_id=50))
+
+
+def test_save_queue_track_requires_spotify_connection_when_unlinked() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=25,
+        plan_id=1,
+        spotify_id=None,
+        spotify_premium=False,
+    )
+    use_case = SaveQueueTrackUseCase(
+        jam_repo=MagicMock(spec=JamRepositoryPort),
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+        interaction_repo=MagicMock(spec=InteractionRepositoryPort),
+    )
+    with pytest.raises(SpotifyConnectionRequiredError):
+        use_case.execute(SaveQueueTrackCommand(jam_id=10, user_id=1, track_id=50))

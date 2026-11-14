@@ -20,6 +20,11 @@ class RegisterUserCommand:
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
+class AuthenticateWithGoogleCommand:
+    id_token: str
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
 class AuthenticateUserCommand:
     email: str
     password: str
@@ -45,5 +50,6 @@ __all__ = [
     "AuthResult",
     "AuthenticateAdminCommand",
     "AuthenticateUserCommand",
+    "AuthenticateWithGoogleCommand",
     "RegisterUserCommand",
 ]

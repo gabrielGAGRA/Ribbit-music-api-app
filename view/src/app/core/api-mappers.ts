@@ -236,6 +236,40 @@ function computeInitials(name: string): string {
   return name.slice(0, 2).toUpperCase() || 'RB';
 }
 
+function resolveReviewAuthor(
+  dto: ReviewApiDto,
+  isOwn: boolean,
+  currentUserName?: string,
+): string {
+  if (isOwn) {
+    return currentUserName || 'Você';
+  }
+  return dto.author_name?.trim() || `Ouvinte #${dto.user_id}`;
+}
+
+function resolveReviewCover(dto: ReviewApiDto, trackImage?: string): string | undefined {
+  if (trackImage) {
+    return trackImage;
+  }
+  if (dto.track_image || dto.track_title) {
+    return resolveCoverUrl(dto.track_image, dto.track_id);
+  }
+  return undefined;
+}
+
+function resolveReviewTrackMetadata(dto: ReviewApiDto, track?: Song) {
+  const songTitle = track ? track.title : (dto.track_title ?? undefined);
+  const songArtist = track ? track.artist : (dto.track_artist ?? undefined);
+  const songImage = resolveReviewCover(dto, track?.image);
+  return { songTitle, songArtist, songImage };
+}
+
+function resolveReviewText(dto: ReviewApiDto): string {
+  return dto.text && dto.text.trim().length > 0
+    ? dto.text
+    : `Avaliou com ${dto.rating}/5 estrelas.`;
+}
+
 /** Maps a ReviewApiDto into a UI CommunityReview card item. */
 export function mapReviewDtoToCommunityReview(options: {
   readonly dto: ReviewApiDto;
@@ -245,28 +279,24 @@ export function mapReviewDtoToCommunityReview(options: {
 }): CommunityReview {
   const { dto, track, currentUserId, currentUserName } = options;
   const isOwn = currentUserId !== undefined && dto.user_id === currentUserId;
-  const author = isOwn ? currentUserName || 'Você' : `Ouvinte #${dto.user_id}`;
+  const author = resolveReviewAuthor(dto, isOwn, currentUserName);
   const relative = formatRelativeAge(dto.created_at);
+  const { songTitle, songArtist, songImage } = resolveReviewTrackMetadata(dto, track);
 
   return {
     id: dto.review_id ?? dto.track_id * 1000 + dto.user_id,
     author,
     initials: computeInitials(author),
-    text:
-      dto.text && dto.text.trim().length > 0 ? dto.text : `Avaliou com ${dto.rating}/5 estrelas.`,
+    text: resolveReviewText(dto),
     likes: dto.likes_count,
     age: relative.age,
     date: relative.timestamp,
     userId: dto.user_id,
     trackId: dto.track_id,
     rating: dto.rating,
-    ...(track
-      ? {
-          songTitle: track.title,
-          songArtist: track.artist,
-          songImage: track.image,
-        }
-      : {}),
+    ...(songTitle ? { songTitle } : {}),
+    ...(songArtist ? { songArtist } : {}),
+    ...(songImage ? { songImage } : {}),
   };
 }
 

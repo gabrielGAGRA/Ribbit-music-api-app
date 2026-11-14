@@ -120,8 +120,36 @@ export function toApiError(err: unknown): ApiError {
   });
 }
 
+/** Checks whether an error is due to Spotify account not being connected. */
+export function isSpotifyConnectionRequiredError(err: unknown): boolean {
+  const apiErr = toApiError(err);
+  if (apiErr.errorCode === 'SpotifyConnectionRequiredError') return true;
+  if (isRecord(apiErr.details) && apiErr.details['rule_name'] === 'spotify_connection_required') {
+    return true;
+  }
+  return false;
+}
+
+/** Checks whether an error is due to Spotify Premium requirement. */
+export function isSpotifyPremiumRequiredError(err: unknown): boolean {
+  const apiErr = toApiError(err);
+  if (apiErr.errorCode === 'SpotifyPremiumRequiredError') return true;
+  if (isRecord(apiErr.details) && apiErr.details['rule_name'] === 'spotify_premium_required') {
+    return true;
+  }
+  return false;
+}
+
+/** Checks whether an error is related to Spotify requirements (connection or premium). */
+export function isSpotifyError(err: unknown): boolean {
+  return isSpotifyConnectionRequiredError(err) || isSpotifyPremiumRequiredError(err);
+}
+
 /** Checks whether the given error indicates a paid subscription requirement (403). */
 export function isPremiumRequiredError(err: unknown): boolean {
+  if (isSpotifyError(err)) {
+    return false;
+  }
   const apiErr = toApiError(err);
   return apiErr.status === 403;
 }
