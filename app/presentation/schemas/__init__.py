@@ -12,6 +12,7 @@ from app.presentation.schemas.admin import (
 )
 from app.presentation.schemas.auth import (
     AuthResponse,
+    GoogleLoginRequest,
     LoginRequest,
     RegisterUserRequest,
     UserResponse,
@@ -56,6 +57,10 @@ from app.presentation.schemas.profile import (
     UserProfileResponse,
     YearlyInteractionStatResponse,
 )
+from app.presentation.schemas.spotify import (
+    SpotifyAuthorizeUrlResponse,
+    SpotifyConnectCallbackRequest,
+)
 from app.presentation.schemas.tracks_reviews import (
     PublishReviewRequest,
     ReviewResponse,
@@ -76,6 +81,7 @@ __all__ = [
     "GenreStatResponse",
     "DeckPlaylistRequest",
     "ExecutiveDashboardResponse",
+    "GoogleLoginRequest",
     "InteractionRequest",
     "InteractionResponse",
     "JamQueueItemResponse",
@@ -93,6 +99,8 @@ __all__ = [
     "ReviewResponse",
     "SkipJamTrackRequest",
     "SourceStatResponse",
+    "SpotifyAuthorizeUrlResponse",
+    "SpotifyConnectCallbackRequest",
     "SwipeAddTrackRequest",
     "ThemePreferenceRequest",
     "TrackBlockResponse",

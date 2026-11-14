@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 
 from app.domain.exceptions import (
-    BusinessRuleViolationError,
     EntityNotFoundError,
     PermissionDeniedError,
+    SpotifyConnectionRequiredError,
 )
 lazy from app.application.ports.repositories.playlist_repository import (
     PlaylistRepositoryPort,
@@ -29,8 +29,9 @@ class ExportPlaylistToSpotifyUseCase:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
         if not user.spotify_id:
-            raise BusinessRuleViolationError(
-                "User does not have a linked Spotify account."
+            raise SpotifyConnectionRequiredError(
+                "Conecte sua conta do Spotify para exportar playlists.",
+                details={"rule_name": "spotify_connection_required"},
             )
 
         playlist = self.playlist_repo.find_by_id(playlist_id)

@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app.application.dtos.jam_dtos import JoinJamCommand
+from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
@@ -50,6 +51,7 @@ class JoinJamUseCase:
                 raise EntityNotFoundError(
                     f"User with ID {effective_user_id} not found."
                 )
+            require_spotify_premium(user)
 
         jam = self.jam_repo.find_by_code(code)
         if not jam or not jam.is_active:

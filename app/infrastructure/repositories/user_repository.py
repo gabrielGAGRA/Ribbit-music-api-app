@@ -31,6 +31,21 @@ def _row_to_user(row: sqlite3.Row) -> User:
         if "preferred_theme" in keys and row["preferred_theme"]
         else "light"
     )
+    spotify_premium = (
+        bool(row["spotify_premium"]) if "spotify_premium" in keys else False
+    )
+    spotify_access_token = (
+        row["spotify_access_token"] if "spotify_access_token" in keys else None
+    )
+    spotify_refresh_token = (
+        row["spotify_refresh_token"] if "spotify_refresh_token" in keys else None
+    )
+    raw_token_expiry = (
+        row["spotify_token_expires_at"] if "spotify_token_expires_at" in keys else None
+    )
+    spotify_token_expires_at = (
+        datetime.fromisoformat(raw_token_expiry) if raw_token_expiry else None
+    )
     return User(
         user_id=row["user_id"],
         email=row["email"],
@@ -39,6 +54,10 @@ def _row_to_user(row: sqlite3.Row) -> User:
         age=row["age"],
         plan_id=row["plan_id"],
         spotify_id=row["spotify_id"],
+        spotify_premium=spotify_premium,
+        spotify_access_token=spotify_access_token,
+        spotify_refresh_token=spotify_refresh_token,
+        spotify_token_expires_at=spotify_token_expires_at,
         primary_account_id=row["primary_account_id"],
         blocked_genres=blocked_genres,
         favorite_genres=favorite_genres,
@@ -71,6 +90,14 @@ class SQLiteUserRepository(UserRepositoryPort):
         row = cursor.fetchone()
         return _row_to_user(row) if row else None
 
+    def find_by_spotify_id(self, spotify_id: str) -> User | None:
+        cursor = self.conn.execute(
+            "SELECT * FROM users WHERE spotify_id = ?",
+            (spotify_id.strip(),),
+        )
+        row = cursor.fetchone()
+        return _row_to_user(row) if row else None
+
     def save(self, user: User) -> User:
         blocked_str = (
             ",".join(sorted(user.blocked_genres)) if user.blocked_genres else None
@@ -90,6 +117,10 @@ class SQLiteUserRepository(UserRepositoryPort):
                     SET email = ?,
                         password_hash = ?,
                         spotify_id = ?,
+                        spotify_premium = ?,
+                        spotify_access_token = ?,
+                        spotify_refresh_token = ?,
+                        spotify_token_expires_at = ?,
                         display_name = ?,
                         age = ?,
                         plan_id = ?,
@@ -105,6 +136,14 @@ class SQLiteUserRepository(UserRepositoryPort):
                         user.email.lower().strip(),
                         user.password_hash,
                         user.spotify_id,
+                        1 if user.spotify_premium else 0,
+                        user.spotify_access_token,
+                        user.spotify_refresh_token,
+                        (
+                            user.spotify_token_expires_at.isoformat()
+                            if user.spotify_token_expires_at is not None
+                            else None
+                        ),
                         user.display_name,
                         user.age,
                         user.plan_id,
@@ -125,15 +164,25 @@ class SQLiteUserRepository(UserRepositoryPort):
         cursor = self.conn.execute(
             """
             INSERT INTO users (
-                email, password_hash, spotify_id, display_name, age,
+                email, password_hash, spotify_id, spotify_premium,
+                spotify_access_token, spotify_refresh_token, spotify_token_expires_at,
+                display_name, age,
                 plan_id, primary_account_id, blocked_genres, favorite_genres,
                 preferred_theme, is_admin, created_at, birth_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user.email.lower().strip(),
                 user.password_hash,
                 user.spotify_id,
+                1 if user.spotify_premium else 0,
+                user.spotify_access_token,
+                user.spotify_refresh_token,
+                (
+                    user.spotify_token_expires_at.isoformat()
+                    if user.spotify_token_expires_at is not None
+                    else None
+                ),
                 user.display_name,
                 user.age,
                 user.plan_id,

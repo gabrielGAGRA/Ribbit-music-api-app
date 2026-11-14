@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
@@ -28,6 +29,7 @@ class CreateJamUseCase:
         host = self.user_repo.find_by_id(command.host_user_id)
         if not host:
             raise EntityNotFoundError(f"Host user {command.host_user_id} not found.")
+        require_spotify_premium(host)
 
         source = (command.deck_source or "free").strip().lower()
         mapping = {

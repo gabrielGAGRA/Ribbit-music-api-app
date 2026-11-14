@@ -1,5 +1,6 @@
 """Application ports for the Spotify Web API capabilities beyond catalog search."""
 
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 lazy from collections.abc import Sequence
 
@@ -10,6 +11,27 @@ lazy from app.application.dtos.spotify_dtos import (
     SpotifyTokens,
 )
 lazy from app.application.ports.services.music_service import ProviderPlaylist
+lazy from app.domain.models.user import User
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class SpotifyUserProfile:
+    id: str
+    display_name: str
+    email: str | None = None
+    product: str | None = None
+
+    @property
+    def is_premium(self) -> bool:
+        return (
+            isinstance(self.product, str)
+            and self.product.strip().casefold() == "premium"
+        )
+
+
+@runtime_checkable
+class SpotifyUserProfilePort(Protocol):
+    def get_current_user_profile(self, access_token: str) -> SpotifyUserProfile: ...
 
 
 @runtime_checkable
@@ -107,3 +129,14 @@ class SpotifyQueuePort(Protocol):
         ...
 
     def pause(self, device_id: str | None = None) -> None: ...
+
+
+@runtime_checkable
+class SpotifyHostQueuePort(Protocol):
+    """Controls the pond owner's Spotify playback queue using their stored OAuth tokens."""
+
+    def enqueue_track(self, user: User, track_uri: str) -> None: ...
+
+    def skip_to_next(self, user: User) -> None: ...
+
+    def start_track(self, user: User, track_uri: str) -> None: ...

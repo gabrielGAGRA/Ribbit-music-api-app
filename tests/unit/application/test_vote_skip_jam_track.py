@@ -9,7 +9,12 @@ from app.application.ports.repositories.jam_repository import JamRepositoryPort
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.vote_skip_jam_track import VoteSkipJamTrackUseCase
-from app.domain.exceptions import BusinessRuleViolationError, EntityNotFoundError
+from app.domain.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
+)
 from app.domain.models.jam import Jam, JamQueueItem
 from app.domain.models.track import Track
 from app.domain.models.user import User
@@ -23,6 +28,7 @@ def test_vote_skip_jam_track_decrements_points_and_saves() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -67,6 +73,7 @@ def test_vote_skip_jam_track_not_in_queue_raises_entity_not_found() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     track = Track(
@@ -108,6 +115,7 @@ def test_vote_skip_jam_track_minor_on_explicit_track_raises_business_rule_error(
         display_name="Tadpole",
         age=16,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     explicit_track = Track(
@@ -162,6 +170,7 @@ def test_vote_skip_jam_track_inactive_jam_raises_entity_not_found() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     inactive_jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=False)
 
@@ -190,6 +199,7 @@ def test_vote_skip_jam_track_deleted_track_raises_entity_not_found() -> None:
         display_name="Frog",
         age=22,
         plan_id=1,
+        spotify_premium=True,
     )
     jam = Jam(jam_id=10, host_user_id=1, room_name="Jam", is_active=True)
     deleted_track = Track(
@@ -219,3 +229,45 @@ def test_vote_skip_jam_track_deleted_track_raises_entity_not_found() -> None:
 
     with pytest.raises(EntityNotFoundError, match="Track not found or inactive"):
         use_case.execute(command)
+
+
+def test_vote_skip_jam_track_requires_spotify_premium() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=22,
+        plan_id=1,
+        spotify_id="spot_1",
+        spotify_premium=False,
+    )
+    use_case = VoteSkipJamTrackUseCase(
+        jam_repo=MagicMock(spec=JamRepositoryPort),
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+    )
+    with pytest.raises(SpotifyPremiumRequiredError):
+        use_case.execute(VoteSkipJamTrackCommand(jam_id=10, track_id=100, user_id=1))
+
+
+def test_vote_skip_jam_track_requires_spotify_connection_when_unlinked() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=1,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Free",
+        age=22,
+        plan_id=1,
+        spotify_id=None,
+        spotify_premium=False,
+    )
+    use_case = VoteSkipJamTrackUseCase(
+        jam_repo=MagicMock(spec=JamRepositoryPort),
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+    )
+    with pytest.raises(SpotifyConnectionRequiredError):
+        use_case.execute(VoteSkipJamTrackCommand(jam_id=10, track_id=100, user_id=1))

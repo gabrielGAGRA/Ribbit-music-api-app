@@ -12,6 +12,10 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "birth_date": "TEXT",
         "favorite_genres": "TEXT",
         "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
+        "spotify_premium": "INTEGER NOT NULL DEFAULT 0",
+        "spotify_access_token": "TEXT",
+        "spotify_refresh_token": "TEXT",
+        "spotify_token_expires_at": "TEXT",
     },
     "playlists": {
         "max_duration_seconds": "INTEGER",

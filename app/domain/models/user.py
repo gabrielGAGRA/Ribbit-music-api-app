@@ -19,9 +19,13 @@ class User:
     email: str
     password_hash: str
     display_name: str
-    age: int
+    age: int | None = None
     plan_id: int
     spotify_id: str | None = None
+    spotify_premium: bool = False
+    spotify_access_token: str | None = None
+    spotify_refresh_token: str | None = None
+    spotify_token_expires_at: datetime | None = None
     primary_account_id: int | None = None
     blocked_genres: frozenset[str] = frozenset()
     favorite_genres: frozenset[str] = frozenset()
@@ -42,11 +46,11 @@ class User:
         return tuple(normalized.split())
 
     def __post_init__(self) -> None:
-        if not self.email.strip():
+        if not self.email or not self.email.strip():
             raise ValueError("Email cannot be blank.")
-        if not self.display_name.strip():
+        if not self.display_name or not self.display_name.strip():
             raise ValueError("Display name cannot be blank.")
-        if self.age < 0:
+        if self.age is not None and self.age < 0:
             raise ValueError("Age cannot be negative.")
         if self.birth_date is not None:
             self.birth_date = self.birth_date.strip() or None
@@ -71,11 +75,11 @@ class User:
 
     def current_age(self, today: date | None = None) -> int:
         if not self.birth_date:
-            return self.age
+            return self.age if self.age is not None else 0
         try:
             bdate = date.fromisoformat(self.birth_date)
         except ValueError, TypeError:
-            return self.age
+            return self.age if self.age is not None else 0
         ref_date = today or datetime.now(UTC).date()
         return (
             ref_date.year
@@ -144,7 +148,29 @@ class User:
         cleaned = spotify_id.strip()
         if not cleaned:
             raise ValueError("Spotify ID cannot be blank.")
+        if cleaned != self.spotify_id:
+            self.spotify_premium = False
+            self.spotify_access_token = None
+            self.spotify_refresh_token = None
+            self.spotify_token_expires_at = None
         self.spotify_id = cleaned
+        return self
+
+    def update_spotify_premium(self, is_premium: bool) -> Self:
+        self.spotify_premium = bool(is_premium)
+        return self
+
+    def update_spotify_tokens(
+        self,
+        *,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+        expires_at: datetime | None = None,
+    ) -> Self:
+        self.spotify_access_token = access_token
+        if refresh_token is not None:
+            self.spotify_refresh_token = refresh_token
+        self.spotify_token_expires_at = expires_at
         return self
 
     def update_blocked_genres(self, genres: Iterable[str]) -> Self:

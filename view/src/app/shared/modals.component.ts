@@ -280,6 +280,12 @@ export class ModalsComponent {
     void this.router?.navigate(['/plans']).catch(() => false);
   }
 
+  goToSettingsFromSpotify(): void {
+    this.closeModal();
+    this.state.setPage('settings');
+    void this.router?.navigate(['/settings']).catch(() => false);
+  }
+
   addBySwipe(): void {
     this.closeModal();
     this.state.setPage('discover');

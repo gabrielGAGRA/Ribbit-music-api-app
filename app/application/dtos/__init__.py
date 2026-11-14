@@ -11,6 +11,7 @@ from app.application.dtos.admin_dtos import (
 from app.application.dtos.auth_dtos import (
     AuthenticateAdminCommand,
     AuthenticateUserCommand,
+    AuthenticateWithGoogleCommand,
     RegisterUserCommand,
 )
 from app.application.dtos.discovery_dtos import RecordSwipeCommand
@@ -49,6 +50,7 @@ __all__ = [
     "AuditLogEntryResult",
     "AuthenticateAdminCommand",
     "AuthenticateUserCommand",
+    "AuthenticateWithGoogleCommand",
     "CreateDeckPlaylistCommand",
     "CreateJamCommand",
     "ExecutiveDashboardResult",

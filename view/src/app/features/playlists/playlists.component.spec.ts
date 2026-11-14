@@ -64,6 +64,7 @@ describe('PlaylistsComponent', () => {
 
   it('should trigger spotify export via POST /api/playlists/{id}/export-spotify', () => {
     writeAuthToken('jwt-token');
+    state.spotifyId.set('spotify_user_test');
     component.openPlaylistView({
       id: '10',
       playlistId: 10,
@@ -103,6 +104,115 @@ describe('PlaylistsComponent', () => {
     });
     expect(component.isExportingSpotify()).toBe(false);
     expect(state.toast()).toContain('Spotify');
+  });
+
+  it('prompts spotify connection modal when unlinked user tries to export playlist', () => {
+    writeAuthToken('jwt-token');
+    state.spotifyId.set(null);
+    component.openPlaylistView({
+      id: '10',
+      playlistId: 10,
+      name: 'Dias de sol',
+      count: 1,
+      duration: '4 min',
+      songs: [],
+    });
+    httpMock.expectOne('/api/playlists/10').flush({
+      playlist_id: 10,
+      user_id: 1,
+      name: 'Dias de sol',
+      description: null,
+      max_duration_seconds: 1800,
+      is_exported: false,
+      spotify_playlist_id: null,
+      total_duration_seconds: 0,
+      tracks: [],
+    });
+
+    component.exportCurrentToSpotify();
+    expect(component.isExportingSpotify()).toBe(false);
+    expect(state.activeModal()).toBe('spotify-connect');
+    expect(state.spotifyPromptReason()).toContain('Conecte sua conta do Spotify');
+    httpMock.expectNone('/api/playlists/10/export-spotify');
+  });
+
+  it('allows non-premium spotify users to export playlist without error', () => {
+    writeAuthToken('jwt-token');
+    state.spotifyId.set('spotify_free_user');
+    state.spotifyPremium.set(false);
+    component.openPlaylistView({
+      id: '10',
+      playlistId: 10,
+      name: 'Dias de sol',
+      count: 1,
+      duration: '4 min',
+      songs: [],
+    });
+    httpMock.expectOne('/api/playlists/10').flush({
+      playlist_id: 10,
+      user_id: 1,
+      name: 'Dias de sol',
+      description: null,
+      max_duration_seconds: 1800,
+      is_exported: false,
+      spotify_playlist_id: null,
+      total_duration_seconds: 0,
+      tracks: [],
+    });
+
+    component.exportCurrentToSpotify();
+    const exportReq = httpMock.expectOne('/api/playlists/10/export-spotify');
+    exportReq.flush({
+      playlist_id: 10,
+      user_id: 1,
+      name: 'Dias de sol',
+      description: null,
+      max_duration_seconds: 1800,
+      is_exported: true,
+      spotify_playlist_id: 'sp_free_10',
+      total_duration_seconds: 0,
+      tracks: [],
+    });
+    expect(component.isExportingSpotify()).toBe(false);
+    expect(state.toast()).toContain('Spotify');
+  });
+
+  it('prompts spotify connection modal when export API returns SpotifyConnectionRequiredError', () => {
+    writeAuthToken('jwt-token');
+    state.spotifyId.set('spotify_stale_user');
+    component.openPlaylistView({
+      id: '10',
+      playlistId: 10,
+      name: 'Dias de sol',
+      count: 1,
+      duration: '4 min',
+      songs: [],
+    });
+    httpMock.expectOne('/api/playlists/10').flush({
+      playlist_id: 10,
+      user_id: 1,
+      name: 'Dias de sol',
+      description: null,
+      max_duration_seconds: 1800,
+      is_exported: false,
+      spotify_playlist_id: null,
+      total_duration_seconds: 0,
+      tracks: [],
+    });
+
+    component.exportCurrentToSpotify();
+    const exportReq = httpMock.expectOne('/api/playlists/10/export-spotify');
+    exportReq.flush(
+      {
+        error: 'SpotifyConnectionRequiredError',
+        message: 'Conecte sua conta do Spotify para exportar playlists.',
+        details: { rule_name: 'spotify_connection_required' },
+      },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    expect(component.isExportingSpotify()).toBe(false);
+    expect(state.activeModal()).toBe('spotify-connect');
+    expect(state.spotifyPromptReason()).toBe('Conecte sua conta do Spotify para exportar playlists.');
   });
 
   it('should toggle viewing all songs in the last queue', () => {

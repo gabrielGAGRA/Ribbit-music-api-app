@@ -369,10 +369,15 @@ def test_jam_and_review_repositories(conn: sqlite3.Connection) -> None:
     reviews_for_track = review_repo.list_by_track(track.track_id, limit=5)
     assert len(reviews_for_track) == 1
     assert reviews_for_track[0].text == "Masterpiece!"
+    assert reviews_for_track[0].author_name == "Host"
+    assert reviews_for_track[0].track_title == "Track Jam"
+    assert reviews_for_track[0].track_artist == "Jammer"
 
     top_recent = review_repo.list_top_recent(days=7, limit=3)
     assert len(top_recent) == 1
     assert top_recent[0].likes_count == 10
+    assert top_recent[0].author_name == "Host"
+    assert top_recent[0].track_title == "Track Jam"
 
     assert review_repo.has_user_liked(saved_review.review_id, user.user_id) is False
     review_repo.record_like(saved_review.review_id, user.user_id)

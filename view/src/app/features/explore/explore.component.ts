@@ -86,7 +86,7 @@ export class ExploreComponent implements OnInit {
   );
 
   constructor() {
-    effect(() => {
+    effect((onCleanup) => {
       const q = this.query().trim();
       const genre = this.state.searchFilterGenre();
       const year = this.state.searchFilterYear();
@@ -100,21 +100,30 @@ export class ExploreComponent implements OnInit {
         return;
       }
 
-      this.songService
-        .searchSongs({
-          ...(q ? { query: q } : {}),
-          ...(genre !== 'Todos' ? { genre } : {}),
-          ...(year !== undefined ? { year } : {}),
-          limit: 30,
-        })
-        .subscribe({
-          next: (items) => {
-            this.serverSearchResults.set(items);
-          },
-          error: () => {
-            this.serverSearchResults.set(null);
-          },
+      const timer = setTimeout(() => {
+        const sub = this.songService
+          .searchSongs({
+            ...(q ? { query: q } : {}),
+            ...(genre !== 'Todos' ? { genre } : {}),
+            ...(year !== undefined ? { year } : {}),
+            limit: 30,
+          })
+          .subscribe({
+            next: (items) => {
+              this.serverSearchResults.set(items);
+            },
+            error: () => {
+              this.serverSearchResults.set(null);
+            },
+          });
+        onCleanup(() => {
+          sub.unsubscribe();
         });
+      }, 500);
+
+      onCleanup(() => {
+        clearTimeout(timer);
+      });
     });
   }
 

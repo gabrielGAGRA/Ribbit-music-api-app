@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.application.ports.repositories.jam_repository import JamRepositoryPort
+from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.advance_jam_playback import (
     AdvanceJamPlaybackUseCase,
 )
@@ -12,8 +13,10 @@ from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
     PermissionDeniedError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
 )
-from app.domain.models import Jam, JamQueueItem
+from app.domain.models import Jam, JamQueueItem, User
 
 
 def test_advance_playback_success() -> None:
@@ -86,3 +89,43 @@ def test_advance_playback_empty_queue() -> None:
     use_case = AdvanceJamPlaybackUseCase(jam_repo=jam_repo)
     with pytest.raises(BusinessRuleViolationError):
         use_case.execute(jam_id=1, requester_user_id=10)
+
+
+def test_advance_playback_requires_spotify_premium_when_user_repo_provided() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=10,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Host",
+        age=25,
+        plan_id=1,
+        spotify_id="spot_host",
+        spotify_premium=False,
+    )
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    use_case = AdvanceJamPlaybackUseCase(jam_repo=jam_repo, user_repo=user_repo)
+
+    with pytest.raises(SpotifyPremiumRequiredError):
+        use_case.execute(jam_id=1, requester_user_id=10)
+    jam_repo.find_by_id.assert_not_called()
+
+
+def test_advance_playback_requires_spotify_connection_when_unlinked() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = User(
+        user_id=10,
+        email="free@ribbit.com",
+        password_hash="pw",
+        display_name="Host",
+        age=25,
+        plan_id=1,
+        spotify_id=None,
+        spotify_premium=False,
+    )
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    use_case = AdvanceJamPlaybackUseCase(jam_repo=jam_repo, user_repo=user_repo)
+
+    with pytest.raises(SpotifyConnectionRequiredError):
+        use_case.execute(jam_id=1, requester_user_id=10)
+    jam_repo.find_by_id.assert_not_called()

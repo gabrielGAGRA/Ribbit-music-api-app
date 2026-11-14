@@ -1,11 +1,13 @@
 """Comprehensive end-to-end integration test suite covering Flows 1 through 7."""
 
 import sqlite3
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from app.application.ports.services.music_service import CatalogTrack, TrackPreview
+from app.application.ports.services.spotify import SpotifyUserProfile
 from app.composition import create_app
 from app.config import Settings
 from app.domain.models.track import Track
@@ -112,6 +114,14 @@ def _register_and_login(
     assert login.status_code == 200, login.text
     token = login.json()["access_token"]
     return resp.json(), {"Authorization": f"Bearer {token}"}
+
+
+def _set_spotify_premium(app: Any, email: str, is_premium: bool = True) -> None:
+    """Updates spotify_premium directly in repository for Jam E2E fixtures."""
+    user = app.state.container.user_repo.find_by_email(email)
+    assert user is not None
+    user.update_spotify_premium(is_premium)
+    app.state.container.user_repo.save(user)
 
 
 # ==============================================================================
@@ -553,7 +563,7 @@ def test_playlist_cover_upload_is_validated_and_owner_private(
 # ==============================================================================
 
 
-def test_flow_5_collaborative_jam(client: TestClient) -> None:
+def test_flow_5_collaborative_jam(client: TestClient, app) -> None:
     plans = client.get("/api/plans").json()
     free_id = next(p["plan_id"] for p in plans if p["name"] == "Free")
 
@@ -565,6 +575,8 @@ def test_flow_5_collaborative_jam(client: TestClient) -> None:
     _, guest_headers = _register_and_login(
         client, "jam_guest@example.com", "1996-09-03", free_id
     )
+    _set_spotify_premium(app, "jam_host@example.com")
+    _set_spotify_premium(app, "jam_guest@example.com")
 
     # 1. Create jam with 6-digit room code
     jam_res = client.post(
@@ -1002,6 +1014,8 @@ def test_family_minor_is_filtered_and_jam_votes_advance_automatically(
         json={"email": "family-child@ribbit.com", "password": "password123"},
     )
     child_headers = {"Authorization": f"Bearer {child_login.json()['access_token']}"}
+    _set_spotify_premium(app, "family-owner@ribbit.com")
+    _set_spotify_premium(app, "family-child@ribbit.com")
 
     room = client.post(
         "/api/jams",
@@ -1083,6 +1097,7 @@ def test_rejected_tracks_are_skipped_and_playlist_and_jam_decks_are_large(
     _, headers = _cadastrar(
         client, "large-deck-user@ribbit.com", "1991-06-07", individual_id
     )
+    _set_spotify_premium(app, "large-deck-user@ribbit.com")
 
     container = app.state.container
     rejected = container.track_repo.find_by_filters(query="Blinding Lights")[0]
@@ -1213,3 +1228,172 @@ def test_admin_seed_uses_common_login_and_admin_role(client: TestClient) -> None
     token_headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
     assert client.get("/api/admin/dashboard", headers=token_headers).status_code == 200
     assert client.get("/api/admin/dashboard").status_code == 401
+
+
+def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
+    client: TestClient, app
+) -> None:
+    plans = client.get("/api/plans").json()
+    free_id = next(p["plan_id"] for p in plans if p["name"] == "Free")
+
+    reg, headers = _register_and_login(
+        client, "premium-gate@ribbit.com", "1993-04-12", free_id
+    )
+    assert reg["user"]["spotify_premium"] is False
+    me = client.get("/api/profile/me", headers=headers)
+    assert me.status_code == 200, me.text
+    assert me.json()["user"]["spotify_premium"] is False
+
+    blocked = client.post(
+        "/api/jams",
+        headers=headers,
+        json={"room_name": "Blocked Jam", "duration_minutes": 30},
+    )
+    assert blocked.status_code == 403, blocked.text
+    assert blocked.json()["error"] == "SpotifyConnectionRequiredError"
+
+    class _StubSpotifyAuth:
+        def exchange_code(self, code: str) -> SimpleNamespace:
+            return SimpleNamespace(access_token=f"tok-{code}")
+
+    class _StubSpotifyProfile:
+        def __init__(self, product: str) -> None:
+            self.product = product
+
+        def get_current_user_profile(self, access_token: str) -> SpotifyUserProfile:
+            return SpotifyUserProfile(
+                id="sp-premium-gate-1",
+                display_name="Premium User",
+                email="premium-gate@ribbit.com",
+                product=self.product,
+            )
+
+    profile_stub = _StubSpotifyProfile("premium")
+    connect_uc = app.state.container.connect_spotify_account_use_case
+    object.__setattr__(connect_uc, "spotify_auth", _StubSpotifyAuth())
+    object.__setattr__(connect_uc, "spotify_profile", profile_stub)
+    state = headers["Authorization"].removeprefix("Bearer ")
+
+    callback_prem = client.post(
+        "/api/spotify/callback",
+        headers=headers,
+        json={"code": "auth-1", "state": state},
+    )
+    assert callback_prem.status_code == 200, callback_prem.text
+    assert callback_prem.json()["spotify_premium"] is True
+
+    allowed = client.post(
+        "/api/jams",
+        headers=headers,
+        json={"room_name": "Allowed Jam", "duration_minutes": 30},
+    )
+    assert allowed.status_code == 201, allowed.text
+
+    profile_stub.product = "free"
+    callback_free = client.post(
+        "/api/spotify/callback",
+        headers=headers,
+        json={"code": "auth-2", "state": state},
+    )
+    assert callback_free.status_code == 200, callback_free.text
+    assert callback_free.json()["spotify_premium"] is False
+
+    blocked_again = client.post(
+        "/api/jams",
+        headers=headers,
+        json={"room_name": "Downgraded Jam", "duration_minutes": 30},
+    )
+    assert blocked_again.status_code == 403, blocked_again.text
+    assert blocked_again.json()["error"] == "SpotifyPremiumRequiredError"
+
+
+def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
+    client: TestClient, app
+) -> None:
+    from app.domain.exceptions import SpotifyPremiumRequiredError
+
+    plans = client.get("/api/plans").json()
+    free_id = next(p["plan_id"] for p in plans if p["name"] == "Free")
+    _, host_headers = _register_and_login(
+        client, "pond-owner@ribbit.com", "1992-07-15", free_id
+    )
+    container = app.state.container
+    owner = container.user_repo.find_by_email("pond-owner@ribbit.com")
+    assert owner is not None
+    owner.link_spotify("sp-pond-owner")
+    owner.update_spotify_premium(True)
+    owner.update_spotify_tokens(
+        access_token="owner-tok",
+        refresh_token="owner-ref",
+    )
+    container.user_repo.save(owner)
+
+    track = container.track_repo.save(
+        Track(
+            title="Pond Queue Song",
+            artist="Ribbit Band",
+            album="Pond Album",
+            duration_seconds=180,
+            genre="Pop",
+            spotify_id="sp_track_pond_1",
+        )
+    )
+    assert track.track_id is not None
+
+    enqueued: list[tuple[int | None, str]] = []
+    should_fail = False
+
+    class _StubHostQueue:
+        def enqueue_track(self, user: Any, track_uri: str) -> None:
+            if should_fail:
+                raise SpotifyPremiumRequiredError()
+            enqueued.append((user.user_id, track_uri))
+
+        def skip_to_next(self, user: Any) -> None:
+            return None
+
+        def start_track(self, user: Any, track_uri: str) -> None:
+            return None
+
+    object.__setattr__(
+        container.vote_jam_track_use_case, "spotify_queue", _StubHostQueue()
+    )
+
+    jam = client.post(
+        "/api/jams",
+        headers=host_headers,
+        json={"room_name": "Spotify Queue Pond", "duration_minutes": 60},
+    )
+    assert jam.status_code == 201, jam.text
+    jam_id = jam.json()["jam_id"]
+
+    vote_ok = client.post(
+        f"/api/jams/{jam_id}/deck-vote",
+        headers=host_headers,
+        json={"track_id": track.track_id, "action": "like"},
+    )
+    assert vote_ok.status_code == 200, vote_ok.text
+    assert enqueued == [(owner.user_id, "spotify:track:sp_track_pond_1")]
+
+    track_two = container.track_repo.save(
+        Track(
+            title="Pond Queue Song Two",
+            artist="Ribbit Band",
+            album="Pond Album",
+            duration_seconds=180,
+            genre="Pop",
+            spotify_id="sp_track_pond_2",
+        )
+    )
+    should_fail = True
+    vote_fail = client.post(
+        f"/api/jams/{jam_id}/deck-vote",
+        headers=host_headers,
+        json={"track_id": track_two.track_id, "action": "like"},
+    )
+    assert vote_fail.status_code == 403, vote_fail.text
+    assert vote_fail.json()["error"] == "SpotifyPremiumRequiredError"
+
+    reloaded_owner = container.user_repo.find_by_id(owner.user_id)
+    assert reloaded_owner is not None
+    assert reloaded_owner.spotify_premium is False

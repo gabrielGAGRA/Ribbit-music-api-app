@@ -13,6 +13,8 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     ExternalServiceError,
     PermissionDeniedError,
+    SpotifyConnectionRequiredError,
+    SpotifyPremiumRequiredError,
 )
 
 type ErrorStatusMap = Mapping[type[CustomError], int]
@@ -21,6 +23,8 @@ ERROR_STATUS_MAP: ErrorStatusMap = frozendict(
     {
         EntityNotFoundError: status.HTTP_404_NOT_FOUND,
         AuthenticationRequiredError: status.HTTP_401_UNAUTHORIZED,
+        SpotifyConnectionRequiredError: status.HTTP_403_FORBIDDEN,
+        SpotifyPremiumRequiredError: status.HTTP_403_FORBIDDEN,
         PermissionDeniedError: status.HTTP_403_FORBIDDEN,
         DuplicateEntityError: status.HTTP_409_CONFLICT,
         BusinessRuleViolationError: status.HTTP_400_BAD_REQUEST,

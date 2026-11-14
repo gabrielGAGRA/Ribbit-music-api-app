@@ -114,6 +114,29 @@ describe('api-mappers', () => {
     expect(review.author).toBe('Carolina Britto');
     expect(review.initials).toBe('CB');
 
+    const otherUserReview = mapReviewDtoToCommunityReview({
+      dto: {
+        review_id: 10,
+        user_id: 42,
+        track_id: 100,
+        rating: 4,
+        text: 'Produção fantástica!',
+        likes_count: 7,
+        is_deleted: false,
+        author_name: 'Marcos Silva',
+        track_title: 'Música Boa',
+        track_artist: 'Cantor Famoso',
+        track_image: 'https://i.scdn.co/image/cover123.jpg',
+      },
+      currentUserId: 9,
+      currentUserName: 'Carolina Britto',
+    });
+    expect(otherUserReview.author).toBe('Marcos Silva');
+    expect(otherUserReview.initials).toBe('MS');
+    expect(otherUserReview.songTitle).toBe('Música Boa');
+    expect(otherUserReview.songArtist).toBe('Cantor Famoso');
+    expect(otherUserReview.songImage).toBe('https://i.scdn.co/image/cover123.jpg');
+
     const fallbackSong = mapTrackDtoToSong({
       track_id: 1,
       title: 'Bohemian Rhapsody',

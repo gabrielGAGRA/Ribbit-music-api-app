@@ -4,9 +4,11 @@ import pytest
 
 from app.domain.exceptions import (
     ExternalServiceError,
+    PermissionDeniedError,
     SpotifyAuthError,
     SpotifyError,
     SpotifyForbiddenError,
+    SpotifyPremiumRequiredError,
     SpotifyQuotaExceededError,
 )
 from app.infrastructure.adapters.spotify.auth import SpotifyAuth
@@ -96,8 +98,30 @@ class TestRequest:
 
     def test_403_raises_forbidden_without_retry(self) -> None:
         client, session = _client(FakeResponse(403, {"error": {"message": "nope"}}))
-        with pytest.raises(SpotifyForbiddenError):
+        with pytest.raises(SpotifyForbiddenError) as info:
             client.request("GET", "/x")
+        assert not isinstance(info.value, SpotifyPremiumRequiredError)
+        assert len(session.calls) == 2
+
+    def test_403_premium_required_raises_specific_error(self) -> None:
+        client, session = _client(
+            FakeResponse(
+                403,
+                {
+                    "error": {
+                        "status": 403,
+                        "message": "Player command failed: Premium required",
+                        "reason": "PREMIUM_REQUIRED",
+                    }
+                },
+            )
+        )
+        with pytest.raises(SpotifyPremiumRequiredError) as info:
+            client.request("POST", "/me/player/queue")
+        assert isinstance(info.value, SpotifyForbiddenError)
+        assert isinstance(info.value, PermissionDeniedError)
+        assert info.value.details["status_code"] == 403
+        assert info.value.details["reason"] == "PREMIUM_REQUIRED"
         assert len(session.calls) == 2
 
     def test_other_error_status_raises_spotify_error(self) -> None:

@@ -53,6 +53,7 @@ def map_track(data: Mapping[str, Any]) -> CatalogTrack:
             cover_url=images[0]["url"] if images else None,
             preview_url=data.get("preview_url"),
             release_year=int(year) if year.isdigit() else None,
+            explicit=bool(data.get("explicit", False)),
         )
     except (KeyError, TypeError, AttributeError) as exc:
         raise SpotifyError("Spotify returned an unexpected track payload") from exc

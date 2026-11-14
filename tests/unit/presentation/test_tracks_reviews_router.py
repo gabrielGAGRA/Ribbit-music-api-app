@@ -181,12 +181,28 @@ def test_save_search_track_like_router_calls_use_case_and_returns_success() -> N
 
 def test_get_community_feed_accepts_custom_query_params() -> None:
     mock_use_case = MagicMock(spec=GetCommunityFeedUseCase)
-    empty_feed: list[ReviewComment] = []
-    mock_use_case.execute.return_value = empty_feed
+    review = ReviewComment(
+        review_id=1,
+        user_id=7,
+        track_id=101,
+        initial_rating=5,
+        text="Sensational track!",
+        initial_likes_count=12,
+        author_name="Alice",
+        track_title="Song A",
+        track_artist="Artist B",
+        track_image="https://example.com/cover.jpg",
+    )
+    mock_use_case.execute.return_value = [review]
 
     res = get_community_feed(use_case=mock_use_case, days=14, limit=25)
 
-    assert res == []
+    assert len(res) == 1
+    assert res[0].review_id == 1
+    assert res[0].author_name == "Alice"
+    assert res[0].track_title == "Song A"
+    assert res[0].track_artist == "Artist B"
+    assert res[0].track_image == "https://example.com/cover.jpg"
     mock_use_case.execute.assert_called_once_with(days=14, limit=25)
 
 
