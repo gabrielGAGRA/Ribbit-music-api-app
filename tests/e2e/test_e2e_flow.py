@@ -1250,7 +1250,7 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
         json={"room_name": "Blocked Jam", "duration_minutes": 30},
     )
     assert blocked.status_code == 403, blocked.text
-    assert blocked.json()["error"] == "SpotifyPremiumRequiredError"
+    assert blocked.json()["error"] == "SpotifyConnectionRequiredError"
 
     class _StubSpotifyAuth:
         def exchange_code(self, code: str) -> SimpleNamespace:
