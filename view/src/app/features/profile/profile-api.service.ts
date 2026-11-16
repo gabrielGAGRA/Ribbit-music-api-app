@@ -32,11 +32,16 @@ export class ProfileApiService {
     });
   }
 
-  /** Links or unlinks a Spotify identifier on the user's profile. */
+  /** Links a Spotify identifier on the user's profile. */
   linkSpotify(spotifyId: string): Observable<UserApiDto> {
     return this.http.post<UserApiDto>('/api/profile/link-spotify', {
       spotify_id: spotifyId,
     });
+  }
+
+  /** Unlinks the user's Spotify account and clears OAuth tokens. */
+  unlinkSpotify(): Observable<UserApiDto> {
+    return this.http.delete<UserApiDto>('/api/spotify/connection');
   }
 
   /** Deletes the authenticated user's account and associated data. */

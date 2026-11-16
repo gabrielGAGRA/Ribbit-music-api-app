@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.spotify import (
     ConnectSpotifyAccountUseCase,
+    DisconnectSpotifyAccountUseCase,
     GetSpotifyAuthorizeUrlUseCase,
 )
 from app.domain.exceptions import AuthenticationRequiredError
@@ -48,6 +49,18 @@ def connect_spotify_callback(
             "Invalid or mismatched Spotify OAuth state parameter."
         )
     user = use_case.execute(user_id=user_id, code=req.code)
+    return UserResponse.model_validate(user)
+
+
+@router.delete("/connection", response_model=UserResponse)
+def disconnect_spotify_connection(
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        DisconnectSpotifyAccountUseCase,
+        Depends(provide(DisconnectSpotifyAccountUseCase)),
+    ],
+) -> UserResponse:
+    user = use_case.execute(user_id=user_id)
     return UserResponse.model_validate(user)
 
 

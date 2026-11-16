@@ -1,6 +1,7 @@
 """SQLite implementation of the interaction persistence port."""
 
 from datetime import UTC, datetime
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.interaction_repository import (
@@ -29,10 +30,17 @@ def _row_to_interaction(row: sqlite3.Row) -> Interaction:
 class SQLiteInteractionRepository(InteractionRepositoryPort):
     """SQLite adapter implementing InteractionRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
 
-    def find_by_user_and_track(self, user_id: int, track_id: int) -> Interaction | None:
+    def _pull_deltas(self) -> None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
+
+    def _find_local(self, user_id: int, track_id: int) -> Interaction | None:
         cursor = self.conn.execute(
             """
             SELECT * FROM interactions
@@ -43,38 +51,44 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
         row = cursor.fetchone()
         return _row_to_interaction(row) if row else None
 
+    def find_by_user_and_track(self, user_id: int, track_id: int) -> Interaction | None:
+        self._pull_deltas()
+        return self._find_local(user_id, track_id)
+
     def save(self, interaction: Interaction) -> Interaction:
         created_at_str = (interaction.created_at or datetime.now(UTC)).isoformat()
-        self.conn.execute(
-            """
-            INSERT INTO interactions (
-                user_id, track_id, action, created_at, source, jam_id
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO interactions (
+                    user_id, track_id, action, created_at, source, jam_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, track_id) DO UPDATE SET
+                    action = excluded.action,
+                    created_at = excluded.created_at,
+                    source = excluded.source,
+                    jam_id = excluded.jam_id
+                """,
+                (
+                    interaction.user_id,
+                    interaction.track_id,
+                    interaction.action.value,
+                    created_at_str,
+                    interaction.source,
+                    interaction.jam_id,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(user_id, track_id) DO UPDATE SET
-                action = excluded.action,
-                created_at = excluded.created_at,
-                source = excluded.source,
-                jam_id = excluded.jam_id
-            """,
-            (
-                interaction.user_id,
-                interaction.track_id,
-                interaction.action.value,
-                created_at_str,
-                interaction.source,
-                interaction.jam_id,
-            ),
-        )
-        self.conn.commit()
+        if self._sync is not None:
+            self._sync.push_interaction(interaction.user_id, interaction.track_id)
         return (
-            self.find_by_user_and_track(interaction.user_id, interaction.track_id)
-            or interaction
+            self._find_local(interaction.user_id, interaction.track_id) or interaction
         )
 
     def list_by_user(
         self, user_id: int, action: InteractionAction | None = None
     ) -> list[Interaction]:
+        self._pull_deltas()
         if action is not None:
             cursor = self.conn.execute(
                 """
@@ -122,6 +136,12 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
             cursor.execute(
                 "DELETE FROM interactions WHERE interaction_id = ?",
                 (interaction.interaction_id,),
+            )
+        if self._sync is not None:
+            self._sync.push_interaction(
+                interaction.user_id,
+                interaction.track_id,
+                is_deleted=True,
             )
         return interaction
 

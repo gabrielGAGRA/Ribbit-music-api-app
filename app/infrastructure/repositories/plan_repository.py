@@ -5,6 +5,7 @@ lazy import sqlite3
 from app.application.ports.repositories.plan_repository import PlanRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.plan import Plan
+from app.infrastructure.repositories.connection import transaction
 
 
 def _row_to_plan(row: sqlite3.Row) -> Plan:
@@ -44,13 +45,18 @@ class SQLitePlanRepository(PlanRepositoryPort):
         return [_row_to_plan(r) for r in rows]
 
     def save(self, plan: Plan) -> Plan:
-        if plan.plan_id is not None:
-            cursor = self.conn.execute(
-                "SELECT plan_id FROM plans WHERE plan_id = ?",
-                (plan.plan_id,),
-            )
-            if cursor.fetchone():
-                self.conn.execute(
+        target_id: int | None = plan.plan_id
+        with transaction(self.conn) as cursor:
+            if plan.plan_id is not None:
+                row = cursor.execute(
+                    "SELECT plan_id FROM plans WHERE plan_id = ?",
+                    (plan.plan_id,),
+                ).fetchone()
+                if not row:
+                    raise EntityNotFoundError(
+                        entity_name="Plan", entity_id=plan.plan_id
+                    )
+                cursor.execute(
                     """
                     UPDATE plans
                     SET name = ?,
@@ -65,21 +71,17 @@ class SQLitePlanRepository(PlanRepositoryPort):
                         plan.plan_id,
                     ),
                 )
-                self.conn.commit()
-                return self.find_by_id(plan.plan_id) or plan
-            raise EntityNotFoundError(entity_name="Plan", entity_id=plan.plan_id)
-
-        cursor = self.conn.execute(
-            """
-            INSERT INTO plans (name, monthly_price, max_profiles)
-            VALUES (?, ?, ?)
-            """,
-            (plan.name, plan.monthly_price, plan.max_profiles),
-        )
-        self.conn.commit()
-        new_id = cursor.lastrowid
-        if new_id is not None:
-            return self.find_by_id(new_id) or plan
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO plans (name, monthly_price, max_profiles)
+                    VALUES (?, ?, ?)
+                    """,
+                    (plan.name, plan.monthly_price, plan.max_profiles),
+                )
+                target_id = cursor.lastrowid
+        if target_id is not None:
+            return self.find_by_id(target_id) or plan
         return plan
 
 

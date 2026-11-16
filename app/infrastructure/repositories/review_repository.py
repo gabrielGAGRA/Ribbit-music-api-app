@@ -1,11 +1,13 @@
 """SQLite implementation of the review and comment persistence port."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.review_repository import ReviewRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.review import ReviewComment
+from app.infrastructure.repositories.connection import transaction
 
 
 def _row_to_review(row: sqlite3.Row) -> ReviewComment:
@@ -36,10 +38,21 @@ def _row_to_review(row: sqlite3.Row) -> ReviewComment:
 class SQLiteReviewRepository(ReviewRepositoryPort):
     """SQLite adapter implementing ReviewRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
 
-    def find_by_id(self, review_id: int) -> ReviewComment | None:
+    def _pull_deltas(self) -> None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
+
+    def _push_review(self, review_id: int) -> None:
+        if self._sync is not None:
+            self._sync.push_review_by_id(review_id)
+
+    def _find_by_id_local(self, review_id: int) -> ReviewComment | None:
         cursor = self.conn.execute(
             """
             SELECT
@@ -58,14 +71,22 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         row = cursor.fetchone()
         return _row_to_review(row) if row else None
 
+    def find_by_id(self, review_id: int) -> ReviewComment | None:
+        self._pull_deltas()
+        return self._find_by_id_local(review_id)
+
     def save(self, review: ReviewComment) -> ReviewComment:
         if review.review_id is not None:
-            cursor = self.conn.execute(
-                "SELECT review_id FROM reviews WHERE review_id = ?",
-                (review.review_id,),
-            )
-            if cursor.fetchone():
-                self.conn.execute(
+            with transaction(self.conn) as cursor:
+                cursor.execute(
+                    "SELECT review_id FROM reviews WHERE review_id = ?",
+                    (review.review_id,),
+                )
+                if not cursor.fetchone():
+                    raise EntityNotFoundError(
+                        entity_name="ReviewComment", entity_id=review.review_id
+                    )
+                cursor.execute(
                     """
                     UPDATE reviews
                     SET rating = ?,
@@ -82,36 +103,35 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
                         review.review_id,
                     ),
                 )
-                self.conn.commit()
-                return self.find_by_id(review.review_id) or review
-            raise EntityNotFoundError(
-                entity_name="ReviewComment", entity_id=review.review_id
-            )
+            self._push_review(review.review_id)
+            return self._find_by_id_local(review.review_id) or review
 
         created_at_str = (review.created_at or datetime.now(UTC)).isoformat()
-        cursor = self.conn.execute(
-            """
-            INSERT INTO reviews (
-                user_id, track_id, rating, text, likes_count, is_deleted, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                review.user_id,
-                review.track_id,
-                review.rating,
-                review.text,
-                review.likes_count,
-                1 if review.is_deleted else 0,
-                created_at_str,
-            ),
-        )
-        self.conn.commit()
-        new_id = cursor.lastrowid
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO reviews (
+                    user_id, track_id, rating, text, likes_count, is_deleted, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    review.user_id,
+                    review.track_id,
+                    review.rating,
+                    review.text,
+                    review.likes_count,
+                    1 if review.is_deleted else 0,
+                    created_at_str,
+                ),
+            )
+            new_id = cursor.lastrowid
         if new_id is not None:
-            return self.find_by_id(new_id) or review
+            self._push_review(new_id)
+            return self._find_by_id_local(new_id) or review
         return review
 
     def list_by_track(self, track_id: int, limit: int) -> list[ReviewComment]:
+        self._pull_deltas()
         cursor = self.conn.execute(
             """
             SELECT
@@ -133,6 +153,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return [_row_to_review(r) for r in rows]
 
     def list_top_recent(self, days: int, limit: int) -> list[ReviewComment]:
+        self._pull_deltas()
         min_date_str = (datetime.now(UTC) - timedelta(days=days)).isoformat()
         cursor = self.conn.execute(
             """
@@ -155,6 +176,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return [_row_to_review(r) for r in rows]
 
     def has_user_liked(self, review_id: int, user_id: int) -> bool:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT 1 FROM review_likes WHERE review_id = ? AND user_id = ?",
             (review_id, user_id),
@@ -163,18 +185,21 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
 
     def record_like(self, review_id: int, user_id: int) -> None:
         created_at_str = datetime.now(UTC).isoformat()
-        self.conn.execute(
-            """
-            INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at)
-            VALUES (?, ?, ?)
-            """,
-            (review_id, user_id, created_at_str),
-        )
-        self.conn.commit()
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (review_id, user_id, created_at_str),
+            )
+        if self._sync is not None:
+            self._sync.push_review_like(review_id, user_id)
 
     def find_active_by_user_and_track(
         self, user_id: int, track_id: int
     ) -> ReviewComment | None:
+        self._pull_deltas()
         cursor = self.conn.execute(
             """
             SELECT
@@ -194,12 +219,15 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return _row_to_review(row) if row else None
 
     def delete(self, review_id: int) -> bool:
-        cursor = self.conn.execute(
-            "UPDATE reviews SET is_deleted = 1 WHERE review_id = ?",
-            (review_id,),
-        )
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                "UPDATE reviews SET is_deleted = 1 WHERE review_id = ?",
+                (review_id,),
+            )
+            deleted = cursor.rowcount > 0
+        if deleted:
+            self._push_review(review_id)
+        return deleted
 
 
 __all__ = ["SQLiteReviewRepository"]
