@@ -6,6 +6,7 @@ import json
 import logging
 import tempfile
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -74,11 +75,13 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         file_path: str = "Songs/songs_final.parquet",
         storage_client: storage.Client | None = None,
         timeout: float = 30.0,
+        max_tracks: int | None = None,
     ) -> None:
         self._bucket_name = bucket_name
         self._file_path = file_path
         self._storage_client = storage_client
         self._timeout = timeout
+        self._max_tracks = max_tracks
 
         if "/" in file_path:
             parent_dir = file_path.rsplit("/", 1)[0]
@@ -141,22 +144,38 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             if (t.title or "").strip() and (t.artist or "").strip()
         }
         merged.extend(
-            CatalogSourceTrack(
-                title=delta.title or "",
-                artist=delta.artist or "Unknown Artist",
-                duration_seconds=delta.duration_seconds or 180,
-                genre=delta.genre or "Unknown",
-                album=delta.album,
-                country=delta.country,
-                release_year=delta.release_year,
-                cover_url=delta.cover_url,
-                spotify_id=delta.spotify_id,
-                itunes_preview_url=delta.preview_url,
-                explicit=bool(delta.explicit) if delta.explicit is not None else False,
-            )
+            self._delta_to_catalog_track(delta)
             for delta in self._iter_new_deltas(delta_map, existing_sids, existing_keys)
         )
         return merged
+
+    @staticmethod
+    def _delta_to_catalog_track(delta: _TrackDeltaItem) -> CatalogSourceTrack:
+        return CatalogSourceTrack(
+            title=delta.title or "",
+            artist=delta.artist or "Unknown Artist",
+            duration_seconds=delta.duration_seconds or 180,
+            genre=delta.genre or "Unknown",
+            album=delta.album,
+            country=delta.country,
+            release_year=delta.release_year,
+            cover_url=delta.cover_url,
+            spotify_id=delta.spotify_id,
+            itunes_preview_url=delta.preview_url,
+            explicit=bool(delta.explicit) if delta.explicit is not None else False,
+        )
+
+    @staticmethod
+    def _record_seen_keys(
+        tracks: Sequence[CatalogSourceTrack],
+        existing_sids: set[str],
+        existing_keys: set[tuple[str, str]],
+    ) -> None:
+        for t in tracks:
+            if t.spotify_id:
+                existing_sids.add(t.spotify_id.strip())
+            if t.title and t.artist:
+                existing_keys.add((t.title.strip().lower(), t.artist.strip().lower()))
 
     def _download_catalog_to_temp(self, bucket: storage.Bucket) -> Path:
         tmp_path: Path | None = None
@@ -183,6 +202,31 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         else:
             return tmp_path
 
+    def _iter_parquet_batches(
+        self,
+        tmp_path: Path,
+        batch_size: int,
+        delta_map: dict[str | tuple[str, str], _TrackDeltaItem],
+        existing_sids: set[str],
+        existing_keys: set[tuple[str, str]],
+    ) -> Iterator[list[CatalogSourceTrack]]:
+        limit = self._max_tracks if self._max_tracks and self._max_tracks > 0 else None
+        effective_batch = min(batch_size, limit) if limit is not None else batch_size
+        yielded = 0
+        pf = pq.ParquetFile(tmp_path)
+        for batch in pf.iter_batches(batch_size=effective_batch):
+            parsed = self._parse_records(batch.to_pylist())
+            if limit is not None:
+                parsed = parsed[: max(limit - yielded, 0)]
+            if delta_map and parsed:
+                parsed = [self._apply_delta_to_track(t, delta_map) for t in parsed]
+                self._record_seen_keys(parsed, existing_sids, existing_keys)
+            if parsed:
+                yielded += len(parsed)
+                yield parsed
+            if limit is not None and yielded >= limit:
+                break
+
     def iter_track_batches(
         self, batch_size: int = 50_000
     ) -> Iterator[list[CatalogSourceTrack]]:
@@ -200,44 +244,18 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             delta_map = self._load_pending_deltas(bucket)
             existing_sids: set[str] = set()
             existing_keys: set[tuple[str, str]] = set()
-            pf = pq.ParquetFile(tmp_path)
-            for batch in pf.iter_batches(batch_size=batch_size):
-                parsed = self._parse_records(batch.to_pylist())
-                if delta_map:
-                    parsed = [self._apply_delta_to_track(t, delta_map) for t in parsed]
-                    for t in parsed:
-                        if t.spotify_id:
-                            existing_sids.add(t.spotify_id.strip())
-                        if t.title and t.artist:
-                            existing_keys.add(
-                                (t.title.strip().lower(), t.artist.strip().lower())
-                            )
-                if parsed:
-                    yield parsed
-
+            yield from self._iter_parquet_batches(
+                tmp_path, batch_size, delta_map, existing_sids, existing_keys
+            )
             if delta_map:
                 new_tracks = [
-                    CatalogSourceTrack(
-                        title=delta.title or "",
-                        artist=delta.artist or "Unknown Artist",
-                        duration_seconds=delta.duration_seconds or 180,
-                        genre=delta.genre or "Unknown",
-                        album=delta.album,
-                        country=delta.country,
-                        release_year=delta.release_year,
-                        cover_url=delta.cover_url,
-                        spotify_id=delta.spotify_id,
-                        itunes_preview_url=delta.preview_url,
-                        explicit=bool(delta.explicit)
-                        if delta.explicit is not None
-                        else False,
-                    )
+                    self._delta_to_catalog_track(delta)
                     for delta in self._iter_new_deltas(
                         delta_map, existing_sids, existing_keys
                     )
                 ]
-                if new_tracks:
-                    yield new_tracks
+                for start in range(0, len(new_tracks), batch_size):
+                    yield new_tracks[start : start + batch_size]
         finally:
             with contextlib.suppress(OSError):
                 tmp_path.unlink(missing_ok=True)
@@ -274,17 +292,19 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
                 "artist": [artist],
                 "album": [album],
                 "duration_seconds": [
-                    int(duration_seconds) if duration_seconds is not None else 180
+                    int(duration_seconds) if duration_seconds is not None else None
                 ],
-                "genre": [genre or "Unknown"],
+                "genre": [genre],
                 "country": [country],
                 "release_year": [
                     int(release_year) if release_year is not None else None
                 ],
                 "cover_url": [cover_url],
                 "itunes_preview_url": [preview_url],
-                "explicit": [int(bool(explicit)) if explicit is not None else 0],
-                "is_deleted": [int(bool(is_deleted)) if is_deleted is not None else 0],
+                "explicit": [int(bool(explicit)) if explicit is not None else None],
+                "is_deleted": [
+                    int(bool(is_deleted)) if is_deleted is not None else None
+                ],
                 "created_at": [now_iso],
             }
             table = pa.Table.from_pydict(data, schema=_DELTA_PARQUET_SCHEMA)
@@ -487,7 +507,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
                 client.list_blobs(self._bucket_name, prefix=self._delta_prefix)
             )
             delta_blobs = [b for b in blobs if b.name.endswith(".parquet")]
-            return self._read_deltas_from_blobs(delta_blobs)
+            return self._read_deltas_from_blobs(delta_blobs, ignore_blob_errors=True)
         except (GoogleAPIError, OSError) as exc:
             logger.warning("Failed to load pending catalog deltas: %s", exc)
             return {}
@@ -563,6 +583,8 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
                 continue
             if not t_norm or not a_norm:
                 continue
+            if delta.duration_seconds is None or delta.explicit is None:
+                continue
             if sid:
                 existing_sids.add(sid)
             existing_keys.add((t_norm, a_norm))
@@ -581,14 +603,43 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         by_title = delta_map.get((title, artist)) if title and artist else None
         return cls._merge_delta_items(by_title, by_sid)
 
+    def _download_delta_bytes_batch(
+        self, blobs: Sequence[storage.Blob], *, ignore_blob_errors: bool = False
+    ) -> list[bytes | None]:
+        def _download(blob: storage.Blob) -> bytes | None:
+            try:
+                return blob.download_as_bytes(timeout=self._timeout)
+            except (pa.ArrowInvalid, ValueError, KeyError) as exc:
+                logger.debug("Skipping unreadable delta blob %s: %s", blob.name, exc)
+                return None
+            except (GoogleAPIError, OSError, RuntimeError) as exc:
+                if not ignore_blob_errors:
+                    raise
+                logger.warning(
+                    "Skipping inaccessible delta blob %s: %s", blob.name, exc
+                )
+                return None
+
+        if len(blobs) <= 1:
+            return [_download(b) for b in blobs]
+        with ThreadPoolExecutor(max_workers=min(16, len(blobs))) as executor:
+            return list(executor.map(_download, blobs))
+
     def _read_deltas_from_blobs(
-        self, blobs: Sequence[storage.Blob]
+        self, blobs: Sequence[storage.Blob], *, ignore_blob_errors: bool = False
     ) -> dict[str | tuple[str, str], _TrackDeltaItem]:
         delta_map: dict[str | tuple[str, str], _TrackDeltaItem] = {}
         seq = 0
-        for b in blobs:
+        for b, content in zip(
+            blobs,
+            self._download_delta_bytes_batch(
+                blobs, ignore_blob_errors=ignore_blob_errors
+            ),
+            strict=True,
+        ):
+            if content is None:
+                continue
             try:
-                content = b.download_as_bytes(timeout=self._timeout)
                 table = pq.read_table(io.BytesIO(content))
                 for row in table.to_pylist():
                     seq += 1

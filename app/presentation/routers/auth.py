@@ -15,9 +15,11 @@ from app.application.use_cases.auth import (
     AuthenticateWithGoogleUseCase,
     RegisterUserUseCase,
 )
+from app.config import Settings
 from app.presentation.dependencies import provide
 from app.presentation.schemas import (
     AuthResponse,
+    GoogleClientIdResponse,
     GoogleLoginRequest,
     LoginRequest,
     RegisterUserRequest,
@@ -91,6 +93,13 @@ def login_with_google(
         access_token=result.access_token,
         user=UserResponse.model_validate(result.user),
     )
+
+
+@router.get("/google/client-id", response_model=GoogleClientIdResponse)
+def get_google_client_id(
+    settings: Annotated[Settings, Depends(provide(Settings))],
+) -> GoogleClientIdResponse:
+    return GoogleClientIdResponse(client_id=settings.google_client_id)
 
 
 __all__ = ["router"]

@@ -215,8 +215,8 @@ def seed_database(
             "genre": "Rock",
             "country": "Reino Unido",
             "release_year": 1975,
-            "cover_url": "https://example.com/bohemian.jpg",
-            "itunes_preview_url": "https://example.com/bohemian_preview.mp3",
+            "cover_url": None,
+            "itunes_preview_url": None,
             "explicit": 0,
         },
         {
@@ -227,8 +227,8 @@ def seed_database(
             "genre": "Pop",
             "country": "Reino Unido",
             "release_year": 2017,
-            "cover_url": "https://example.com/shapeofyou.jpg",
-            "itunes_preview_url": "https://example.com/shapeofyou_preview.mp3",
+            "cover_url": None,
+            "itunes_preview_url": None,
             "explicit": 0,
         },
         {
@@ -239,8 +239,8 @@ def seed_database(
             "genre": "Hip Hop",
             "country": "Estados Unidos",
             "release_year": 2013,
-            "cover_url": "https://example.com/rapgod.jpg",
-            "itunes_preview_url": "https://example.com/rapgod_preview.mp3",
+            "cover_url": None,
+            "itunes_preview_url": None,
             "explicit": 1,
         },
         {
@@ -251,8 +251,8 @@ def seed_database(
             "genre": "Pop",
             "country": "Canadá",
             "release_year": 2020,
-            "cover_url": "https://example.com/blindinglights.jpg",
-            "itunes_preview_url": "https://example.com/blindinglights_preview.mp3",
+            "cover_url": None,
+            "itunes_preview_url": None,
             "explicit": 0,
         },
         {
@@ -263,11 +263,19 @@ def seed_database(
             "genre": "Grunge",
             "country": "Estados Unidos",
             "release_year": 1991,
-            "cover_url": "https://example.com/nirvana.jpg",
-            "itunes_preview_url": "https://example.com/nirvana_preview.mp3",
+            "cover_url": None,
+            "itunes_preview_url": None,
             "explicit": 0,
         },
     ]
+
+    conn.execute(
+        "UPDATE tracks SET cover_url = NULL WHERE cover_url LIKE 'https://example.com/%'"
+    )
+    conn.execute(
+        "UPDATE tracks SET itunes_preview_url = NULL "
+        "WHERE itunes_preview_url LIKE 'https://example.com/%'"
+    )
 
     now_str = datetime.now(UTC).isoformat()
     for t in sample_tracks:

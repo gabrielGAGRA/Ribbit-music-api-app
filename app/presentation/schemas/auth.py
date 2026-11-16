@@ -50,6 +50,14 @@ class GoogleLoginRequest(BaseModel):
     id_token: str = Field(min_length=1)
 
 
+class GoogleClientIdResponse(BaseModel):
+    """Public Google OAuth client configuration for frontend GIS initialization."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    client_id: str | None = None
+
+
 class LoginRequest(BaseModel):
     """Credentials payload for user authentication."""
 
@@ -71,6 +79,7 @@ class AuthResponse(BaseModel):
 
 __all__ = [
     "AuthResponse",
+    "GoogleClientIdResponse",
     "GoogleLoginRequest",
     "LoginRequest",
     "RegisterUserRequest",

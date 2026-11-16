@@ -99,3 +99,23 @@ def test_verify_id_token_invalid_response_raises_error() -> None:
     adapter = GoogleIdpVerifierAdapter(session=mock_session)
     with pytest.raises(AuthenticationRequiredError, match="Invalid or expired"):
         adapter.verify_id_token("token_bad")
+
+
+def test_verify_id_token_rejects_cross_client_prefix_audience() -> None:
+    mock_session = MagicMock(spec=niquests.Session)
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "email": "user@example.com",
+        "email_verified": True,
+        "name": "User",
+        "sub": "sub-1",
+        "aud": "108921521849256271018-abcdef.apps.googleusercontent.com",
+    }
+    mock_session.get.return_value = mock_response
+
+    adapter = GoogleIdpVerifierAdapter(
+        expected_client_id="108921521849256271018", session=mock_session
+    )
+    with pytest.raises(AuthenticationRequiredError, match="does not match"):
+        adapter.verify_id_token("cross_client_token")
