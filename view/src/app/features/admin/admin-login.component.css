@@ -3,7 +3,7 @@
   min-height: 100dvh;
   display: grid;
   grid-template-columns: 1.08fr 0.92fr;
-  background: #0b0e14;
+  background: var(--bg);
 }
 
 .admin-login-story {
@@ -14,7 +14,7 @@
   border-right: 1px solid var(--line);
   background:
     radial-gradient(circle at 18% 18%, rgba(89, 148, 255, 0.14), transparent 46%),
-    radial-gradient(circle at 82% 84%, rgba(102, 220, 176, 0.1), transparent 44%), #0e121a;
+    radial-gradient(circle at 82% 84%, rgba(102, 220, 176, 0.1), transparent 44%), var(--bg-elev);
 }
 
 .admin-brand {
@@ -53,13 +53,13 @@
 }
 
 .admin-story-copy p {
-  color: #a9b2c3;
+  color: var(--muted);
   font-size: 15px;
   line-height: 1.6;
 }
 
 .admin-credential-box {
-  background: rgba(21, 25, 34, 0.88);
+  background: var(--panel-elev);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 18px 20px;
@@ -79,12 +79,12 @@
 
 .admin-credential-box p {
   font-size: 13px;
-  color: #b7c0d1;
+  color: var(--muted);
 }
 
 .admin-credential-box code {
-  color: #eff2f8;
-  background: #0b0e14;
+  color: var(--ink);
+  background: var(--bg);
   padding: 2px 7px;
   border-radius: 6px;
   border: 1px solid var(--line);
@@ -131,9 +131,9 @@
   gap: 10px;
   padding: 11px 14px;
   border-radius: 12px;
-  background: rgba(239, 95, 118, 0.13);
-  border: 1px solid rgba(239, 95, 118, 0.38);
-  color: #ff98a8;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid var(--danger);
+  color: var(--danger);
   font-size: 13px;
 }
 
@@ -153,7 +153,7 @@
 .admin-field label {
   font-size: 13px;
   font-weight: 600;
-  color: #dde3ef;
+  color: var(--ink);
 }
 
 .field-hint {
@@ -162,11 +162,11 @@
 }
 
 .admin-field input {
-  background: #0e1118;
+  background: var(--panel-elev);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 12px 14px;
-  color: #eff2f8;
+  color: var(--ink);
   font-size: 16px;
   transition:
     border-color 0.16s,
@@ -185,7 +185,7 @@
 
 .field-error-msg {
   display: none;
-  color: #ff98a8;
+  color: var(--danger);
   font-size: 12px;
 }
 
@@ -214,7 +214,7 @@
 }
 
 .back-link-btn:hover {
-  color: #eff2f8;
+  color: var(--ink);
 }
 
 @media (max-width: 900px) {

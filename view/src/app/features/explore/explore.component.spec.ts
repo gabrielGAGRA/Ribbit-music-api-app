@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ExploreComponent } from './explore.component';
@@ -65,5 +65,28 @@ describe('ExploreComponent', () => {
     expect(globalStyles).toMatch(
       /@media\s*\(max-width:\s*600px\)[\s\S]*\.community-reviews\s*\{[^}]*minmax\(0,\s*1fr\)/,
     );
+  });
+
+  it('should call songService.likeAndSaveSearchTrack when likeAndSaveTrack is triggered', () => {
+    const httpMock = TestBed.inject(HttpTestingController);
+    const state = TestBed.inject(RibbitStateService);
+    const song = {
+      trackId: 42,
+      title: 'Solar Power',
+      artist: 'Lorde',
+      genre: 'Indie',
+      time: '3:12',
+      image: 'https://example.com/solar.jpg',
+      album: 'Solar Power',
+      year: '2021',
+      match: 95,
+    };
+
+    component.likeAndSaveTrack(song);
+    const req = httpMock.expectOne('/api/reviews/42/like-and-save');
+    expect(req.request.method).toBe('POST');
+    req.flush({ success: true });
+
+    expect(state.toast()).toContain('adicionada às suas curtidas');
   });
 });

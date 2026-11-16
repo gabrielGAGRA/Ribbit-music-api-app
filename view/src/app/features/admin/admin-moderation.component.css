@@ -29,12 +29,12 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--muted);
-  background: #0e1118;
+  background: var(--surface-tint);
   border: 1px solid var(--line);
 }
 
 .tab-pill.active {
-  color: #eff2f8;
+  color: var(--blue);
   background: rgba(89, 148, 255, 0.16);
   border-color: rgba(89, 148, 255, 0.45);
 }
@@ -48,7 +48,7 @@
 .search-field label {
   font-size: 12.5px;
   font-weight: 600;
-  color: #dce3f2;
+  color: var(--ink);
 }
 
 .field-hint {
@@ -60,7 +60,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  background: #0e1118;
+  background: var(--panel-elev);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 0 13px;
@@ -71,7 +71,7 @@
   flex: 1;
   background: transparent;
   border: 0;
-  color: #eff2f8;
+  color: var(--ink);
   padding: 11px 0;
   font-size: 15px;
 }
@@ -99,6 +99,130 @@
 .section-head h2 {
   font-size: 19px;
   margin-top: 4px;
+}
+
+.catalog-header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.catalog-actions-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.catalog-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--blue);
+  background: rgba(89, 148, 255, 0.15);
+  border: 1px solid rgba(89, 148, 255, 0.35);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.catalog-action-btn:hover:not(:disabled) {
+  background: rgba(89, 148, 255, 0.25);
+  border-color: rgba(89, 148, 255, 0.55);
+}
+
+.catalog-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.catalog-status-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(102, 220, 176, 0.12);
+  border: 1px solid rgba(102, 220, 176, 0.35);
+  color: var(--green);
+  font-size: 13px;
+}
+
+.genre-cell-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.edit-genre-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.edit-genre-btn:hover {
+  color: var(--blue);
+  background: rgba(89, 148, 255, 0.1);
+}
+
+.edit-genre-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.edit-genre-input {
+  background: var(--panel-elev);
+  border: 1px solid var(--blue);
+  color: var(--ink);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  width: 120px;
+  outline: none;
+}
+
+.save-genre-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+.cancel-genre-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.cancel-genre-btn:hover {
+  color: var(--ink);
+  border-color: var(--border-strong);
 }
 
 .sr-only {
@@ -136,7 +260,7 @@
 }
 
 .admin-table thead th {
-  background: #10141d;
+  background: var(--panel-elev);
   color: var(--muted);
   font-size: 11.5px;
   font-weight: 700;
@@ -150,7 +274,7 @@
 .admin-table tbody th,
 .admin-table tbody td {
   padding: 13px 14px;
-  border-bottom: 1px solid rgba(34, 38, 49, 0.7);
+  border-bottom: 1px solid var(--line);
   text-align: left;
 }
 
@@ -194,9 +318,9 @@
   padding: 3px 10px;
   border-radius: 999px;
   font-size: 12px;
-  background: #0e1118;
+  background: var(--surface-tint);
   border: 1px solid var(--line);
-  color: #c5ccda;
+  color: var(--ink-secondary);
 }
 
 .explicit-toggle {
@@ -249,7 +373,7 @@
 }
 
 .review-mod-card {
-  background: #0f131b;
+  background: var(--panel-elev);
   border: 1px solid var(--line);
   border-radius: 14px;
   padding: 16px 18px;
@@ -305,7 +429,7 @@
 .review-body-text {
   font-size: 14px;
   line-height: 1.55;
-  color: #dce3f2;
+  color: var(--ink);
 }
 
 .review-mod-footer {
@@ -352,7 +476,7 @@
     position: sticky;
     inset-block-start: 0;
     z-index: 2;
-    background: #10141d;
+    background: var(--panel-elev);
   }
 
   .tracks-table td:nth-child(2)::before {

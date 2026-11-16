@@ -11,11 +11,11 @@
 .not-found-container h1 {
   font-size: 4rem;
   margin: 16px 0 8px;
-  color: var(--text-primary, #ffffff);
+  color: var(--ink);
 }
 
 .not-found-container p {
-  color: var(--text-muted, #94a3b8);
+  color: var(--muted);
   margin-bottom: 24px;
   font-size: 1.1rem;
 }

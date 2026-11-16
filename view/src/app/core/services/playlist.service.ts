@@ -8,17 +8,41 @@ import type {
   PaginatedTracksApiDto,
   Playlist,
   PlaylistApiDto,
-  Song,
 } from '@ribbit/shared-types';
-import { mapPlaylistDtoToPlaylist, mapTrackDtoToSong } from '../api-mappers';
+import { mapPlaylistDtoToPlaylist } from '../api-mappers';
 
 /** Manages user playlists, contextual deck generation, and Spotify export via /api/playlists. */
 @Injectable({ providedIn: 'root' })
 export class PlaylistService {
   private readonly http = inject(HttpClient);
   private readonly playlistsSignal = signal<readonly Playlist[]>([]);
+  private readonly coverBlobUrlsSignal = signal<Record<number, string>>({});
 
   readonly playlists = this.playlistsSignal.asReadonly();
+  readonly coverBlobUrls = this.coverBlobUrlsSignal.asReadonly();
+
+  getCoverBlobUrl(playlistId: number): string | null {
+    return this.coverBlobUrlsSignal()[playlistId] ?? null;
+  }
+
+  setCoverBlobUrl(playlistId: number, url: string): void {
+    this.coverBlobUrlsSignal.update((curr) => ({ ...curr, [playlistId]: url }));
+  }
+
+  loadCoverBlob(playlistId: number): void {
+    if (this.coverBlobUrlsSignal()[playlistId]) return;
+    this.getPlaylistImageBlob(playlistId).subscribe({
+      next: (blob) => {
+        if (blob && blob.size > 0) {
+          const objectUrl = URL.createObjectURL(blob);
+          this.coverBlobUrlsSignal.update((curr) => ({ ...curr, [playlistId]: objectUrl }));
+        }
+      },
+      error: () => {
+        // Keep fallback if unavailable
+      },
+    });
+  }
 
   /** Lists all playlists owned by the authenticated user. */
   getPlaylists(): Observable<readonly Playlist[]> {
@@ -26,6 +50,17 @@ export class PlaylistService {
       map((dtos) => dtos.map((dto) => mapPlaylistDtoToPlaylist(dto))),
       tap((list) => {
         this.playlistsSignal.set(list);
+        for (const pl of list) {
+          if (
+            pl.playlistId !== undefined &&
+            pl.coverImageUrl &&
+            !pl.coverImageUrl.startsWith('http') &&
+            !pl.coverImageUrl.startsWith('data:') &&
+            !pl.coverImageUrl.startsWith('blob:')
+          ) {
+            this.loadCoverBlob(pl.playlistId);
+          }
+        }
       }),
     );
   }
@@ -39,7 +74,25 @@ export class PlaylistService {
 
   /** Creates a new contextual deck playlist on the backend. */
   createDeckPlaylist(payload: DeckPlaylistApiRequest): Observable<Playlist> {
-    return this.http.post<PlaylistApiDto>('/api/playlists/deck', payload).pipe(
+    const refId = payload.reference_playlist_id ?? payload.referencePlaylistId;
+    const srcId = payload.source_playlist_id ?? payload.sourcePlaylistId ?? refId;
+    const cleanPayload: Record<string, unknown> = { name: payload.name };
+    const fields = [
+      'duration_minutes',
+      'genre',
+      'year',
+      'artist',
+      'country',
+      'description',
+    ] as const;
+    for (const field of fields) {
+      const val = payload[field];
+      if (val !== undefined) cleanPayload[field] = val;
+    }
+    if (refId != null) cleanPayload['reference_playlist_id'] = refId;
+    if (srcId != null) cleanPayload['source_playlist_id'] = srcId;
+
+    return this.http.post<PlaylistApiDto>('/api/playlists/deck', cleanPayload).pipe(
       map((dto) => mapPlaylistDtoToPlaylist(dto)),
       tap((created) => {
         this.playlistsSignal.update((current) => [created, ...current]);
@@ -47,12 +100,31 @@ export class PlaylistService {
     );
   }
 
+  /** Uploads a custom cover image file for a playlist via PUT /api/playlists/${playlistId}/image. */
+  uploadPlaylistImage(playlistId: number, file: File): Observable<PlaylistApiDto> {
+    return this.http.put<PlaylistApiDto>(`/api/playlists/${playlistId}/image`, file, {
+      headers: { 'Content-Type': file.type || 'image/jpeg' },
+    });
+  }
+
+  /** Retrieves the binary cover image blob for a playlist via GET /api/playlists/${playlistId}/image. */
+  getPlaylistImageBlob(playlistId: number): Observable<Blob> {
+    return this.http.get(`/api/playlists/${playlistId}/image`, {
+      responseType: 'blob',
+    });
+  }
+
   /** Fetches candidate tracks for swipe-building a playlist. */
-  getPlaylistDeck(playlistId: number, limit = 20): Observable<readonly Song[]> {
-    const params = new HttpParams().set('limit', String(limit));
-    return this.http
-      .get<PaginatedTracksApiDto>(`/api/playlists/${playlistId}/deck`, { params })
-      .pipe(map((page) => page.items.map((dto) => mapTrackDtoToSong(dto))));
+  getPlaylistDeck(
+    playlistId: number,
+    limit = 20,
+    cursorId?: number,
+  ): Observable<PaginatedTracksApiDto> {
+    let params = new HttpParams().set('limit', String(limit));
+    if (cursorId !== undefined && cursorId !== null) {
+      params = params.set('cursor_id', String(cursorId));
+    }
+    return this.http.get<PaginatedTracksApiDto>(`/api/playlists/${playlistId}/deck`, { params });
   }
 
   /** Adds a track to a playlist via swipe-add without polluting global likes. */
@@ -89,7 +161,7 @@ export class PlaylistService {
   /** Exports a Ribbit playlist to the user's linked Spotify account. */
   exportToSpotify(
     playlistId: number,
-    playlistName: string,
+    playlistName = 'Playlist',
   ): Observable<{
     readonly success: boolean;
     readonly message: string;

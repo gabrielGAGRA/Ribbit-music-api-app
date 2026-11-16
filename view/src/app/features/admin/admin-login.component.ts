@@ -66,6 +66,22 @@ export class AdminLoginComponent {
     this.emailBlurred.set(true);
     this.passwordBlurred.set(true);
 
+    if (this.adminState.hasHttpClient()) {
+      this.adminState.loginAdminWithApi(this.emailDraft(), this.passwordDraft()).subscribe({
+        next: () => {
+          if (this.router) {
+            this.router.navigate(['/admin/dashboard']).catch(() => {});
+          }
+        },
+        error: (error: unknown) => {
+          const message =
+            error instanceof Error ? error.message : 'Não foi possível autenticar no console.';
+          this.errorMessage.set(message);
+        },
+      });
+      return;
+    }
+
     try {
       this.adminState.loginAdmin(this.emailDraft(), this.passwordDraft());
       if (this.router) {

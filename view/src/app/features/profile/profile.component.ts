@@ -72,6 +72,15 @@ export class ProfileComponent {
     void this.router?.navigate(['/settings']).catch(() => false);
   }
 
+  goToFamily(): void {
+    this.state.setPage('family');
+    void this.router?.navigate(['/family']).catch(() => false);
+  }
+
+  openTutorial(): void {
+    this.state.setModal('onboarding');
+  }
+
   viewFullCollection(): void {
     const tab = this.selectedTab();
     const route = tab === 'like' ? 'likes' : tab === 'love' ? 'loved' : 'rejected';
