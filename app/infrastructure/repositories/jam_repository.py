@@ -6,6 +6,7 @@ lazy import sqlite3
 from app.application.ports.repositories.jam_repository import JamRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.jam import Jam, JamQueueItem
+from app.infrastructure.repositories.connection import transaction
 
 
 def _row_to_jam(row: sqlite3.Row) -> Jam:
@@ -80,13 +81,16 @@ class SQLiteJamRepository(JamRepositoryPort):
         return _row_to_jam(row) if row else None
 
     def save(self, jam: Jam) -> Jam:
-        if jam.jam_id is not None:
-            cursor = self.conn.execute(
-                "SELECT jam_id FROM jams WHERE jam_id = ?",
-                (jam.jam_id,),
-            )
-            if cursor.fetchone():
-                self.conn.execute(
+        target_id: int | None = jam.jam_id
+        with transaction(self.conn) as cursor:
+            if jam.jam_id is not None:
+                existing = cursor.execute(
+                    "SELECT jam_id FROM jams WHERE jam_id = ?",
+                    (jam.jam_id,),
+                ).fetchone()
+                if not existing:
+                    raise EntityNotFoundError(entity_name="Jam", entity_id=jam.jam_id)
+                cursor.execute(
                     """
                     UPDATE jams
                     SET host_user_id = ?,
@@ -119,39 +123,35 @@ class SQLiteJamRepository(JamRepositoryPort):
                         jam.jam_id,
                     ),
                 )
-                self.conn.commit()
-                return self.find_by_id(jam.jam_id) or jam
-            raise EntityNotFoundError(entity_name="Jam", entity_id=jam.jam_id)
-
-        created_at_str = (jam.created_at or datetime.now(UTC)).isoformat()
-        cursor = self.conn.execute(
-            """
-            INSERT INTO jams (
-                host_user_id, room_name, room_code, is_active, current_track_id, created_at,
-                duration_minutes, max_superlikes, superlikes_used, skip_votes_threshold,
-                accumulated_duration_seconds, deck_source, source_playlist_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                jam.host_user_id,
-                jam.room_name,
-                jam.room_code,
-                1 if jam.is_active else 0,
-                jam.current_track_id,
-                created_at_str,
-                jam.duration_minutes,
-                jam.max_superlikes,
-                jam.superlikes_used,
-                jam.skip_votes_threshold,
-                jam.accumulated_duration_seconds,
-                jam.deck_source,
-                jam.source_playlist_id,
-            ),
-        )
-        self.conn.commit()
-        new_id = cursor.lastrowid
-        if new_id is not None:
-            return self.find_by_id(new_id) or jam
+            else:
+                created_at_str = (jam.created_at or datetime.now(UTC)).isoformat()
+                cursor.execute(
+                    """
+                    INSERT INTO jams (
+                        host_user_id, room_name, room_code, is_active, current_track_id, created_at,
+                        duration_minutes, max_superlikes, superlikes_used, skip_votes_threshold,
+                        accumulated_duration_seconds, deck_source, source_playlist_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        jam.host_user_id,
+                        jam.room_name,
+                        jam.room_code,
+                        1 if jam.is_active else 0,
+                        jam.current_track_id,
+                        created_at_str,
+                        jam.duration_minutes,
+                        jam.max_superlikes,
+                        jam.superlikes_used,
+                        jam.skip_votes_threshold,
+                        jam.accumulated_duration_seconds,
+                        jam.deck_source,
+                        jam.source_playlist_id,
+                    ),
+                )
+                target_id = cursor.lastrowid
+        if target_id is not None:
+            return self.find_by_id(target_id) or jam
         return jam
 
     def find_queue_item(self, jam_id: int, track_id: int) -> JamQueueItem | None:
@@ -166,35 +166,32 @@ class SQLiteJamRepository(JamRepositoryPort):
         return _row_to_queue_item(row) if row else None
 
     def save_queue_item(self, item: JamQueueItem) -> JamQueueItem:
-        cursor = self.conn.execute(
-            """
-            SELECT jam_queue_id FROM jam_queue_items
-            WHERE jam_id = ? AND track_id = ?
-            """,
-            (item.jam_id, item.track_id),
-        )
-        existing = cursor.fetchone()
-        if existing:
-            self.conn.execute(
+        with transaction(self.conn) as cursor:
+            existing = cursor.execute(
                 """
-                UPDATE jam_queue_items
-                SET vote_points = ?
+                SELECT jam_queue_id FROM jam_queue_items
                 WHERE jam_id = ? AND track_id = ?
                 """,
-                (item.vote_points, item.jam_id, item.track_id),
-            )
-            self.conn.commit()
-            return self.find_queue_item(item.jam_id, item.track_id) or item
-
-        added_at_str = (item.added_at or datetime.now(UTC)).isoformat()
-        cursor = self.conn.execute(
-            """
-            INSERT INTO jam_queue_items (jam_id, track_id, vote_points, added_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (item.jam_id, item.track_id, item.vote_points, added_at_str),
-        )
-        self.conn.commit()
+                (item.jam_id, item.track_id),
+            ).fetchone()
+            if existing:
+                cursor.execute(
+                    """
+                    UPDATE jam_queue_items
+                    SET vote_points = ?
+                    WHERE jam_id = ? AND track_id = ?
+                    """,
+                    (item.vote_points, item.jam_id, item.track_id),
+                )
+            else:
+                added_at_str = (item.added_at or datetime.now(UTC)).isoformat()
+                cursor.execute(
+                    """
+                    INSERT INTO jam_queue_items (jam_id, track_id, vote_points, added_at)
+                    VALUES (?, ?, ?, ?)
+                    """,
+                    (item.jam_id, item.track_id, item.vote_points, added_at_str),
+                )
         return self.find_queue_item(item.jam_id, item.track_id) or item
 
     def list_queue(self, jam_id: int) -> list[JamQueueItem]:
@@ -210,42 +207,42 @@ class SQLiteJamRepository(JamRepositoryPort):
         return [_row_to_queue_item(r) for r in rows]
 
     def remove_track_from_queue(self, jam_id: int, track_id: int) -> bool:
-        cursor = self.conn.execute(
-            """
-            DELETE FROM jam_queue_items
-            WHERE jam_id = ? AND track_id = ?
-            """,
-            (jam_id, track_id),
-        )
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                DELETE FROM jam_queue_items
+                WHERE jam_id = ? AND track_id = ?
+                """,
+                (jam_id, track_id),
+            )
+            return cursor.rowcount > 0
 
     def advance_playback(
         self, jam_id: int, new_track_id: int, removed_track_id: int
     ) -> Jam:
-        cursor = self.conn.execute(
-            "SELECT jam_id FROM jams WHERE jam_id = ?",
-            (jam_id,),
-        )
-        if not cursor.fetchone():
-            raise EntityNotFoundError(entity_name="Jam", entity_id=jam_id)
+        with transaction(self.conn) as cursor:
+            row = cursor.execute(
+                "SELECT jam_id FROM jams WHERE jam_id = ?",
+                (jam_id,),
+            ).fetchone()
+            if not row:
+                raise EntityNotFoundError(entity_name="Jam", entity_id=jam_id)
 
-        self.conn.execute(
-            """
-            UPDATE jams
-            SET current_track_id = ?
-            WHERE jam_id = ?
-            """,
-            (new_track_id, jam_id),
-        )
-        self.conn.execute(
-            """
-            DELETE FROM jam_queue_items
-            WHERE jam_id = ? AND track_id = ?
-            """,
-            (jam_id, removed_track_id),
-        )
-        self.conn.commit()
+            cursor.execute(
+                """
+                UPDATE jams
+                SET current_track_id = ?
+                WHERE jam_id = ?
+                """,
+                (new_track_id, jam_id),
+            )
+            cursor.execute(
+                """
+                DELETE FROM jam_queue_items
+                WHERE jam_id = ? AND track_id = ?
+                """,
+                (jam_id, removed_track_id),
+            )
         jam = self.find_by_id(jam_id)
         if jam is None:
             raise EntityNotFoundError(entity_name="Jam", entity_id=jam_id)
@@ -253,15 +250,15 @@ class SQLiteJamRepository(JamRepositoryPort):
 
     def add_participant(self, jam_id: int, user_id: int) -> bool:
         now_str = datetime.now(UTC).isoformat()
-        cursor = self.conn.execute(
-            """
-            INSERT OR IGNORE INTO jam_participants (jam_id, user_id, joined_at)
-            VALUES (?, ?, ?)
-            """,
-            (jam_id, user_id, now_str),
-        )
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO jam_participants (jam_id, user_id, joined_at)
+                VALUES (?, ?, ?)
+                """,
+                (jam_id, user_id, now_str),
+            )
+            return cursor.rowcount > 0
 
     def is_participant(self, jam_id: int, user_id: int) -> bool:
         cursor = self.conn.execute(
@@ -282,15 +279,15 @@ class SQLiteJamRepository(JamRepositoryPort):
 
     def record_skip_vote(self, jam_id: int, track_id: int, user_id: int) -> bool:
         now_str = datetime.now(UTC).isoformat()
-        cursor = self.conn.execute(
-            """
-            INSERT OR IGNORE INTO jam_skip_votes (jam_id, track_id, user_id, voted_at)
-            VALUES (?, ?, ?, ?)
-            """,
-            (jam_id, track_id, user_id, now_str),
-        )
-        self.conn.commit()
-        return cursor.rowcount > 0
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO jam_skip_votes (jam_id, track_id, user_id, voted_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (jam_id, track_id, user_id, now_str),
+            )
+            return cursor.rowcount > 0
 
     def count_skip_votes(self, jam_id: int, track_id: int) -> int:
         cursor = self.conn.execute(
@@ -301,17 +298,17 @@ class SQLiteJamRepository(JamRepositoryPort):
         return int(row[0]) if row else 0
 
     def clear_skip_votes(self, jam_id: int, track_id: int | None = None) -> None:
-        if track_id is not None:
-            self.conn.execute(
-                "DELETE FROM jam_skip_votes WHERE jam_id = ? AND track_id = ?",
-                (jam_id, track_id),
-            )
-        else:
-            self.conn.execute(
-                "DELETE FROM jam_skip_votes WHERE jam_id = ?",
-                (jam_id,),
-            )
-        self.conn.commit()
+        with transaction(self.conn) as cursor:
+            if track_id is not None:
+                cursor.execute(
+                    "DELETE FROM jam_skip_votes WHERE jam_id = ? AND track_id = ?",
+                    (jam_id, track_id),
+                )
+            else:
+                cursor.execute(
+                    "DELETE FROM jam_skip_votes WHERE jam_id = ?",
+                    (jam_id,),
+                )
 
 
 __all__ = ["SQLiteJamRepository"]

@@ -80,6 +80,8 @@ def test_export_playlist_to_spotify_success_marks_exported_and_saves() -> None:
         account_id="spotify_user_123",
         name="Pond Favorites",
         track_ids=["sp_track_abc", "20"],
+        access_token=None,
+        refresh_token=None,
     )
     playlist_repo.save.assert_called_once_with(playlist)
 
@@ -157,6 +159,8 @@ def test_export_playlist_to_spotify_succeeds_without_spotify_premium() -> None:
         account_id="spotify_free_user",
         name="Free Spotify Playlist",
         track_ids=[],
+        access_token=None,
+        refresh_token=None,
     )
 
 

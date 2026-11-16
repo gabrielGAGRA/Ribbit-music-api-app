@@ -1,7 +1,9 @@
 """Configuration settings for the Ribbit application."""
 
 import contextlib
+import json
 import os
+from pathlib import Path
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, model_validator
@@ -41,6 +43,9 @@ class Settings(BaseModel):
     gcs_bucket_name: str | None = None
     gcs_tracks_file_path: str = "Songs/songs_final.parquet"
     google_client_id: str | None = None
+    gcp_project_id: str | None = None
+    firestore_enabled: bool = False
+    firestore_database: str = "(default)"
 
     @model_validator(mode="after")
     def _validate_production_secret_key(self) -> Self:  # noqa: N804
@@ -49,6 +54,30 @@ class Settings(BaseModel):
         ):
             raise RuntimeError("RIBBIT_SECRET_KEY must be configured in production.")
         return self
+
+
+def _resolve_gcp_project_id() -> str | None:
+    env_project = (
+        os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or ""
+    ).strip()
+    if env_project:
+        return env_project
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if creds_path:
+        path = Path(creds_path)
+        if path.is_file():
+            with contextlib.suppress(Exception):
+                data = json.loads(path.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and data.get("project_id"):
+                    return str(data["project_id"]).strip() or None
+    return None
+
+
+def _resolve_firestore_enabled(gcp_project_id: str | None) -> bool:
+    raw_fs = os.getenv("FIRESTORE_ENABLED")
+    if raw_fs is not None:
+        return raw_fs.strip().lower() in ("1", "true", "yes", "on")
+    return bool(gcp_project_id)
 
 
 def load_settings() -> Settings:
@@ -110,6 +139,8 @@ def load_settings() -> Settings:
             "fernando.seraco@usp.br",
         )
 
+    gcp_project_id = _resolve_gcp_project_id()
+
     return Settings(
         database_path=db_path,
         password_hash_iterations=iterations,
@@ -136,6 +167,9 @@ def load_settings() -> Settings:
             "GCS_TRACKS_FILE_PATH", "Songs/songs_final.parquet"
         ),
         google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
+        gcp_project_id=gcp_project_id,
+        firestore_enabled=_resolve_firestore_enabled(gcp_project_id),
+        firestore_database=os.getenv("FIRESTORE_DATABASE", "(default)"),
     )
 
 

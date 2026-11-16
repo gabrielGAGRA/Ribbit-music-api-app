@@ -7,6 +7,8 @@ from app.config import Settings, load_settings
 from app.infrastructure.repositories.connection import SCHEMA_PATH
 from app.infrastructure.security.password_hasher import PBKDF2PasswordHasher
 
+_SEED_EPOCH_ISO = "1970-01-01T00:00:00+00:00"
+
 _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "users": {
         "birth_date": "TEXT",
@@ -193,16 +195,15 @@ def seed_database(
         iterations=resolved_settings.password_hash_iterations
     )
     hashed_pw = hasher.hash_password(admin_password)
-    now_str = datetime.now(UTC).isoformat()
 
-    _seed_default_admin(conn, admin_email, hashed_pw, free_plan_id, now_str)
+    _seed_default_admin(conn, admin_email, hashed_pw, free_plan_id, _SEED_EPOCH_ISO)
     _seed_eligible_admins(
         conn,
         resolved_settings.admin_eligible_emails,
         admin_email,
         hashed_pw,
         free_plan_id,
-        now_str,
+        _SEED_EPOCH_ISO,
     )
 
     sample_tracks = [

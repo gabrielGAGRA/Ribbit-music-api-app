@@ -96,6 +96,7 @@ from app.application.use_cases.review import (
 )
 from app.application.use_cases.spotify import (
     ConnectSpotifyAccountUseCase,
+    DisconnectSpotifyAccountUseCase,
     GetSpotifyAuthorizeUrlUseCase,
     SyncPlaylistFromSpotifyUseCase,
     SyncTracksFromSpotifyUseCase,
@@ -124,6 +125,8 @@ from app.application.use_cases.user import (
 from app.config import Settings, load_settings
 from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters import (
+    FirestoreRestClient,
+    FirestoreSyncService,
     GCSTrackCatalogAdapter,
     ITunesAdapter,
     SpotifyAdapter,
@@ -245,6 +248,7 @@ class Container:
     # Spotify
     get_spotify_authorize_url_use_case: GetSpotifyAuthorizeUrlUseCase
     connect_spotify_account_use_case: ConnectSpotifyAccountUseCase
+    disconnect_spotify_account_use_case: DisconnectSpotifyAccountUseCase
     sync_tracks_from_spotify_use_case: SyncTracksFromSpotifyUseCase
     sync_playlist_from_spotify_use_case: SyncPlaylistFromSpotifyUseCase
     # Admin
@@ -266,6 +270,7 @@ class Container:
     ingest_tracks_from_catalog_use_case: IngestTracksFromCatalogUseCase | None = None
     compact_catalog_use_case: CompactCatalogUseCase | None = None
     sync_catalog_version_use_case: SyncCatalogVersionUseCase | None = None
+    firestore_sync_service: FirestoreSyncService | None = None
     _type_registry: dict[type, Any] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -305,6 +310,8 @@ class Container:
             registry[CompactCatalogUseCase] = self.compact_catalog_use_case
         if self.sync_catalog_version_use_case is not None:
             registry[SyncCatalogVersionUseCase] = self.sync_catalog_version_use_case
+        if self.firestore_sync_service is not None:
+            registry[FirestoreSyncService] = self.firestore_sync_service
 
         object.__setattr__(self, "_type_registry", registry)
 
@@ -357,13 +364,28 @@ def build_container(
     )
     music_service = SpotifyAdapter(spotify_credentials)
 
-    user_repo = SQLiteUserRepository(conn)
+    firestore_sync = (
+        FirestoreSyncService(
+            conn=conn,
+            client=FirestoreRestClient(
+                project_id=settings.gcp_project_id,
+                database_id=settings.firestore_database,
+            ),
+        )
+        if settings.firestore_enabled
+        and settings.gcp_project_id
+        and connection is None
+        and settings.database_path != ":memory:"
+        else None
+    )
+
+    user_repo = SQLiteUserRepository(conn, sync_service=firestore_sync)
     plan_repo = SQLitePlanRepository(conn)
     track_repo = SQLiteTrackRepository(conn)
-    playlist_repo = SQLitePlaylistRepository(conn)
-    interaction_repo = SQLiteInteractionRepository(conn)
+    playlist_repo = SQLitePlaylistRepository(conn, sync_service=firestore_sync)
+    interaction_repo = SQLiteInteractionRepository(conn, sync_service=firestore_sync)
     jam_repo = SQLiteJamRepository(conn)
-    review_repo = SQLiteReviewRepository(conn)
+    review_repo = SQLiteReviewRepository(conn, sync_service=firestore_sync)
     audit_log_repo = SQLiteAuditLogRepository(conn)
 
     catalog_adapter = (
@@ -444,6 +466,9 @@ def build_container(
             user_repo=user_repo,
             spotify_auth=user_spotify_auth,
             spotify_profile=spotify_user_profile,
+        ),
+        disconnect_spotify_account_use_case=DisconnectSpotifyAccountUseCase(
+            user_repo=user_repo,
         ),
         # Auth
         register_user_use_case=RegisterUserUseCase(
@@ -622,6 +647,7 @@ def build_container(
         ingest_tracks_from_catalog_use_case=ingest_tracks_use_case,
         compact_catalog_use_case=compact_catalog_use_case,
         sync_catalog_version_use_case=sync_catalog_version_use_case,
+        firestore_sync_service=firestore_sync,
     )
 
 
@@ -718,6 +744,38 @@ def _start_background_catalog_sync(
     ).start()
 
 
+def _start_background_firestore_sync(
+    container: Container, logger: logging.Logger
+) -> threading.Thread | None:
+    """Runs initial Firestore bidirectional sync in a background daemon thread."""
+    sync_service = container.firestore_sync_service
+    if sync_service is None:
+        return None
+
+    def _worker() -> None:
+        try:
+            sync_service.sync_all()
+            log_operational_event(
+                logger,
+                event="firestore.startup_sync.completed",
+                status="success",
+                message="Initial Firestore bidirectional sync completed.",
+            )
+        except Exception as exc:  # noqa: BLE001
+            log_operational_event(
+                logger,
+                event="firestore.startup_sync.skipped",
+                status="warning",
+                message=f"Initial Firestore sync failed: {exc}",
+            )
+
+    thread = threading.Thread(
+        target=_worker, name="firestore-initial-sync", daemon=True
+    )
+    thread.start()
+    return thread
+
+
 def create_app(
     settings: Settings | None = None,
     connection: sqlite3.Connection | None = None,
@@ -732,9 +790,11 @@ def create_app(
         settings=resolved_settings,
         password_hasher=container.password_hasher,
     )
+    firestore_sync_thread: threading.Thread | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+        nonlocal firestore_sync_thread
         logger = logging.getLogger("app")
         log_operational_event(
             logger,
@@ -750,6 +810,7 @@ def create_app(
         )
         if owns_connection:
             _start_background_catalog_sync(resolved_settings, container, logger)
+            firestore_sync_thread = _start_background_firestore_sync(container, logger)
         try:
             yield
         finally:
@@ -760,6 +821,11 @@ def create_app(
                 message=f"Shutting down service: {resolved_settings.app_title}",
             )
             if owns_connection:
+                if (
+                    firestore_sync_thread is not None
+                    and firestore_sync_thread.is_alive()
+                ):
+                    firestore_sync_thread.join(timeout=5.0)
                 container.connection.close()
 
     app = FastAPI(
