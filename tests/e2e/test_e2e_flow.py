@@ -312,7 +312,7 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
     family_id = next(p["plan_id"] for p in plans if p["name"] == "Família")
 
     # 1. Register with Free plan, then change subscription to Family plan
-    _, headers = _register_and_login(
+    titular, headers = _register_and_login(
         client, "family_titular@example.com", "1985-02-14", free_id
     )
 
@@ -323,7 +323,33 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
     )
     assert plan_update.status_code == 200, plan_update.text
 
-    # 2. Provision minor dependent under Family plan -> succeeds
+    # 2. Link an existing profile by verifying its email and password.
+    existing_email = "family_existing_profile@example.com"
+    existing_password = "Password123!"
+    existing_profile, _ = _register_and_login(
+        client,
+        existing_email,
+        "1990-04-12",
+        free_id,
+        password=existing_password,
+    )
+    invalid_link = client.post(
+        "/api/profile/family/members",
+        headers=headers,
+        json={"email": existing_email, "password": "WrongPassword123!"},
+    )
+    assert invalid_link.status_code == 401
+
+    existing_link = client.post(
+        "/api/profile/family/members",
+        headers=headers,
+        json={"email": existing_email, "password": existing_password},
+    )
+    assert existing_link.status_code == 200, existing_link.text
+    assert existing_link.json()["user_id"] == existing_profile["user"]["user_id"]
+    assert existing_link.json()["primary_account_id"] == titular["user"]["user_id"]
+
+    # 3. Provision minor dependent under Family plan -> succeeds
     dep_res = client.post(
         "/api/profile/family/members",
         headers=headers,
@@ -336,8 +362,8 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
     )
     assert dep_res.status_code in (200, 201), dep_res.text
 
-    # 3. Add dependents up to max limit (Família allows 6 profiles: 1 titular + 5 dependents)
-    for i in range(2, 6):
+    # 4. Add dependents up to max limit (1 titular + 5 dependents)
+    for i in range(2, 5):
         resp = client.post(
             "/api/profile/family/members",
             headers=headers,
@@ -350,7 +376,7 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
         )
         assert resp.status_code in (200, 201), resp.text
 
-    # 4. Exceeding capacity limit -> rejected with 400
+    # 5. Exceeding capacity limit -> rejected with 400
     overflow_res = client.post(
         "/api/profile/family/members",
         headers=headers,

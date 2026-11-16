@@ -6,8 +6,10 @@ import pytest
 
 from app.application.ports.repositories.plan_repository import PlanRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
+from app.application.ports.services.password_hasher import PasswordHasherPort
 from app.application.use_cases.user.add_family_member import AddFamilyMemberUseCase
 from app.domain.exceptions import (
+    AuthenticationRequiredError,
     BusinessRuleViolationError,
     DuplicateEntityError,
     EntityNotFoundError,
@@ -341,6 +343,110 @@ def test_add_family_member_links_account_and_updates_plan_successfully() -> None
     user_repo.save.assert_called_once_with(dependent_user)
 
 
+def test_add_family_member_authenticates_and_links_existing_account() -> None:
+    primary_user = User(
+        user_id=1,
+        email="primary@test.com",
+        password_hash="primary-hash",
+        display_name="Primary",
+        age=30,
+        plan_id=3,
+    )
+    existing_user = User(
+        user_id=2,
+        email="existing@test.com",
+        password_hash="existing-hash",
+        display_name="Existing",
+        age=25,
+        plan_id=1,
+    )
+    family_plan = Plan(
+        plan_id=3,
+        name="Family",
+        initial_monthly_price=34.90,
+        initial_max_profiles=6,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = primary_user
+    user_repo.find_by_email.return_value = existing_user
+    user_repo.list_dependents.return_value = []
+    user_repo.save.side_effect = lambda user: user
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = family_plan
+    password_hasher = MagicMock(spec=PasswordHasherPort)
+    password_hasher.verify_password.return_value = True
+
+    use_case = AddFamilyMemberUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        password_hasher=password_hasher,
+    )
+    result = use_case.execute(
+        primary_user_id=1,
+        email=" EXISTING@Test.com ",
+        password="account-password",
+    )
+
+    assert result is existing_user
+    assert result.primary_account_id == 1
+    assert result.plan_id == 3
+    assert result.password_hash == "existing-hash"
+    password_hasher.verify_password.assert_called_once_with(
+        "account-password",
+        "existing-hash",
+    )
+    user_repo.find_by_email.assert_called_once_with("existing@test.com")
+    user_repo.save.assert_called_once_with(existing_user)
+
+
+def test_add_family_member_rejects_existing_account_with_wrong_password() -> None:
+    primary_user = User(
+        user_id=1,
+        email="primary@test.com",
+        password_hash="primary-hash",
+        display_name="Primary",
+        age=30,
+        plan_id=3,
+    )
+    existing_user = User(
+        user_id=2,
+        email="existing@test.com",
+        password_hash="existing-hash",
+        display_name="Existing",
+        age=25,
+        plan_id=1,
+    )
+    family_plan = Plan(
+        plan_id=3,
+        name="Family",
+        initial_monthly_price=34.90,
+        initial_max_profiles=6,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = primary_user
+    user_repo.find_by_email.return_value = existing_user
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = family_plan
+    password_hasher = MagicMock(spec=PasswordHasherPort)
+    password_hasher.verify_password.return_value = False
+
+    use_case = AddFamilyMemberUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        password_hasher=password_hasher,
+    )
+
+    with pytest.raises(AuthenticationRequiredError, match="Invalid credentials"):
+        use_case.execute(
+            primary_user_id=1,
+            email="existing@test.com",
+            password="wrong-password",
+        )
+
+    user_repo.save.assert_not_called()
+    user_repo.list_dependents.assert_not_called()
+
+
 def test_add_family_member_provisioning_minor_succeeds() -> None:
     primary_user = User(
         user_id=1,
@@ -383,9 +489,7 @@ def test_add_family_member_provisioning_minor_succeeds() -> None:
     user_repo.save.assert_called_once()
 
 
-def test_add_family_member_provisioning_duplicate_email_raises_duplicate_entity() -> (
-    None
-):
+def test_add_family_member_provisioning_email_conflict_after_lookup_raises() -> None:
     primary_user = User(
         user_id=1,
         email="primary@test.com",
@@ -410,7 +514,7 @@ def test_add_family_member_provisioning_duplicate_email_raises_duplicate_entity(
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = primary_user
-    user_repo.find_by_email.return_value = existing_user
+    user_repo.find_by_email.side_effect = [None, existing_user]
     user_repo.list_dependents.return_value = []
 
     plan_repo = MagicMock(spec=PlanRepositoryPort)
