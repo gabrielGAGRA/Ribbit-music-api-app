@@ -48,6 +48,8 @@ class ExportPlaylistToSpotifyUseCase:
             account_id=user.spotify_id,
             name=playlist.name,
             track_ids=external_track_ids,
+            access_token=user.spotify_access_token,
+            refresh_token=user.spotify_refresh_token,
         )
 
         playlist.export(spotify_playlist_id)

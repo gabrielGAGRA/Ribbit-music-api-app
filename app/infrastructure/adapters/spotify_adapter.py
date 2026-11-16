@@ -81,14 +81,20 @@ class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
         )
 
     def export_playlist(
-        self, account_id: str, name: str, track_ids: Sequence[ExternalTrackId | str]
+        self,
+        account_id: str,
+        name: str,
+        track_ids: Sequence[ExternalTrackId | str],
+        *,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
     ) -> str:
         """Creates a private playlist in the authorized Spotify account.
 
         ``account_id`` is informational: Spotify always writes to the account that granted
         the user token. Ids that are not Spotify track ids are skipped.
         """
-        playlists = self._require_playlists()
+        playlists = self._playlists_for_tokens(access_token, refresh_token)
         created = playlists.create_playlist(name)
         uris = [
             f"spotify:track:{track_id}"
@@ -105,6 +111,27 @@ class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
         if self.catalog is None:
             raise SpotifyAuthError("Spotify credentials are not configured")
         return self.catalog
+
+    def _playlists_for_tokens(
+        self, access_token: str | None, refresh_token: str | None
+    ) -> SpotifyPlaylists:
+        if (access_token or refresh_token) and self.auth is not None:
+            from app.infrastructure.adapters.spotify.credentials import (  # noqa: PLC0415
+                SpotifyCredentials,
+            )
+
+            creds = self.auth._credentials
+            user_creds = SpotifyCredentials(
+                client_id=creds.client_id,
+                client_secret=creds.client_secret,
+                redirect_uri=creds.redirect_uri,
+                refresh_token=refresh_token or creds.refresh_token,
+            )
+            user_auth = SpotifyAuth(user_creds, self.auth._session)
+            if access_token:
+                user_auth._access_token = access_token
+            return SpotifyPlaylists(SpotifyHttpClient(user_auth, self.auth._session))
+        return self._require_playlists()
 
     def _require_playlists(self) -> SpotifyPlaylists:
         if self.playlists is None:

@@ -8,6 +8,7 @@ lazy from collections.abc import Sequence
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.track import Track, TrackId
+from app.infrastructure.repositories.connection import transaction
 
 
 def _sqlite_translate(value: str | None, from_chars: str, to_chars: str) -> str | None:
@@ -203,89 +204,98 @@ class SQLiteTrackRepository(TrackRepositoryPort):
                 result[track.track_id] = track
         return result
 
-    def save(self, track: Track) -> Track:
-        if track.track_id is not None:
-            cursor = self.conn.execute(
-                "SELECT track_id FROM tracks WHERE track_id = ?",
-                (track.track_id,),
-            )
-            if cursor.fetchone():
-                self.conn.execute(
-                    """
-                    UPDATE tracks
-                    SET spotify_id = ?,
-                        title = ?,
-                        artist = ?,
-                        album = ?,
-                        duration_seconds = ?,
-                        genre = ?,
-                        country = ?,
-                        release_year = ?,
-                        cover_url = ?,
-                        itunes_preview_url = ?,
-                        explicit = ?,
-                        is_deleted = ?
-                    WHERE track_id = ?
-                    """,
-                    (
-                        track.spotify_id,
-                        track.title,
-                        track.artist,
-                        track.album,
-                        track.duration_seconds,
-                        track.genre or "",
-                        track.country,
-                        track.release_year,
-                        track.cover_url,
-                        track.itunes_preview_url,
-                        1 if track.explicit else 0,
-                        1 if track.is_deleted else 0,
-                        track.track_id,
-                    ),
-                )
-                self.conn.commit()
-                return self.find_by_id(track.track_id) or track
-            raise EntityNotFoundError(entity_name="Track", entity_id=track.track_id)
+    def _update_track_by_id(
+        self, cursor: sqlite3.Cursor, track_id: int, track: Track
+    ) -> int:
+        row = cursor.execute(
+            "SELECT track_id FROM tracks WHERE track_id = ?",
+            (track_id,),
+        ).fetchone()
+        if not row:
+            raise EntityNotFoundError(entity_name="Track", entity_id=track_id)
+        cursor.execute(
+            """
+            UPDATE tracks
+            SET spotify_id = ?,
+                title = ?,
+                artist = ?,
+                album = ?,
+                duration_seconds = ?,
+                genre = ?,
+                country = ?,
+                release_year = ?,
+                cover_url = ?,
+                itunes_preview_url = ?,
+                explicit = ?,
+                is_deleted = ?
+            WHERE track_id = ?
+            """,
+            (
+                track.spotify_id,
+                track.title,
+                track.artist,
+                track.album,
+                track.duration_seconds,
+                track.genre or "",
+                track.country,
+                track.release_year,
+                track.cover_url,
+                track.itunes_preview_url,
+                1 if track.explicit else 0,
+                1 if track.is_deleted else 0,
+                track_id,
+            ),
+        )
+        return track_id
 
-        if track.track_id is None and track.spotify_id:
-            existing = self.find_by_spotify_id(track.spotify_id)
-            if existing is not None and existing.track_id is not None:
-                self.conn.execute(
-                    """
-                    UPDATE tracks
-                    SET title = ?,
-                        artist = ?,
-                        album = ?,
-                        duration_seconds = ?,
-                        genre = ?,
-                        country = ?,
-                        release_year = ?,
-                        cover_url = ?,
-                        itunes_preview_url = coalesce(?, itunes_preview_url),
-                        explicit = ?,
-                        is_deleted = ?
-                    WHERE track_id = ?
-                    """,
-                    (
-                        track.title,
-                        track.artist,
-                        track.album,
-                        track.duration_seconds,
-                        track.genre or "",
-                        track.country,
-                        track.release_year,
-                        track.cover_url,
-                        track.itunes_preview_url,
-                        1 if track.explicit else 0,
-                        1 if track.is_deleted else 0,
-                        existing.track_id,
-                    ),
-                )
-                self.conn.commit()
-                return self.find_by_id(existing.track_id) or existing
+    def _update_track_by_spotify_id(
+        self, cursor: sqlite3.Cursor, track: Track
+    ) -> int | None:
+        if not track.spotify_id:
+            return None
+        row = cursor.execute(
+            "SELECT track_id FROM tracks WHERE spotify_id = ?",
+            (track.spotify_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        existing_id = int(row["track_id"])
+        cursor.execute(
+            """
+            UPDATE tracks
+            SET title = ?,
+                artist = ?,
+                album = ?,
+                duration_seconds = ?,
+                genre = ?,
+                country = ?,
+                release_year = ?,
+                cover_url = ?,
+                itunes_preview_url = coalesce(?, itunes_preview_url),
+                explicit = ?,
+                is_deleted = ?
+            WHERE track_id = ?
+            """,
+            (
+                track.title,
+                track.artist,
+                track.album,
+                track.duration_seconds,
+                track.genre or "",
+                track.country,
+                track.release_year,
+                track.cover_url,
+                track.itunes_preview_url,
+                1 if track.explicit else 0,
+                1 if track.is_deleted else 0,
+                existing_id,
+            ),
+        )
+        return existing_id
 
+    def _insert_track(self, cursor: sqlite3.Cursor, track: Track) -> int | None:
         created_at_str = (track.created_at or datetime.now(UTC)).isoformat()
-        cursor = self.conn.execute(
+        cursor.execute(
             """
             INSERT INTO tracks (
                 spotify_id, title, artist, album, duration_seconds,
@@ -309,10 +319,19 @@ class SQLiteTrackRepository(TrackRepositoryPort):
                 created_at_str,
             ),
         )
-        self.conn.commit()
-        new_id = cursor.lastrowid
-        if new_id is not None:
-            return self.find_by_id(new_id) or track
+        return cursor.lastrowid
+
+    def save(self, track: Track) -> Track:
+        target_id: int | None = None
+        with transaction(self.conn) as cursor:
+            if track.track_id is not None:
+                target_id = self._update_track_by_id(cursor, track.track_id, track)
+            else:
+                target_id = self._update_track_by_spotify_id(cursor, track)
+                if target_id is None:
+                    target_id = self._insert_track(cursor, track)
+        if target_id is not None:
+            return self.find_by_id(target_id) or track
         return track
 
     def list_active(
@@ -456,64 +475,64 @@ class SQLiteTrackRepository(TrackRepositoryPort):
 
         now_iso = datetime.now(UTC).isoformat()
         rows = [self._track_insert_tuple(t, now_iso) for t in tracks]
-        self.conn.execute(
-            """
-            CREATE TEMP TABLE IF NOT EXISTS _stage_tracks (
-                spotify_id TEXT,
-                title TEXT NOT NULL,
-                artist TEXT NOT NULL,
-                album TEXT,
-                duration_seconds INTEGER NOT NULL,
-                genre TEXT NOT NULL,
-                country TEXT,
-                release_year INTEGER,
-                cover_url TEXT,
-                itunes_preview_url TEXT,
-                explicit INTEGER NOT NULL,
-                is_deleted INTEGER NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        self.conn.execute("DELETE FROM _stage_tracks")
-        self.conn.executemany(
-            """
-            INSERT INTO _stage_tracks (
-                spotify_id, title, artist, album, duration_seconds, genre,
-                country, release_year, cover_url, itunes_preview_url,
-                explicit, is_deleted, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            rows,
-        )
-        cursor = self.conn.execute(
-            """
-            INSERT INTO tracks (
-                spotify_id, title, artist, album, duration_seconds, genre,
-                country, release_year, cover_url, itunes_preview_url,
-                explicit, is_deleted, created_at
-            )
-            SELECT
-                s.spotify_id, s.title, s.artist, s.album, s.duration_seconds, s.genre,
-                s.country, s.release_year, s.cover_url, s.itunes_preview_url,
-                s.explicit, s.is_deleted, s.created_at
-            FROM _stage_tracks s
-            WHERE NOT (
-                s.spotify_id IS NOT NULL
-                AND EXISTS (
-                    SELECT 1 FROM tracks t WHERE t.spotify_id = s.spotify_id
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                CREATE TEMP TABLE IF NOT EXISTS _stage_tracks (
+                    spotify_id TEXT,
+                    title TEXT NOT NULL,
+                    artist TEXT NOT NULL,
+                    album TEXT,
+                    duration_seconds INTEGER NOT NULL,
+                    genre TEXT NOT NULL,
+                    country TEXT,
+                    release_year INTEGER,
+                    cover_url TEXT,
+                    itunes_preview_url TEXT,
+                    explicit INTEGER NOT NULL,
+                    is_deleted INTEGER NOT NULL,
+                    created_at TEXT NOT NULL
                 )
+                """
             )
-            AND NOT EXISTS (
-                SELECT 1 FROM tracks t
-                WHERE lower(t.title) = lower(s.title)
-                  AND lower(t.artist) = lower(s.artist)
+            cursor.execute("DELETE FROM _stage_tracks")
+            cursor.executemany(
+                """
+                INSERT INTO _stage_tracks (
+                    spotify_id, title, artist, album, duration_seconds, genre,
+                    country, release_year, cover_url, itunes_preview_url,
+                    explicit, is_deleted, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
             )
-            """
-        )
-        inserted = max(cursor.rowcount, 0)
-        self.conn.execute("DELETE FROM _stage_tracks")
-        self.conn.commit()
+            cursor.execute(
+                """
+                INSERT INTO tracks (
+                    spotify_id, title, artist, album, duration_seconds, genre,
+                    country, release_year, cover_url, itunes_preview_url,
+                    explicit, is_deleted, created_at
+                )
+                SELECT
+                    s.spotify_id, s.title, s.artist, s.album, s.duration_seconds, s.genre,
+                    s.country, s.release_year, s.cover_url, s.itunes_preview_url,
+                    s.explicit, s.is_deleted, s.created_at
+                FROM _stage_tracks s
+                WHERE NOT (
+                    s.spotify_id IS NOT NULL
+                    AND EXISTS (
+                        SELECT 1 FROM tracks t WHERE t.spotify_id = s.spotify_id
+                    )
+                )
+                AND NOT EXISTS (
+                    SELECT 1 FROM tracks t
+                    WHERE lower(t.title) = lower(s.title)
+                      AND lower(t.artist) = lower(s.artist)
+                )
+                """
+            )
+            inserted = max(cursor.rowcount, 0)
+            cursor.execute("DELETE FROM _stage_tracks")
         return inserted, 0
 
 

@@ -156,6 +156,14 @@ class User:
         self.spotify_id = cleaned
         return self
 
+    def unlink_spotify(self) -> Self:
+        self.spotify_id = None
+        self.spotify_premium = False
+        self.spotify_access_token = None
+        self.spotify_refresh_token = None
+        self.spotify_token_expires_at = None
+        return self
+
     def update_spotify_premium(self, is_premium: bool) -> Self:
         self.spotify_premium = bool(is_premium)
         return self

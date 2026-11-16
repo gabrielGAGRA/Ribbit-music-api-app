@@ -71,6 +71,11 @@ def test_load_settings_defaults_and_env_overrides(
         "APP_VERSION",
         "ENVIRONMENT",
         "LOG_LEVEL",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GCP_PROJECT_ID",
+        "GOOGLE_CLOUD_PROJECT",
+        "FIRESTORE_ENABLED",
+        "FIRESTORE_DATABASE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -80,6 +85,8 @@ def test_load_settings_defaults_and_env_overrides(
     assert default_settings.spotify_client_id is None
     assert default_settings.app_title == "Ribbit Platform API"
     assert default_settings.environment == "development"
+    assert default_settings.gcp_project_id is None
+    assert default_settings.firestore_enabled is False
 
     monkeypatch.setenv("DATABASE_URL", "sqlite:///custom_test.db")
     monkeypatch.setenv("PASSWORD_HASH_ITERATIONS", "15000")
@@ -87,6 +94,7 @@ def test_load_settings_defaults_and_env_overrides(
     monkeypatch.setenv("APP_TITLE", "Custom Ribbit")
     monkeypatch.setenv("ENVIRONMENT", "staging")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    monkeypatch.setenv("GCP_PROJECT_ID", "ribbit-proj-123")
 
     custom_settings = load_settings()
     assert custom_settings.database_path == "custom_test.db"
@@ -95,6 +103,8 @@ def test_load_settings_defaults_and_env_overrides(
     assert custom_settings.app_title == "Custom Ribbit"
     assert custom_settings.environment == "staging"
     assert custom_settings.log_level == "DEBUG"
+    assert custom_settings.gcp_project_id == "ribbit-proj-123"
+    assert custom_settings.firestore_enabled is True
 
 
 def test_load_settings_invalid_iterations_falls_back_to_default(

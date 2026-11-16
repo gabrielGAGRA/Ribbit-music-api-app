@@ -1,11 +1,13 @@
 """SQLite implementation of the user persistence port."""
 
 from datetime import UTC, datetime
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.user import User
+from app.infrastructure.repositories.connection import transaction
 
 
 def _row_to_user(row: sqlite3.Row) -> User:
@@ -71,10 +73,13 @@ def _row_to_user(row: sqlite3.Row) -> User:
 class SQLiteUserRepository(UserRepositoryPort):
     """SQLite adapter implementing UserRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
 
-    def find_by_id(self, user_id: int) -> User | None:
+    def _find_by_id_local(self, user_id: int) -> User | None:
         cursor = self.conn.execute(
             "SELECT * FROM users WHERE user_id = ?",
             (user_id,),
@@ -82,7 +87,14 @@ class SQLiteUserRepository(UserRepositoryPort):
         row = cursor.fetchone()
         return _row_to_user(row) if row else None
 
+    def find_by_id(self, user_id: int) -> User | None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
+        return self._find_by_id_local(user_id)
+
     def find_by_email(self, email: str) -> User | None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM users WHERE lower(email) = ?",
             (email.lower().strip(),),
@@ -91,6 +103,8 @@ class SQLiteUserRepository(UserRepositoryPort):
         return _row_to_user(row) if row else None
 
     def find_by_spotify_id(self, spotify_id: str) -> User | None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM users WHERE spotify_id = ?",
             (spotify_id.strip(),),
@@ -106,12 +120,16 @@ class SQLiteUserRepository(UserRepositoryPort):
             ",".join(sorted(user.favorite_genres)) if user.favorite_genres else None
         )
         if user.user_id is not None:
-            cursor = self.conn.execute(
-                "SELECT user_id FROM users WHERE user_id = ?",
-                (user.user_id,),
-            )
-            if cursor.fetchone():
-                self.conn.execute(
+            with transaction(self.conn) as cursor:
+                cursor.execute(
+                    "SELECT user_id FROM users WHERE user_id = ?",
+                    (user.user_id,),
+                )
+                if not cursor.fetchone():
+                    raise EntityNotFoundError(
+                        entity_name="User", entity_id=user.user_id
+                    )
+                cursor.execute(
                     """
                     UPDATE users
                     SET email = ?,
@@ -129,7 +147,11 @@ class SQLiteUserRepository(UserRepositoryPort):
                         favorite_genres = ?,
                         preferred_theme = ?,
                         is_admin = ?,
-                        birth_date = ?
+                        birth_date = ?,
+                        created_at = CASE
+                            WHEN created_at = '1970-01-01T00:00:00+00:00' THEN ?
+                            ELSE created_at
+                        END
                     WHERE user_id = ?
                     """,
                     (
@@ -153,63 +175,89 @@ class SQLiteUserRepository(UserRepositoryPort):
                         user.preferred_theme,
                         1 if user.is_admin else 0,
                         user.birth_date,
+                        datetime.now(UTC).isoformat(),
                         user.user_id,
                     ),
                 )
-                self.conn.commit()
-                return self.find_by_id(user.user_id) or user
-            raise EntityNotFoundError(entity_name="User", entity_id=user.user_id)
+            if self._sync is not None:
+                self._sync.push_user_by_id(user.user_id)
+            return self._find_by_id_local(user.user_id) or user
 
         created_at_str = (user.created_at or datetime.now(UTC)).isoformat()
-        cursor = self.conn.execute(
-            """
-            INSERT INTO users (
-                email, password_hash, spotify_id, spotify_premium,
-                spotify_access_token, spotify_refresh_token, spotify_token_expires_at,
-                display_name, age,
-                plan_id, primary_account_id, blocked_genres, favorite_genres,
-                preferred_theme, is_admin, created_at, birth_date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                user.email.lower().strip(),
-                user.password_hash,
-                user.spotify_id,
-                1 if user.spotify_premium else 0,
-                user.spotify_access_token,
-                user.spotify_refresh_token,
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO users (
+                    email, password_hash, spotify_id, spotify_premium,
+                    spotify_access_token, spotify_refresh_token, spotify_token_expires_at,
+                    display_name, age,
+                    plan_id, primary_account_id, blocked_genres, favorite_genres,
+                    preferred_theme, is_admin, created_at, birth_date
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
                 (
-                    user.spotify_token_expires_at.isoformat()
-                    if user.spotify_token_expires_at is not None
-                    else None
+                    user.email.lower().strip(),
+                    user.password_hash,
+                    user.spotify_id,
+                    1 if user.spotify_premium else 0,
+                    user.spotify_access_token,
+                    user.spotify_refresh_token,
+                    (
+                        user.spotify_token_expires_at.isoformat()
+                        if user.spotify_token_expires_at is not None
+                        else None
+                    ),
+                    user.display_name,
+                    user.age,
+                    user.plan_id,
+                    user.primary_account_id,
+                    blocked_str,
+                    favorite_str,
+                    user.preferred_theme,
+                    1 if user.is_admin else 0,
+                    created_at_str,
+                    user.birth_date,
                 ),
-                user.display_name,
-                user.age,
-                user.plan_id,
-                user.primary_account_id,
-                blocked_str,
-                favorite_str,
-                user.preferred_theme,
-                1 if user.is_admin else 0,
-                created_at_str,
-                user.birth_date,
-            ),
-        )
-        self.conn.commit()
-        new_id = cursor.lastrowid
+            )
+            new_id = cursor.lastrowid
         if new_id is not None:
-            return self.find_by_id(new_id) or user
+            if self._sync is not None:
+                self._sync.push_user_by_id(new_id)
+            return self._find_by_id_local(new_id) or user
         return user
 
     def delete(self, user_id: int) -> bool:
-        cursor = self.conn.execute(
-            "DELETE FROM users WHERE user_id = ?",
-            (user_id,),
-        )
-        self.conn.commit()
-        return cursor.rowcount > 0
+        child_docs: list[tuple[str, str]] = []
+        dep_ids: list[int] = []
+        with transaction(self.conn) as cursor:
+            row = cursor.execute(
+                "SELECT email FROM users WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            email = str(row["email"]) if row and row["email"] else None
+            dep_ids = [
+                int(r["user_id"])
+                for r in cursor.execute(
+                    "SELECT user_id FROM users WHERE primary_account_id = ?",
+                    (user_id,),
+                ).fetchall()
+            ]
+            if email and self._sync is not None:
+                child_docs = self._sync.prepare_user_delete(cursor, user_id, email)
+            cursor.execute(
+                "DELETE FROM users WHERE user_id = ?",
+                (user_id,),
+            )
+            deleted = cursor.rowcount > 0
+        if deleted and email and self._sync is not None:
+            for dep_id in dep_ids:
+                self._sync.push_user_by_id(dep_id)
+            self._sync.push_user_deleted(email, child_docs)
+        return deleted
 
     def list_dependents(self, primary_account_id: int) -> list[User]:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM users WHERE primary_account_id = ?",
             (primary_account_id,),
@@ -218,6 +266,8 @@ class SQLiteUserRepository(UserRepositoryPort):
         return [_row_to_user(r) for r in rows]
 
     def list_all(self) -> list[User]:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         cursor = self.conn.execute("SELECT * FROM users ORDER BY user_id ASC")
         rows = cursor.fetchall()
         return [_row_to_user(r) for r in rows]
