@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
 from app.domain.exceptions import (
+    AuthenticationRequiredError,
     BusinessRuleViolationError,
     DuplicateEntityError,
     EntityNotFoundError,
@@ -45,6 +46,14 @@ class AddFamilyMemberUseCase:
         if not dependent_user:
             raise EntityNotFoundError(f"Dependent user {dependent_user_id} not found.")
 
+        return self._link_existing_user(primary_user, dependent_user, plan)
+
+    def _link_existing_user(
+        self,
+        primary_user: User,
+        dependent_user: User,
+        plan: Plan,
+    ) -> User:
         if dependent_user.primary_account_id == primary_user.user_id:
             return dependent_user
 
@@ -114,6 +123,41 @@ class AddFamilyMemberUseCase:
         )
         return self.user_repo.save(new_dependent)
 
+    def _add_by_credentials(
+        self,
+        primary_user: User,
+        plan: Plan,
+        email: str,
+        password: str,
+        display_name: str | None,
+        birth_date: str | None,
+    ) -> User:
+        email_clean = email.strip().lower()
+        existing_user = self.user_repo.find_by_email(email_clean)
+        if existing_user:
+            if self.password_hasher is None:
+                raise RuntimeError(
+                    "Password hasher is required to verify existing account credentials."
+                )
+            if not self.password_hasher.verify_password(
+                password, existing_user.password_hash
+            ):
+                raise AuthenticationRequiredError("Invalid credentials.")
+            if existing_user.user_id is None:
+                raise RuntimeError(
+                    "Existing family member account is missing its persisted ID."
+                )
+            return self._link_existing_user(primary_user, existing_user, plan)
+
+        return self._provision_dependent(
+            primary_user=primary_user,
+            plan=plan,
+            email=email_clean,
+            password=password,
+            display_name=display_name,
+            birth_date=birth_date,
+        )
+
     def execute(
         self,
         primary_user_id: int,
@@ -156,7 +200,7 @@ class AddFamilyMemberUseCase:
             return self._link_existing(primary_user, dependent_user_id, plan)
 
         if email and password:
-            return self._provision_dependent(
+            return self._add_by_credentials(
                 primary_user=primary_user,
                 plan=plan,
                 email=email,
