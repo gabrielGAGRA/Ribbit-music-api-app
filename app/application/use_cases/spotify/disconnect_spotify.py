@@ -22,4 +22,3 @@ class DisconnectSpotifyAccountUseCase:
 
 
 __all__ = ["DisconnectSpotifyAccountUseCase"]
-
