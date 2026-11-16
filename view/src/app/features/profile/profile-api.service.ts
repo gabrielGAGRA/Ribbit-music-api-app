@@ -3,8 +3,12 @@ import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
 import type {
   ActionSuccessApiDto,
+  AddFamilyMemberApiRequest,
   InteractionApiDto,
+  SpotifyAuthorizeUrlApiResponse,
+  SpotifyConnectCallbackApiRequest,
   SwipeApiAction,
+  UpdateMemberParentalControlsApiRequest,
   UserApiDto,
   UserProfileApiDto,
 } from '@ribbit/shared-types';
@@ -44,6 +48,16 @@ export class ProfileApiService {
     return this.http.delete<UserApiDto>('/api/spotify/connection');
   }
 
+  /** Fetches the signed Spotify OAuth 2.0 authorization URL from GET /api/spotify/authorize. */
+  getSpotifyAuthorizeUrl(): Observable<SpotifyAuthorizeUrlApiResponse> {
+    return this.http.get<SpotifyAuthorizeUrlApiResponse>('/api/spotify/authorize');
+  }
+
+  /** Exchanges the Spotify OAuth authorization code and state token via POST /api/spotify/callback. */
+  connectSpotifyCallback(payload: SpotifyConnectCallbackApiRequest): Observable<UserApiDto> {
+    return this.http.post<UserApiDto>('/api/spotify/callback', payload);
+  }
+
   /** Deletes the authenticated user's account and associated data. */
   deleteAccount(): Observable<ActionSuccessApiDto> {
     return this.http.delete<ActionSuccessApiDto>('/api/profile/account');
@@ -76,5 +90,55 @@ export class ProfileApiService {
     return this.http.put<UserApiDto>('/api/profile/blocked-genres', {
       blocked_genres: [...blockedGenres],
     });
+  }
+
+  /** Gets preferred theme ('light' | 'dark') for user profile. */
+  getTheme(): Observable<string> {
+    return this.http.get<string>('/api/profile/theme');
+  }
+
+  /** Updates preferred theme ('light' | 'dark') for user profile. */
+  updateTheme(theme: 'light' | 'dark'): Observable<UserApiDto> {
+    return this.http.put<UserApiDto>('/api/profile/theme', {
+      preferred_theme: theme,
+    });
+  }
+
+  /** Gets favorite genres for user profile. */
+  getFavoriteGenres(): Observable<readonly string[]> {
+    return this.http.get<readonly string[]>('/api/profile/favorite-genres');
+  }
+
+  /** Updates favorite genres for user profile. */
+  updateFavoriteGenres(favoriteGenres: readonly string[]): Observable<UserApiDto> {
+    return this.http.put<UserApiDto>('/api/profile/favorite-genres', {
+      favorite_genres: [...favoriteGenres],
+    });
+  }
+
+  /** Lists dependent user profiles enrolled in the authenticated user's family plan. */
+  listFamilyMembers(): Observable<UserApiDto[]> {
+    return this.http.get<UserApiDto[]>('/api/profile/family/members');
+  }
+
+  /** Adds or registers a dependent user to the authenticated user's family plan. */
+  addFamilyMember(payload: AddFamilyMemberApiRequest): Observable<UserApiDto> {
+    return this.http.post<UserApiDto>('/api/profile/family/members', payload);
+  }
+
+  /** Removes a dependent user profile from the authenticated user's family plan. */
+  removeFamilyMember(memberId: number): Observable<UserApiDto> {
+    return this.http.delete<UserApiDto>(`/api/profile/family/members/${memberId}`);
+  }
+
+  /** Updates parental control restrictions (blocked genres and artists) for a dependent account. */
+  updateFamilyMemberParentalControls(
+    memberId: number,
+    payload: UpdateMemberParentalControlsApiRequest,
+  ): Observable<UserApiDto> {
+    return this.http.put<UserApiDto>(
+      `/api/profile/family/members/${memberId}/parental-controls`,
+      payload,
+    );
   }
 }

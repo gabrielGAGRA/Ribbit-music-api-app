@@ -70,6 +70,26 @@ function setStoredGenres(key: string, value: readonly string[]): void {
   }
 }
 
+function getStoredTheme(fallback: 'light' | 'dark'): 'light' | 'dark' {
+  try {
+    if (typeof localStorage === 'undefined') return fallback;
+    const raw = localStorage.getItem('ribbit-theme');
+    return raw === 'light' || raw === 'dark' ? raw : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setStoredTheme(theme: 'light' | 'dark'): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('ribbit-theme', theme);
+    }
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
 const DEFAULT_JAM_STATE: JamState = {
   active: false,
   code: '',
@@ -116,21 +136,33 @@ export class RibbitStateService implements OnDestroy {
 
   readonly playlists = signal<readonly Playlist[]>([]);
   readonly selectedGenres = signal<readonly string[]>(
-    getStoredGenres('ribbit-genres', ['Indie', 'R&B / Soul', 'Eletrônica']),
+    getStoredGenres('ribbit-genres', ['Rock', 'Pop', 'Indie']).slice(0, 3),
   );
   readonly blockedGenres = signal<readonly string[]>(this.initialUser?.blocked_genres ?? []);
+  readonly blockedArtists = signal<readonly string[]>(this.initialUser?.blocked_artists ?? []);
 
   readonly userId = signal<number | null>(this.initialUser?.user_id ?? null);
+  readonly primaryAccountId = signal<number | null>(this.initialUser?.primary_account_id ?? null);
   readonly userEmail = signal<string>(this.initialUser?.email ?? '');
   readonly userName = signal<string>(this.initialUser?.display_name ?? 'Visitante');
   readonly currentPlanId = signal<number>(this.initialUser?.plan_id ?? 1);
   readonly currentPlan = signal<string>('Free');
   readonly spotifyId = signal<string | null>(this.initialUser?.spotify_id ?? null);
   readonly spotifyPremium = signal<boolean>(Boolean(this.initialUser?.spotify_premium));
+  readonly preferredTheme = signal<'light' | 'dark'>(
+    getStoredTheme(
+      this.initialUser?.preferred_theme === 'light' || this.initialUser?.preferred_theme === 'dark'
+        ? this.initialUser.preferred_theme
+        : 'dark',
+    ),
+  );
+  readonly favoriteGenres = signal<readonly string[]>(this.initialUser?.favorite_genres ?? []);
 
   readonly toast = signal<string>('');
   readonly activePage = signal<string>('discover');
-  readonly authView = signal<'app' | 'login' | 'register'>(this.hasInitialToken ? 'app' : 'login');
+  readonly authView = signal<'app' | 'login' | 'register' | 'forgot-password'>(
+    this.hasInitialToken ? 'app' : 'login',
+  );
   readonly activeModal = signal<string | null>(null);
   readonly mode = signal<string>('Para você');
 
@@ -163,6 +195,7 @@ export class RibbitStateService implements OnDestroy {
 
   readonly jamState = signal<JamState>(DEFAULT_JAM_STATE);
   readonly jamDeckSongs = signal<readonly Song[]>([]);
+  readonly jamDeckNextCursor = signal<number | null>(null);
   readonly jamVotes = computed<number>(() => this.jamState().votes);
 
   readonly currentIndex = signal<number>(0);
@@ -184,6 +217,7 @@ export class RibbitStateService implements OnDestroy {
   readonly isSpotifyLinked = computed<boolean>(() => Boolean(this.spotifyId()));
 
   constructor() {
+    this.applyTheme(this.preferredTheme());
     this.unsubscribeUnauthorized = this.sessionNotifier.onUnauthorized(() => {
       this.handleUnauthorizedSession();
     });
@@ -236,8 +270,8 @@ export class RibbitStateService implements OnDestroy {
     this.setModal('details');
   }
 
-  /** Switches between authenticated shell, login, and registration views. */
-  setAuthView(view: 'app' | 'login' | 'register'): void {
+  /** Switches between authenticated shell, login, registration, and forgot-password views. */
+  setAuthView(view: 'app' | 'login' | 'register' | 'forgot-password'): void {
     this.authView.set(view);
   }
 
@@ -250,6 +284,15 @@ export class RibbitStateService implements OnDestroy {
     }
     this.authView.set('app');
     this.hydrateAuthenticatedSession();
+
+    // Trigger onboarding on first access
+    if (typeof localStorage !== 'undefined') {
+      const email = auth.user.email;
+      const seen = localStorage.getItem(`ribbit:onboarding_done:${email}`);
+      if (!seen) {
+        this.setModal('onboarding');
+      }
+    }
   }
 
   /** Logs the current user out and clears persisted session state. */
@@ -281,10 +324,39 @@ export class RibbitStateService implements OnDestroy {
       },
     });
 
+    this.refreshUserPreferences();
     this.refreshCatalogAndFeed();
     this.refreshPlaylists();
     this.refreshInteractedCollections();
     this.loadNextDiscoveryTrack();
+  }
+
+  /** Synchronizes blocked genres, favorite genres, and theme preference from /api/profile/*. */
+  refreshUserPreferences(): void {
+    if (!readAuthToken()) return;
+    forkJoin({
+      blocked: this.profileApi
+        .listBlockedGenres()
+        .pipe(catchError(() => of(null as readonly string[] | null))),
+      favorites: this.profileApi
+        .getFavoriteGenres()
+        .pipe(catchError(() => of(null as readonly string[] | null))),
+      theme: this.profileApi.getTheme().pipe(catchError(() => of(null as string | null))),
+    }).subscribe(({ blocked, favorites, theme }) => {
+      if (blocked !== null) {
+        this.blockedGenres.set([...blocked]);
+      }
+      if (favorites !== null && favorites.length > 0) {
+        this.favoriteGenres.set([...favorites]);
+        this.selectedGenres.set([...favorites]);
+        setStoredGenres('ribbit-genres', favorites);
+      }
+      if (theme === 'light' || theme === 'dark') {
+        this.preferredTheme.set(theme);
+        this.applyTheme(theme);
+        setStoredTheme(theme);
+      }
+    });
   }
 
   /** Fetches the next candidate song for the Discovery deck. */
@@ -378,7 +450,45 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
-  /** Sets the current plan label locally or initiates plan change flow. */
+  /** Applies and optionally persists preferred theme ('light' | 'dark'). */
+  setTheme(theme: 'light' | 'dark', persist = true): void {
+    this.preferredTheme.set(theme);
+    this.applyTheme(theme);
+    setStoredTheme(theme);
+    if (persist && readAuthToken()) {
+      this.profileApi.updateTheme(theme).subscribe({
+        error: () => {},
+      });
+    }
+  }
+
+  private applyTheme(theme: 'light' | 'dark'): void {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', theme);
+      if (document.body) {
+        document.body.setAttribute('data-theme', theme);
+      }
+    }
+  }
+
+  /** Saves favorite genres via /api/profile/favorite-genres (maximum 3 genres). */
+  saveFavoriteGenres(genres: readonly string[]): void {
+    const limited = genres.slice(0, 3);
+    this.favoriteGenres.set(limited);
+    this.selectedGenres.set(limited);
+    setStoredGenres('ribbit-genres', limited);
+    if (readAuthToken()) {
+      this.profileApi.updateFavoriteGenres(limited).subscribe({
+        next: () => {
+          this.loadNextDiscoveryTrack();
+          this.notify('Gêneros favoritos atualizados com sucesso!');
+        },
+        error: (err: unknown) => {
+          this.notify(toApiError(err).message);
+        },
+      });
+    }
+  }
   setPlan(planName: string): void {
     this.currentPlan.set(planName);
   }
@@ -479,6 +589,19 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
+  /** Unlinks the user's Spotify account and clears OAuth tokens. */
+  unlinkSpotifyAccount(): void {
+    this.profileApi.unlinkSpotify().subscribe({
+      next: (updatedUser) => {
+        this.applyUserDto(updatedUser);
+        this.notify('Conta do Spotify desvinculada com sucesso.');
+      },
+      error: (err: unknown) => {
+        this.notify(toApiError(err).message);
+      },
+    });
+  }
+
   /** Records a swipe decision on /api/discovery/interact and advances to the next track. */
   decide(kind: DecisionKind): void {
     const song = this.currentSong();
@@ -515,6 +638,34 @@ export class RibbitStateService implements OnDestroy {
       this.notify('Você ainda não fez nenhum swipe.');
       return;
     }
+
+    if (readAuthToken()) {
+      this.songService.undoSwipe().subscribe({
+        next: () => {
+          this.currentIndex.set(last.index);
+          if (last.song.trackId !== undefined) {
+            this.discoverySong.set(last.song);
+          }
+          this.isDeckEmpty.set(false);
+          this.lastSwiped.set(null);
+          this.history.update((items) => items.slice(0, -1));
+          this.audioPlayer.loadTrack(last.song.previewUrl);
+          this.refreshInteractedCollections();
+          this.notify('Último swipe desfeito. Avalie a faixa novamente.');
+        },
+        error: (err: unknown) => {
+          if (isPremiumRequiredError(err)) {
+            this.promptPlanUpgrade(
+              'Desfazer o último swipe é um recurso exclusivo dos planos Ribbit Pro e Família.',
+            );
+            return;
+          }
+          this.notify(toApiError(err).message);
+        },
+      });
+      return;
+    }
+
     this.currentIndex.set(last.index);
     if (last.song.trackId !== undefined) {
       this.discoverySong.set(last.song);
@@ -560,6 +711,29 @@ export class RibbitStateService implements OnDestroy {
       });
   }
 
+  private createLocalMockPlaylist(
+    name: string,
+    durationMinutes: number,
+    extraFilters: Omit<DeckPlaylistApiRequest, 'name' | 'duration_minutes'>,
+    seedSongs: readonly Song[],
+  ): Playlist {
+    const refId =
+      extraFilters.reference_playlist_id ??
+      extraFilters.source_playlist_id ??
+      extraFilters.referencePlaylistId;
+    return {
+      id: String(Date.now()),
+      playlistId: Date.now(),
+      name,
+      count: seedSongs.length,
+      duration: `${durationMinutes} min`,
+      songs: seedSongs,
+      ...(refId ? { referencePlaylistId: refId, sourcePlaylistId: refId } : {}),
+      ...(extraFilters.startDate ? { startDate: extraFilters.startDate } : {}),
+      ...(extraFilters.endDate ? { endDate: extraFilters.endDate } : {}),
+    };
+  }
+
   /** Creates a contextual playlist on the backend and optionally populates it with tracks. */
   createPlaylist(
     name: string,
@@ -568,7 +742,17 @@ export class RibbitStateService implements OnDestroy {
     seedSongs: readonly Song[] = [],
   ): void {
     const trimmedName = name.trim() || 'Minha nova frequência';
-    if (!readAuthToken()) return;
+    if (!readAuthToken()) {
+      const mockCreated = this.createLocalMockPlaylist(
+        trimmedName,
+        durationMinutes,
+        extraFilters,
+        seedSongs,
+      );
+      this.playlists.update((list) => [mockCreated, ...list]);
+      this.notify(`Playlist "${mockCreated.name}" criada na sua biblioteca.`);
+      return;
+    }
 
     this.playlistService
       .createDeckPlaylist({
@@ -592,20 +776,39 @@ export class RibbitStateService implements OnDestroy {
   addSongToPlaylist(playlistIndex: number, targetSong?: Song): void {
     const playlist = this.playlists()[playlistIndex];
     const song = targetSong ?? this.currentSong();
-    if (!playlist?.playlistId || song.trackId === undefined) {
-      this.notify('Selecione uma faixa válida para adicionar à playlist.');
+    if (!playlist) {
+      this.notify('Selecione uma playlist válida para adicionar a música.');
       return;
     }
 
-    this.playlistService.addTrackToPlaylist(playlist.playlistId, song.trackId).subscribe({
-      next: () => {
-        this.refreshSinglePlaylist(playlist.playlistId!);
-        this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
-      },
-      error: (err: unknown) => {
-        this.notify(toApiError(err).message);
-      },
-    });
+    const currentSongs = playlist.songs ?? [];
+    const exists = currentSongs.some(
+      (s) => (s.trackId && song.trackId && s.trackId === song.trackId) || s.title === song.title,
+    );
+    if (!exists) {
+      const updated: Playlist = {
+        ...playlist,
+        count: currentSongs.length + 1,
+        songs: [...currentSongs, song],
+      };
+      this.playlists.update((list) =>
+        list.map((item, idx) => (idx === playlistIndex ? updated : item)),
+      );
+    }
+
+    if (playlist.playlistId && song.trackId !== undefined && readAuthToken()) {
+      this.playlistService.addTrackToPlaylist(playlist.playlistId, song.trackId).subscribe({
+        next: () => {
+          this.refreshSinglePlaylist(playlist.playlistId!);
+          this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
+        },
+        error: (err: unknown) => {
+          this.notify(toApiError(err).message);
+        },
+      });
+    } else {
+      this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
+    }
   }
 
   /** Deletes a playlist by name or Playlist reference on the backend. */
@@ -771,6 +974,21 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
+  /** Advances the active Jam track immediately (host only) via POST /api/jams/{id}/advance. */
+  advanceJam(): void {
+    const jamId = this.jamState().jamId;
+    if (!jamId) return;
+    this.jamService.advanceJam(jamId).subscribe({
+      next: () => {
+        this.syncJamState(jamId);
+        this.notify('Faixa da Jam avançada pelo anfitrião.');
+      },
+      error: (err: unknown) => {
+        this.notify(toApiError(err).message);
+      },
+    });
+  }
+
   /** Saves a track from the Jam queue to the user's liked songs via POST /api/jams/{id}/save-queue-track. */
   saveJamQueueSong(song: Song): void {
     const jamId = this.jamState().jamId;
@@ -790,8 +1008,9 @@ export class RibbitStateService implements OnDestroy {
   closeOrLeaveJam(): void {
     const jam = this.jamState();
     this.stopJamPolling();
-    if (jam.jamId && jam.hostUserId === this.userId()) {
-      this.jamService.closeJam(jam.jamId).subscribe({
+    const jamId = jam.jamId ?? jam.roomId;
+    if (jamId && jam.hostUserId === this.userId()) {
+      this.jamService.closeJam(jamId).subscribe({
         next: () => {
           this.jamState.set(DEFAULT_JAM_STATE);
           this.notify('Jam encerrada para todos os participantes.');
@@ -898,10 +1117,11 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
-  /** Persists favorite genres locally for UI recommendations context. */
+  /** Persists favorite genres locally for UI recommendations context (maximum 3 genres). */
   setSelectedGenres(genres: readonly string[]): void {
-    this.selectedGenres.set(genres);
-    setStoredGenres('ribbit-genres', genres);
+    const limited = genres.slice(0, 3);
+    this.selectedGenres.set(limited);
+    setStoredGenres('ribbit-genres', limited);
   }
 
   /** Updates blocked genres on PUT /api/profile/blocked-genres (triggers upgrade modal on 403). */
@@ -928,15 +1148,26 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
-  private applyUserDto(user: UserApiDto): void {
+  applyUserDto(user: UserApiDto): void {
     writeStoredUser(user);
     this.userId.set(user.user_id);
+    this.primaryAccountId.set(user.primary_account_id ?? null);
     this.userEmail.set(user.email);
     this.userName.set(user.display_name);
     this.currentPlanId.set(user.plan_id);
     this.spotifyId.set(user.spotify_id ?? null);
     this.spotifyPremium.set(Boolean(user.spotify_premium));
     this.blockedGenres.set(user.blocked_genres ? [...user.blocked_genres] : []);
+    this.blockedArtists.set(user.blocked_artists ? [...user.blocked_artists] : []);
+    if (user.preferred_theme === 'light' || user.preferred_theme === 'dark') {
+      this.preferredTheme.set(user.preferred_theme);
+      this.applyTheme(user.preferred_theme);
+      setStoredTheme(user.preferred_theme);
+    }
+    if (user.favorite_genres && user.favorite_genres.length > 0) {
+      this.favoriteGenres.set([...user.favorite_genres]);
+      this.selectedGenres.set([...user.favorite_genres]);
+    }
   }
 
   private applyInteractedHistory(
@@ -1042,7 +1273,7 @@ export class RibbitStateService implements OnDestroy {
     const hours = Math.floor(jamDto.duration_minutes / 60);
     const mins = jamDto.duration_minutes % 60;
     this.jamState.set({
-      ...(jamId != null ? { jamId } : {}),
+      ...(jamId != null ? { jamId, roomId: jamId } : {}),
       hostUserId: jamDto.host_user_id,
       active: jamDto.is_active,
       code: jamDto.room_code,
@@ -1054,6 +1285,8 @@ export class RibbitStateService implements OnDestroy {
       accumulatedMinutes: Math.round(jamDto.accumulated_duration_seconds / 60),
       superlikesCount: jamDto.superlikes_used,
       superlikesLimit: jamDto.max_superlikes,
+      deckSource: (jamDto.deck_source as 'livre' | 'curtidas' | 'playlist') || 'livre',
+      ...(jamDto.source_playlist_id != null ? { sourcePlaylistId: jamDto.source_playlist_id } : {}),
       queueItems: [],
     });
 
@@ -1064,13 +1297,21 @@ export class RibbitStateService implements OnDestroy {
     }
   }
 
-  private loadJamDeck(jamId: number): void {
-    this.jamService.getJamDeck(jamId, 30).subscribe({
-      next: (deck) => {
-        this.jamDeckSongs.set(deck);
+  loadJamDeck(jamId: number, cursorId?: number): void {
+    this.jamService.getJamDeck(jamId, 30, cursorId).subscribe({
+      next: (page) => {
+        const songs = page.items.map((dto) => mapTrackDtoToSong(dto));
+        if (cursorId) {
+          this.jamDeckSongs.update((cur) => [...cur, ...songs]);
+        } else {
+          this.jamDeckSongs.set(songs);
+        }
+        this.jamDeckNextCursor.set(page.next_cursor ?? null);
       },
       error: () => {
-        this.jamDeckSongs.set(this.songs());
+        if (!cursorId) {
+          this.jamDeckSongs.set(this.songs());
+        }
       },
     });
   }
@@ -1145,6 +1386,8 @@ export class RibbitStateService implements OnDestroy {
     this.currentPlan.set('Free');
     this.currentPlanId.set(1);
     this.spotifyId.set(null);
+    this.blockedGenres.set([]);
+    this.blockedArtists.set([]);
     this.activeModal.set(null);
   }
 }
