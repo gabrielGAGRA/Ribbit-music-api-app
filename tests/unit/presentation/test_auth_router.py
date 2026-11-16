@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock
 
+lazy import pytest
+
 from app.application.dtos import AuthenticateUserCommand, RegisterUserCommand
 from app.application.dtos.auth_dtos import AuthResult
 from app.application.ports.services.token_service import TokenServicePort
@@ -89,7 +91,90 @@ def test_auth_router_exposes_only_english_routes() -> None:
     from app.presentation.routers.auth import router
 
     paths = [getattr(route, "path", None) for route in router.routes]
-    assert paths == ["/api/auth/register", "/api/auth/login", "/api/auth/google"]
+    assert paths == [
+        "/api/auth/register",
+        "/api/auth/login",
+        "/api/auth/google",
+        "/api/auth/google/client-id",
+    ]
+
+
+def test_auth_router_get_google_client_id() -> None:
+    from app.config import Settings
+    from app.presentation.routers.auth import get_google_client_id
+
+    response = get_google_client_id(
+        settings=Settings(google_client_id="my-google-client-id")
+    )
+
+    assert response.client_id == "my-google-client-id"
+
+
+def test_http_get_google_client_id_resolves_settings_via_di() -> None:
+    import sqlite3
+
+    from app.composition import create_app
+    from app.config import Settings
+    from tests.e2e.test_client import TestClient
+
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        app = create_app(
+            settings=Settings(
+                database_path=":memory:",
+                password_hash_iterations=1_000,
+                google_client_id="di-client-id.apps.googleusercontent.com",
+            ),
+            connection=conn,
+        )
+        client = TestClient(app)
+
+        response = client.get("/api/auth/google/client-id")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "client_id": "di-client-id.apps.googleusercontent.com"
+        }
+    finally:
+        conn.close()
+
+
+def test_http_get_google_client_id_uses_only_injected_settings_without_reloading_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import sqlite3
+
+    from app.composition import create_app
+    from app.config import Settings
+    from tests.e2e.test_client import TestClient
+
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.delenv("RIBBIT_SECRET_KEY", raising=False)
+    monkeypatch.delenv("SECRET_KEY", raising=False)
+    monkeypatch.setenv("GOOGLE_CLIENT_ID", "env-client.apps.googleusercontent.com")
+
+    conn = sqlite3.connect(":memory:", check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        app = create_app(
+            settings=Settings(
+                database_path=":memory:",
+                password_hash_iterations=1_000,
+                environment="production",
+                secret_key="p" * 40,
+                google_client_id=None,
+            ),
+            connection=conn,
+        )
+        client = TestClient(app)
+
+        response = client.get("/api/auth/google/client-id")
+
+        assert response.status_code == 200
+        assert response.json() == {"client_id": None}
+    finally:
+        conn.close()
 
 
 def test_auth_router_google_login_success() -> None:

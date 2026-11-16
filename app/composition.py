@@ -392,6 +392,7 @@ def build_container(
         GCSTrackCatalogAdapter(
             bucket_name=settings.gcs_bucket_name,
             file_path=settings.gcs_tracks_file_path,
+            max_tracks=settings.gcs_max_ingest_tracks,
         )
         if settings.gcs_bucket_name
         else None

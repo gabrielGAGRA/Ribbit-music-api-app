@@ -884,3 +884,119 @@ def test_write_track_delta_matches_tracks_schema_and_fetch_tracks_includes_new_t
     assert new_track.release_year == 2025
     assert new_track.cover_url == "https://itunes.example.com/new.jpg"
     assert new_track.itunes_preview_url == "https://itunes.example.com/new.m4a"
+
+
+def test_iter_track_batches_respects_max_tracks_and_filters_partial_deltas() -> None:
+    from pathlib import Path
+
+    base_parquet = _build_test_parquet_bytes()
+    delta_1_bytes = _parquet_bytes(
+        {
+            "title": ["Bohemian Rhapsody"],
+            "artist": ["Queen"],
+            "itunes_preview_url": ["https://audio-ssl.itunes.apple.com/queen.m4a"],
+            "cover_url": ["https://is1-ssl.mzstatic.com/queen.jpg"],
+            "spotify_id": ["spot-1"],
+        }
+    )
+    # Full standalone delta (includes duration_seconds and explicit) should be ingested
+    delta_2_bytes = _parquet_bytes(
+        {
+            "title": ["Extra Delta Track"],
+            "artist": ["Delta Artist"],
+            "duration_seconds": [215],
+            "explicit": [True],
+            "itunes_preview_url": ["https://audio-ssl.itunes.apple.com/extra.m4a"],
+            "cover_url": ["https://is1-ssl.mzstatic.com/extra.jpg"],
+            "spotify_id": ["spot-extra"],
+        }
+    )
+    # Partial update delta for an explicit track beyond max_tracks must NOT become a new track
+    delta_partial_bytes = _parquet_bytes(
+        {
+            "title": ["Explicit Beyond Limit"],
+            "artist": ["Restricted Artist"],
+            "genre": ["Hip-Hop"],
+            "duration_seconds": [None],
+            "explicit": [None],
+            "spotify_id": ["spot-beyond"],
+        }
+    )
+
+    def _write_base(dest_path: str, **_kwargs: Any) -> None:
+        Path(dest_path).write_bytes(base_parquet)
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_to_filename.side_effect = _write_base
+    mock_bucket.blob.return_value = mock_base_blob
+    mock_client.bucket.return_value = mock_bucket
+
+    blob_1 = MagicMock()
+    blob_1.name = "Songs/deltas/d1.parquet"
+    blob_1.download_as_bytes.return_value = delta_1_bytes
+    blob_2 = MagicMock()
+    blob_2.name = "Songs/deltas/d2.parquet"
+    blob_2.download_as_bytes.return_value = delta_2_bytes
+    blob_3 = MagicMock()
+    blob_3.name = "Songs/deltas/d3_partial.parquet"
+    blob_3.download_as_bytes.return_value = delta_partial_bytes
+    mock_client.list_blobs.return_value = [blob_1, blob_2, blob_3]
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+        max_tracks=1,
+    )
+
+    batches = list(adapter.iter_track_batches(batch_size=10))
+    assert len(batches) == 2
+    assert len(batches[0]) == 1
+    assert batches[0][0].title == "Bohemian Rhapsody"
+    assert batches[0][0].cover_url == "https://is1-ssl.mzstatic.com/queen.jpg"
+    assert len(batches[1]) == 1
+    assert batches[1][0].title == "Extra Delta Track"
+    assert batches[1][0].explicit is True
+    assert batches[1][0].duration_seconds == 215
+
+
+def test_fetch_tracks_skips_missing_delta_blob_without_dropping_other_deltas() -> None:
+    from google.api_core.exceptions import NotFound
+
+    base_parquet = _build_test_parquet_bytes()
+    valid_delta = _parquet_bytes(
+        {
+            "title": ["Bohemian Rhapsody"],
+            "artist": ["Queen"],
+            "itunes_preview_url": ["https://audio-ssl.itunes.apple.com/queen.m4a"],
+            "spotify_id": ["spot-1"],
+        }
+    )
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_as_bytes.return_value = base_parquet
+    mock_bucket.blob.return_value = mock_base_blob
+    mock_client.bucket.return_value = mock_bucket
+
+    missing_blob = MagicMock()
+    missing_blob.name = "Songs/deltas/d_gone.parquet"
+    missing_blob.download_as_bytes.side_effect = NotFound("compacted concurrently")
+
+    ok_blob = MagicMock()
+    ok_blob.name = "Songs/deltas/d_ok.parquet"
+    ok_blob.download_as_bytes.return_value = valid_delta
+    mock_client.list_blobs.return_value = [missing_blob, ok_blob]
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+    )
+
+    tracks = adapter.fetch_tracks()
+    queen = next(t for t in tracks if t.title == "Bohemian Rhapsody")
+    assert queen.itunes_preview_url == "https://audio-ssl.itunes.apple.com/queen.m4a"

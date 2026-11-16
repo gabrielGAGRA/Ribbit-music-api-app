@@ -3,6 +3,8 @@
 import contextlib
 import json
 import os
+import ssl
+import tempfile
 from pathlib import Path
 from typing import Self
 
@@ -10,6 +12,100 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 _DEFAULT_DEV_SECRET_KEY = "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
 _DEFAULT_DEV_ADMIN_PASSWORD = "RibbitLocal2026!"  # noqa: S105
+_DEFAULT_GCS_MAX_INGEST_TRACKS = 50_000
+
+
+def _atomic_write_ca_bundle(bundle_path: Path, combined: str) -> None:
+    existing: str | None = None
+    with contextlib.suppress(OSError, UnicodeError, ValueError):
+        existing = bundle_path.read_text(encoding="utf-8")
+    if existing == combined:
+        return
+    tmp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=bundle_path.parent,
+            prefix="ca_",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp_file:
+            tmp_name = tmp_file.name
+            tmp_file.write(combined)
+        Path(tmp_name).replace(bundle_path)
+        tmp_name = None
+    finally:
+        if tmp_name is not None:
+            with contextlib.suppress(OSError):
+                Path(tmp_name).unlink(missing_ok=True)
+
+
+def _configure_system_ca_bundle() -> None:
+    """Combines certifi and OS trust-store CAs so requests/google-auth verify HTTPS."""
+    if os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE"):
+        return
+    with contextlib.suppress(
+        ImportError, OSError, ssl.SSLError, UnicodeError, ValueError
+    ):
+        import certifi  # noqa: PLC0415
+
+        ctx = ssl.create_default_context()
+        os_certs = sorted(
+            {
+                ssl.DER_cert_to_PEM_cert(der)
+                for der in ctx.get_ca_certs(binary_form=True)
+            }
+        )
+        if not os_certs:
+            return
+        base_dir = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / ".cache"))
+        bundle_dir = base_dir / "ribbit"
+        bundle_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        bundle_path = bundle_dir / "ribbit_combined_ca.pem"
+        certifi_pem = Path(certifi.where()).read_text(encoding="utf-8")
+        combined = certifi_pem.rstrip() + "\n" + "".join(os_certs)
+        _atomic_write_ca_bundle(bundle_path, combined)
+        os.environ["REQUESTS_CA_BUNDLE"] = str(bundle_path)
+
+
+def _extract_client_id_from_payload(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    for section_key in ("web", "installed"):
+        section = payload.get(section_key)
+        if isinstance(section, dict):
+            nested = section.get("client_id")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+    key = "oauth_client_id" if payload.get("type") == "service_account" else "client_id"
+    direct = payload.get(key)
+    return direct.strip() if isinstance(direct, str) and direct.strip() else None
+
+
+def _resolve_google_client_id() -> str | None:
+    explicit = (os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+    if explicit:
+        return explicit
+    creds_raw = (os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+    if not creds_raw:
+        return None
+    creds_path = Path(creds_raw)
+    if not creds_path.is_file():
+        return None
+    with contextlib.suppress(OSError, json.JSONDecodeError, TypeError, ValueError):
+        payload = json.loads(creds_path.read_text(encoding="utf-8"))
+        return _extract_client_id_from_payload(payload)
+    return None
+
+
+def _parse_optional_positive_int(raw: str | None, default: int | None) -> int | None:
+    if raw is None or not raw.strip():
+        return default
+    with contextlib.suppress(ValueError):
+        parsed = int(raw.strip())
+        return parsed if parsed > 0 else None
+    return default
 
 
 class Settings(BaseModel):
@@ -42,6 +138,7 @@ class Settings(BaseModel):
     )
     gcs_bucket_name: str | None = None
     gcs_tracks_file_path: str = "Songs/songs_final.parquet"
+    gcs_max_ingest_tracks: int | None = _DEFAULT_GCS_MAX_INGEST_TRACKS
     google_client_id: str | None = None
     gcp_project_id: str | None = None
     firestore_enabled: bool = False
@@ -86,6 +183,8 @@ def load_settings() -> Settings:
         from dotenv import load_dotenv  # noqa: PLC0415
 
         load_dotenv()
+
+    _configure_system_ca_bundle()
 
     raw_iterations = os.getenv("PASSWORD_HASH_ITERATIONS")
 
@@ -166,7 +265,11 @@ def load_settings() -> Settings:
         gcs_tracks_file_path=os.getenv(
             "GCS_TRACKS_FILE_PATH", "Songs/songs_final.parquet"
         ),
-        google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
+        gcs_max_ingest_tracks=_parse_optional_positive_int(
+            os.getenv("GCS_MAX_INGEST_TRACKS"),
+            _DEFAULT_GCS_MAX_INGEST_TRACKS,
+        ),
+        google_client_id=_resolve_google_client_id(),
         gcp_project_id=gcp_project_id,
         firestore_enabled=_resolve_firestore_enabled(gcp_project_id),
         firestore_database=os.getenv("FIRESTORE_DATABASE", "(default)"),
