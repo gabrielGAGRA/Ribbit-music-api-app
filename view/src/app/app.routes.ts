@@ -9,6 +9,7 @@ import { AdminUsersComponent } from './features/admin/admin-users.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { DiscoverComponent } from './features/discover/discover.component';
 import { ExploreComponent } from './features/explore/explore.component';
+import { FamilyComponent } from './features/family/family.component';
 import { JamsComponent } from './features/jams/jams.component';
 import { NotFoundComponent } from './features/not-found/not-found.component';
 import { PlansComponent } from './features/plans/plans.component';
@@ -25,6 +26,7 @@ export const routes: Routes = [
   { path: 'explore', component: ExploreComponent, title: 'Ribbit - Explorar' },
   { path: 'profile', component: ProfileComponent, title: 'Ribbit - Perfil' },
   { path: 'settings', component: SettingsComponent, title: 'Ribbit - Configurações' },
+  { path: 'callback', component: SettingsComponent, title: 'Ribbit - Configurações' },
   { path: 'dashboard', component: DashboardComponent, title: 'Ribbit - Dashboard' },
   {
     path: 'likes',
@@ -45,6 +47,7 @@ export const routes: Routes = [
     title: 'Ribbit - Rejeitadas',
   },
   { path: 'plans', component: PlansComponent, title: 'Ribbit - Planos' },
+  { path: 'family', component: FamilyComponent, title: 'Ribbit - Plano Família' },
   { path: 'admin/login', component: AdminLoginComponent, title: 'Ribbit Admin - Login' },
   {
     path: 'admin',

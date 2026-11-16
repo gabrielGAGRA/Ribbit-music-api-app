@@ -120,10 +120,16 @@ export function toApiError(err: unknown): ApiError {
   });
 }
 
-/** Checks whether an error is due to Spotify account not being connected. */
+const SPOTIFY_CONNECTION_ERROR_CODES = new Set([
+  'SpotifyConnectionRequiredError',
+  'SpotifyAuthError',
+  'SpotifyForbiddenError',
+]);
+
+/** Checks whether an error is due to Spotify account not being connected or lacking a valid user OAuth token. */
 export function isSpotifyConnectionRequiredError(err: unknown): boolean {
   const apiErr = toApiError(err);
-  if (apiErr.errorCode === 'SpotifyConnectionRequiredError') return true;
+  if (SPOTIFY_CONNECTION_ERROR_CODES.has(apiErr.errorCode)) return true;
   if (isRecord(apiErr.details) && apiErr.details['rule_name'] === 'spotify_connection_required') {
     return true;
   }
