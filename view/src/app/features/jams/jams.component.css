@@ -33,22 +33,22 @@
 
 .jam-swipe-header h2 {
   font-size: 22px;
-  color: #ffffff;
+  color: var(--ink);
   margin: 4px 0 2px;
 }
 
 .jam-swipe-header p {
   font-size: 12px;
-  color: #8c9ba5;
+  color: var(--muted);
   margin: 0;
 }
 
 .room-code-pill {
   font-size: 11px;
   font-weight: 700;
-  color: #64b5f6;
-  background: rgba(100, 181, 246, 0.12);
-  border: 1px solid rgba(100, 181, 246, 0.3);
+  color: var(--blue);
+  background: var(--surface-tint);
+  border: 1px solid var(--border);
   padding: 4px 10px;
   border-radius: 999px;
 }
@@ -58,8 +58,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(25, 34, 48, 0.6);
-  border: 1px solid rgba(82, 110, 148, 0.25);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 8px 12px;
   font-size: 12px;
@@ -74,7 +74,7 @@
 
 .superlikes-rule {
   font-size: 11px;
-  color: #8c9ba5;
+  color: var(--muted);
 }
 
 .jam-swipe-card {
@@ -83,12 +83,12 @@
   height: 380px;
   border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-md);
   user-select: none;
   touch-action: pan-y;
   cursor: grab;
-  background: #101720;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--panel);
+  border: 1px solid var(--border);
 }
 
 .jam-swipe-card img {
@@ -116,12 +116,13 @@
 .jam-card-info strong {
   font-size: 20px;
   font-weight: 700;
-  color: #ffffff;
+  color: var(--on-media-ink);
 }
 
 .jam-card-info span {
   font-size: 13px;
-  color: #cbd5e1;
+  color: var(--on-media-ink);
+  opacity: 0.85;
 }
 
 .jam-deck-stage {
@@ -148,7 +149,7 @@
 
 .jam-action-item span {
   font-size: 10px;
-  color: #8c9ba5;
+  color: var(--muted);
   font-weight: 500;
 }
 

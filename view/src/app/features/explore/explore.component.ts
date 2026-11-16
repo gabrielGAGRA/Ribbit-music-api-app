@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import type { CommunityReview, Song } from '@ribbit/shared-types';
+import { toApiError } from '../../core/api-error';
 import { mapTrackDtoToSong } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { MOCK_REVIEWS } from '../../core/mocks/reviews.mock';
@@ -187,6 +188,19 @@ export class ExploreComponent implements OnInit {
     this.state.discoverySong.set(song);
     this.state.setPage('discover');
     void this.router?.navigate(['/discover']).catch(() => false);
+  }
+
+  likeAndSaveTrack(song: Song): void {
+    if (song.trackId === undefined) return;
+    this.songService.likeAndSaveSearchTrack(song.trackId).subscribe({
+      next: () => {
+        this.state.refreshInteractedCollections();
+        this.state.notify(`"${song.title}" adicionada às suas curtidas!`);
+      },
+      error: (err: unknown) => {
+        this.state.notify(toApiError(err).message);
+      },
+    });
   }
 
   openSongDetails(song: Song): void {

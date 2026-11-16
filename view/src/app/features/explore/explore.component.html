@@ -38,6 +38,14 @@
             <span>{{ item.artist }}</span>
           </div>
           <button
+            class="icon-button like-track-btn"
+            (click)="likeAndSaveTrack(item)"
+            [attr.aria-label]="'Curtir e salvar ' + item.title"
+            title="Curtir e salvar nas minhas músicas"
+          >
+            <app-icon name="heart" [size]="17" />
+          </button>
+          <button
             class="icon-button"
             (click)="openSongDetails(item)"
             [attr.aria-label]="'Ver detalhes de ' + item.title"

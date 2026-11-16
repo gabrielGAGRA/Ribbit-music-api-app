@@ -71,13 +71,42 @@
   @switch (activeTab()) {
     @case ('catalog') {
       <section class="admin-card">
-        <div class="section-head">
-          <span class="eyebrow blue">
-            PUT /API/ADMIN/TRACKS/&#123;ID&#125;/EXPLICIT · PUT
-            /API/ADMIN/TRACKS/&#123;ID&#125;/BLOCK
-          </span>
-          <h2>Catálogo Musical Disponível</h2>
+        <div class="section-head catalog-header-row">
+          <div>
+            <span class="eyebrow blue">
+              PUT /API/ADMIN/TRACKS/&#123;ID&#125;/EXPLICIT · PUT
+              /API/ADMIN/TRACKS/&#123;ID&#125;/BLOCK · PUT /API/ADMIN/TRACKS/&#123;ID&#125;/GENRE
+            </span>
+            <h2>Catálogo Musical Disponível</h2>
+          </div>
+          <div class="catalog-actions-group">
+            <button
+              type="button"
+              class="catalog-action-btn"
+              [disabled]="isCompacting()"
+              (click)="compactCatalog()"
+            >
+              <app-icon name="sliders" [size]="14" />
+              {{ isCompacting() ? 'Compactando...' : 'Compactar Catálogo (Delta Tables)' }}
+            </button>
+            <button
+              type="button"
+              class="catalog-action-btn"
+              [disabled]="isSyncing()"
+              (click)="syncCatalog()"
+            >
+              <app-icon name="repeat" [size]="14" />
+              {{ isSyncing() ? 'Sincronizando...' : 'Sincronizar Catálogo' }}
+            </button>
+          </div>
         </div>
+
+        @if (catalogActionStatus()) {
+          <div class="catalog-status-banner">
+            <app-icon name="sparkles" [size]="14" />
+            <span>{{ catalogActionStatus() }}</span>
+          </div>
+        }
 
         <div
           tabindex="0"
@@ -115,7 +144,49 @@
                     </div>
                   </td>
                   <td>
-                    <span class="genre-pill">{{ track.genre }}</span>
+                    @if (editingTrackId() === track.track_id) {
+                      <div class="edit-genre-inline">
+                        <input
+                          type="text"
+                          class="edit-genre-input"
+                          [value]="editGenreDraft()"
+                          (input)="updateGenreDraft($event)"
+                          (keyup.enter)="saveGenre(track.track_id)"
+                          (keyup.escape)="cancelEditingGenre()"
+                          placeholder="Novo gênero"
+                          maxlength="30"
+                        />
+                        <button
+                          type="button"
+                          class="save-genre-btn"
+                          title="Salvar gênero"
+                          (click)="saveGenre(track.track_id)"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          class="cancel-genre-btn"
+                          title="Cancelar"
+                          (click)="cancelEditingGenre()"
+                        >
+                          <app-icon name="close" [size]="11" />
+                        </button>
+                      </div>
+                    } @else {
+                      <div class="genre-cell-view">
+                        <span class="genre-pill">{{ track.genre }}</span>
+                        <button
+                          type="button"
+                          class="edit-genre-btn"
+                          title="Alterar gênero"
+                          (click)="startEditingGenre(track)"
+                        >
+                          <app-icon name="sparkles" [size]="12" />
+                          Editar
+                        </button>
+                      </div>
+                    }
                   </td>
                   <td>{{ formatDuration(track.duration_seconds) }}</td>
                   <td>

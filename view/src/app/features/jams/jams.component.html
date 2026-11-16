@@ -7,10 +7,12 @@
         Um som só.
       </h2>
       <p>Cada voto ajuda a construir a próxima descoberta em grupo.</p>
-      <button class="primary-button" (click)="openJamModal()">
-        <app-icon name="plus" [size]="17" />
-        {{ state.jamState().active ? 'Nova Jam' : 'Criar uma Jam' }}
-      </button>
+      @if (!state.jamState().active && !state.jamState().roomId) {
+        <button class="primary-button" (click)="openJamModal()">
+          <app-icon name="plus" [size]="17" />
+          Criar uma Jam
+        </button>
+      }
     </div>
     <div class="jam-orbit">
       <app-icon name="users" [size]="55" />
@@ -40,9 +42,19 @@
             <h2>Deslize para a Jam</h2>
             <p>Seus votos adicionam e pontuam faixas diretamente na fila coletiva.</p>
           </div>
-          <button class="text-button room-code-pill" (click)="copyCode()">
-            {{ state.jamState().code }} <app-icon name="send" [size]="13" />
-          </button>
+          <div class="jam-header-actions">
+            <button class="text-button room-code-pill" (click)="copyCode()">
+              {{ state.jamState().code }} <app-icon name="send" [size]="13" />
+            </button>
+            <button
+              class="outline-button small-btn leave-jam-top-btn"
+              (click)="leaveJam()"
+              title="Sair da Jam"
+            >
+              <app-icon name="logout" [size]="14" />
+              {{ state.jamState().hostUserId === state.userId() ? 'Encerrar Jam' : 'Sair da Jam' }}
+            </button>
+          </div>
         </div>
 
         <div class="jam-superlikes-bar">
@@ -122,6 +134,10 @@
             }}
             faixas)
           </button>
+          <button class="outline-button full-width leave-jam-btn" (click)="leaveJam()">
+            <app-icon name="logout" [size]="16" />
+            {{ state.jamState().hostUserId === state.userId() ? 'Encerrar Jam' : 'Sair da Jam' }}
+          </button>
         </div>
       </div>
     } @else {
@@ -167,6 +183,15 @@
           <button class="outline-button" (click)="voteSkip()">
             Votar para pular · {{ state.jamVotes() }}/{{ state.jamState().voteThreshold }}
           </button>
+          @if (state.jamState().hostUserId === state.userId()) {
+            <button
+              class="outline-button advance-jam-btn"
+              (click)="advanceJam()"
+              title="Avançar faixa imediatamente (Anfitrião)"
+            >
+              <app-icon name="arrow" [size]="15" /> Avançar faixa (Host)
+            </button>
+          }
           <button class="primary-button" (click)="likeCurrent()">
             Salvar nas Curtidas <app-icon name="heart" [size]="17" />
           </button>

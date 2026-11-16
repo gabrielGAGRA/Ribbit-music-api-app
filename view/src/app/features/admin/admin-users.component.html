@@ -108,7 +108,13 @@
                   </div>
                 </th>
                 <td>{{ user.email }}</td>
-                <td>{{ user.age }} anos</td>
+                <td>
+                  @if (user.age !== null) {
+                    {{ user.age }} anos
+                  } @else {
+                    Não informada
+                  }
+                </td>
                 <td>
                   <span class="plan-chip" [class.paid]="user.plan_name !== 'Free'">
                     {{ user.plan_name }}
@@ -181,7 +187,13 @@
                   </div>
                 </th>
                 <td>{{ admin.email }}</td>
-                <td>{{ admin.age }} anos</td>
+                <td>
+                  @if (admin.age !== null) {
+                    {{ admin.age }} anos
+                  } @else {
+                    Não informada
+                  }
+                </td>
                 <td>
                   @if (isCurrentSessionUser(admin.user_id)) {
                     <span class="role-badge self-badge">Você (sessão atual)</span>

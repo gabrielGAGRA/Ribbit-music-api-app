@@ -1,0 +1,598 @@
+<div class="secondary-page family-page tab-enter">
+  <div class="family-top-bar">
+    <button type="button" class="text-button back-link" (click)="goToProfile()">
+      <app-icon name="arrow-left" [size]="16" /> Voltar para Meu Perfil
+    </button>
+    <span class="family-tier-pill" [class.active]="isFamilyPlan()">
+      <app-icon name="shield" [size]="14" />
+      {{
+        isChildAccount()
+          ? 'Conta Filha Vinculada'
+          : isFamilyPlan()
+            ? 'Plano Família Ativo'
+            : 'Plano Atual: ' + state.currentPlan()
+      }}
+    </span>
+  </div>
+
+  <!-- Parent Account Hero Overview -->
+  <section class="panel family-hero-card">
+    <div class="family-hero-main">
+      <div class="parent-identity">
+        <div class="avatar parent-avatar">
+          {{ parentInitials() }}
+          <span
+            class="parent-crown-badge"
+            [title]="isChildAccount() ? 'Conta Filha' : 'Conta Pai (Titular)'"
+          >
+            {{ isChildAccount() ? 'FILHA' : 'PAI' }}
+          </span>
+        </div>
+        <div class="parent-copy">
+          <span class="eyebrow blue">
+            {{
+              isChildAccount() ? 'MEMBRO DE PLANO FAMILIAR' : 'CONTA PAI · GESTOR DO PLANO FAMILIAR'
+            }}
+          </span>
+          <h2>{{ state.userName() }}</h2>
+          <p>{{ state.userEmail() || 'Titular responsável pelas contas filhas do grupo' }}</p>
+        </div>
+      </div>
+
+      @if (!isChildAccount() && isFamilyPlan()) {
+        <div class="hero-cta-group">
+          <button
+            type="button"
+            class="primary-button"
+            [disabled]="availableSlots().length === 0"
+            (click)="openAddChildForm('create')"
+          >
+            <app-icon name="plus" [size]="16" /> Nova Conta Filha
+          </button>
+          <button
+            type="button"
+            class="outline-button"
+            [disabled]="availableSlots().length === 0"
+            (click)="openAddChildForm('link')"
+          >
+            <app-icon name="users" [size]="16" /> Vincular por E-mail
+          </button>
+        </div>
+      }
+    </div>
+
+    <!-- Visual Slot Occupancy Meter -->
+    @if (!isChildAccount()) {
+      <div class="family-capacity-bar">
+        <div class="capacity-labels">
+          <div>
+            <strong>Ocupação do Plano Família</strong>
+            <span>
+              1 Conta Pai + {{ familyMembers().length }} Conta(s) Filha(s) de
+              {{ maxProfiles() }} perfis
+            </span>
+          </div>
+          <strong class="capacity-fraction">{{ usedProfilesCount() }} / {{ maxProfiles() }}</strong>
+        </div>
+
+        <div
+          class="capacity-track"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          [attr.aria-valuenow]="occupancyPercent()"
+        >
+          <div class="capacity-fill" [appWidthPercent]="occupancyPercent()"></div>
+        </div>
+
+        <div class="family-slots-strip" aria-label="Vagas do plano familiar">
+          <div class="slot-bubble is-parent" [title]="'Conta Pai: ' + state.userName()">
+            <span>{{ parentInitials() }}</span>
+            <small>Pai</small>
+          </div>
+
+          @for (member of familyMembers(); track member.user_id) {
+            <div class="slot-bubble is-child" [title]="'Conta Filha: ' + member.display_name">
+              <span>{{ computeInitials(member.display_name) }}</span>
+              <small>Filha</small>
+            </div>
+          }
+
+          @for (slot of availableSlots(); track slot) {
+            <button
+              type="button"
+              class="slot-bubble is-empty"
+              [disabled]="!isFamilyPlan() || isChildAccount()"
+              (click)="openAddChildForm('create')"
+              title="Vaga disponível — Adicionar conta filha"
+            >
+              <app-icon name="plus" [size]="14" />
+              <small>Livre</small>
+            </button>
+          }
+        </div>
+      </div>
+    }
+  </section>
+
+  <!-- Upgrade Prompt if user is not on Family Plan -->
+  @if (!isFamilyPlan() && !isChildAccount()) {
+    <section class="panel family-upgrade-banner">
+      <div class="upgrade-banner-left">
+        <app-frog [size]="58" mood="wave" [speaking]="true" />
+        <div>
+          <span class="eyebrow blue">DESBLOQUEIE AS CONTAS FILHAS</span>
+          <h3>Ative o Plano Família para gerenciar até {{ maxChildAccounts() }} contas filhas</h3>
+          <p>
+            No Plano Família, a sua conta atua como <strong>Conta Pai</strong>: você pode criar
+            contas filhas com e-mail, vincular contas existentes, banir gêneros ou artistas por
+            dependente e contar com filtro automático de faixas explícitas para menores de 18 anos.
+          </p>
+        </div>
+      </div>
+      <button type="button" class="primary-button" (click)="goToPlans()">
+        Mudar para Plano Família <app-icon name="arrow" [size]="16" />
+      </button>
+    </section>
+  }
+
+  <!-- Notice if logged in as a Child Account -->
+  @if (isChildAccount()) {
+    <section class="panel child-account-notice">
+      <span class="notice-badge">
+        <app-icon name="shield" [size]="20" />
+      </span>
+      <div class="child-notice-content">
+        <h3>Esta é uma Conta Filha vinculada</h3>
+        <p>
+          Sua assinatura está vinculada à Conta Pai <strong>#{{ state.primaryAccountId() }}</strong
+          >. A inclusão, remoção e regras de controle parental do grupo familiar são realizadas
+          exclusivamente pela Conta Pai titular.
+        </p>
+
+        @if (state.blockedGenres().length > 0 || state.blockedArtists().length > 0) {
+          <div class="child-notice-bans">
+            @for (genre of state.blockedGenres(); track genre) {
+              <span class="ban-chip is-genre">Gênero banido: {{ genre }}</span>
+            }
+            @for (artist of state.blockedArtists(); track artist) {
+              <span class="ban-chip is-artist">Artista banido: {{ artist }}</span>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- Feedback Alerts -->
+  @if (errorMessage()) {
+    <div class="family-alert is-error" role="alert">
+      <app-icon name="close" [size]="15" />
+      <span>{{ errorMessage() }}</span>
+    </div>
+  }
+
+  @if (successMessage()) {
+    <div class="family-alert is-success" role="status">
+      <app-icon name="check" [size]="15" />
+      <span>{{ successMessage() }}</span>
+    </div>
+  }
+
+  <!-- Interactive Form to Create or Link a Child Account -->
+  @if (isFormOpen() && !isChildAccount()) {
+    <section class="panel family-form-panel tab-enter">
+      <div class="family-form-header">
+        <div>
+          <span class="eyebrow blue">NOVA CONTA FILHA</span>
+          <h3>
+            {{
+              addMode() === 'create'
+                ? 'Criar conta filha no Plano Família'
+                : 'Vincular conta existente por e-mail'
+            }}
+          </h3>
+        </div>
+        <div class="family-mode-tabs" role="tablist">
+          <button
+            type="button"
+            role="tab"
+            [class.active]="addMode() === 'create'"
+            [attr.aria-selected]="addMode() === 'create'"
+            (click)="switchAddMode('create')"
+          >
+            <app-icon name="plus" [size]="14" /> Criar Conta Filha
+          </button>
+          <button
+            type="button"
+            role="tab"
+            [class.active]="addMode() === 'link'"
+            [attr.aria-selected]="addMode() === 'link'"
+            (click)="switchAddMode('link')"
+          >
+            <app-icon name="users" [size]="14" /> Vincular por E-mail
+          </button>
+        </div>
+      </div>
+
+      <form class="family-form-body" (submit)="submitAddChild($event)">
+        @if (addMode() === 'create') {
+          <div class="family-fields-grid">
+            <label class="family-input-group">
+              <span>Nome da conta filha</span>
+              <input
+                type="text"
+                name="childDisplayName"
+                placeholder="Ex.: Lucas Silva"
+                [value]="childDisplayName()"
+                (input)="onDisplayNameInput($event)"
+                required
+              />
+            </label>
+
+            <label class="family-input-group">
+              <span>E-mail de acesso</span>
+              <input
+                type="email"
+                name="childEmail"
+                placeholder="Ex.: lucas@familia.com"
+                [value]="childEmail()"
+                (input)="onEmailInput($event)"
+                required
+              />
+            </label>
+
+            <label class="family-input-group">
+              <span>Senha provisória</span>
+              <input
+                type="password"
+                name="childPassword"
+                placeholder="Mínimo de 6 caracteres"
+                [value]="childPassword()"
+                (input)="onPasswordInput($event)"
+                required
+              />
+            </label>
+
+            <label class="family-input-group">
+              <span>Data de nascimento (Controle Parental)</span>
+              <input
+                type="date"
+                name="childBirthDate"
+                [value]="childBirthDate()"
+                (input)="onBirthDateInput($event)"
+              />
+            </label>
+          </div>
+
+          @if (calculatedChildAge() !== null) {
+            <div class="age-protection-preview" [class.is-minor]="isNewChildMinor()">
+              <app-icon [name]="isNewChildMinor() ? 'shield' : 'check'" [size]="16" />
+              @if (isNewChildMinor()) {
+                <span>
+                  <strong>Proteção Sub-18 Ativa ({{ calculatedChildAge() }} anos):</strong> Esta
+                  conta filha terá bloqueio automático de faixas com conteúdo explícito no catálogo.
+                </span>
+              } @else {
+                <span>
+                  <strong>Maior de idade ({{ calculatedChildAge() }} anos):</strong> Conta filha com
+                  acesso integral ao catálogo e playlists independentes.
+                </span>
+              }
+            </div>
+          }
+        } @else {
+          <div class="family-link-field">
+            <label class="family-input-group">
+              <span>E-mail da conta Ribbit existente (ou ID numérico)</span>
+              <input
+                type="text"
+                name="existingChildIdentifier"
+                placeholder="Ex.: dependente@email.com ou 42"
+                [value]="existingChildIdentifier()"
+                (input)="onExistingIdentifierInput($event)"
+                required
+              />
+              <small>
+                A conta informada passará a ser uma conta filha vinculada ao seu Plano Família sem
+                perder suas playlists e curtidas.
+              </small>
+            </label>
+
+            @if (existingChildIdentifier().includes('@')) {
+              <label class="family-input-group">
+                <span>Senha da conta existente</span>
+                <input
+                  type="password"
+                  name="existingChildPassword"
+                  placeholder="Senha de acesso da conta informada"
+                  [value]="existingChildPassword()"
+                  (input)="onExistingPasswordInput($event)"
+                  required
+                />
+                <small>
+                  Obrigatório pelo backend para autenticar a titularidade da conta ao vincular por
+                  e-mail.
+                </small>
+              </label>
+            }
+          </div>
+        }
+
+        <div class="family-form-footer">
+          <button type="button" class="outline-button" (click)="closeAddChildForm()">
+            Cancelar
+          </button>
+          <button type="submit" class="primary-button" [disabled]="isSubmitting()">
+            <app-icon name="check" [size]="16" />
+            {{
+              isSubmitting()
+                ? 'Salvando conta filha...'
+                : addMode() === 'create'
+                  ? 'Confirmar Criação da Conta Filha'
+                  : 'Vincular Conta Filha'
+            }}
+          </button>
+        </div>
+      </form>
+    </section>
+  }
+
+  <!-- Child Accounts Directory -->
+  @if (!isChildAccount()) {
+    <section class="family-children-section">
+      <div class="section-title">
+        <div>
+          <h2>Contas Filhas &amp; Controle Parental</h2>
+          <span>
+            {{ familyMembers().length }} de {{ maxChildAccounts() }} vagas de dependentes
+            preenchidas
+          </span>
+        </div>
+      </div>
+
+      @if (isLoading()) {
+        <div class="panel family-empty-state">
+          <p>Sincronizando contas filhas do seu Plano Família...</p>
+        </div>
+      } @else {
+        <div class="family-children-grid">
+          @for (member of familyMembers(); track member.user_id) {
+            <article class="panel child-account-card">
+              <div class="child-card-top">
+                <div class="child-identity">
+                  <div class="avatar child-avatar" [class.minor]="isMemberMinor(member)">
+                    {{ computeInitials(member.display_name) }}
+                  </div>
+                  <div class="child-meta">
+                    <div class="child-name-row">
+                      <strong>{{ member.display_name }}</strong>
+                      <span class="child-id-tag">#{{ member.user_id }}</span>
+                    </div>
+                    <span class="child-email">{{ member.email }}</span>
+                  </div>
+                </div>
+
+                <span class="child-role-badge">Conta Filha</span>
+              </div>
+
+              <div class="child-card-specs">
+                <div class="spec-pill">
+                  <app-icon name="user" [size]="13" />
+                  <span>{{ getMemberAgeLabel(member) }}</span>
+                </div>
+                @if (member.birth_date) {
+                  <div class="spec-pill">
+                    <app-icon name="clock" [size]="13" />
+                    <span>Nasc.: {{ member.birth_date }}</span>
+                  </div>
+                }
+                <div class="spec-pill protection" [class.is-minor]="isMemberMinor(member)">
+                  <app-icon name="shield" [size]="13" />
+                  <span>
+                    {{
+                      isMemberMinor(member)
+                        ? 'Sub-18 · Filtro Explícito Ativo'
+                        : 'Catálogo Completo'
+                    }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Current Banned Genres & Artists Summary -->
+              <div class="parental-summary-box">
+                <div class="parental-summary-header">
+                  <span>Restrições parentais ativas</span>
+                  <button
+                    type="button"
+                    class="parental-manage-btn"
+                    [class.active]="editingControlsMemberId() === member.user_id"
+                    [disabled]="isSavingControls()"
+                    (click)="openParentalControls(member)"
+                  >
+                    <app-icon name="sliders" [size]="13" />
+                    {{
+                      editingControlsMemberId() === member.user_id
+                        ? 'Fechar Banimentos'
+                        : 'Banir Gêneros / Artistas'
+                    }}
+                  </button>
+                </div>
+
+                @if (
+                  (member.blocked_genres?.length ?? 0) === 0 &&
+                  (member.blocked_artists?.length ?? 0) === 0
+                ) {
+                  <p class="parental-empty-copy">
+                    Nenhum gênero ou artista banido para esta conta filha.
+                  </p>
+                } @else {
+                  <div class="parental-chips-row">
+                    @for (genre of member.blocked_genres ?? []; track genre) {
+                      <span class="ban-chip is-genre">Gênero: {{ genre }}</span>
+                    }
+                    @for (artist of member.blocked_artists ?? []; track artist) {
+                      <span class="ban-chip is-artist">Artista: {{ artist }}</span>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- Inline Parental Controls Editor -->
+              @if (editingControlsMemberId() === member.user_id) {
+                <div class="parental-editor tab-enter">
+                  @if (controlsError()) {
+                    <div class="family-alert is-error" role="alert">
+                      <app-icon name="close" [size]="14" />
+                      <span>{{ controlsError() }}</span>
+                    </div>
+                  }
+
+                  <div class="parental-editor-block">
+                    <span class="editor-block-title">Banir gêneros musicais</span>
+                    <div class="genre-ban-pills">
+                      @for (genre of availableGenres; track genre) {
+                        <button
+                          type="button"
+                          class="genre-ban-pill"
+                          [class.blocked]="isDraftGenreBlocked(genre)"
+                          (click)="toggleDraftGenre(genre)"
+                        >
+                          {{ genre }}
+                          @if (isDraftGenreBlocked(genre)) {
+                            <app-icon name="close" [size]="11" />
+                          }
+                        </button>
+                      }
+                    </div>
+
+                    @if (getExtraDraftGenres().length > 0) {
+                      <div class="parental-chips-row">
+                        @for (customGenre of getExtraDraftGenres(); track customGenre) {
+                          <span class="ban-chip is-genre is-removable">
+                            {{ customGenre }}
+                            <button
+                              type="button"
+                              aria-label="Remover gênero banido"
+                              (click)="removeDraftGenre(customGenre)"
+                            >
+                              <app-icon name="close" [size]="11" />
+                            </button>
+                          </span>
+                        }
+                      </div>
+                    }
+
+                    <div class="ban-add-row">
+                      <input
+                        type="text"
+                        placeholder="Outro gênero (ex.: Sertanejo)"
+                        [value]="customGenreInput()"
+                        (input)="onCustomGenreInput($event)"
+                        (keydown.enter)="addCustomBlockedGenre($event)"
+                      />
+                      <button
+                        type="button"
+                        class="outline-button small-ban-btn"
+                        (click)="addCustomBlockedGenre()"
+                      >
+                        <app-icon name="plus" [size]="13" /> Banir Gênero
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="parental-editor-block">
+                    <span class="editor-block-title">Banir artistas</span>
+                    @if (draftBlockedArtists().length > 0) {
+                      <div class="parental-chips-row">
+                        @for (artist of draftBlockedArtists(); track artist) {
+                          <span class="ban-chip is-artist is-removable">
+                            {{ artist }}
+                            <button
+                              type="button"
+                              aria-label="Remover artista banido"
+                              (click)="removeDraftArtist(artist)"
+                            >
+                              <app-icon name="close" [size]="11" />
+                            </button>
+                          </span>
+                        }
+                      </div>
+                    } @else {
+                      <p class="parental-empty-copy">Nenhum artista selecionado para banimento.</p>
+                    }
+
+                    <div class="ban-add-row">
+                      <input
+                        type="text"
+                        placeholder="Nome do artista (ex.: Eminem)"
+                        [value]="artistBanInput()"
+                        (input)="onArtistBanInput($event)"
+                        (keydown.enter)="addBlockedArtist($event)"
+                      />
+                      <button
+                        type="button"
+                        class="outline-button small-ban-btn"
+                        (click)="addBlockedArtist()"
+                      >
+                        <app-icon name="plus" [size]="13" /> Banir Artista
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="parental-editor-actions">
+                    <button
+                      type="button"
+                      class="outline-button"
+                      [disabled]="isSavingControls()"
+                      (click)="closeParentalControls()"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      class="primary-button"
+                      [disabled]="isSavingControls()"
+                      (click)="saveParentalControls(member)"
+                    >
+                      <app-icon name="check" [size]="15" />
+                      {{ isSavingControls() ? 'Salvando...' : 'Salvar Restrições' }}
+                    </button>
+                  </div>
+                </div>
+              }
+
+              <div class="child-card-footer">
+                <span class="linked-status">
+                  <i></i> Vinculada à Conta Pai {{ state.userName() }}
+                </span>
+                <button
+                  type="button"
+                  class="unlink-child-btn"
+                  [disabled]="removingMemberId() === member.user_id"
+                  (click)="removeChildAccount(member)"
+                >
+                  <app-icon name="close" [size]="13" />
+                  {{ removingMemberId() === member.user_id ? 'Removendo...' : 'Desvincular Conta' }}
+                </button>
+              </div>
+            </article>
+          }
+
+          <!-- Available Slot Cards -->
+          @if (isFamilyPlan()) {
+            @for (slot of availableSlots(); track slot) {
+              <button type="button" class="empty-slot-card" (click)="openAddChildForm('create')">
+                <span class="slot-plus-circle">
+                  <app-icon name="plus" [size]="20" />
+                </span>
+                <strong>Vaga de Conta Filha Disponível</strong>
+                <span>Clique para criar ou vincular uma conta filha neste slot</span>
+              </button>
+            }
+          }
+        </div>
+      }
+    </section>
+  }
+</div>

@@ -63,7 +63,9 @@ export class JamsComponent {
 
   openJamModal(): void {
     if (!this.state.isSpotifyLinked()) {
-      this.state.promptSpotifyConnection('Conecte sua conta do Spotify para criar uma Jam no Pond.');
+      this.state.promptSpotifyConnection(
+        'Conecte sua conta do Spotify para criar uma Jam no Pond.',
+      );
       return;
     }
     if (!this.state.spotifyPremium()) {
@@ -77,7 +79,9 @@ export class JamsComponent {
     const cleaned = code.trim();
     if (!cleaned) return;
     if (!this.state.isSpotifyLinked()) {
-      this.state.promptSpotifyConnection('Conecte sua conta do Spotify para entrar na Jam no Pond.');
+      this.state.promptSpotifyConnection(
+        'Conecte sua conta do Spotify para entrar na Jam no Pond.',
+      );
       return;
     }
     if (!this.state.spotifyPremium()) {
@@ -89,7 +93,7 @@ export class JamsComponent {
       this.state.joinJamRoom(cleaned);
       return;
     }
-    this.state.jamState.update((cur) => ({ ...cur, active: true, code: cleaned }));
+    this.state.jamState.update((cur) => ({ ...cur, active: true, code: cleaned, roomId: 999 }));
     this.state.notify(`Você entrou na Jam (${cleaned})! Deslize para pontuar músicas.`);
   }
 
@@ -110,6 +114,18 @@ export class JamsComponent {
 
   voteSkip(): void {
     this.state.voteSkipJam();
+  }
+
+  advanceJam(): void {
+    this.state.advanceJam();
+  }
+
+  fetchMoreJamDeck(): void {
+    const jamId = this.state.jamState().jamId;
+    const nextCursor = this.state.jamDeckNextCursor();
+    if (jamId && nextCursor) {
+      this.state.loadJamDeck(jamId, nextCursor);
+    }
   }
 
   likeCurrent(): void {
@@ -155,8 +171,14 @@ export class JamsComponent {
       this.state.notify(`"${song.title}" pulada.`);
     }
 
-    this.jamDeckCursor.set(this.jamDeckCursor() + 1);
+    const nextCursor = this.jamDeckCursor() + 1;
+    this.jamDeckCursor.set(nextCursor);
     this.jamDrag.set(0);
+
+    const deckSongs = this.state.jamDeckSongs();
+    if (nextCursor >= deckSongs.length - 3) {
+      this.fetchMoreJamDeck();
+    }
   }
 
   onJamPointerDown(event: PointerEvent): void {

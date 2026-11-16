@@ -28,15 +28,44 @@
     </nav>
 
     <div class="admin-sidebar-footer">
-      <div class="admin-env-box">
-        <div class="env-title">
-          <app-icon name="sliders" [size]="15" />
-          <span>Modo Sandbox Local</span>
-        </div>
-        <p>Estado isolado em <code>ribbit-admin-*</code> sem afetar o player de ouvinte.</p>
+      <div class="admin-env-box" [class.fallback-active]="adminState.isUsingLocalFallback()">
+        @if (adminState.isUsingLocalFallback()) {
+          <div class="env-title fallback-title">
+            <app-icon name="sliders" [size]="15" />
+            <span>Fallback Local Ativo</span>
+          </div>
+          <p>
+            {{
+              adminState.fallbackReason() ||
+                'Operando sobre mocks em localStorage (sem conexão HttpClient com /api/admin).'
+            }}
+          </p>
+          <button
+            type="button"
+            class="outline-button small-btn full-width"
+            (click)="reconnectBackend()"
+          >
+            <app-icon name="repeat" [size]="14" />
+            Sincronizar com API
+          </button>
+        } @else {
+          <div class="env-title">
+            <app-icon name="check" [size]="15" />
+            <span>API /api/admin Conectada</span>
+          </div>
+          <p>Dados sincronizados com o backend FastAPI via <code>HttpClient</code>.</p>
+          <button
+            type="button"
+            class="outline-button small-btn full-width"
+            (click)="reconnectBackend()"
+          >
+            <app-icon name="repeat" [size]="14" />
+            Atualizar dados da API
+          </button>
+        }
         <button type="button" class="outline-button small-btn full-width" (click)="resetDemo()">
-          <app-icon name="repeat" [size]="14" />
-          Restaurar dados demo
+          <app-icon name="sliders" [size]="14" />
+          Forçar dados demo locais
         </button>
       </div>
 
@@ -75,6 +104,17 @@
       </div>
 
       <div class="admin-topbar-actions">
+        <span
+          class="admin-datasource-badge"
+          [class.fallback]="adminState.isUsingLocalFallback()"
+          [title]="adminState.dataSourceBanner()"
+        >
+          @if (adminState.isUsingLocalFallback()) {
+            FALLBACK LOCAL (Mocks)
+          } @else {
+            API REAL (/api/admin)
+          }
+        </span>
         <button
           type="button"
           class="outline-button small-btn mobile-app-shortcut"

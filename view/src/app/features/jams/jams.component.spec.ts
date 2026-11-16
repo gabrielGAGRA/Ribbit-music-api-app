@@ -139,4 +139,99 @@ describe('JamsComponent', () => {
     expect(state.activeModal()).toBeNull();
     expect(state.toast()).toContain('Spotify Premium é necessária');
   });
+
+  it('should trigger advanceJam and load more deck tracks using cursor', () => {
+    writeAuthToken('jwt-jam-token');
+    state.jamState.set({
+      jamId: 35,
+      hostUserId: 1,
+      active: true,
+      code: 'RIBBIT-999',
+      roomName: 'Sala VIP',
+      votes: 0,
+      voteThreshold: 3,
+      durationHours: 1,
+      durationMinutes: 0,
+    });
+    state.jamDeckNextCursor.set(200);
+
+    component.advanceJam();
+    const advReq = httpMock.expectOne('/api/jams/35/advance');
+    expect(advReq.request.method).toBe('POST');
+    advReq.flush({});
+    httpMock.expectOne('/api/jams/35/state').flush({
+      jam: {
+        jam_id: 35,
+        host_user_id: 1,
+        room_name: 'Sala VIP',
+        room_code: 'RIBBIT-999',
+        is_active: true,
+        duration_minutes: 60,
+        max_superlikes: 5,
+        superlikes_used: 0,
+        skip_votes_threshold: 3,
+        accumulated_duration_seconds: 0,
+        deck_source: 'livre',
+      },
+      current_track: null,
+      queue: [],
+      skip_votes: 0,
+    });
+
+    component.fetchMoreJamDeck();
+    const deckReq = httpMock.expectOne('/api/jams/35/deck?limit=30&cursor_id=200');
+    expect(deckReq.request.method).toBe('GET');
+    deckReq.flush({ items: [], next_cursor: null, has_more: false });
+  });
+
+  it('should close jam via POST /api/jams/{id}/close when host calls leaveJam()', () => {
+    writeAuthToken('jwt-jam-token');
+    state.userId.set(10);
+    state.jamState.set({
+      jamId: 44,
+      roomId: 44,
+      hostUserId: 10,
+      active: true,
+      code: 'HOST-44',
+      roomName: 'Minha Jam Host',
+      votes: 0,
+      voteThreshold: 3,
+      durationHours: 1,
+      durationMinutes: 0,
+    });
+
+    component.leaveJam();
+
+    const closeReq = httpMock.expectOne('/api/jams/44/close');
+    expect(closeReq.request.method).toBe('POST');
+    closeReq.flush({ jam_id: 44, is_active: false });
+
+    expect(state.jamState().active).toBe(false);
+    expect(state.jamState().roomId).toBeUndefined();
+    expect(state.toast()).toContain('encerrada');
+  });
+
+  it('should leave jam and reset state locally without calling closeJam when listener calls leaveJam()', () => {
+    writeAuthToken('jwt-jam-token');
+    state.userId.set(99); // Listener, not host
+    state.jamState.set({
+      jamId: 55,
+      roomId: 55,
+      hostUserId: 10, // Host is someone else
+      active: true,
+      code: 'LIST-55',
+      roomName: 'Sala de Outro Host',
+      votes: 0,
+      voteThreshold: 3,
+      durationHours: 1,
+      durationMinutes: 0,
+    });
+
+    component.leaveJam();
+
+    httpMock.expectNone('/api/jams/55/close');
+    expect(state.jamState().active).toBe(false);
+    expect(state.jamState().roomId).toBeUndefined();
+    expect(state.toast()).toContain('Você saiu da Jam');
+  });
 });

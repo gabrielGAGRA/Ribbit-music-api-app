@@ -10,6 +10,7 @@ import type {
   ReviewApiDto,
   Song,
   TrackApiDto,
+  UndoInteractionApiDto,
 } from '@ribbit/shared-types';
 import {
   mapDecisionToApiAction,
@@ -70,6 +71,11 @@ export class SongService {
       track_id: trackId,
       action: mapDecisionToApiAction(kind),
     });
+  }
+
+  /** Reverts the last swipe interaction on /api/discovery/undo. */
+  undoSwipe(): Observable<UndoInteractionApiDto> {
+    return this.http.post<UndoInteractionApiDto>('/api/discovery/undo', {});
   }
 
   /** Searches the track catalog using /api/tracks/search. */

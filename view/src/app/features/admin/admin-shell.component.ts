@@ -129,6 +129,10 @@ export class AdminShellComponent implements OnDestroy {
     this.adminState.resetDemoData();
   }
 
+  protected reconnectBackend(): void {
+    this.adminState.hydrateFromBackend();
+  }
+
   protected openListenerApp(): void {
     if (this.router) {
       this.router.navigate(['/discover']).catch(() => {});

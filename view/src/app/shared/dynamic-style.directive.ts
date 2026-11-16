@@ -8,7 +8,7 @@ import { Directive, ElementRef, effect, inject, input } from '@angular/core';
 export class WidthPercentDirective {
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
 
-  readonly appWidthPercent = input.required<number>();
+  readonly appWidthPercent = input<number>(0);
 
   constructor() {
     effect(() => {
