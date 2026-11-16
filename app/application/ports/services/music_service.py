@@ -88,7 +88,13 @@ class PlaylistSourcePort(Protocol):
 @runtime_checkable
 class PlaylistExportPort(Protocol):
     def export_playlist(
-        self, account_id: str, name: str, track_ids: Sequence[ExternalTrackId | str]
+        self,
+        account_id: str,
+        name: str,
+        track_ids: Sequence[ExternalTrackId | str],
+        *,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
     ) -> str:
         """Returns the identifier of the playlist created at the provider.
 

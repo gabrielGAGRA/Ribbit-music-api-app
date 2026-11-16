@@ -457,12 +457,14 @@ export class RibbitStateService implements OnDestroy {
     this.setModal('spotify-connect');
   }
 
-  /** Links or unlinks a Spotify account via POST /api/profile/link-spotify. */
+  /** Links a Spotify account via POST /api/profile/link-spotify or unlinks via DELETE /api/spotify/connection. */
   toggleSpotifyLink(): void {
     const uid = this.userId();
     if (uid === null) return;
-    const nextSpotifyId = this.isSpotifyLinked() ? '' : `spotify_user_${uid}`;
-    this.profileApi.linkSpotify(nextSpotifyId).subscribe({
+    const request$ = this.isSpotifyLinked()
+      ? this.profileApi.unlinkSpotify()
+      : this.profileApi.linkSpotify(`spotify_user_${uid}`);
+    request$.subscribe({
       next: (updatedUser) => {
         this.applyUserDto(updatedUser);
         this.notify(

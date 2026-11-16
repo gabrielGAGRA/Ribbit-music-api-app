@@ -7,6 +7,7 @@ from app.application.dtos.admin_dtos import AuditLogEntryResult
 from app.application.ports.repositories.audit_log_repository import (
     AuditLogRepositoryPort,
 )
+from app.infrastructure.repositories.connection import transaction
 
 
 class SQLiteAuditLogRepository(AuditLogRepositoryPort):
@@ -17,14 +18,14 @@ class SQLiteAuditLogRepository(AuditLogRepositoryPort):
 
     def log_event(self, event: str, status: str) -> None:
         created_at_str = datetime.now(UTC).isoformat()
-        self.conn.execute(
-            """
-            INSERT INTO audit_logs (event, status, created_at)
-            VALUES (?, ?, ?)
-            """,
-            (event, status, created_at_str),
-        )
-        self.conn.commit()
+        with transaction(self.conn) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO audit_logs (event, status, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (event, status, created_at_str),
+            )
 
     def list_all(self) -> list[AuditLogEntryResult]:
         cursor = self.conn.execute(
