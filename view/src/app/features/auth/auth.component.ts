@@ -1,7 +1,16 @@
 import type { OnInit } from '@angular/core';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  DestroyRef,
+  ElementRef,
+  inject,
+  signal,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import type { PlanApiDto } from '@ribbit/shared-types';
+import type { AuthApiResponse, PlanApiDto } from '@ribbit/shared-types';
 import { AuthApiService } from './auth-api.service';
 import { toApiError } from '../../core/api-error';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -15,11 +24,57 @@ export interface PlanOption {
   readonly label: string;
 }
 
+interface GoogleCredentialResponse {
+  readonly credential?: string;
+}
+
+interface GooglePromptMomentNotification {
+  readonly isNotDisplayed?: () => boolean;
+  readonly isSkippedMoment?: () => boolean;
+  readonly isDismissedMoment?: () => boolean;
+  readonly getDismissedReason?: () => string;
+}
+
+interface GoogleAccountsId {
+  readonly initialize: (config: {
+    readonly client_id: string;
+    readonly callback: (response: GoogleCredentialResponse) => void;
+    readonly ux_mode?: 'popup' | 'redirect';
+    readonly cancel_on_tap_outside?: boolean;
+  }) => void;
+  readonly prompt: (
+    momentListener?: (notification?: GooglePromptMomentNotification) => void,
+  ) => void;
+  readonly renderButton?: (
+    parent: HTMLElement,
+    options: {
+      readonly type?: 'standard' | 'icon';
+      readonly theme?: 'outline' | 'filled_blue' | 'filled_black';
+      readonly size?: 'large' | 'medium' | 'small';
+      readonly text?: 'signin_with' | 'signup_with' | 'continue_with' | 'signin';
+      readonly shape?: 'rectangular' | 'pill' | 'circle' | 'square';
+    },
+  ) => void;
+}
+
+interface GoogleGlobalScope {
+  readonly google?: {
+    readonly accounts?: {
+      readonly id?: GoogleAccountsId;
+    };
+  };
+}
+
 export const PLAN_OPTIONS: readonly PlanOption[] = [
   { id: 1, name: 'Free', label: 'Plano Free (R$ 0,00/mês)' },
   { id: 2, name: 'Individual', label: 'Ribbit Pro — Individual (R$ 14,90/mês)' },
   { id: 3, name: 'Família', label: 'Ribbit Jam — Família (R$ 27,90/mês)' },
 ];
+
+function getGoogleAccountsId(): GoogleAccountsId | null {
+  const win = globalThis as GoogleGlobalScope;
+  return win.google?.accounts?.id ?? null;
+}
 
 function formatPlanOption(dto: PlanApiDto): PlanOption {
   const formattedPrice = `R$ ${dto.monthly_price.toFixed(2).replace('.', ',')}/mês`;
@@ -38,6 +93,21 @@ function parseBirthDate(raw: string): Date | null {
   return Number.isNaN(birth.getTime()) ? null : birth;
 }
 
+function computeAge(birth: Date, today: Date): number {
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+function isFutureBirthDate(birth: Date, today: Date): boolean {
+  const endOfToday = new Date(today.getTime());
+  endOfToday.setHours(23, 59, 59, 999);
+  return birth.getTime() > endOfToday.getTime();
+}
+
 /** Handles real user authentication and registration against /api/auth. */
 @Component({
   selector: 'app-auth',
@@ -50,10 +120,19 @@ function parseBirthDate(raw: string): Date | null {
 export class AuthComponent implements OnInit {
   private readonly authApi = inject(AuthApiService);
   private readonly planService = inject(PlanService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly hostRef = inject<ElementRef<HTMLElement>>(ElementRef, { optional: true });
   private readonly router = inject(Router, { optional: true });
   protected readonly state = inject(RibbitStateService);
 
+  private initializedGoogleClientId: string | null = null;
+
   readonly planOptions = signal<readonly PlanOption[]>(PLAN_OPTIONS);
+  readonly googleClientId = signal<string | null>(null);
+  readonly isLoadingGoogleConfig = signal<boolean>(false);
+  readonly showGoogleFallbackButton = signal<boolean>(false);
+  readonly authMode = signal<'login' | 'register' | 'forgot-password'>('login');
+  readonly forgotSubmitted = signal<boolean>(false);
   readonly nameDraft = signal<string>('');
   readonly emailDraft = signal<string>('');
   readonly birthDateDraft = signal<string>('');
@@ -63,24 +142,25 @@ export class AuthComponent implements OnInit {
   readonly errorMessage = signal<string>('');
   readonly isSubmitting = signal<boolean>(false);
 
+  readonly authView = computed<'login' | 'register' | 'forgot-password'>(() => {
+    const mode = this.authMode();
+    if (mode === 'forgot-password' || this.state.authView() === 'forgot-password') {
+      return 'forgot-password';
+    }
+    if (mode === 'register' || this.state.authView() === 'register') {
+      return 'register';
+    }
+    return 'login';
+  });
+
   readonly calculatedAge = computed<number | null>(() => {
     const birth = parseBirthDate(this.birthDateDraft());
-    if (!birth) return null;
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
-    const monthDiff = today.getMonth() - birth.getMonth();
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
-      age--;
-    }
-    return age;
+    return birth ? computeAge(birth, new Date()) : null;
   });
 
   readonly isFutureDate = computed<boolean>(() => {
     const birth = parseBirthDate(this.birthDateDraft());
-    if (!birth) return false;
-    const today = new Date();
-    today.setHours(23, 59, 59, 999);
-    return birth.getTime() > today.getTime();
+    return birth ? isFutureBirthDate(birth, new Date()) : false;
   });
 
   readonly isUnderage = computed<boolean>(() => {
@@ -117,33 +197,251 @@ export class AuthComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    this.planService.loadPlanDtos().subscribe({
-      next: (dtos) => {
-        if (dtos.length > 0) {
-          this.planOptions.set(dtos.map((dto) => formatPlanOption(dto)));
-        }
-      },
-      error: () => {
-        // Fallback PLAN_OPTIONS remains available when /api/plans is offline
-      },
-    });
+    this.planService
+      .loadPlanDtos()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (dtos) => {
+          if (dtos.length > 0) {
+            this.planOptions.set(dtos.map((dto) => formatPlanOption(dto)));
+          }
+        },
+        error: () => {
+          // Fallback PLAN_OPTIONS remains available when /api/plans is offline
+        },
+      });
+    this.authApi
+      .getGoogleClientId()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          const trimmed = response.client_id?.trim();
+          if (trimmed) {
+            this.googleClientId.set(trimmed);
+          }
+        },
+        error: () => {
+          // Defer error surfacing until user triggers Google sign-in
+        },
+      });
   }
 
   isRegister(): boolean {
-    return this.state.authView() === 'register';
+    return this.authView() === 'register';
+  }
+
+  isForgot(): boolean {
+    return this.authView() === 'forgot-password';
   }
 
   toggleView(): void {
     this.errorMessage.set('');
-    this.state.setAuthView(this.isRegister() ? 'login' : 'register');
+    this.forgotSubmitted.set(false);
+    this.showGoogleFallbackButton.set(false);
+    this.selectedPlanId.set(1);
+    const next = this.isRegister() ? 'login' : 'register';
+    this.authMode.set(next);
+    this.state.setAuthView(next);
   }
 
   onForgot(): void {
-    this.state.notify('Entre em contato com o suporte para redefinir sua senha.');
+    this.errorMessage.set('');
+    this.forgotSubmitted.set(false);
+    this.showGoogleFallbackButton.set(false);
+    this.authMode.set('forgot-password');
+    this.state.setAuthView('forgot-password');
+  }
+
+  backToLogin(): void {
+    this.errorMessage.set('');
+    this.forgotSubmitted.set(false);
+    this.showGoogleFallbackButton.set(false);
+    this.authMode.set('login');
+    this.state.setAuthView('login');
+  }
+
+  /**
+   * Dispatches a password recovery request.
+   * Note: The FastAPI backend currently lacks a POST /api/auth/forgot-password route.
+   */
+  requestPasswordReset(email?: string): void {
+    if (email !== undefined) {
+      this.emailDraft.set(email);
+    }
+    const targetEmail = (email ?? this.emailDraft()).trim();
+    if (!targetEmail.includes('@')) {
+      this.errorMessage.set('Informe um e-mail válido para recuperação.');
+      return;
+    }
+    this.isSubmitting.set(true);
+    this.errorMessage.set('');
+    // Simula disparo de recuperação de conta (pendente de endpoint no backend: POST /api/auth/forgot-password)
+    setTimeout(() => {
+      this.isSubmitting.set(false);
+      this.forgotSubmitted.set(true);
+      this.state.notify(
+        'Se este e-mail estiver cadastrado, enviamos as instruções de recuperação.',
+      );
+    }, 400);
+  }
+
+  submitForgotPassword(): void {
+    this.requestPasswordReset(this.emailDraft());
   }
 
   onGoogleLogin(): void {
-    this.state.notify('Use seu e-mail e senha para autenticar no Ribbit.');
+    if (this.isSubmitting() || this.isLoadingGoogleConfig() || this.isForgot()) return;
+    this.errorMessage.set('');
+    const clientId = this.googleClientId();
+    if (clientId) {
+      this.promptGoogleIdentity(clientId);
+      return;
+    }
+    this.fetchGoogleClientIdAndPrompt();
+  }
+
+  /** Authenticates directly against POST /api/auth/google using a Google Identity ID token. */
+  authenticateWithGoogleIdToken(idToken: string): void {
+    if (this.isSubmitting()) return;
+    const trimmedToken = idToken.trim();
+    if (!trimmedToken) {
+      this.errorMessage.set('Token do Google inválido.');
+      return;
+    }
+
+    this.isSubmitting.set(true);
+    this.errorMessage.set('');
+
+    this.authApi
+      .loginWithGoogle({ id_token: trimmedToken })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.finishGoogleAuthSuccess(response);
+        },
+        error: (err: unknown) => {
+          this.isSubmitting.set(false);
+          this.errorMessage.set(toApiError(err).message);
+        },
+      });
+  }
+
+  private fetchGoogleClientIdAndPrompt(): void {
+    this.isLoadingGoogleConfig.set(true);
+    this.authApi
+      .getGoogleClientId()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isLoadingGoogleConfig.set(false);
+          if (this.isSubmitting() || this.isForgot()) return;
+          const clientId = response.client_id?.trim();
+          if (!clientId) {
+            this.errorMessage.set(
+              'Login com Google indisponível: GOOGLE_CLIENT_ID não configurado no servidor.',
+            );
+            return;
+          }
+          this.googleClientId.set(clientId);
+          this.promptGoogleIdentity(clientId);
+        },
+        error: (err: unknown) => {
+          this.isLoadingGoogleConfig.set(false);
+          if (this.isSubmitting() || this.isForgot()) return;
+          this.errorMessage.set(toApiError(err).message);
+        },
+      });
+  }
+
+  private ensureGoogleInitialized(googleId: GoogleAccountsId, clientId: string): void {
+    if (this.initializedGoogleClientId === clientId) {
+      return;
+    }
+    googleId.initialize({
+      client_id: clientId,
+      callback: (response) => {
+        this.authenticateWithGoogleIdToken(response.credential ?? '');
+      },
+      ux_mode: 'popup',
+      cancel_on_tap_outside: true,
+    });
+    this.initializedGoogleClientId = clientId;
+  }
+
+  private renderGoogleFallbackButton(googleId: GoogleAccountsId): boolean {
+    if (!googleId.renderButton) {
+      return false;
+    }
+    const container =
+      this.hostRef?.nativeElement.querySelector<HTMLElement>('.google-gsi-fallback');
+    if (!container) {
+      return false;
+    }
+    if (container.dataset['gsiRendered'] !== 'true') {
+      googleId.renderButton(container, {
+        type: 'standard',
+        theme: 'outline',
+        size: 'large',
+        text: 'continue_with',
+        shape: 'pill',
+      });
+      container.dataset['gsiRendered'] = 'true';
+    }
+    this.showGoogleFallbackButton.set(true);
+    container.classList.add('visible');
+    container.focus();
+    return true;
+  }
+
+  private isGooglePromptDismissed(notification: GooglePromptMomentNotification): boolean {
+    return Boolean(
+      notification.isDismissedMoment?.() &&
+      notification.getDismissedReason?.() !== 'credential_returned',
+    );
+  }
+
+  private isGooglePromptSuppressed(notification: GooglePromptMomentNotification): boolean {
+    return Boolean(notification.isNotDisplayed?.() || notification.isSkippedMoment?.());
+  }
+
+  private handleGooglePromptMoment(
+    googleId: GoogleAccountsId,
+    notification?: GooglePromptMomentNotification,
+  ): void {
+    if (!notification || this.isForgot() || this.isSubmitting()) {
+      return;
+    }
+    if (this.isGooglePromptDismissed(notification)) {
+      this.renderGoogleFallbackButton(googleId);
+      return;
+    }
+    if (this.isGooglePromptSuppressed(notification) && !this.renderGoogleFallbackButton(googleId)) {
+      this.errorMessage.set(
+        'Não foi possível exibir o modal do Google. Verifique as permissões do navegador.',
+      );
+    }
+  }
+
+  private promptGoogleIdentity(clientId: string): void {
+    if (this.isSubmitting() || this.isForgot()) return;
+    const googleId = getGoogleAccountsId();
+    if (!googleId) {
+      this.errorMessage.set('Serviço de autenticação do Google indisponível no navegador.');
+      return;
+    }
+    this.ensureGoogleInitialized(googleId, clientId);
+    this.renderGoogleFallbackButton(googleId);
+    googleId.prompt((notification) => {
+      this.handleGooglePromptMoment(googleId, notification);
+    });
+  }
+
+  private finishGoogleAuthSuccess(response: AuthApiResponse): void {
+    this.isSubmitting.set(false);
+    this.errorMessage.set('');
+    this.showGoogleFallbackButton.set(false);
+    this.state.completeAuthentication(response);
+    this.state.notify(`Conectado com Google como ${response.user.display_name}.`);
   }
 
   openAdminConsole(): void {
@@ -178,6 +476,11 @@ export class AuthComponent implements OnInit {
     event.preventDefault();
     if (this.isSubmitting()) return;
     this.errorMessage.set('');
+
+    if (this.isForgot()) {
+      this.submitForgotPassword();
+      return;
+    }
 
     if (this.isRegister()) {
       this.submitRegister();
@@ -229,6 +532,7 @@ export class AuthComponent implements OnInit {
         birth_date: this.birthDateDraft(),
         plan_id: selectedPlan.id,
       })
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (response) => {
           this.isSubmitting.set(false);
@@ -253,16 +557,19 @@ export class AuthComponent implements OnInit {
     }
 
     this.isSubmitting.set(true);
-    this.authApi.login({ email, password }).subscribe({
-      next: (response) => {
-        this.isSubmitting.set(false);
-        this.state.completeAuthentication(response);
-        this.state.notify('Login realizado com sucesso.');
-      },
-      error: (err: unknown) => {
-        this.isSubmitting.set(false);
-        this.errorMessage.set(toApiError(err).message);
-      },
-    });
+    this.authApi
+      .login({ email, password })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.isSubmitting.set(false);
+          this.state.completeAuthentication(response);
+          this.state.notify('Login realizado com sucesso.');
+        },
+        error: (err: unknown) => {
+          this.isSubmitting.set(false);
+          this.errorMessage.set(toApiError(err).message);
+        },
+      });
   }
 }
