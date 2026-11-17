@@ -92,6 +92,7 @@ from app.application.use_cases.review import (
     GetCommunityFeedUseCase,
     GetRecentlyInteractedTracksUseCase,
     GetTrackReviewsUseCase,
+    GetUserReviewsUseCase,
     LikeReviewCommentUseCase,
     PublishReviewUseCase,
     SaveSearchTrackLikeUseCase,
@@ -230,6 +231,7 @@ class Container:
     publish_review_use_case: PublishReviewUseCase
     delete_review_use_case: DeleteReviewUseCase
     get_track_reviews_use_case: GetTrackReviewsUseCase
+    get_user_reviews_use_case: GetUserReviewsUseCase
     get_community_feed_use_case: GetCommunityFeedUseCase
     like_review_comment_use_case: LikeReviewCommentUseCase
     get_recently_interacted_tracks_use_case: GetRecentlyInteractedTracksUseCase
@@ -619,6 +621,7 @@ def build_container(
         ),
         delete_review_use_case=DeleteReviewUseCase(review_repo),
         get_track_reviews_use_case=GetTrackReviewsUseCase(track_repo, review_repo),
+        get_user_reviews_use_case=GetUserReviewsUseCase(review_repo),
         get_community_feed_use_case=GetCommunityFeedUseCase(review_repo),
         like_review_comment_use_case=LikeReviewCommentUseCase(review_repo),
         get_recently_interacted_tracks_use_case=GetRecentlyInteractedTracksUseCase(
