@@ -32,6 +32,7 @@ class TrackRepositoryPort(Protocol):
         artist: str | Sequence[str] | None = None,
         album: str | Sequence[str] | None = None,
         genre: str | Sequence[str] | None = None,
+        country: str | Sequence[str] | None = None,
         year: int | Sequence[int] | None = None,
         query: str | None = None,
         limit: int = 50,

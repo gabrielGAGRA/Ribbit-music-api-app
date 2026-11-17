@@ -47,8 +47,19 @@ class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
             return
         http_session = session or niquests.Session()
         self.auth = SpotifyAuth(credentials, http_session)
+        catalog_auth = (
+            SpotifyAuth(
+                SpotifyCredentials(
+                    client_id=credentials.client_id,
+                    client_secret=credentials.client_secret,
+                ),
+                http_session,
+            )
+            if credentials.client_secret
+            else self.auth
+        )
+        self.catalog = SpotifyCatalog(SpotifyHttpClient(catalog_auth, http_session))
         http = SpotifyHttpClient(self.auth, http_session)
-        self.catalog = SpotifyCatalog(http)
         if self.auth.mode is not SpotifyAuthMode.CLIENT_CREDENTIALS:
             self.playlists = SpotifyPlaylists(http)
             self.player = SpotifyPlayer(http)

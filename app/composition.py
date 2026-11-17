@@ -23,6 +23,7 @@ from app.application.ports.repositories import (
 )
 from app.application.ports.services import (
     GoogleIdpVerifierPort,
+    GoogleOAuthPort,
     PasswordHasherPort,
     PlaylistExportPort,
     PlaylistSourcePort,
@@ -55,6 +56,8 @@ from app.application.use_cases.auth import (
     AuthenticateAdminUseCase,
     AuthenticateUserUseCase,
     AuthenticateWithGoogleUseCase,
+    CompleteGoogleOAuthUseCase,
+    GetGoogleAuthorizeUrlUseCase,
     RegisterUserUseCase,
 )
 from app.application.use_cases.discovery import (
@@ -131,7 +134,10 @@ from app.infrastructure.adapters import (
     ITunesAdapter,
     SpotifyAdapter,
 )
-from app.infrastructure.adapters.google_auth_adapter import GoogleIdpVerifierAdapter
+from app.infrastructure.adapters.google_auth_adapter import (
+    GoogleIdpVerifierAdapter,
+    GoogleOAuthAdapter,
+)
 from app.infrastructure.adapters.spotify import SpotifyCredentials
 from app.infrastructure.adapters.spotify.auth import SpotifyAuth
 from app.infrastructure.adapters.spotify.user_profile import SpotifyUserProfileAdapter
@@ -186,9 +192,12 @@ class Container:
     review_repo: SQLiteReviewRepository
     audit_log_repo: SQLiteAuditLogRepository
     google_verifier: GoogleIdpVerifierPort
+    google_oauth: GoogleOAuthPort | None = None
     spotify_user_profile: SpotifyUserProfilePort
     # Auth
     authenticate_with_google_use_case: AuthenticateWithGoogleUseCase
+    get_google_authorize_url_use_case: GetGoogleAuthorizeUrlUseCase | None = None
+    complete_google_oauth_use_case: CompleteGoogleOAuthUseCase | None = None
     register_user_use_case: RegisterUserUseCase
     authenticate_user_use_case: AuthenticateUserUseCase
     authenticate_admin_use_case: AuthenticateAdminUseCase
@@ -300,18 +309,27 @@ class Container:
         registry[JamRepositoryPort] = self.jam_repo
         registry[ReviewRepositoryPort] = self.review_repo
         registry[AuditLogRepositoryPort] = self.audit_log_repo
-        if self.catalog_file_port is not None:
-            registry[TrackCatalogFilePort] = self.catalog_file_port
-        if self.ingest_tracks_from_catalog_use_case is not None:
-            registry[IngestTracksFromCatalogUseCase] = (
-                self.ingest_tracks_from_catalog_use_case
-            )
-        if self.compact_catalog_use_case is not None:
-            registry[CompactCatalogUseCase] = self.compact_catalog_use_case
-        if self.sync_catalog_version_use_case is not None:
-            registry[SyncCatalogVersionUseCase] = self.sync_catalog_version_use_case
-        if self.firestore_sync_service is not None:
-            registry[FirestoreSyncService] = self.firestore_sync_service
+
+        optional_mappings: tuple[tuple[type, Any], ...] = (
+            (GoogleOAuthPort, self.google_oauth),
+            (GetGoogleAuthorizeUrlUseCase, self.get_google_authorize_url_use_case),
+            (CompleteGoogleOAuthUseCase, self.complete_google_oauth_use_case),
+            (TrackCatalogFilePort, self.catalog_file_port),
+            (
+                IngestTracksFromCatalogUseCase,
+                self.ingest_tracks_from_catalog_use_case,
+            ),
+            (CompactCatalogUseCase, self.compact_catalog_use_case),
+            (SyncCatalogVersionUseCase, self.sync_catalog_version_use_case),
+            (FirestoreSyncService, self.firestore_sync_service),
+        )
+        registry.update(
+            {
+                target_type: service
+                for target_type, service in optional_mappings
+                if service is not None
+            }
+        )
 
         object.__setattr__(self, "_type_registry", registry)
 
@@ -327,6 +345,13 @@ class Container:
             except TypeError:
                 continue
         raise KeyError(f"No component registered for type {target_type}")
+
+    def resolve_optional[T](self, target_type: type[T]) -> T | None:
+        """Resolves an application component by type, returning None if unconfigured."""
+        try:
+            return self.resolve(target_type)
+        except KeyError:
+            return None
 
     def __getattr__(self, name: str) -> Any:
         use_case_name = f"{name}_use_case"
@@ -392,6 +417,7 @@ def build_container(
         GCSTrackCatalogAdapter(
             bucket_name=settings.gcs_bucket_name,
             file_path=settings.gcs_tracks_file_path,
+            max_tracks=settings.gcs_max_ingest_tracks,
         )
         if settings.gcs_bucket_name
         else None
@@ -425,6 +451,39 @@ def build_container(
     google_verifier = GoogleIdpVerifierAdapter(
         expected_client_id=settings.google_client_id,
     )
+    google_oauth = (
+        GoogleOAuthAdapter(
+            client_id=settings.google_client_id,
+            client_secret=settings.google_client_secret,
+            redirect_uri=settings.google_redirect_uri,
+            auth_uri=settings.google_auth_uri,
+            token_uri=settings.google_token_uri,
+        )
+        if (
+            settings.google_client_id
+            and settings.google_client_secret
+            and settings.google_redirect_uri
+        )
+        else None
+    )
+    get_google_authorize_url_use_case = (
+        GetGoogleAuthorizeUrlUseCase(oauth_port=google_oauth)
+        if google_oauth is not None
+        else None
+    )
+    authenticate_with_google_use_case = AuthenticateWithGoogleUseCase(
+        user_repo=user_repo,
+        token_service=token_service,
+        google_verifier=google_verifier,
+    )
+    complete_google_oauth_use_case = (
+        CompleteGoogleOAuthUseCase(
+            oauth_port=google_oauth,
+            authenticate_with_google_use_case=authenticate_with_google_use_case,
+        )
+        if google_oauth is not None
+        else None
+    )
     spotify_user_profile = SpotifyUserProfileAdapter()
     user_spotify_credentials = SpotifyCredentials(
         client_id=settings.spotify_client_id or "dev_spotify_client",
@@ -453,12 +512,11 @@ def build_container(
         review_repo=review_repo,
         audit_log_repo=audit_log_repo,
         google_verifier=google_verifier,
+        google_oauth=google_oauth,
         spotify_user_profile=spotify_user_profile,
-        authenticate_with_google_use_case=AuthenticateWithGoogleUseCase(
-            user_repo=user_repo,
-            token_service=token_service,
-            google_verifier=google_verifier,
-        ),
+        authenticate_with_google_use_case=authenticate_with_google_use_case,
+        get_google_authorize_url_use_case=get_google_authorize_url_use_case,
+        complete_google_oauth_use_case=complete_google_oauth_use_case,
         get_spotify_authorize_url_use_case=GetSpotifyAuthorizeUrlUseCase(
             spotify_auth=user_spotify_auth,
         ),

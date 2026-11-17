@@ -57,4 +57,49 @@ describe('AudioPlayerService', () => {
     player.resetProgress();
     expect(player.progress()).toBe(0);
   });
+
+  it('should keep audio paused if pause is called before play promise resolves', async () => {
+    let resolvePlay!: () => void;
+    const pauseSpy = vi.fn();
+    const fakeAudio = {
+      preload: 'metadata',
+      volume: 0.7,
+      duration: 30,
+      currentTime: 0,
+      addEventListener: vi.fn(),
+      removeAttribute: vi.fn(),
+      play: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolvePlay = resolve;
+          }),
+      ),
+      pause: pauseSpy,
+    };
+    const originalAudio = globalThis.Audio;
+    vi.stubGlobal(
+      'Audio',
+      vi.fn(() => {
+        return fakeAudio;
+      }),
+    );
+
+    try {
+      player.loadTrack('https://cdn.ribbit.app/preview.mp3');
+      player.play();
+      expect(player.isPlaying()).toBe(true);
+
+      player.pause();
+      expect(player.isPlaying()).toBe(false);
+      expect(pauseSpy).toHaveBeenCalledTimes(1);
+
+      resolvePlay();
+      await Promise.resolve();
+
+      expect(player.isPlaying()).toBe(false);
+      expect(pauseSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.stubGlobal('Audio', originalAudio);
+    }
+  });
 });

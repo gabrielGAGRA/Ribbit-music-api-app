@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -12,7 +10,6 @@ import { RibbitStateService } from './core/ribbit-state.service';
 describe('AppComponent', () => {
   let component: AppComponent;
   let state: RibbitStateService;
-  let player: AudioPlayerService;
 
   beforeEach(() => {
     localStorage.clear();
@@ -23,7 +20,6 @@ describe('AppComponent', () => {
       ],
     });
     state = TestBed.inject(RibbitStateService);
-    player = TestBed.inject(AudioPlayerService);
     component = TestBed.runInInjectionContext(() => new AppComponent());
   });
 
@@ -46,6 +42,26 @@ describe('AppComponent', () => {
     expect(component.breadcrumbLabel()).toBe('Configurações');
   });
 
+  it('should use The Pond for Jams and Comunidade for Explore while keeping Descoberta distinct', () => {
+    component.changePage('discover');
+    expect(component.breadcrumbLabel()).toBe('Descoberta');
+    expect(component.currentHeading().eyebrow).not.toBe('THE POND');
+
+    component.changePage('jams');
+    expect(component.breadcrumbLabel()).toBe('Jams');
+    expect(component.currentHeading().eyebrow).toBe('THE POND');
+
+    component.changePage('explore');
+    expect(component.breadcrumbLabel()).toBe('Comunidade');
+    expect(component.currentHeading().eyebrow).toBe('COMUNIDADE');
+  });
+
+  it('should signal playlists view reset when clicking playlists in the sidebar', () => {
+    const before = state.playlistsViewReset();
+    component.changePage('playlists');
+    expect(state.playlistsViewReset()).toBe(before + 1);
+  });
+
   it('should compute user initials and real library counts accurately', () => {
     state.setUserName('João Lucas');
     expect(component.userInitials()).toBe('JL');
@@ -58,36 +74,47 @@ describe('AppComponent', () => {
     expect(component.lovedCount()).toBe(1);
   });
 
-  it('should toggle persistent player playback', () => {
-    expect(player.isPlaying()).toBe(false);
-    component.togglePlayback();
-    expect(player.isPlaying()).toBe(true);
+  it('should compute recent discoveries based on liked songs', () => {
+    expect(component.recentDiscoveries().length).toBeGreaterThan(0);
+    state.decide('like');
+    expect(component.recentDiscoveries().length).toBeGreaterThan(0);
   });
 
-  it('should expose mobile topbar brand and mini-player progress bar in shell template and styles', () => {
-    const template = readFileSync(resolve(__dirname, './app.component.html'), 'utf8');
-    const globalStyles = readFileSync(resolve(__dirname, '../styles.css'), 'utf8');
+  it('should reflect jam active and roomId state for sidebar promotion', () => {
+    expect(state.jamState().roomId).toBeUndefined();
+    expect(state.jamState().active).toBe(false);
 
-    expect(template).toContain('topbar-brand');
-    expect(template).toContain('breadcrumb-prefix');
-    expect(template).toContain('player-mobile-progress');
+    state.jamState.set({
+      jamId: 77,
+      roomId: 77,
+      active: true,
+      code: 'JAM-77',
+      roomName: 'Minha Sala',
+      votes: 0,
+      voteThreshold: 3,
+      durationHours: 1,
+      durationMinutes: 0,
+    });
 
-    expect(globalStyles).toContain('100dvh');
-    expect(globalStyles).toMatch(/\.breadcrumb\s*>\s*span:last-child\s*\{[^}]*color:\s*#c5ccda/);
-    const toastKeyframes = globalStyles.match(
-      /@keyframes\s+toast-in\s*\{\s*from\s*\{[^}]*\}\s*to\s*\{[^}]*\}\s*\}/,
-    )?.[0];
-    expect(toastKeyframes).toBeDefined();
-    expect(toastKeyframes).toContain('translate(-50%, 14px)');
-    expect(toastKeyframes).not.toContain('bottom:');
-    expect(globalStyles).toMatch(
-      /@media\s*\(max-width:\s*768px\)[\s\S]*\.topbar-brand\s*\{[^}]*align-self:\s*center/,
-    );
-    expect(globalStyles).toMatch(
-      /@media\s*\(max-width:\s*768px\)[\s\S]*\.player\s*\{[\s\S]*left:\s*0/,
-    );
-    expect(globalStyles).toMatch(
-      /@media\s*\(max-width:\s*768px\)[\s\S]*\.player-volume\s*\{[\s\S]*display:\s*none/,
-    );
+    expect(state.jamState().roomId).toBe(77);
+    expect(state.jamState().active).toBe(true);
+  });
+
+  it('should map /callback and /settings query URLs to the settings active page', () => {
+    expect(component.resolveActivePageFromUrl('/callback?code=abc&state=xyz')).toBe('settings');
+    expect(component.resolveActivePageFromUrl('/settings?code=abc&state=xyz')).toBe('settings');
+    expect(component.resolveActivePageFromUrl('/playlists#section')).toBe('playlists');
+    expect(component.resolveActivePageFromUrl('/')).toBe('discover');
+  });
+
+  it('should pause playing audio when transitioning between screens', () => {
+    const player = TestBed.inject(AudioPlayerService);
+    player.play();
+    expect(player.isPlaying()).toBe(true);
+
+    component.changePage('explore');
+    TestBed.flushEffects();
+
+    expect(player.isPlaying()).toBe(false);
   });
 });

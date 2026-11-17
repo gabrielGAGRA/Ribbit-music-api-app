@@ -1,41 +1,70 @@
-import { Injectable, computed, signal } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import type { OnDestroy } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import type { Observable, Subscription } from 'rxjs';
+import { forkJoin, throwError } from 'rxjs';
+import { catchError, map, tap } from 'rxjs/operators';
 import type {
-  AdminAccount,
+  ActionSuccessApiDto,
   AdminModerationReview,
   AdminSession,
   AdminUserPlanSummary,
   AudienceReportApiDto,
+  AuthApiResponse,
   BlockedGenreEntry,
+  CompactCatalogApiResponse,
   ExecutiveDashboardApiDto,
   PlanApiDto,
   PlanBreakdownEntry,
+  RegisterAdminApiRequest,
+  ReviewApiDto,
+  SyncCatalogVersionApiResponse,
   TrackApiDto,
+  TrackBlockApiResponse,
+  TrackExplicitApiResponse,
+  TrackGenreApiResponse,
   UpdateAdminPlanPayload,
+  UserApiDto,
 } from '@ribbit/shared-types';
+import { toApiError } from '../../core/api-error';
+import { AuthSessionNotifier } from '../../core/auth-session.notifier';
 import {
-  DEFAULT_ADMIN_EMAIL,
-  DEFAULT_ADMIN_PASSWORD,
-  MOCK_ADMIN_PLANS,
-  MOCK_ADMIN_REVIEWS,
-  MOCK_ADMIN_TRACKS,
-  MOCK_ADMIN_USERS,
-} from './admin.mock';
+  clearAdminAuthToken,
+  createAdminHttpContext,
+  readAdminAuthToken,
+  writeAdminAuthToken,
+} from '../../core/auth-token.storage';
 
-const STORAGE_KEYS = {
-  session: 'ribbit-admin-session',
-  plans: 'ribbit-admin-plans',
-  users: 'ribbit-admin-users',
-  tracks: 'ribbit-admin-tracks',
-  reviews: 'ribbit-admin-reviews',
-} as const;
+const ADMIN_SESSION_STORAGE_KEY = 'ribbit-admin-session';
+const LEGACY_ADMIN_STORAGE_KEYS: readonly string[] = [
+  'ribbit-admin-plans',
+  'ribbit-admin-users',
+  'ribbit-admin-tracks',
+  'ribbit-admin-reviews',
+];
 
-/** Represents a domain or authorization rule violation in the administrative console. */
+const EMPTY_DASHBOARD: ExecutiveDashboardApiDto = {
+  total_users: 0,
+  estimated_net_revenue: 0,
+  users_by_plan: {},
+  revenue_by_plan: {},
+};
+
+const EMPTY_AUDIENCE: AudienceReportApiDto = {
+  total_users: 0,
+  total_tracks: 0,
+  active_tracks: 0,
+  blocked_genres: {},
+};
+
+/** Represents a domain, validation, or API error in the administrative console. */
 export class AdminDomainError extends Error {
-  readonly code: 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'RULE' | 'DUPLICATE';
+  readonly code: 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'RULE' | 'DUPLICATE' | 'API';
 
   constructor(
     message: string,
-    code: 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'RULE' | 'DUPLICATE' = 'RULE',
+    code: 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'RULE' | 'DUPLICATE' | 'API' = 'RULE',
   ) {
     super(message);
     this.name = 'AdminDomainError';
@@ -43,46 +72,58 @@ export class AdminDomainError extends Error {
   }
 }
 
-function readStoredJson<T>(key: string, fallback: T): T {
+function clearLegacyAdminMockStorage(): void {
   try {
-    if (typeof localStorage === 'undefined') return fallback;
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    const parsed: unknown = JSON.parse(raw);
-    return parsed !== null && typeof parsed === 'object' ? (parsed as T) : fallback;
+    if (typeof localStorage === 'undefined') return;
+    for (const key of LEGACY_ADMIN_STORAGE_KEYS) {
+      localStorage.removeItem(key);
+    }
   } catch {
-    // Ignore malformed localStorage entries and restore mock fallback
-    return fallback;
+    // Ignore storage cleanup errors in restricted browser contexts
   }
 }
 
-function readStoredArray<T>(key: string, fallback: readonly T[]): readonly T[] {
+function isValidAdminSession(parsed: unknown): parsed is AdminSession {
+  if (typeof parsed !== 'object' || parsed === null) return false;
+  if (
+    !('user_id' in parsed && 'email' in parsed && 'display_name' in parsed && 'is_admin' in parsed)
+  ) {
+    return false;
+  }
+  return Boolean((parsed as AdminSession).is_admin);
+}
+
+function readStoredSession(): AdminSession | null {
   try {
-    if (typeof localStorage === 'undefined') return fallback;
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
+    if (typeof localStorage === 'undefined') return null;
+    if (!readAdminAuthToken()) {
+      localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
+      return null;
+    }
+    const raw = localStorage.getItem(ADMIN_SESSION_STORAGE_KEY);
+    if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as readonly T[]) : fallback;
+    return isValidAdminSession(parsed) ? parsed : null;
   } catch {
-    // Ignore malformed localStorage arrays and restore mock fallback
-    return fallback;
+    // Ignore malformed session entries and require fresh authentication
+    return null;
   }
 }
 
-function writeStoredJson<T>(key: string, value: T): void {
+function writeStoredSession(session: AdminSession): void {
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem(ADMIN_SESSION_STORAGE_KEY, JSON.stringify(session));
     }
   } catch {
     // Ignore storage quota errors in browser environments
   }
 }
 
-function removeStoredKey(key: string): void {
+function removeStoredSession(): void {
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(key);
+      localStorage.removeItem(ADMIN_SESSION_STORAGE_KEY);
     }
   } catch {
     // Ignore storage access errors
@@ -93,133 +134,165 @@ function toPercent(part: number, total: number): number {
   return total > 0 ? Math.round((part / total) * 100) : 0;
 }
 
-function accumulatePlanTotals(
-  users: readonly AdminAccount[],
+function buildBreakdownFromDashboard(
+  dashboard: ExecutiveDashboardApiDto,
   plans: readonly PlanApiDto[],
-): {
-  readonly userCounts: ReadonlyMap<string, number>;
-  readonly planRevenues: ReadonlyMap<string, number>;
-  readonly totalRevenue: number;
-} {
-  const planMap = new Map<number, PlanApiDto>(plans.map((plan) => [plan.plan_id, plan]));
-  const userCounts = new Map<string, number>();
-  const planRevenues = new Map<string, number>();
-  let totalRevenue = 0;
-
-  for (const user of users) {
-    const plan = planMap.get(user.plan_id);
-    if (!plan) continue;
-    userCounts.set(plan.name, (userCounts.get(plan.name) ?? 0) + 1);
-    if (user.primary_account_id === undefined) {
-      totalRevenue += plan.monthly_price;
-      planRevenues.set(plan.name, (planRevenues.get(plan.name) ?? 0) + plan.monthly_price);
-    }
-  }
-
-  return { userCounts, planRevenues, totalRevenue };
-}
-
-function computePlanMetrics(
-  users: readonly AdminAccount[],
-  plans: readonly PlanApiDto[],
-): {
-  readonly dashboard: ExecutiveDashboardApiDto;
-  readonly breakdown: readonly PlanBreakdownEntry[];
-} {
-  const { userCounts, planRevenues, totalRevenue } = accumulatePlanTotals(users, plans);
-  const roundedTotalRevenue = Math.round(totalRevenue * 100) / 100;
-  const totalUsers = users.length;
-  const usersByPlanObj: Record<string, number> = {};
-  const revenueByPlanObj: Record<string, number> = {};
-  const breakdown: PlanBreakdownEntry[] = [];
-
-  for (const plan of plans) {
-    const count = userCounts.get(plan.name) ?? 0;
-    const rev = Math.round((planRevenues.get(plan.name) ?? 0) * 100) / 100;
-    usersByPlanObj[plan.name] = count;
-    revenueByPlanObj[plan.name] = rev;
-    breakdown.push({
+): readonly PlanBreakdownEntry[] {
+  const totalUsers = dashboard.total_users;
+  const totalRevenue = dashboard.estimated_net_revenue;
+  return plans.map((plan) => {
+    const count = dashboard.users_by_plan[plan.name] ?? 0;
+    const rev = Math.round((dashboard.revenue_by_plan[plan.name] ?? 0) * 100) / 100;
+    return {
       planName: plan.name,
       userCount: count,
       userPercent: toPercent(count, totalUsers),
       revenue: rev,
-      revenuePercent: toPercent(rev, roundedTotalRevenue),
-    });
-  }
+      revenuePercent: toPercent(rev, totalRevenue),
+    };
+  });
+}
 
+function buildBlockedGenreEntries(
+  record: Readonly<Record<string, number>>,
+): readonly BlockedGenreEntry[] {
+  const sorted = Object.entries(record).sort((left, right) => right[1] - left[1]);
+  const maxCount = sorted[0]?.[1] ?? 0;
+  return sorted.map(([genre, count]) => ({
+    genre,
+    count,
+    percent: maxCount > 0 ? Math.round((count / maxCount) * 100) : 0,
+  }));
+}
+
+function validateAdminAge(rawAge: number | undefined): number {
+  const age = rawAge ?? 30;
+  if (!Number.isFinite(age) || !Number.isInteger(age) || age < 18) {
+    throw new AdminDomainError('A idade mínima do administrador é 18 anos.', 'RULE');
+  }
+  return age;
+}
+
+function buildRegisterAdminPayload(payload: RegisterAdminApiRequest): RegisterAdminApiRequest {
+  const email = payload.email.trim().toLowerCase();
+  const displayName = payload.display_name.trim();
+  if (!email.includes('@')) {
+    throw new AdminDomainError('Informe um e-mail válido para o administrador.', 'RULE');
+  }
+  if (displayName.length < 2 || displayName.length > 50) {
+    throw new AdminDomainError('O nome deve ter entre 2 e 50 caracteres.', 'RULE');
+  }
+  if (payload.password.length < 6) {
+    throw new AdminDomainError('A senha deve possuir ao menos 6 caracteres.', 'RULE');
+  }
+  const age = validateAdminAge(payload.age);
   return {
-    dashboard: {
-      total_users: totalUsers,
-      estimated_net_revenue: roundedTotalRevenue,
-      users_by_plan: usersByPlanObj,
-      revenue_by_plan: revenueByPlanObj,
-    },
-    breakdown,
+    email,
+    password: payload.password,
+    display_name: displayName,
+    age,
+    ...(payload.birth_date ? { birth_date: payload.birth_date } : {}),
   };
 }
 
-function computeBlockedGenres(users: readonly AdminAccount[]): {
-  readonly record: Readonly<Record<string, number>>;
-  readonly entries: readonly BlockedGenreEntry[];
-} {
-  const counts = new Map<string, number>();
-  for (const user of users) {
-    for (const genre of user.blocked_genres) {
-      counts.set(genre, (counts.get(genre) ?? 0) + 1);
-    }
-  }
-
-  const sorted = [...counts.entries()].sort((left, right) => right[1] - left[1]);
-  const maxCount = sorted[0]?.[1] ?? 0;
-  const record: Record<string, number> = {};
-  const entries: BlockedGenreEntry[] = sorted.map(([genre, count]) => {
-    record[genre] = count;
-    return {
-      genre,
-      count,
-      percent: maxCount > 0 ? Math.round((count / maxCount) * 100) : 0,
-    };
-  });
-
-  return { record, entries };
+function resolveReviewTrackMeta(
+  dto: ReviewApiDto,
+  track: TrackApiDto | undefined,
+): { readonly title: string; readonly artist: string } {
+  return {
+    title: dto.track_title ?? track?.title ?? `Faixa #${dto.track_id}`,
+    artist: dto.track_artist ?? track?.artist ?? 'Artista do Catálogo',
+  };
 }
 
-/** Isolated reactive state store backing all /api/admin/* screens via localStorage mocks. */
-@Injectable({ providedIn: 'root' })
-export class AdminStateService {
-  private readonly sessionSignal = signal<AdminSession | null>(
-    readStoredJson<AdminSession | null>(STORAGE_KEYS.session, null),
-  );
-  private readonly plansSignal = signal<readonly PlanApiDto[]>(
-    readStoredArray<PlanApiDto>(STORAGE_KEYS.plans, MOCK_ADMIN_PLANS),
-  );
-  private readonly usersSignal = signal<readonly AdminAccount[]>(
-    readStoredArray<AdminAccount>(STORAGE_KEYS.users, MOCK_ADMIN_USERS),
-  );
-  private readonly tracksSignal = signal<readonly TrackApiDto[]>(
-    readStoredArray<TrackApiDto>(STORAGE_KEYS.tracks, MOCK_ADMIN_TRACKS),
-  );
-  private readonly reviewsSignal = signal<readonly AdminModerationReview[]>(
-    readStoredArray<AdminModerationReview>(STORAGE_KEYS.reviews, MOCK_ADMIN_REVIEWS),
-  );
-  private readonly toastSignal = signal<string>('');
+function mapModerationReview(
+  dto: ReviewApiDto,
+  index: number,
+  userById: ReadonlyMap<number, AdminUserPlanSummary>,
+  trackById: ReadonlyMap<number, TrackApiDto>,
+): AdminModerationReview {
+  const author = userById.get(dto.user_id);
+  const trackMeta = resolveReviewTrackMeta(dto, trackById.get(dto.track_id));
+  return {
+    review_id: dto.review_id ?? index + 1,
+    user_id: dto.user_id,
+    author_name: dto.author_name ?? author?.display_name ?? `Usuário #${dto.user_id}`,
+    track_id: dto.track_id,
+    track_title: trackMeta.title,
+    track_artist: trackMeta.artist,
+    rating: dto.rating,
+    text: dto.text ?? '',
+    likes_count: dto.likes_count,
+    created_at: dto.created_at ?? '',
+    is_deleted: dto.is_deleted,
+  };
+}
 
-  readonly defaultAdminEmail = DEFAULT_ADMIN_EMAIL;
-  readonly defaultAdminPassword = DEFAULT_ADMIN_PASSWORD;
+function mapAdminDomainError(err: unknown): AdminDomainError {
+  if (err instanceof AdminDomainError) {
+    return err;
+  }
+  const apiErr = toApiError(err);
+  if (apiErr.status === 401) {
+    return new AdminDomainError(apiErr.message || 'Credenciais inválidas.', 'AUTH');
+  }
+  if (apiErr.status === 403) {
+    return new AdminDomainError(
+      apiErr.message || 'Acesso restrito a administradores.',
+      'FORBIDDEN',
+    );
+  }
+  if (apiErr.status === 404) {
+    return new AdminDomainError(apiErr.message || 'Registro não encontrado.', 'NOT_FOUND');
+  }
+  if (apiErr.status === 409) {
+    return new AdminDomainError(apiErr.message || 'Conflito de dados.', 'DUPLICATE');
+  }
+  return new AdminDomainError(apiErr.message, 'API');
+}
+
+/** Coordinates /api/admin/* HTTP integration with reactive Angular signals. */
+@Injectable({ providedIn: 'root' })
+export class AdminStateService implements OnDestroy {
+  private readonly http = inject(HttpClient);
+  private readonly sessionNotifier = inject(AuthSessionNotifier);
+  private readonly router = inject(Router, { optional: true });
+
+  private readonly sessionSignal = signal<AdminSession | null>(readStoredSession());
+  private readonly plansSignal = signal<readonly PlanApiDto[]>([]);
+  private readonly usersSignal = signal<readonly AdminUserPlanSummary[]>([]);
+  private readonly administratorsSignal = signal<readonly UserApiDto[]>([]);
+  private readonly activeTracksSignal = signal<readonly TrackApiDto[]>([]);
+  private readonly blockedTracksSignal = signal<readonly TrackApiDto[]>([]);
+  private readonly reviewsSignal = signal<readonly AdminModerationReview[]>([]);
+  private readonly dashboardSignal = signal<ExecutiveDashboardApiDto>(EMPTY_DASHBOARD);
+  private readonly audienceSignal = signal<AudienceReportApiDto>(EMPTY_AUDIENCE);
+  private readonly isLoadingSignal = signal<boolean>(false);
+  private readonly syncErrorSignal = signal<string>('');
+  private readonly toastSignal = signal<string>('');
+  private readonly hasHydratedSignal = signal<boolean>(false);
+  private readonly lastCatalogQuerySignal = signal<string>('');
+
+  private readonly unsubscribeAdminUnauthorized: () => void;
+  private hydrationSub: Subscription | null = null;
+  private refreshSub: Subscription | null = null;
+  private sessionEpoch = 0;
+  private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly currentAdmin = this.sessionSignal.asReadonly();
   readonly isAuthenticated = computed<boolean>(() => Boolean(this.sessionSignal()?.is_admin));
   readonly plans = this.plansSignal.asReadonly();
-  readonly tracks = this.tracksSignal.asReadonly();
+  readonly usersWithPlans = this.usersSignal.asReadonly();
+  readonly administrators = this.administratorsSignal.asReadonly();
+  readonly activeTracks = this.activeTracksSignal.asReadonly();
+  readonly blockedTracks = this.blockedTracksSignal.asReadonly();
+  readonly executiveDashboard = this.dashboardSignal.asReadonly();
+  readonly audienceReport = this.audienceSignal.asReadonly();
+  readonly isLoading = this.isLoadingSignal.asReadonly();
+  readonly syncError = this.syncErrorSignal.asReadonly();
   readonly toastMessage = this.toastSignal.asReadonly();
-
-  readonly activeTracks = computed<readonly TrackApiDto[]>(() =>
-    this.tracksSignal().filter((track) => !track.is_deleted),
-  );
-
-  readonly blockedTracks = computed<readonly TrackApiDto[]>(() =>
-    this.tracksSignal().filter((track) => track.is_deleted),
-  );
+  readonly hasHydrated = this.hasHydratedSignal.asReadonly();
+  readonly lastCatalogQuery = this.lastCatalogQuerySignal.asReadonly();
 
   readonly topModerationReviews = computed<readonly AdminModerationReview[]>(() =>
     [...this.reviewsSignal()]
@@ -228,242 +301,540 @@ export class AdminStateService {
       .slice(0, 10),
   );
 
-  readonly administrators = computed<readonly AdminAccount[]>(() =>
-    this.usersSignal().filter((user) => user.is_admin),
+  readonly planBreakdown = computed<readonly PlanBreakdownEntry[]>(() =>
+    buildBreakdownFromDashboard(this.dashboardSignal(), this.plansSignal()),
   );
 
-  readonly usersWithPlans = computed<readonly AdminUserPlanSummary[]>(() => {
-    const planNames = new Map<number, string>(
-      this.plansSignal().map((plan) => [plan.plan_id, plan.name]),
-    );
-    return this.usersSignal().map((user) => ({
-      user_id: user.user_id,
-      email: user.email,
-      display_name: user.display_name,
-      age: user.age,
-      plan_name: planNames.get(user.plan_id) ?? 'Free',
-      is_admin: user.is_admin,
-    }));
-  });
-
-  private readonly planMetrics = computed(() =>
-    computePlanMetrics(this.usersSignal(), this.plansSignal()),
+  readonly blockedGenreRanking = computed<readonly BlockedGenreEntry[]>(() =>
+    buildBlockedGenreEntries(this.audienceSignal().blocked_genres),
   );
 
-  readonly executiveDashboard = computed<ExecutiveDashboardApiDto>(
-    () => this.planMetrics().dashboard,
-  );
-
-  readonly planBreakdown = computed<readonly PlanBreakdownEntry[]>(
-    () => this.planMetrics().breakdown,
-  );
-
-  private readonly genreAggregation = computed(() => computeBlockedGenres(this.usersSignal()));
-
-  readonly blockedGenreRanking = computed<readonly BlockedGenreEntry[]>(
-    () => this.genreAggregation().entries,
-  );
-
-  readonly audienceReport = computed<AudienceReportApiDto>(() => ({
-    total_users: this.usersSignal().length,
-    total_tracks: this.tracksSignal().length,
-    active_tracks: this.activeTracks().length,
-    blocked_genres: this.genreAggregation().record,
-  }));
-
-  /** Authenticates an administrator matching POST /api/admin/login semantics. */
-  loginAdmin(email: string, password: string): AdminSession {
-    const normalizedEmail = email.trim().toLowerCase();
-    const account = this.usersSignal().find(
-      (candidate) => candidate.email.toLowerCase() === normalizedEmail,
-    );
-
-    if (!account || account.password !== password) {
-      throw new AdminDomainError('Credenciais inválidas.', 'AUTH');
-    }
-    if (!account.is_admin) {
-      throw new AdminDomainError('Acesso restrito a administradores.', 'FORBIDDEN');
-    }
-
-    const session: AdminSession = {
-      user_id: account.user_id,
-      email: account.email,
-      display_name: account.display_name,
-      is_admin: true,
-    };
-    this.sessionSignal.set(session);
-    writeStoredJson(STORAGE_KEYS.session, session);
-    this.notify(`Bem-vindo ao Console Admin, ${account.display_name}.`);
-    return session;
+  constructor() {
+    clearLegacyAdminMockStorage();
+    this.unsubscribeAdminUnauthorized = this.sessionNotifier.onAdminUnauthorized(() => {
+      this.clearSessionState();
+      if (this.router) {
+        this.router.navigate(['/admin/login']).catch(() => {});
+      }
+    });
   }
 
-  /** Clears the active administrative session. */
+  ngOnDestroy(): void {
+    this.unsubscribeAdminUnauthorized();
+    this.hydrationSub?.unsubscribe();
+    this.hydrationSub = null;
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = null;
+    if (this.toastTimer !== null) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
+  }
+
+  /** Authenticates an administrator against POST /api/admin/login and hydrates dashboard state. */
+  loginAdmin(email: string, password: string): Observable<AdminSession> {
+    const normalizedEmail = email.trim().toLowerCase();
+    return this.http
+      .post<AuthApiResponse>('/api/admin/login', {
+        email: normalizedEmail,
+        password,
+      })
+      .pipe(
+        map((response) => {
+          if (!response.user.is_admin) {
+            throw new AdminDomainError('Acesso restrito a administradores.', 'FORBIDDEN');
+          }
+          writeAdminAuthToken(response.access_token);
+          const session: AdminSession = {
+            user_id: response.user.user_id,
+            email: response.user.email,
+            display_name: response.user.display_name,
+            is_admin: response.user.is_admin,
+          };
+          this.sessionSignal.set(session);
+          writeStoredSession(session);
+          this.hydrateFromBackend();
+          this.notify(`Bem-vindo ao Console Admin, ${session.display_name}.`);
+          return session;
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
+  }
+
+  /** Loads all administrative projections from /api/admin/* endpoints into reactive signals. */
+  hydrateFromBackend(): void {
+    this.hydrationSub?.unsubscribe();
+    const expectedEpoch = this.sessionEpoch;
+    this.isLoadingSignal.set(true);
+    this.syncErrorSignal.set('');
+
+    this.hydrationSub = forkJoin({
+      plans: this.http.get<readonly PlanApiDto[]>('/api/admin/plans'),
+      dashboard: this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
+      audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
+      users: this.http.get<readonly AdminUserPlanSummary[]>('/api/admin/users'),
+      admins: this.http.get<readonly UserApiDto[]>('/api/admin/administrators'),
+      activeTracks: this.http.get<readonly TrackApiDto[]>('/api/tracks/search', {
+        params: new HttpParams().set('limit', '100'),
+        context: createAdminHttpContext(),
+      }),
+      blockedTracks: this.http.get<readonly TrackApiDto[]>('/api/admin/blocked-tracks'),
+      reviews: this.http.get<readonly ReviewApiDto[]>('/api/admin/reviews'),
+    }).subscribe({
+      next: (payload) => {
+        if (this.sessionEpoch !== expectedEpoch) return;
+        this.plansSignal.set(payload.plans);
+        this.dashboardSignal.set(payload.dashboard);
+        this.audienceSignal.set(payload.audience);
+        this.usersSignal.set(payload.users);
+        this.administratorsSignal.set(payload.admins);
+        this.activeTracksSignal.set(payload.activeTracks);
+        this.lastCatalogQuerySignal.set('');
+        this.blockedTracksSignal.set(payload.blockedTracks);
+        this.reviewsSignal.set(
+          this.mapReviews(payload.reviews, payload.users, [
+            ...payload.activeTracks,
+            ...payload.blockedTracks,
+          ]),
+        );
+        this.hasHydratedSignal.set(true);
+        this.isLoadingSignal.set(false);
+        this.syncErrorSignal.set('');
+      },
+      error: (err: unknown) => {
+        if (this.sessionEpoch !== expectedEpoch) return;
+        this.isLoadingSignal.set(false);
+        this.syncErrorSignal.set(mapAdminDomainError(err).message);
+      },
+    });
+  }
+
+  /** Clears the active administrative session and resets cached backend signals. */
   logoutAdmin(): void {
-    this.sessionSignal.set(null);
-    removeStoredKey(STORAGE_KEYS.session);
+    this.clearSessionState();
     this.notify('Sessão administrativa encerrada.');
   }
 
-  /** Promotes a user to administrator in the local mock data. */
-  promoteUserToAdmin(userId: number): AdminAccount {
-    return this.setUserAdminFlag(userId, true);
+  /** Registers a new eligible administrator via POST /api/admin/administrators. */
+  registerAdministrator(payload: RegisterAdminApiRequest): Observable<UserApiDto> {
+    let requestBody: RegisterAdminApiRequest;
+    try {
+      requestBody = buildRegisterAdminPayload(payload);
+    } catch (err: unknown) {
+      return throwError(() => mapAdminDomainError(err));
+    }
+
+    return this.http.post<UserApiDto>('/api/admin/administrators', requestBody).pipe(
+      tap((createdAdmin) => {
+        this.administratorsSignal.update((current) => [
+          ...current.filter((admin) => admin.user_id !== createdAdmin.user_id),
+          createdAdmin,
+        ]);
+        this.refreshUsersAndMetrics();
+        this.notify(`Administrador "${createdAdmin.display_name}" cadastrado com sucesso.`);
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
   }
 
-  /** Updates administrator privileges matching PUT /api/admin/administrators/{id}. */
-  updateAdminRole(targetUserId: number, isAdmin: boolean): AdminAccount {
+  /** Promotes an existing user to administrator via PUT /api/admin/administrators/{id}. */
+  promoteUserToAdmin(userId: number): Observable<UserApiDto> {
+    return this.updateAdminRole(userId, true);
+  }
+
+  /** Updates administrator privileges via PUT /api/admin/administrators/{id}. */
+  updateAdminRole(targetUserId: number, isAdmin: boolean): Observable<UserApiDto> {
     const activeAdminId = this.sessionSignal()?.user_id;
     if (activeAdminId === targetUserId && !isAdmin) {
-      throw new AdminDomainError('Administrador não pode revogar o próprio acesso.', 'RULE');
+      return throwError(
+        () => new AdminDomainError('Administrador não pode revogar o próprio acesso.', 'RULE'),
+      );
     }
-    return this.setUserAdminFlag(targetUserId, isAdmin);
+
+    return this.http
+      .put<UserApiDto>(`/api/admin/administrators/${targetUserId}`, {
+        is_admin: isAdmin,
+      })
+      .pipe(
+        tap((remoteUser) => {
+          this.usersSignal.update((users) =>
+            users.map((user) =>
+              user.user_id === remoteUser.user_id
+                ? { ...user, is_admin: remoteUser.is_admin }
+                : user,
+            ),
+          );
+          if (remoteUser.is_admin) {
+            this.administratorsSignal.update((admins) => [
+              ...admins.filter((admin) => admin.user_id !== remoteUser.user_id),
+              remoteUser,
+            ]);
+          } else {
+            this.administratorsSignal.update((admins) =>
+              admins.filter((admin) => admin.user_id !== remoteUser.user_id),
+            );
+          }
+          this.notify(
+            remoteUser.is_admin
+              ? `${remoteUser.display_name} agora possui acesso administrativo.`
+              : `Acesso administrativo de ${remoteUser.display_name} revogado.`,
+          );
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
   }
 
-  /** Updates plan pricing, name, or profile limits matching PUT /api/admin/plans/{id}. */
-  updatePlan(planId: number, payload: UpdateAdminPlanPayload): PlanApiDto {
-    const currentPlans = this.plansSignal();
-    const existingPlan = currentPlans.find((item) => item.plan_id === planId);
+  /** Updates plan pricing, name, or profile limits via PUT /api/admin/plans/{id}. */
+  updatePlan(planId: number, payload: UpdateAdminPlanPayload): Observable<PlanApiDto> {
+    const existingPlan = this.plansSignal().find((item) => item.plan_id === planId);
     if (!existingPlan) {
-      throw new AdminDomainError(`Plano ${planId} não encontrado.`, 'NOT_FOUND');
+      return throwError(() => new AdminDomainError(`Plano ${planId} não encontrado.`, 'NOT_FOUND'));
     }
 
-    const resolvedName =
-      payload.new_name !== undefined
-        ? this.validatePlanName(planId, payload.new_name)
-        : existingPlan.name;
-    const resolvedPrice =
-      payload.new_price !== undefined
-        ? this.validatePlanPrice(payload.new_price)
-        : existingPlan.monthly_price;
-    const resolvedMaxProfiles =
-      payload.max_profiles !== undefined
-        ? this.validateMaxProfiles(planId, payload.max_profiles)
-        : existingPlan.max_profiles;
-
-    const updatedPlan: PlanApiDto = {
-      plan_id: planId,
-      name: resolvedName,
-      monthly_price: resolvedPrice,
-      max_profiles: resolvedMaxProfiles,
-    };
-
-    const nextPlans = currentPlans.map((item) => (item.plan_id === planId ? updatedPlan : item));
-    this.plansSignal.set(nextPlans);
-    writeStoredJson(STORAGE_KEYS.plans, nextPlans);
-    this.notify(`Plano "${updatedPlan.name}" atualizado com sucesso.`);
-    return updatedPlan;
-  }
-
-  /** Searches active catalog tracks matching GET /api/tracks/search. */
-  searchCatalogTracks(query: string): readonly TrackApiDto[] {
-    const term = query.trim().toLowerCase();
-    const active = this.activeTracks();
-    if (!term) return active;
-    return active.filter(
-      (track) =>
-        track.title.toLowerCase().includes(term) ||
-        track.artist.toLowerCase().includes(term) ||
-        track.genre.toLowerCase().includes(term) ||
-        (track.album?.toLowerCase().includes(term) ?? false),
-    );
-  }
-
-  /** Blocks or restores a catalog track matching PUT /api/admin/tracks/{id}/block. */
-  setTrackBlocked(trackId: number, blocked: boolean): TrackApiDto {
-    const updated = this.mutateTrack(trackId, (track) => ({ ...track, is_deleted: blocked }));
-    this.notify(
-      blocked
-        ? `Faixa "${updated.title}" bloqueada no catálogo.`
-        : `Faixa "${updated.title}" restaurada ao catálogo ativo.`,
-    );
-    return updated;
-  }
-
-  /** Updates explicit advisory flag matching PUT /api/admin/tracks/{id}/explicit. */
-  setTrackExplicit(trackId: number, explicit: boolean): TrackApiDto {
-    const updated = this.mutateTrack(trackId, (track) => ({ ...track, explicit }));
-    this.notify(
-      explicit
-        ? `Selo +18 ativado em "${updated.title}".`
-        : `Selo +18 removido de "${updated.title}".`,
-    );
-    return updated;
-  }
-
-  /** Soft-deletes an abusive review matching DELETE /api/reviews/{id}. */
-  deleteReview(reviewId: number): void {
-    const current = this.reviewsSignal();
-    const target = current.find((item) => item.review_id === reviewId && !item.is_deleted);
-    if (!target) {
-      throw new AdminDomainError(`Avaliação ${reviewId} não encontrada.`, 'NOT_FOUND');
+    let resolvedName = existingPlan.name;
+    let resolvedPrice = existingPlan.monthly_price;
+    let resolvedMaxProfiles = existingPlan.max_profiles;
+    try {
+      if (payload.new_name !== undefined) {
+        resolvedName = this.validatePlanName(planId, payload.new_name);
+      }
+      if (payload.new_price !== undefined) {
+        resolvedPrice = this.validatePlanPrice(payload.new_price);
+      }
+      if (payload.max_profiles !== undefined) {
+        resolvedMaxProfiles = this.validateMaxProfiles(payload.max_profiles);
+      }
+    } catch (err: unknown) {
+      return throwError(() => mapAdminDomainError(err));
     }
 
-    const next = current.map((item) =>
-      item.review_id === reviewId ? { ...item, is_deleted: true } : item,
-    );
-    this.reviewsSignal.set(next);
-    writeStoredJson(STORAGE_KEYS.reviews, next);
-    this.notify(`Avaliação #${reviewId} removida pela moderação.`);
+    return this.http
+      .put<PlanApiDto>(`/api/admin/plans/${planId}`, {
+        new_name: resolvedName,
+        new_price: resolvedPrice,
+        max_profiles: resolvedMaxProfiles,
+      })
+      .pipe(
+        tap((remotePlan) => {
+          this.plansSignal.update((plans) =>
+            plans.map((item) => (item.plan_id === planId ? remotePlan : item)),
+          );
+          this.refreshDashboardAndUsers();
+          this.notify(`Plano "${remotePlan.name}" atualizado com sucesso.`);
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
   }
 
-  /** Restores all administrative mock datasets to their factory seed state. */
-  resetDemoData(): void {
-    this.plansSignal.set(MOCK_ADMIN_PLANS);
-    this.usersSignal.set(MOCK_ADMIN_USERS);
-    this.tracksSignal.set(MOCK_ADMIN_TRACKS);
-    this.reviewsSignal.set(MOCK_ADMIN_REVIEWS);
-    writeStoredJson(STORAGE_KEYS.plans, MOCK_ADMIN_PLANS);
-    writeStoredJson(STORAGE_KEYS.users, MOCK_ADMIN_USERS);
-    writeStoredJson(STORAGE_KEYS.tracks, MOCK_ADMIN_TRACKS);
-    writeStoredJson(STORAGE_KEYS.reviews, MOCK_ADMIN_REVIEWS);
-    this.notify('Dados de demonstração do painel restaurados.');
+  /** Queries GET /api/tracks/search on the backend and updates active catalog tracks. */
+  fetchCatalogTracksFromBackend(query: string): Observable<readonly TrackApiDto[]> {
+    let params = new HttpParams().set('limit', '100');
+    const trimmed = query.trim();
+    if (trimmed) {
+      params = params.set('query', trimmed);
+    }
+
+    const expectedEpoch = this.sessionEpoch;
+    return this.http
+      .get<readonly TrackApiDto[]>('/api/tracks/search', {
+        params,
+        context: createAdminHttpContext(),
+      })
+      .pipe(
+        tap((remoteTracks) => {
+          if (this.sessionEpoch !== expectedEpoch) return;
+          this.activeTracksSignal.set(remoteTracks);
+          this.lastCatalogQuerySignal.set(trimmed);
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
+  }
+
+  /** Blocks or restores a catalog track via PUT /api/admin/tracks/{id}/block. */
+  setTrackBlocked(trackId: number, blocked: boolean): Observable<TrackBlockApiResponse> {
+    return this.http
+      .put<TrackBlockApiResponse>(`/api/admin/tracks/${trackId}/block`, {
+        blocked,
+      })
+      .pipe(
+        tap((response) => {
+          this.applyTrackBlockUpdate(trackId, response.blocked);
+          this.refreshAudienceReport();
+          const title = this.findTrackTitle(trackId);
+          this.notify(
+            response.blocked
+              ? `Faixa "${title}" bloqueada no catálogo.`
+              : `Faixa "${title}" restaurada ao catálogo ativo.`,
+          );
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
+  }
+
+  /** Updates explicit advisory flag via PUT /api/admin/tracks/{id}/explicit. */
+  setTrackExplicit(trackId: number, explicit: boolean): Observable<TrackExplicitApiResponse> {
+    return this.http
+      .put<TrackExplicitApiResponse>(`/api/admin/tracks/${trackId}/explicit`, {
+        explicit,
+      })
+      .pipe(
+        tap((response) => {
+          this.patchTrackInLists(trackId, (track) => ({
+            ...track,
+            explicit: response.explicit,
+          }));
+          const title = this.findTrackTitle(trackId);
+          this.notify(
+            response.explicit
+              ? `Selo +18 ativado em "${title}".`
+              : `Selo +18 removido de "${title}".`,
+          );
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
+  }
+
+  /** Updates track genre via PUT /api/admin/tracks/{id}/genre. */
+  updateTrackGenre(trackId: number, genre: string): Observable<TrackGenreApiResponse> {
+    const trimmedGenre = genre.trim();
+    if (!trimmedGenre) {
+      return throwError(() => new AdminDomainError('O gênero da faixa é obrigatório.', 'RULE'));
+    }
+
+    return this.http
+      .put<TrackGenreApiResponse>(`/api/admin/tracks/${trackId}/genre`, {
+        genre: trimmedGenre,
+      })
+      .pipe(
+        tap((response) => {
+          this.patchTrackInLists(trackId, (track) => ({
+            ...track,
+            genre: response.genre,
+          }));
+          this.notify(`Gênero da faixa #${trackId} atualizado para "${response.genre}".`);
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
+  }
+
+  /** Triggers catalog delta-table compaction via POST /api/admin/catalog/compact. */
+  compactCatalog(): Observable<CompactCatalogApiResponse> {
+    return this.http.post<CompactCatalogApiResponse>('/api/admin/catalog/compact', {}).pipe(
+      tap((response) => {
+        this.notify(response.message || 'Catálogo compactado com sucesso.');
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
+  }
+
+  /** Synchronizes catalog delta tables via POST /api/admin/catalog/sync. */
+  syncCatalog(force = false): Observable<SyncCatalogVersionApiResponse> {
+    const params = new HttpParams().set('force', String(force));
+    return this.http
+      .post<SyncCatalogVersionApiResponse>('/api/admin/catalog/sync', {}, { params })
+      .pipe(
+        tap((response) => {
+          this.notify(response.message || 'Catálogo sincronizado com sucesso.');
+          if (response.synced) {
+            this.refreshTracksAndAudience();
+          }
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
+  }
+
+  /** Requests review deletion via DELETE /api/reviews/{id}. */
+  deleteReview(reviewId: number): Observable<ActionSuccessApiDto> {
+    return this.http
+      .delete<ActionSuccessApiDto>(`/api/reviews/${reviewId}`, {
+        context: createAdminHttpContext(),
+      })
+      .pipe(
+        tap((response) => {
+          if (response.success) {
+            this.reviewsSignal.update((reviews) =>
+              reviews.map((item) =>
+                item.review_id === reviewId ? { ...item, is_deleted: true } : item,
+              ),
+            );
+            this.notify(`Avaliação #${reviewId} removida pela moderação.`);
+          }
+        }),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
   }
 
   /** Displays a transient feedback toast inside the admin console. */
   notify(message: string): void {
     this.toastSignal.set(message);
-    setTimeout(() => {
+    if (this.toastTimer !== null) {
+      clearTimeout(this.toastTimer);
+    }
+    this.toastTimer = setTimeout(() => {
       if (this.toastSignal() === message) {
         this.toastSignal.set('');
       }
+      this.toastTimer = null;
     }, 3400);
   }
 
   /** Dismisses the active admin toast banner immediately. */
   clearToast(): void {
     this.toastSignal.set('');
+    if (this.toastTimer !== null) {
+      clearTimeout(this.toastTimer);
+      this.toastTimer = null;
+    }
   }
 
-  /** Returns the maximum occupied profiles among titular subscribers of a plan. */
-  getOccupiedProfilesForPlan(planId: number): number {
-    const allUsers = this.usersSignal();
-    let maxOccupied = 1;
-    for (const holder of allUsers) {
-      if (holder.plan_id !== planId || holder.primary_account_id !== undefined) continue;
-      const dependents = allUsers.filter((dep) => dep.primary_account_id === holder.user_id).length;
-      if (dependents + 1 > maxOccupied) {
-        maxOccupied = dependents + 1;
-      }
-    }
-    return maxOccupied;
+  private clearSessionState(): void {
+    this.sessionEpoch += 1;
+    this.hydrationSub?.unsubscribe();
+    this.hydrationSub = null;
+    this.refreshSub?.unsubscribe();
+    this.refreshSub = null;
+    this.isLoadingSignal.set(false);
+    this.sessionSignal.set(null);
+    this.plansSignal.set([]);
+    this.usersSignal.set([]);
+    this.administratorsSignal.set([]);
+    this.activeTracksSignal.set([]);
+    this.blockedTracksSignal.set([]);
+    this.reviewsSignal.set([]);
+    this.dashboardSignal.set(EMPTY_DASHBOARD);
+    this.audienceSignal.set(EMPTY_AUDIENCE);
+    this.hasHydratedSignal.set(false);
+    this.lastCatalogQuerySignal.set('');
+    this.syncErrorSignal.set('');
+    removeStoredSession();
+    clearAdminAuthToken();
   }
 
-  private setUserAdminFlag(userId: number, isAdmin: boolean): AdminAccount {
-    const currentUsers = this.usersSignal();
-    const found = currentUsers.find((user) => user.user_id === userId);
-    if (!found) {
-      throw new AdminDomainError(`Usuário com ID ${userId} não encontrado.`, 'NOT_FOUND');
-    }
-
-    const updatedUser: AdminAccount = { ...found, is_admin: isAdmin };
-    const nextUsers = currentUsers.map((user) => (user.user_id === userId ? updatedUser : user));
-    this.usersSignal.set(nextUsers);
-    writeStoredJson(STORAGE_KEYS.users, nextUsers);
-    this.notify(
-      isAdmin
-        ? `${updatedUser.display_name} agora possui acesso administrativo.`
-        : `Acesso administrativo de ${updatedUser.display_name} revogado.`,
+  private mapReviews(
+    reviewDtos: readonly ReviewApiDto[],
+    users: readonly AdminUserPlanSummary[],
+    tracks: readonly TrackApiDto[],
+  ): AdminModerationReview[] {
+    const userById = new Map<number, AdminUserPlanSummary>(
+      users.map((user) => [user.user_id, user]),
     );
-    return updatedUser;
+    const trackById = new Map<number, TrackApiDto>(tracks.map((track) => [track.track_id, track]));
+
+    return reviewDtos.map((dto, index) => mapModerationReview(dto, index, userById, trackById));
+  }
+
+  private runBackgroundRefresh<T>(source$: Observable<T>, apply: (payload: T) => void): void {
+    this.refreshSub?.unsubscribe();
+    const expectedEpoch = this.sessionEpoch;
+    this.refreshSub = source$.subscribe({
+      next: (payload) => {
+        if (this.sessionEpoch !== expectedEpoch) return;
+        apply(payload);
+      },
+      error: (err: unknown) => {
+        if (this.sessionEpoch !== expectedEpoch) return;
+        this.syncErrorSignal.set(mapAdminDomainError(err).message);
+      },
+    });
+  }
+
+  private refreshUsersAndMetrics(): void {
+    this.runBackgroundRefresh(
+      forkJoin({
+        users: this.http.get<readonly AdminUserPlanSummary[]>('/api/admin/users'),
+        dashboard: this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
+        audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
+      }),
+      (payload) => {
+        this.usersSignal.set(payload.users);
+        this.dashboardSignal.set(payload.dashboard);
+        this.audienceSignal.set(payload.audience);
+      },
+    );
+  }
+
+  private refreshDashboardAndUsers(): void {
+    this.runBackgroundRefresh(
+      forkJoin({
+        dashboard: this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
+        users: this.http.get<readonly AdminUserPlanSummary[]>('/api/admin/users'),
+      }),
+      (payload) => {
+        this.dashboardSignal.set(payload.dashboard);
+        this.usersSignal.set(payload.users);
+      },
+    );
+  }
+
+  private refreshAudienceReport(): void {
+    this.runBackgroundRefresh(
+      this.http.get<AudienceReportApiDto>('/api/admin/audience'),
+      (audience) => {
+        this.audienceSignal.set(audience);
+      },
+    );
+  }
+
+  private refreshTracksAndAudience(): void {
+    this.runBackgroundRefresh(
+      forkJoin({
+        activeTracks: this.http.get<readonly TrackApiDto[]>('/api/tracks/search', {
+          params: new HttpParams().set('limit', '100'),
+          context: createAdminHttpContext(),
+        }),
+        blockedTracks: this.http.get<readonly TrackApiDto[]>('/api/admin/blocked-tracks'),
+        audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
+      }),
+      (payload) => {
+        this.activeTracksSignal.set(payload.activeTracks);
+        this.lastCatalogQuerySignal.set('');
+        this.blockedTracksSignal.set(payload.blockedTracks);
+        this.audienceSignal.set(payload.audience);
+      },
+    );
+  }
+
+  private applyTrackBlockUpdate(trackId: number, blocked: boolean): void {
+    if (blocked) {
+      const target = this.activeTracksSignal().find((track) => track.track_id === trackId);
+      this.activeTracksSignal.update((tracks) =>
+        tracks.filter((track) => track.track_id !== trackId),
+      );
+      if (target) {
+        this.blockedTracksSignal.update((tracks) => [
+          ...tracks.filter((track) => track.track_id !== trackId),
+          { ...target, is_deleted: true },
+        ]);
+      }
+      return;
+    }
+
+    const target = this.blockedTracksSignal().find((track) => track.track_id === trackId);
+    this.blockedTracksSignal.update((tracks) =>
+      tracks.filter((track) => track.track_id !== trackId),
+    );
+    if (target) {
+      this.activeTracksSignal.update((tracks) => [
+        ...tracks.filter((track) => track.track_id !== trackId),
+        { ...target, is_deleted: false },
+      ]);
+    }
+  }
+
+  private patchTrackInLists(trackId: number, updater: (track: TrackApiDto) => TrackApiDto): void {
+    this.activeTracksSignal.update((tracks) =>
+      tracks.map((track) => (track.track_id === trackId ? updater(track) : track)),
+    );
+    this.blockedTracksSignal.update((tracks) =>
+      tracks.map((track) => (track.track_id === trackId ? updater(track) : track)),
+    );
+  }
+
+  private findTrackTitle(trackId: number): string {
+    const found =
+      this.activeTracksSignal().find((track) => track.track_id === trackId) ??
+      this.blockedTracksSignal().find((track) => track.track_id === trackId);
+    return found?.title ?? `#${trackId}`;
   }
 
   private validatePlanName(planId: number, rawName: string): string {
@@ -487,30 +858,10 @@ export class AdminStateService {
     return Math.round(price * 100) / 100;
   }
 
-  private validateMaxProfiles(planId: number, maxProfiles: number): number {
+  private validateMaxProfiles(maxProfiles: number): number {
     if (!Number.isFinite(maxProfiles) || !Number.isInteger(maxProfiles) || maxProfiles < 1) {
       throw new AdminDomainError('O limite de perfis deve ser de pelo menos 1.', 'RULE');
     }
-    const occupied = this.getOccupiedProfilesForPlan(planId);
-    if (maxProfiles < occupied) {
-      throw new AdminDomainError(
-        'O limite não pode ser menor que os perfis já vinculados.',
-        'RULE',
-      );
-    }
     return maxProfiles;
-  }
-
-  private mutateTrack(trackId: number, updater: (track: TrackApiDto) => TrackApiDto): TrackApiDto {
-    const current = this.tracksSignal();
-    const target = current.find((item) => item.track_id === trackId);
-    if (!target) {
-      throw new AdminDomainError(`Faixa ${trackId} não encontrada.`, 'NOT_FOUND');
-    }
-    const updated = updater(target);
-    const next = current.map((item) => (item.track_id === trackId ? updated : item));
-    this.tracksSignal.set(next);
-    writeStoredJson(STORAGE_KEYS.tracks, next);
-    return updated;
   }
 }

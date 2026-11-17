@@ -3,6 +3,8 @@
 import contextlib
 import json
 import os
+import ssl
+import tempfile
 from pathlib import Path
 from typing import Self
 
@@ -10,6 +12,208 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 _DEFAULT_DEV_SECRET_KEY = "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
 _DEFAULT_DEV_ADMIN_PASSWORD = "RibbitLocal2026!"  # noqa: S105
+_DEFAULT_ADMIN_ELIGIBLE_EMAILS = (
+    "admin@ribbit.example.com",
+    "gabriel.agra@usp.br",
+    "fernando.seraco@usp.br",
+    "mateusara@usp.br",
+)
+_DEFAULT_GCS_MAX_INGEST_TRACKS = 50_000
+
+
+def _atomic_write_ca_bundle(bundle_path: Path, combined: str) -> None:
+    existing: str | None = None
+    with contextlib.suppress(OSError, UnicodeError, ValueError):
+        existing = bundle_path.read_text(encoding="utf-8")
+    if existing == combined:
+        return
+    tmp_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=bundle_path.parent,
+            prefix="ca_",
+            suffix=".tmp",
+            delete=False,
+        ) as tmp_file:
+            tmp_name = tmp_file.name
+            tmp_file.write(combined)
+        Path(tmp_name).replace(bundle_path)
+        tmp_name = None
+    finally:
+        if tmp_name is not None:
+            with contextlib.suppress(OSError):
+                Path(tmp_name).unlink(missing_ok=True)
+
+
+def _configure_system_ca_bundle() -> None:
+    """Combines certifi and OS trust-store CAs so requests/google-auth verify HTTPS."""
+    if os.environ.get("REQUESTS_CA_BUNDLE") or os.environ.get("SSL_CERT_FILE"):
+        return
+    with contextlib.suppress(
+        ImportError, OSError, ssl.SSLError, UnicodeError, ValueError
+    ):
+        import certifi  # noqa: PLC0415
+
+        ctx = ssl.create_default_context()
+        os_certs = sorted(
+            {
+                ssl.DER_cert_to_PEM_cert(der)
+                for der in ctx.get_ca_certs(binary_form=True)
+            }
+        )
+        if not os_certs:
+            return
+        base_dir = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / ".cache"))
+        bundle_dir = base_dir / "ribbit"
+        bundle_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        bundle_path = bundle_dir / "ribbit_combined_ca.pem"
+        certifi_pem = Path(certifi.where()).read_text(encoding="utf-8")
+        combined = certifi_pem.rstrip() + "\n" + "".join(os_certs)
+        _atomic_write_ca_bundle(bundle_path, combined)
+        os.environ["REQUESTS_CA_BUNDLE"] = str(bundle_path)
+
+
+def _extract_client_id_from_payload(payload: object) -> str | None:
+    if not isinstance(payload, dict):
+        return None
+    for section_key in ("web", "installed"):
+        section = payload.get(section_key)
+        if isinstance(section, dict):
+            nested = section.get("client_id")
+            if isinstance(nested, str) and nested.strip():
+                return nested.strip()
+    key = "oauth_client_id" if payload.get("type") == "service_account" else "client_id"
+    direct = payload.get(key)
+    return direct.strip() if isinstance(direct, str) and direct.strip() else None
+
+
+def _load_json_payload(path_raw: str | None) -> dict[str, object] | None:
+    if not path_raw or not path_raw.strip():
+        return None
+    path = Path(path_raw.strip())
+    if not path.is_file():
+        return None
+    with contextlib.suppress(OSError, json.JSONDecodeError, TypeError, ValueError):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _extract_oauth_section(payload: dict[str, object] | None) -> dict[str, object]:
+    if not payload:
+        return {}
+    for section_key in ("web", "installed"):
+        section = payload.get(section_key)
+        if isinstance(section, dict):
+            return section
+    return payload
+
+
+def _resolve_oauth_file_payload() -> dict[str, object]:
+    explicit_file = os.getenv("GOOGLE_OAUTH_CLIENT_FILE")
+    if explicit_file:
+        data = _load_json_payload(explicit_file)
+        if data:
+            return _extract_oauth_section(data)
+
+    sa_creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if sa_creds:
+        data = _load_json_payload(sa_creds)
+        if data and any(k in data for k in ("web", "installed")):
+            return _extract_oauth_section(data)
+
+    return {}
+
+
+def _resolve_google_oauth_settings() -> tuple[
+    str | None, str | None, str | None, str, str, str
+]:
+    oauth_section = _resolve_oauth_file_payload()
+
+    explicit_client_id = (os.getenv("GOOGLE_CLIENT_ID") or "").strip() or None
+    file_client_id_raw = oauth_section.get("client_id")
+    file_client_id = (
+        str(file_client_id_raw).strip()
+        if isinstance(file_client_id_raw, str) and file_client_id_raw.strip()
+        else None
+    )
+
+    sa_client_id: str | None = None
+    if not explicit_client_id and not file_client_id:
+        creds_raw = (os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or "").strip()
+        if creds_raw:
+            payload = _load_json_payload(creds_raw)
+            sa_client_id = _extract_client_id_from_payload(payload)
+
+    client_id = explicit_client_id or file_client_id or sa_client_id
+
+    explicit_secret = (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip() or None
+    file_secret_raw = oauth_section.get("client_secret")
+    file_secret = (
+        str(file_secret_raw).strip()
+        if isinstance(file_secret_raw, str) and file_secret_raw.strip()
+        else None
+    )
+    client_secret = explicit_secret or file_secret
+
+    explicit_redirect = (os.getenv("GOOGLE_REDIRECT_URI") or "").strip() or None
+    file_redirects = oauth_section.get("redirect_uris")
+    file_redirect = (
+        file_redirects[0].strip()
+        if isinstance(file_redirects, list)
+        and file_redirects
+        and isinstance(file_redirects[0], str)
+        and file_redirects[0].strip()
+        else None
+    )
+    default_redirect = (
+        "http://localhost:4200/api/auth/google/callback"
+        if (client_id and client_secret)
+        else None
+    )
+    redirect_uri = explicit_redirect or file_redirect or default_redirect
+
+    explicit_auth_uri = (os.getenv("GOOGLE_AUTH_URI") or "").strip() or None
+    file_auth_uri = str(oauth_section.get("auth_uri") or "").strip() or None
+    auth_uri = (
+        explicit_auth_uri
+        or file_auth_uri
+        or "https://accounts.google.com/o/oauth2/auth"
+    )
+
+    explicit_token_uri = (os.getenv("GOOGLE_TOKEN_URI") or "").strip() or None
+    file_token_uri = str(oauth_section.get("token_uri") or "").strip() or None
+    token_uri = (
+        explicit_token_uri or file_token_uri or "https://oauth2.googleapis.com/token"
+    )
+
+    frontend_redirect = (os.getenv("GOOGLE_FRONTEND_REDIRECT_URL") or "").strip() or "/"
+
+    return (
+        client_id,
+        client_secret,
+        redirect_uri,
+        auth_uri,
+        token_uri,
+        frontend_redirect,
+    )
+
+
+def _resolve_google_client_id() -> str | None:
+    client_id, *_ = _resolve_google_oauth_settings()
+    return client_id
+
+
+def _parse_optional_positive_int(raw: str | None, default: int | None) -> int | None:
+    if raw is None or not raw.strip():
+        return default
+    with contextlib.suppress(ValueError):
+        parsed = int(raw.strip())
+        return parsed if parsed > 0 else None
+    return default
 
 
 class Settings(BaseModel):
@@ -35,14 +239,16 @@ class Settings(BaseModel):
     token_expiration_seconds: int = 43200
     admin_email: str = "admin@ribbit.example.com"
     admin_password: str = _DEFAULT_DEV_ADMIN_PASSWORD
-    admin_eligible_emails: tuple[str, ...] = (
-        "admin@ribbit.example.com",
-        "gabriel.agra@usp.br",
-        "fernando.seraco@usp.br",
-    )
+    admin_eligible_emails: tuple[str, ...] = _DEFAULT_ADMIN_ELIGIBLE_EMAILS
     gcs_bucket_name: str | None = None
     gcs_tracks_file_path: str = "Songs/songs_final.parquet"
+    gcs_max_ingest_tracks: int | None = _DEFAULT_GCS_MAX_INGEST_TRACKS
     google_client_id: str | None = None
+    google_client_secret: str | None = None
+    google_redirect_uri: str | None = None
+    google_auth_uri: str = "https://accounts.google.com/o/oauth2/auth"
+    google_token_uri: str = "https://oauth2.googleapis.com/token"  # noqa: S105
+    google_frontend_redirect_url: str = "/"
     gcp_project_id: str | None = None
     firestore_enabled: bool = False
     firestore_database: str = "(default)"
@@ -56,28 +262,36 @@ class Settings(BaseModel):
         return self
 
 
-def _resolve_gcp_project_id() -> str | None:
+def _resolve_gcp_project_id() -> tuple[str | None, bool]:
     env_project = (
         os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or ""
     ).strip()
     if env_project:
-        return env_project
+        return env_project, True
     creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     if creds_path:
         path = Path(creds_path)
         if path.is_file():
             with contextlib.suppress(Exception):
                 data = json.loads(path.read_text(encoding="utf-8"))
-                if isinstance(data, dict) and data.get("project_id"):
-                    return str(data["project_id"]).strip() or None
-    return None
+                if (
+                    isinstance(data, dict)
+                    and data.get("type") == "service_account"
+                    and data.get("project_id")
+                ):
+                    return str(data["project_id"]).strip() or None, True
+    oauth_section = _resolve_oauth_file_payload()
+    oauth_proj = oauth_section.get("project_id")
+    if isinstance(oauth_proj, str) and oauth_proj.strip():
+        return oauth_proj.strip(), False
+    return None, False
 
 
-def _resolve_firestore_enabled(gcp_project_id: str | None) -> bool:
+def _resolve_firestore_enabled(*, has_explicit_gcp_creds: bool) -> bool:
     raw_fs = os.getenv("FIRESTORE_ENABLED")
     if raw_fs is not None:
         return raw_fs.strip().lower() in ("1", "true", "yes", "on")
-    return bool(gcp_project_id)
+    return has_explicit_gcp_creds
 
 
 def load_settings() -> Settings:
@@ -86,6 +300,8 @@ def load_settings() -> Settings:
         from dotenv import load_dotenv  # noqa: PLC0415
 
         load_dotenv()
+
+    _configure_system_ca_bundle()
 
     raw_iterations = os.getenv("PASSWORD_HASH_ITERATIONS")
 
@@ -133,13 +349,18 @@ def load_settings() -> Settings:
             e.strip().lower() for e in raw_eligible.split(",") if e.strip()
         )
     else:
-        admin_eligible_emails = (
-            "admin@ribbit.example.com",
-            "gabriel.agra@usp.br",
-            "fernando.seraco@usp.br",
-        )
+        admin_eligible_emails = _DEFAULT_ADMIN_ELIGIBLE_EMAILS
 
-    gcp_project_id = _resolve_gcp_project_id()
+    gcp_project_id, has_explicit_gcp_creds = _resolve_gcp_project_id()
+
+    (
+        google_client_id,
+        google_client_secret,
+        google_redirect_uri,
+        google_auth_uri,
+        google_token_uri,
+        google_frontend_redirect_url,
+    ) = _resolve_google_oauth_settings()
 
     return Settings(
         database_path=db_path,
@@ -166,9 +387,20 @@ def load_settings() -> Settings:
         gcs_tracks_file_path=os.getenv(
             "GCS_TRACKS_FILE_PATH", "Songs/songs_final.parquet"
         ),
-        google_client_id=os.getenv("GOOGLE_CLIENT_ID") or None,
+        gcs_max_ingest_tracks=_parse_optional_positive_int(
+            os.getenv("GCS_MAX_INGEST_TRACKS"),
+            _DEFAULT_GCS_MAX_INGEST_TRACKS,
+        ),
+        google_client_id=google_client_id,
+        google_client_secret=google_client_secret,
+        google_redirect_uri=google_redirect_uri,
+        google_auth_uri=google_auth_uri,
+        google_token_uri=google_token_uri,
+        google_frontend_redirect_url=google_frontend_redirect_url,
         gcp_project_id=gcp_project_id,
-        firestore_enabled=_resolve_firestore_enabled(gcp_project_id),
+        firestore_enabled=_resolve_firestore_enabled(
+            has_explicit_gcp_creds=has_explicit_gcp_creds
+        ),
         firestore_database=os.getenv("FIRESTORE_DATABASE", "(default)"),
     )
 

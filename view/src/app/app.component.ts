@@ -1,11 +1,17 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import type { NavigationItem, Song } from '@ribbit/shared-types';
 import { AudioPlayerService } from './core/audio-player.service';
 import { RibbitStateService } from './core/ribbit-state.service';
 import { AuthComponent } from './features/auth/auth.component';
-import { WidthPercentDirective } from './shared/dynamic-style.directive';
 import { FrogComponent } from './shared/frog.component';
 import { IconComponent } from './shared/icon.component';
 import { ModalsComponent } from './shared/modals.component';
@@ -20,7 +26,7 @@ interface PageHeading {
 
 const PAGE_HEADINGS: Record<string, PageHeading> = {
   discover: {
-    eyebrow: 'THE POND',
+    eyebrow: 'FIND YOUR NEXT FAVORITE',
     description: '',
   },
   playlists: {
@@ -30,16 +36,16 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     description: 'Uma trilha sonora para cada versão de você.',
   },
   jams: {
-    eyebrow: 'BETTER TOGETHER',
+    eyebrow: 'THE POND',
     titlePrefix: 'A mesma música. ',
     titleHighlight: 'Juntos.',
     description: 'Conecte seus gostos e descubra com seus amigos.',
   },
   explore: {
-    eyebrow: 'NOVOS HORIZONTES',
+    eyebrow: 'COMUNIDADE',
     titlePrefix: 'Tem um mundo ',
     titleHighlight: 'pra ouvir.',
-    description: 'Explore artistas, gêneros e histórias que merecem um play.',
+    description: 'Busque faixas, explore lançamentos e acompanhe os reviews da comunidade.',
   },
   settings: {
     eyebrow: 'CONFIGURAÇÕES',
@@ -81,6 +87,12 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     titleHighlight: 'Mais você.',
     description: 'Escolha o plano que acompanha o ritmo das suas descobertas.',
   },
+  family: {
+    eyebrow: 'PLANO FAMÍLIA',
+    titlePrefix: 'Conta Pai e ',
+    titleHighlight: 'Contas Filhas.',
+    description: 'Gerencie os perfis dependentes, vagas e proteção etária do seu grupo familiar.',
+  },
 };
 
 /** Root application shell hosting sidebar navigation, active feature outlet, right rail, and bottom player. */
@@ -94,7 +106,6 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     ToastComponent,
     ModalsComponent,
     AuthComponent,
-    WidthPercentDirective,
   ],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
@@ -102,7 +113,7 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
 })
 export class AppComponent {
   protected readonly state = inject(RibbitStateService);
-  protected readonly player = inject(AudioPlayerService);
+  private readonly player = inject(AudioPlayerService);
   private readonly router = inject(Router, { optional: true });
 
   readonly isAdminRoute = signal<boolean>(
@@ -110,14 +121,12 @@ export class AppComponent {
   );
 
   protected readonly navigationItems: readonly NavigationItem[] = [
-    { id: 'discover', label: 'Descoberta', sub: 'The Pond', icon: 'pond' },
+    { id: 'discover', label: 'Descoberta', sub: 'Find your next favorite', icon: 'pond' },
     { id: 'playlists', label: 'Playlists', sub: 'Your Studio', icon: 'music' },
-    { id: 'jams', label: 'Jams', sub: 'Better together', icon: 'users' },
-    { id: 'explore', label: 'Explorar', sub: 'Find your next favorite', icon: 'search' },
+    { id: 'jams', label: 'Jams', sub: 'The Pond', icon: 'users' },
+    { id: 'explore', label: 'Comunidade', sub: 'Reviews & Busca', icon: 'search' },
     { id: 'profile', label: 'Meu perfil', sub: 'My Ribbit', icon: 'user' },
   ];
-
-  readonly currentSong = computed<Song>(() => this.state.currentSong());
 
   readonly userInitials = computed<string>(() => {
     const parts = this.state
@@ -132,13 +141,14 @@ export class AppComponent {
   });
 
   readonly isProfileArea = computed<boolean>(() =>
-    ['profile', 'dashboard', 'likes', 'loved', 'rejected', 'plans'].includes(
+    ['profile', 'dashboard', 'likes', 'loved', 'rejected', 'plans', 'family'].includes(
       this.state.activePage(),
     ),
   );
 
   readonly breadcrumbLabel = computed<string>(() => {
     if (this.state.activePage() === 'settings') return 'Configurações';
+    if (this.state.activePage() === 'family') return 'Plano Família';
     if (this.isProfileArea()) return 'Meu perfil';
     const nav = this.navigationItems.find((item) => item.id === this.state.activePage());
     return nav ? nav.label : 'Descoberta';
@@ -153,17 +163,6 @@ export class AppComponent {
   readonly lovedCount = computed<number>(() => this.state.lovedSongs().length);
   readonly rejectedCount = computed<number>(() => this.state.rejectedSongs().length);
 
-  readonly isCurrentSongLiked = computed<boolean>(() => {
-    const current = this.currentSong();
-    return this.state
-      .likedSongs()
-      .some((item) =>
-        current.trackId !== undefined
-          ? item.trackId === current.trackId
-          : item.title === current.title,
-      );
-  });
-
   readonly dailyDiscoveries = computed<number>(() =>
     Math.min(this.likedCount() + this.rejectedCount(), 20),
   );
@@ -177,12 +176,17 @@ export class AppComponent {
     return liked.length > 0 ? liked.slice(0, 3) : this.state.songs().slice(0, 3);
   });
 
-  readonly formattedPlayerTime = computed<string>(() => {
-    const sec = Math.round(this.player.progress() * 0.3);
-    return String(sec).padStart(2, '0');
-  });
-
   constructor() {
+    let previousPage = this.state.activePage();
+    effect(() => {
+      const currentPage = this.state.activePage();
+      const authView = this.state.authView();
+      if (currentPage !== previousPage || authView !== 'app') {
+        previousPage = currentPage;
+        this.player.pause();
+      }
+    });
+
     if (this.router) {
       this.isAdminRoute.set(this.router.url.startsWith('/admin'));
       this.router.events
@@ -191,12 +195,17 @@ export class AppComponent {
           const isAdmin = event.urlAfterRedirects.startsWith('/admin');
           this.isAdminRoute.set(isAdmin);
           if (isAdmin) return;
-          const path = event.urlAfterRedirects.replace(/^\//, '').split('/')[0] || 'discover';
+          const path = this.resolveActivePageFromUrl(event.urlAfterRedirects);
           if (path && path !== this.state.activePage()) {
             this.state.setPage(path);
           }
         });
     }
+  }
+
+  resolveActivePageFromUrl(url: string): string {
+    const rawSegment = url.replace(/^\//, '').split(/[/?#]/)[0] || 'discover';
+    return rawSegment === 'callback' ? 'settings' : rawSegment;
   }
 
   isNavItemActive(id: string): boolean {
@@ -205,6 +214,9 @@ export class AppComponent {
   }
 
   changePage(id: string): void {
+    if (id === 'playlists') {
+      this.state.resetPlaylistsView();
+    }
     this.state.setPage(id);
     if (this.router) {
       void this.router.navigate([`/${id}`]).catch(() => false);
@@ -217,7 +229,9 @@ export class AppComponent {
 
   openJamModal(): void {
     if (!this.state.isSpotifyLinked()) {
-      this.state.promptSpotifyConnection('Conecte sua conta do Spotify para criar uma Jam no Pond.');
+      this.state.promptSpotifyConnection(
+        'Conecte sua conta do Spotify para criar uma Jam no Pond.',
+      );
       return;
     }
     if (!this.state.spotifyPremium()) {
@@ -235,31 +249,7 @@ export class AppComponent {
     this.state.setModal('notifications');
   }
 
-  togglePlayback(): void {
-    this.player.togglePlay();
-  }
-
-  likeCurrentSong(): void {
-    if (!this.state.isDeckEmpty()) {
-      this.state.decide('like');
-    }
-  }
-
-  undoSwipe(): void {
-    this.state.undo();
-  }
-
-  nextSong(): void {
-    if (!this.state.isDeckEmpty()) {
-      this.state.decide('reject');
-    }
-  }
-
-  onProgressChange(event: Event): void {
-    this.player.setProgress(Number((event.target as HTMLInputElement).value));
-  }
-
-  onVolumeChange(event: Event): void {
-    this.player.setVolume(Number((event.target as HTMLInputElement).value));
+  openTutorial(): void {
+    this.state.setModal('onboarding');
   }
 }

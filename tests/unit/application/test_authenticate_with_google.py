@@ -14,7 +14,7 @@ from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.auth.authenticate_with_google import (
     AuthenticateWithGoogleUseCase,
 )
-from app.domain.exceptions import AuthenticationRequiredError
+from app.domain.exceptions import AuthenticationRequiredError, EntityNotFoundError
 from app.domain.models.user import User
 
 
@@ -54,7 +54,9 @@ def test_authenticate_with_google_existing_user() -> None:
     user_repo.save.assert_not_called()
 
 
-def test_authenticate_with_google_auto_provisions_new_user() -> None:
+def test_authenticate_with_google_unregistered_user_raises_registration_required() -> (
+    None
+):
     user_repo = MagicMock(spec=UserRepositoryPort)
     token_service = MagicMock(spec=TokenServicePort)
     google_verifier = MagicMock(spec=GoogleIdpVerifierPort)
@@ -67,29 +69,23 @@ def test_authenticate_with_google_auto_provisions_new_user() -> None:
         sub="sub-newbie-999",
     )
 
-    def fake_save(u: User) -> User:
-        u.user_id = 99
-        return u
-
-    user_repo.save.side_effect = fake_save
-    token_service.create_access_token.return_value = "jwt_token_new"
-
     use_case = AuthenticateWithGoogleUseCase(
         user_repo=user_repo,
         token_service=token_service,
         google_verifier=google_verifier,
     )
 
-    result = use_case.execute(
-        AuthenticateWithGoogleCommand(id_token="google_token_new")
-    )
+    with pytest.raises(EntityNotFoundError) as exc_info:
+        use_case.execute(AuthenticateWithGoogleCommand(id_token="google_token_new"))
 
-    assert result.user.user_id == 99
-    assert result.user.email == "newbie@example.com"
-    assert result.user.display_name == "Newbie User"
-    assert result.user.age is None
-    assert result.access_token == "jwt_token_new"
-    user_repo.save.assert_called_once()
+    assert exc_info.value.details == {
+        "entity_name": "User",
+        "registration_required": True,
+        "email": "newbie@example.com",
+        "display_name": "Newbie User",
+    }
+    user_repo.save.assert_not_called()
+    token_service.create_access_token.assert_not_called()
 
 
 def test_authenticate_with_google_unverified_token_propagates_error() -> None:

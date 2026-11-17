@@ -54,6 +54,9 @@ function flushInitialHydration(httpMock: HttpTestingController): void {
     user: SAMPLE_AUTH.user,
     plan: SAMPLE_PLANS[0]!,
   });
+  httpMock.expectOne('/api/profile/blocked-genres').flush([]);
+  httpMock.expectOne('/api/profile/favorite-genres').flush(['Indie']);
+  httpMock.expectOne('/api/profile/theme').flush('dark');
   httpMock.expectOne('/api/tracks/search?limit=50').flush([SAMPLE_TRACK]);
   httpMock.expectOne('/api/reviews/feed?days=30&limit=20').flush([]);
   httpMock.expectOne('/api/playlists').flush([]);
@@ -136,9 +139,48 @@ describe('RibbitStateService', () => {
     expect(service.isDeckEmpty()).toBe(true);
 
     service.undo();
+    const undoReq = httpMock.expectOne('/api/discovery/undo');
+    expect(undoReq.request.method).toBe('POST');
+    undoReq.flush({
+      interaction_id: 1,
+      track_id: 101,
+      action: 'superlike',
+      created_at: '2026-01-01T12:00:00Z',
+    });
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/profile/interactions').flush([]);
+
     expect(service.isDeckEmpty()).toBe(false);
     expect(service.discoverySong()?.trackId).toBe(101);
     expect(service.toast()).toContain('desfeito');
+  });
+
+  it('opens upgrade modal when undo returns 403 on Free plan', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    service.decide('love');
+    const interactReq = httpMock.expectOne('/api/discovery/interact');
+    interactReq.flush({
+      interaction_id: 1,
+      user_id: 7,
+      track_id: 101,
+      action: 'superlike',
+      created_at: '2026-01-01T12:00:00Z',
+    });
+    httpMock.expectOne('/api/discovery/next').flush(null);
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/profile/interactions').flush([]);
+
+    service.undo();
+    const undoReq = httpMock.expectOne('/api/discovery/undo');
+    undoReq.flush(
+      { detail: 'Feature exclusive to Premium subscribers.' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+
+    expect(service.activeModal()).toBe('upgrade');
+    expect(service.upgradePromptReason()).toContain('Desfazer');
   });
 
   it('opens upgrade modal when updating blocked genres returns 403 on Free plan', () => {
@@ -190,9 +232,17 @@ describe('RibbitStateService', () => {
     service.completeAuthentication(SAMPLE_AUTH);
     flushInitialHydration(httpMock);
 
-    service.createPlaylist('Noite Indie', 45);
+    service.createPlaylist('Noite Indie', 45, {
+      reference_playlist_id: 12,
+      source_playlist_id: 12,
+    });
     const playlistReq = httpMock.expectOne('/api/playlists/deck');
     expect(playlistReq.request.method).toBe('POST');
+    expect(playlistReq.request.body).toEqual({
+      name: 'Noite Indie',
+      duration_minutes: 45,
+      source_playlist_id: 12,
+    });
     const createdPlaylist: PlaylistApiDto = {
       playlist_id: 50,
       user_id: 7,
@@ -218,5 +268,25 @@ describe('RibbitStateService', () => {
     expect(deleteReq.request.method).toBe('DELETE');
     deleteReq.flush(null, { status: 204, statusText: 'No Content' });
     expect(service.authView()).toBe('register');
+
+    service.setAuthView('forgot-password');
+    expect(service.authView()).toBe('forgot-password');
+    service.setAuthView('login');
+    expect(service.authView()).toBe('login');
+  });
+
+  it('initializes and toggles theme, persisting to localStorage and applying data-theme attribute', () => {
+    service.setTheme('light');
+    expect(service.preferredTheme()).toBe('light');
+    expect(localStorage.getItem('ribbit-theme')).toBe('light');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light');
+
+    service.setTheme('dark');
+    expect(service.preferredTheme()).toBe('dark');
+    expect(localStorage.getItem('ribbit-theme')).toBe('dark');
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+
+    // Clean up lifecycle
+    service.ngOnDestroy();
   });
 });

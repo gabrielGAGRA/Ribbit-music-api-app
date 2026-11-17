@@ -3,6 +3,7 @@
 import contextlib
 import logging
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from app.domain.exceptions import EntityNotFoundError, ExternalServiceError
 lazy from app.application.dtos.review_dtos import SearchTracksCommand
@@ -107,11 +108,22 @@ class SearchTracksUseCase:
         if not user:
             raise EntityNotFoundError(f"User with ID {command.user_id} not found.")
 
+        year_filter: int | list[int] | None = command.year
+        if command.start_year is not None or command.end_year is not None:
+            start_y = command.start_year if command.start_year is not None else 1970
+            end_y = (
+                command.end_year
+                if command.end_year is not None
+                else datetime.now(UTC).year
+            )
+            if start_y <= end_y:
+                year_filter = list(range(start_y, end_y + 1))
+
         tracks = self.track_repo.find_by_filters(
             artist=command.artist,
             album=command.album,
             genre=command.genre,
-            year=command.year,
+            year=year_filter,
             query=command.query,
             limit=command.limit,
             offset=command.offset,

@@ -108,6 +108,10 @@ export function mapPlaylistDtoToPlaylist(dto: PlaylistApiDto): Playlist {
     ...(dto.description ? { description: dto.description } : {}),
     isExported: dto.is_exported,
     ...(dto.spotify_playlist_id ? { spotifyPlaylistId: dto.spotify_playlist_id } : {}),
+    ...(dto.source_playlist_id != null ? { sourcePlaylistId: dto.source_playlist_id } : {}),
+    ...(dto.cover_image_url ? { coverImageUrl: dto.cover_image_url } : {}),
+    ...(dto.max_duration_seconds != null ? { maxDurationSeconds: dto.max_duration_seconds } : {}),
+    ...(dto.deck_filters ? { deckFilters: dto.deck_filters } : {}),
     songs,
   };
 }
@@ -236,11 +240,7 @@ function computeInitials(name: string): string {
   return name.slice(0, 2).toUpperCase() || 'RB';
 }
 
-function resolveReviewAuthor(
-  dto: ReviewApiDto,
-  isOwn: boolean,
-  currentUserName?: string,
-): string {
+function resolveReviewAuthor(dto: ReviewApiDto, isOwn: boolean, currentUserName?: string): string {
   if (isOwn) {
     return currentUserName || 'Você';
   }
@@ -326,7 +326,7 @@ export function mapJamStateDto(options: {
   });
 
   return {
-    ...(jam.jam_id != null ? { jamId: jam.jam_id } : {}),
+    ...(jam.jam_id != null ? { jamId: jam.jam_id, roomId: jam.jam_id } : {}),
     hostUserId: jam.host_user_id,
     active: jam.is_active,
     code: jam.room_code,
@@ -338,6 +338,8 @@ export function mapJamStateDto(options: {
     accumulatedMinutes: Math.round(jam.accumulated_duration_seconds / 60),
     superlikesCount: jam.superlikes_used,
     superlikesLimit: jam.max_superlikes,
+    deckSource: (jam.deck_source as 'livre' | 'curtidas' | 'playlist') || 'livre',
+    ...(jam.source_playlist_id != null ? { sourcePlaylistId: jam.source_playlist_id } : {}),
     ...(currentTrack ? { currentTrack } : {}),
     queueItems,
   };

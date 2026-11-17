@@ -50,7 +50,6 @@ export class AudioPlayerService implements OnDestroy {
 
   /** Pauses active audio or visual ticker playback. */
   pause(): void {
-    if (!this.isPlaying()) return;
     this.isPlaying.set(false);
     if (this.audioElement) {
       this.audioElement.pause();
@@ -136,6 +135,10 @@ export class AudioPlayerService implements OnDestroy {
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise.then(
           () => {
+            if (!this.isPlaying()) {
+              audio.pause();
+              return;
+            }
             this.usingRealAudio.set(true);
             this.stopTicker();
           },

@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { ProfileComponent } from './profile.component';
 import { authInterceptor } from '../../core/auth.interceptor';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+import { SongService } from '../../core/services/song.service';
 
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
@@ -65,5 +66,51 @@ describe('ProfileComponent', () => {
     expect(globalStyles).toMatch(
       /@media\s*\(max-width:\s*768px\)[\s\S]*\.dashboard-columns\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
     );
+  });
+
+  it('should render profile quick-link pills without trailing icons', () => {
+    const template = readFileSync(resolve(__dirname, './profile.component.html'), 'utf8');
+    const tagsSection = template.match(/<div class="preferences-tags">[\s\S]*?<\/div>/)?.[0] ?? '';
+
+    expect(tagsSection).toContain('Dashboard anual');
+    expect(tagsSection).not.toContain('<app-icon');
+  });
+
+  it('should list only the authenticated user reviews in userReviews()', () => {
+    const songService = TestBed.inject(SongService);
+    const reviewsSignal = (
+      songService as unknown as {
+        reviewsSignal: { set: (items: readonly Record<string, unknown>[]) => void };
+      }
+    ).reviewsSignal;
+    state.userId.set(7);
+    reviewsSignal.set([
+      {
+        id: 1,
+        userId: 7,
+        author: 'Meu Usuário',
+        initials: 'MU',
+        text: 'Excelente faixa!',
+        likes: 3,
+        rating: 5,
+        age: 'agora',
+        date: 100,
+      },
+      {
+        id: 2,
+        userId: 99,
+        author: 'Outro Usuário',
+        initials: 'OU',
+        text: 'Curti bastante.',
+        likes: 1,
+        rating: 4,
+        age: 'ontem',
+        date: 90,
+      },
+    ]);
+
+    expect(component.userReviews().length).toBe(1);
+    expect(component.userReviews()[0]?.id).toBe(1);
+    expect(component.userReviews()[0]?.rating).toBe(5);
   });
 });

@@ -252,3 +252,63 @@ def test_get_playlist_deck_uses_reference_playlist_when_present() -> None:
 
     assert [t.track_id for t in result.items] == [11, 12]
     track_repo.list_active.assert_not_called()
+
+
+def test_get_playlist_deck_combines_genre_year_and_country_filters() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="hash",
+        display_name="User",
+        age=25,
+        plan_id=1,
+    )
+    matching = Track(
+        track_id=31,
+        title="Indie 2021 BR",
+        artist="Banda",
+        duration_seconds=180,
+        genre="Indie Rock",
+        country="Brasil",
+        release_year=2021,
+    )
+    wrong_year = Track(
+        track_id=32,
+        title="Indie 2005 BR",
+        artist="Banda",
+        duration_seconds=180,
+        genre="Indie",
+        country="Brasil",
+        release_year=2005,
+    )
+    playlist = Playlist(
+        playlist_id=30,
+        user_id=1,
+        name="Indie BR",
+        deck_filters='{"genre": ["Indie"], "year": [2020, 2021, 2022], "artist": [], "country": ["Brasil"]}',
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = [matching, wrong_year]
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+    )
+    result = use_case.execute(playlist_id=30, user_id=1)
+
+    track_repo.find_by_filters.assert_called_once_with(
+        artist=None,
+        genre=["Indie"],
+        country=["Brasil"],
+        year=[2020, 2021, 2022],
+        limit=100,
+    )
+    assert [t.track_id for t in result.items] == [31]

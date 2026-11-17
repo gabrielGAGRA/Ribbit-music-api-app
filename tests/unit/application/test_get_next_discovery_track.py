@@ -655,3 +655,61 @@ def test_get_next_discovery_track_catches_and_logs_external_service_error(
     assert (
         "Failed to write track delta for track 15: GCS network timeout" in caplog.text
     )
+
+
+def test_get_next_discovery_track_replaces_example_com_placeholder_urls() -> None:
+    from app.application.ports.services.music_service import (
+        TrackPreview,
+        TrackPreviewPort,
+    )
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult Frog",
+        age=25,
+        plan_id=1,
+    )
+    placeholder_track = Track(
+        track_id=1,
+        title="Bohemian Rhapsody",
+        artist="Queen",
+        duration_seconds=354,
+        genre="Rock",
+        cover_url="https://example.com/bohemian.jpg",
+        itunes_preview_url="https://example.com/bohemian_preview.mp3",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [placeholder_track]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = TrackPreview(
+        external_id="ext-1",
+        title="Bohemian Rhapsody",
+        artist="Queen",
+        preview_url="https://audio-ssl.itunes.apple.com/bohemian.m4a",
+        cover_url="https://is1-ssl.mzstatic.com/bohemian.jpg",
+        genre="Rock",
+    )
+
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+    )
+    result = use_case.execute(user_id=1)
+
+    assert result is not None
+    assert (
+        result.itunes_preview_url == "https://audio-ssl.itunes.apple.com/bohemian.m4a"
+    )
+    assert result.cover_url == "https://is1-ssl.mzstatic.com/bohemian.jpg"
+    track_repo.save.assert_called_once_with(placeholder_track)

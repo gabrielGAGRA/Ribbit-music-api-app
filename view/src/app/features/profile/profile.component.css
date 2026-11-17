@@ -2,3 +2,81 @@
   display: block;
   width: 100%;
 }
+
+.profile-reviews-section {
+  margin-bottom: 18px;
+}
+
+.profile-review-item {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.profile-review-item:first-of-type {
+  border-top: none;
+}
+
+.profile-review-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-review-header img {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.profile-review-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-review-meta strong,
+.profile-review-meta span {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.profile-review-meta strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.profile-review-meta span {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.profile-review-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.profile-review-stars app-icon.filled {
+  color: #f5b942;
+}
+
+.profile-review-stars app-icon.empty {
+  color: var(--muted);
+  opacity: 0.35;
+}
+
+.profile-review-stars span {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.profile-review-item > p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-secondary);
+}

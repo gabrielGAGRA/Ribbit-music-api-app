@@ -9,11 +9,19 @@ from app.application.use_cases.auth.authenticate_user import (
 from app.application.use_cases.auth.authenticate_with_google import (
     AuthenticateWithGoogleUseCase,
 )
+from app.application.use_cases.auth.complete_google_oauth import (
+    CompleteGoogleOAuthUseCase,
+)
+from app.application.use_cases.auth.get_google_authorize_url import (
+    GetGoogleAuthorizeUrlUseCase,
+)
 from app.application.use_cases.auth.register_user import RegisterUserUseCase
 
 __all__ = [
     "AuthenticateAdminUseCase",
     "AuthenticateUserUseCase",
     "AuthenticateWithGoogleUseCase",
+    "CompleteGoogleOAuthUseCase",
+    "GetGoogleAuthorizeUrlUseCase",
     "RegisterUserUseCase",
 ]

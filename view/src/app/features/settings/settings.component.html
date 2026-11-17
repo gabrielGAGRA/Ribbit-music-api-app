@@ -23,7 +23,6 @@
           <div class="user-name-row">
             <span class="user-display-name">{{ state.userName() }}</span>
             <button class="inline-action-btn" (click)="startEditingName()" title="Editar nome">
-              <app-icon name="sparkles" [size]="14" />
               Editar
             </button>
           </div>
@@ -55,7 +54,73 @@
     </div>
   </section>
 
-  <!-- Subscription & Plans Section -->
+  <!-- Security & Password Section -->
+  <section class="panel settings-card">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon">
+          <app-icon name="shield" [size]="20" />
+        </span>
+        <div>
+          <h2>Segurança &amp; Senha</h2>
+          <p>Atualize a senha de acesso à sua conta Ribbit</p>
+        </div>
+      </div>
+    </div>
+
+    @if (passwordError()) {
+      <div class="settings-error-alert" role="alert">
+        <app-icon name="close" [size]="14" />
+        <span>{{ passwordError() }}</span>
+      </div>
+    }
+
+    @if (passwordSuccess()) {
+      <div class="settings-success-alert" role="status">
+        <app-icon name="check" [size]="14" />
+        <span>{{ passwordSuccess() }}</span>
+      </div>
+    }
+
+    <div class="password-form-row">
+      <div class="password-field">
+        <label for="current-password-input">Senha Atual</label>
+        <input
+          id="current-password-input"
+          type="password"
+          class="settings-input"
+          [value]="currentPassword()"
+          (input)="onCurrentPasswordInput($event)"
+          placeholder="Digite sua senha atual"
+          autocomplete="current-password"
+        />
+      </div>
+
+      <div class="password-field">
+        <label for="new-password-input">Nova Senha</label>
+        <input
+          id="new-password-input"
+          type="password"
+          class="settings-input"
+          [value]="newPassword()"
+          (input)="onNewPasswordInput($event)"
+          placeholder="Nova senha (mínimo 6 caracteres)"
+          autocomplete="new-password"
+        />
+      </div>
+
+      <div class="password-action">
+        <button
+          type="button"
+          class="primary-button small-btn"
+          [disabled]="isChangingPassword()"
+          (click)="updatePassword()"
+        >
+          {{ isChangingPassword() ? 'Salvando...' : 'Atualizar Senha' }}
+        </button>
+      </div>
+    </div>
+  </section>
   <section class="panel settings-card">
     <div class="settings-card-header">
       <div class="settings-card-title">
@@ -93,7 +158,24 @@
     </div>
   </section>
 
-  <!-- Integrations Section -->
+  <!-- Parental Control & Family Plan Shortcut -->
+  <section class="panel settings-card">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon">
+          <app-icon name="shield" [size]="20" />
+        </span>
+        <div>
+          <h2>Controle Parental &amp; Plano Família</h2>
+          <p>Gerencie contas filhas, cadastro por e-mail e banimentos de gêneros ou artistas</p>
+        </div>
+      </div>
+      <button type="button" class="primary-button small-btn" (click)="goToFamily()">
+        <app-icon name="users" [size]="14" />
+        Abrir Controle Parental
+      </button>
+    </div>
+  </section>
   <section class="panel settings-card">
     <div class="settings-card-header">
       <div class="settings-card-title">
@@ -116,18 +198,90 @@
           <strong>Spotify</strong>
           <span>
             @if (isSpotifyLinked()) {
-              Conta vinculada ({{ state.spotifyId() }}) e pronta para exportar playlists
+              Conta vinculada ({{ state.spotifyId() }}){{
+                state.spotifyPremium() ? ' · Spotify Premium' : ''
+              }}
+              e pronta para exportar playlists
             } @else {
-              Conecte sua conta para salvar descobertas diretamente na biblioteca do Spotify
+              Autentique sua conta oficial do Spotify para exportar playlists e sincronizar Jams
             }
           </span>
         </div>
       </div>
-      <button
-        [class]="isSpotifyLinked() ? 'outline-button small-btn' : 'primary-button small-btn'"
-        (click)="toggleSpotify()"
+      @if (isSpotifyLinked()) {
+        <div class="integration-actions">
+          <button
+            type="button"
+            class="outline-button small-btn spotify-connect-btn"
+            [disabled]="isLinkingSpotify()"
+            (click)="connectSpotify()"
+          >
+            {{ isLinkingSpotify() ? 'Conectando...' : 'Reconectar ao Spotify' }}
+          </button>
+          <button
+            type="button"
+            class="outline-button small-btn spotify-disconnect-btn"
+            [disabled]="isLinkingSpotify()"
+            (click)="disconnectSpotify()"
+          >
+            {{ isLinkingSpotify() ? 'Aguarde...' : 'Desvincular' }}
+          </button>
+        </div>
+      } @else {
+        <button
+          type="button"
+          class="primary-button small-btn spotify-connect-btn"
+          [disabled]="isLinkingSpotify()"
+          (click)="connectSpotify()"
+        >
+          {{ isLinkingSpotify() ? 'Conectando...' : 'Conectar ao Spotify' }}
+        </button>
+      }
+    </div>
+
+    @if (spotifyFeedback(); as feedback) {
+      <div
+        [class]="feedback.type === 'success' ? 'settings-success-alert' : 'settings-error-alert'"
+        role="status"
       >
-        {{ isSpotifyLinked() ? 'Desvincular' : 'Conectar' }}
+        <app-icon [name]="feedback.type === 'success' ? 'check' : 'close'" [size]="14" />
+        <span>{{ feedback.message }}</span>
+      </div>
+    }
+  </section>
+
+  <!-- Theme and Interface Section -->
+  <section class="panel settings-card">
+    <div class="settings-card-header">
+      <div class="settings-card-title">
+        <span class="settings-icon">
+          <app-icon name="sparkles" [size]="20" />
+        </span>
+        <div>
+          <h2>Aparência &amp; Tema</h2>
+          <p>Alterne entre os modos claro e escuro sincronizados com seu perfil</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="theme-selection-row">
+      <button
+        type="button"
+        class="theme-toggle-btn"
+        [class.active]="state.preferredTheme() === 'dark'"
+        (click)="setTheme('dark')"
+      >
+        <span class="theme-dot dark"></span>
+        Modo Escuro
+      </button>
+      <button
+        type="button"
+        class="theme-toggle-btn"
+        [class.active]="state.preferredTheme() === 'light'"
+        (click)="setTheme('light')"
+      >
+        <span class="theme-dot light"></span>
+        Modo Claro
       </button>
     </div>
   </section>
@@ -144,9 +298,14 @@
           <p>Filtros ativos e gêneros que você escolheu não ouvir</p>
         </div>
       </div>
-      <button class="outline-button small-btn" (click)="openBlockedGenresModal()">
-        Editar filtros
-      </button>
+      <div class="settings-header-actions">
+        <button class="outline-button small-btn" (click)="openOnboardingModal()">
+          Rever Onboarding &amp; Gêneros
+        </button>
+        <button class="outline-button small-btn" (click)="openBlockedGenresModal()">
+          Editar filtros
+        </button>
+      </div>
     </div>
 
     <div class="blocked-genres-wrap">

@@ -71,12 +71,20 @@ describe('api-mappers', () => {
         },
       ],
       total_duration_seconds: 200,
+      cover_image_url: 'https://example.com/cover.png',
+      max_duration_seconds: 3600,
+      deck_filters: '{"genre":"Pop"}',
+      source_playlist_id: 3,
     });
 
     expect(playlist.playlistId).toBe(12);
     expect(playlist.count).toBe(1);
     expect(playlist.duration).toBe('3 min');
     expect(playlist.isExported).toBe(true);
+    expect(playlist.coverImageUrl).toBe('https://example.com/cover.png');
+    expect(playlist.maxDurationSeconds).toBe(3600);
+    expect(playlist.deckFilters).toBe('{"genre":"Pop"}');
+    expect(playlist.sourcePlaylistId).toBe(3);
   });
 
   it('translates swipe actions between UI and backend contracts', () => {
@@ -160,7 +168,8 @@ describe('api-mappers', () => {
           superlikes_used: 2,
           skip_votes_threshold: 3,
           accumulated_duration_seconds: 600,
-          deck_source: 'livre',
+          deck_source: 'playlist',
+          source_playlist_id: 12,
         },
         current_track: null,
         queue: [{ jam_id: 5, track_id: 1, vote_points: 4 }],
@@ -173,6 +182,8 @@ describe('api-mappers', () => {
     expect(jamState.durationHours).toBe(1);
     expect(jamState.durationMinutes).toBe(35);
     expect(jamState.queueItems?.[0]?.votePoints).toBe(4);
+    expect(jamState.deckSource).toBe('playlist');
+    expect(jamState.sourcePlaylistId).toBe(12);
 
     const dashboard = mapAnnualStatsToDashboard(
       {

@@ -92,6 +92,8 @@ def search_tracks(
             album=query.album,
             genre=query.genre,
             year=query.year,
+            start_year=query.start_year,
+            end_year=query.end_year,
             limit=query.limit,
             offset=query.offset,
         )
