@@ -34,7 +34,7 @@ export class ExploreComponent implements OnInit {
 
   readonly query = this.state.searchQuery;
   readonly historyExpanded = signal<boolean>(false);
-  readonly reviewSort = signal<string>('recent');
+  readonly reviewSort = signal<string>('likes');
   readonly reviewLikes = signal<Record<number, boolean>>({});
   protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
   private readonly serverSearchResults = signal<readonly Song[] | null>(null);
