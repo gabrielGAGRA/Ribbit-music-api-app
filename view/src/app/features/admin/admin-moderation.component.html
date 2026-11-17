@@ -44,17 +44,18 @@
           >Pesquisar faixas ativas (GET /api/tracks/search)</label
         >
         <span id="moderation-search-hint" class="field-hint">
-          Busque por título, artista, álbum ou gênero para bloquear ou aplicar selo +18
+          Busque por título, artista ou álbum para bloquear, editar gênero ou aplicar selo +18
         </span>
         <div class="search-box">
           <app-icon name="search" [size]="16" />
           <input
             id="moderation-track-search"
             type="search"
-            placeholder="Ex.: Liniker, Trap, Baile Subterrâneo..."
+            placeholder="Ex.: Bohemian Rhapsody, Queen..."
             aria-describedby="moderation-search-hint"
             [value]="trackQuery()"
             (input)="updateTrackQuery($event)"
+            (search)="searchTracks()"
           />
         </div>
       </div>
@@ -227,7 +228,7 @@
       <section class="admin-card">
         <div class="section-head">
           <span class="eyebrow blue">
-            GET /API/ADMIN/BLOCKED-TRACKS · PUT /API/ADMIN/MUSICAS/&#123;ID&#125;/BLOQUEAR
+            GET /API/ADMIN/BLOCKED-TRACKS · PUT /API/ADMIN/TRACKS/&#123;TRACK_ID&#125;/BLOCK
           </span>
           <h2>Faixas Bloqueadas (Soft-Delete)</h2>
         </div>
@@ -312,6 +313,16 @@
             >GET /API/ADMIN/REVIEWS · DELETE /API/REVIEWS/&#123;REVIEW_ID&#125;</span
           >
           <h2>Avaliações Mais Curtidas (Últimos 30 Dias)</h2>
+        </div>
+
+        <div class="moderation-route-notice" role="note">
+          <app-icon name="shield" [size]="15" />
+          <span>
+            Nota: o endpoint dedicado
+            <code>DELETE /api/admin/reviews/&#123;review_id&#125;</code> ainda não existe no
+            backend; a rota atual <code>DELETE /api/reviews/&#123;review_id&#125;</code> permite
+            apenas a exclusão pelo autor original.
+          </span>
         </div>
 
         <div class="reviews-list">

@@ -20,14 +20,83 @@ describe('AdminModerationComponent', () => {
     httpMock.verify();
   });
 
+  function hydrateWithSampleData(state: AdminStateService): void {
+    state.hydrateFromBackend();
+    httpMock.expectOne('/api/admin/plans').flush([]);
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 2,
+      estimated_net_revenue: 0,
+      users_by_plan: {},
+      revenue_by_plan: {},
+    });
+    httpMock.expectOne('/api/admin/audience').flush({
+      total_users: 2,
+      total_tracks: 2,
+      active_tracks: 2,
+      blocked_genres: {},
+    });
+    httpMock.expectOne('/api/admin/users').flush([]);
+    httpMock.expectOne('/api/admin/administrators').flush([]);
+    httpMock.expectOne('/api/tracks/search?limit=100').flush([
+      {
+        track_id: 101,
+        title: 'Bohemian Rhapsody',
+        artist: 'Queen',
+        duration_seconds: 354,
+        genre: 'Rock',
+        explicit: false,
+        is_deleted: false,
+      },
+      {
+        track_id: 107,
+        title: 'Horizonte Azul',
+        artist: 'Boogarins',
+        duration_seconds: 264,
+        genre: 'Psicodélico',
+        explicit: false,
+        is_deleted: false,
+      },
+    ]);
+    httpMock.expectOne('/api/admin/blocked-tracks').flush([]);
+    httpMock.expectOne('/api/admin/reviews').flush([
+      {
+        review_id: 502,
+        user_id: 8,
+        track_id: 101,
+        rating: 2,
+        text: 'Avaliação reportada',
+        likes_count: 31,
+        is_deleted: false,
+        author_name: 'Ouvinte',
+        track_title: 'Bohemian Rhapsody',
+        track_artist: 'Queen',
+      },
+    ]);
+  }
+
   it('searches active tracks, toggles explicit/+18, blocks/restores tracks, and deletes reviews', () => {
     const state = TestBed.inject(AdminStateService);
+    hydrateWithSampleData(state);
     const component = TestBed.runInInjectionContext(() => new AdminModerationComponent());
 
     expect(component['formatDuration'](218)).toBe('3:38');
-    expect(component['searchedActiveTracks']().length).toBe(5);
+    expect(component['searchedActiveTracks']().length).toBe(2);
 
     component['trackQuery'].set('Boogarins');
+    component['searchTracks']('Boogarins');
+    const searchReq = httpMock.expectOne('/api/tracks/search?limit=100&query=Boogarins');
+    expect(searchReq.request.method).toBe('GET');
+    searchReq.flush([
+      {
+        track_id: 107,
+        title: 'Horizonte Azul',
+        artist: 'Boogarins',
+        duration_seconds: 264,
+        genre: 'Psicodélico',
+        explicit: false,
+        is_deleted: false,
+      },
+    ]);
     expect(component['searchedActiveTracks']().length).toBe(1);
 
     const targetTrack = component['searchedActiveTracks']()[0]!;
@@ -44,6 +113,12 @@ describe('AdminModerationComponent', () => {
     expect(blockReq.request.method).toBe('PUT');
     expect(blockReq.request.body).toEqual({ blocked: true });
     blockReq.flush({ track_id: 107, blocked: true });
+    httpMock.expectOne('/api/admin/audience').flush({
+      total_users: 2,
+      total_tracks: 2,
+      active_tracks: 1,
+      blocked_genres: {},
+    });
     expect(component['blockedTracks']().some((item) => item.track_id === 107)).toBe(true);
 
     component['selectTab']('blocked');
@@ -52,6 +127,12 @@ describe('AdminModerationComponent', () => {
     expect(restoreReq.request.method).toBe('PUT');
     expect(restoreReq.request.body).toEqual({ blocked: false });
     restoreReq.flush({ track_id: 107, blocked: false });
+    httpMock.expectOne('/api/admin/audience').flush({
+      total_users: 2,
+      total_tracks: 2,
+      active_tracks: 2,
+      blocked_genres: {},
+    });
     expect(component['blockedTracks']().some((item) => item.track_id === 107)).toBe(false);
 
     component['selectTab']('reviews');
@@ -61,11 +142,11 @@ describe('AdminModerationComponent', () => {
     expect(deleteReviewReq.request.method).toBe('DELETE');
     deleteReviewReq.flush({ success: true });
     expect(component['topReviews']().length).toBe(reviewCount - 1);
-    expect(state.isUsingLocalFallback()).toBe(false);
   });
 
   it('updates track genre and compacts/synchronizes catalog', () => {
     const state = TestBed.inject(AdminStateService);
+    hydrateWithSampleData(state);
     const component = TestBed.runInInjectionContext(() => new AdminModerationComponent());
 
     const track = state.activeTracks()[0]!;
@@ -99,10 +180,67 @@ describe('AdminModerationComponent', () => {
     const syncReq = httpMock.expectOne('/api/admin/catalog/sync?force=false');
     expect(syncReq.request.method).toBe('POST');
     syncReq.flush({
-      synced: true,
+      synced: false,
       version: 10,
       message: 'Catálogo sincronizado com sucesso.',
     });
     expect(component['catalogActionStatus']()).toContain('sincronizado com sucesso');
+    component.ngOnDestroy();
+  });
+
+  it('cancels stale in-flight catalog searches and resets filtered list when re-entering moderation', () => {
+    const state = TestBed.inject(AdminStateService);
+    hydrateWithSampleData(state);
+    const component = TestBed.runInInjectionContext(() => new AdminModerationComponent());
+    component.ngOnInit();
+
+    component['searchTracks']('a');
+    const firstReq = httpMock.expectOne('/api/tracks/search?limit=100&query=a');
+
+    component['searchTracks']('Boogarins');
+    expect(firstReq.cancelled).toBe(true);
+
+    const secondReq = httpMock.expectOne('/api/tracks/search?limit=100&query=Boogarins');
+    secondReq.flush([
+      {
+        track_id: 107,
+        title: 'Horizonte Azul',
+        artist: 'Boogarins',
+        duration_seconds: 264,
+        genre: 'Psicodélico',
+        explicit: false,
+        is_deleted: false,
+      },
+    ]);
+    expect(component['searchedActiveTracks']().length).toBe(1);
+    expect(state.lastCatalogQuery()).toBe('Boogarins');
+    component.ngOnDestroy();
+
+    const reopened = TestBed.runInInjectionContext(() => new AdminModerationComponent());
+    reopened.ngOnInit();
+    const resetReq = httpMock.expectOne('/api/tracks/search?limit=100');
+    resetReq.flush([
+      {
+        track_id: 101,
+        title: 'Bohemian Rhapsody',
+        artist: 'Queen',
+        duration_seconds: 354,
+        genre: 'Rock',
+        explicit: false,
+        is_deleted: false,
+      },
+      {
+        track_id: 107,
+        title: 'Horizonte Azul',
+        artist: 'Boogarins',
+        duration_seconds: 264,
+        genre: 'Psicodélico',
+        explicit: false,
+        is_deleted: false,
+      },
+    ]);
+    expect(reopened['searchedActiveTracks']().length).toBe(2);
+    expect(state.lastCatalogQuery()).toBe('');
+    reopened.ngOnDestroy();
   });
 });

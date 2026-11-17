@@ -1,12 +1,22 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import type { OnDestroy, OnInit } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subject, merge, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import type { AdminModerationReview, TrackApiDto } from '@ribbit/shared-types';
-import { safeInject } from '../../core/safe-inject';
 import { IconComponent } from '../../shared/icon.component';
 import { AdminStateService } from './admin-state.service';
 
 type ModerationTab = 'catalog' | 'blocked' | 'reviews';
 
-/** Catalog block/explicit controls and top-liked review moderation screen. */
+/** Catalog block/explicit/genre controls, Delta sync/compaction, and review moderation screen. */
 @Component({
   selector: 'app-admin-moderation',
   standalone: true,
@@ -15,20 +25,27 @@ type ModerationTab = 'catalog' | 'blocked' | 'reviews';
   styleUrl: './admin-moderation.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AdminModerationComponent {
-  protected readonly adminState = safeInject(AdminStateService, new AdminStateService());
+export class AdminModerationComponent implements OnInit, OnDestroy {
+  protected readonly adminState = inject(AdminStateService);
+  private readonly destroyRef = inject(DestroyRef);
 
   protected readonly activeTab = signal<ModerationTab>('catalog');
   protected readonly trackQuery = signal<string>('');
   protected readonly moderationError = signal<string>('');
+  protected readonly isSearchingTracks = signal<boolean>(false);
   protected readonly isCompacting = signal<boolean>(false);
   protected readonly isSyncing = signal<boolean>(false);
   protected readonly catalogActionStatus = signal<string>('');
   protected readonly editingTrackId = signal<number | null>(null);
   protected readonly editGenreDraft = signal<string>('');
 
+  private readonly immediateSearch$ = new Subject<string>();
+  private readonly debouncedSearch$ = new Subject<string>();
+  private statusTimer: ReturnType<typeof setTimeout> | null = null;
+  private searchPipelineInitialized = false;
+
   protected readonly searchedActiveTracks = computed<readonly TrackApiDto[]>(() =>
-    this.adminState.searchCatalogTracks(this.trackQuery()),
+    this.adminState.activeTracks(),
   );
 
   protected readonly blockedTracks = computed<readonly TrackApiDto[]>(() =>
@@ -39,6 +56,20 @@ export class AdminModerationComponent {
     this.adminState.topModerationReviews(),
   );
 
+  ngOnInit(): void {
+    this.ensureSearchPipeline();
+    if (this.adminState.hasHydrated() && this.adminState.lastCatalogQuery() !== '') {
+      this.searchTracks('');
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.statusTimer !== null) {
+      clearTimeout(this.statusTimer);
+      this.statusTimer = null;
+    }
+  }
+
   protected selectTab(tab: ModerationTab): void {
     this.moderationError.set('');
     this.activeTab.set(tab);
@@ -47,9 +78,14 @@ export class AdminModerationComponent {
   protected updateTrackQuery(event: Event): void {
     const target = event.target as HTMLInputElement;
     this.trackQuery.set(target.value);
-    if (this.adminState.hasHttpClient()) {
-      this.adminState.fetchCatalogTracksFromBackend(target.value).subscribe();
-    }
+    this.ensureSearchPipeline();
+    this.debouncedSearch$.next(target.value);
+  }
+
+  protected searchTracks(query = this.trackQuery()): void {
+    this.trackQuery.set(query);
+    this.ensureSearchPipeline();
+    this.immediateSearch$.next(query);
   }
 
   protected formatDuration(durationSeconds: number): string {
@@ -60,42 +96,46 @@ export class AdminModerationComponent {
 
   protected toggleExplicit(track: TrackApiDto): void {
     this.moderationError.set('');
-    try {
-      this.adminState.setTrackExplicit(track.track_id, !track.explicit);
-    } catch (error: unknown) {
-      this.moderationError.set(
-        error instanceof Error ? error.message : 'Erro ao alterar classificação indicativa.',
-      );
-    }
+    this.adminState.setTrackExplicit(track.track_id, !track.explicit).subscribe({
+      error: (error: unknown) => {
+        this.moderationError.set(
+          error instanceof Error ? error.message : 'Erro ao alterar classificação indicativa.',
+        );
+      },
+    });
   }
 
   protected blockTrack(trackId: number): void {
     this.moderationError.set('');
-    try {
-      this.adminState.setTrackBlocked(trackId, true);
-    } catch (error: unknown) {
-      this.moderationError.set(error instanceof Error ? error.message : 'Erro ao bloquear faixa.');
-    }
+    this.adminState.setTrackBlocked(trackId, true).subscribe({
+      error: (error: unknown) => {
+        this.moderationError.set(
+          error instanceof Error ? error.message : 'Erro ao bloquear faixa.',
+        );
+      },
+    });
   }
 
   protected restoreTrack(trackId: number): void {
     this.moderationError.set('');
-    try {
-      this.adminState.setTrackBlocked(trackId, false);
-    } catch (error: unknown) {
-      this.moderationError.set(error instanceof Error ? error.message : 'Erro ao restaurar faixa.');
-    }
+    this.adminState.setTrackBlocked(trackId, false).subscribe({
+      error: (error: unknown) => {
+        this.moderationError.set(
+          error instanceof Error ? error.message : 'Erro ao restaurar faixa.',
+        );
+      },
+    });
   }
 
   protected removeReview(reviewId: number): void {
     this.moderationError.set('');
-    try {
-      this.adminState.deleteReview(reviewId);
-    } catch (error: unknown) {
-      this.moderationError.set(
-        error instanceof Error ? error.message : 'Erro ao remover avaliação.',
-      );
-    }
+    this.adminState.deleteReview(reviewId).subscribe({
+      error: (error: unknown) => {
+        this.moderationError.set(
+          error instanceof Error ? error.message : 'Erro ao remover avaliação.',
+        );
+      },
+    });
   }
 
   protected compactCatalog(): void {
@@ -105,13 +145,11 @@ export class AdminModerationComponent {
     this.adminState.compactCatalog().subscribe({
       next: (res) => {
         this.isCompacting.set(false);
-        this.catalogActionStatus.set(res.message);
-        setTimeout(() => {
-          this.catalogActionStatus.set('');
-        }, 4000);
+        this.setTransientCatalogStatus(res.message);
       },
       error: (err: unknown) => {
         this.isCompacting.set(false);
+        this.catalogActionStatus.set('');
         this.moderationError.set(
           err instanceof Error ? err.message : 'Erro ao compactar catálogo.',
         );
@@ -126,13 +164,11 @@ export class AdminModerationComponent {
     this.adminState.syncCatalog().subscribe({
       next: (res) => {
         this.isSyncing.set(false);
-        this.catalogActionStatus.set(res.message);
-        setTimeout(() => {
-          this.catalogActionStatus.set('');
-        }, 4000);
+        this.setTransientCatalogStatus(res.message);
       },
       error: (err: unknown) => {
         this.isSyncing.set(false);
+        this.catalogActionStatus.set('');
         this.moderationError.set(
           err instanceof Error ? err.message : 'Erro ao sincronizar catálogo.',
         );
@@ -177,5 +213,44 @@ export class AdminModerationComponent {
   protected starArray(rating: number): readonly number[] {
     const count = Math.max(1, Math.min(5, Math.round(rating)));
     return Array.from({ length: count }, (_, idx) => idx);
+  }
+
+  private ensureSearchPipeline(): void {
+    if (this.searchPipelineInitialized) return;
+    this.searchPipelineInitialized = true;
+
+    merge(
+      this.immediateSearch$,
+      this.debouncedSearch$.pipe(debounceTime(300), distinctUntilChanged()),
+    )
+      .pipe(
+        switchMap((query) => {
+          this.moderationError.set('');
+          this.isSearchingTracks.set(true);
+          return this.adminState.fetchCatalogTracksFromBackend(query).pipe(
+            catchError((err: unknown) => {
+              this.moderationError.set(
+                err instanceof Error ? err.message : 'Erro ao pesquisar faixas no catálogo.',
+              );
+              return of(null);
+            }),
+          );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe(() => {
+        this.isSearchingTracks.set(false);
+      });
+  }
+
+  private setTransientCatalogStatus(message: string): void {
+    this.catalogActionStatus.set(message);
+    if (this.statusTimer !== null) {
+      clearTimeout(this.statusTimer);
+    }
+    this.statusTimer = setTimeout(() => {
+      this.catalogActionStatus.set('');
+      this.statusTimer = null;
+    }, 4000);
   }
 }

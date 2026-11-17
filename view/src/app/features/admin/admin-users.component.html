@@ -76,9 +76,9 @@
     <section class="admin-card">
       <div class="section-header-row">
         <div>
-          <span class="eyebrow blue"
-            >GET /API/ADMIN/USERS · PUT /USERS/&#123;ID&#125;/PROMOTE-ADMIN</span
-          >
+          <span class="eyebrow blue">
+            GET /API/ADMIN/USERS · PUT /API/ADMIN/ADMINISTRATORS/&#123;USER_ID&#125;
+          </span>
           <h2>Base de Assinantes e Contas</h2>
         </div>
       </div>
@@ -132,9 +132,10 @@
                     <button
                       type="button"
                       class="outline-button small-btn"
+                      [disabled]="updatingUserId() === user.user_id"
                       (click)="promoteUser(user.user_id)"
                     >
-                      Promover a Admin
+                      {{ updatingUserId() === user.user_id ? 'Promovendo...' : 'Promover a Admin' }}
                     </button>
                   } @else {
                     <span class="muted">Acesso ativo</span>
@@ -154,14 +155,114 @@
     </section>
   } @else {
     <section class="admin-card">
-      <div class="section-header-row">
+      <div class="section-header-row section-header-actions">
         <div>
           <span class="eyebrow blue">
-            GET /API/ADMIN/ADMINISTRATORS · PUT /ADMINISTRATORS/&#123;ID&#125;
+            GET /API/ADMIN/ADMINISTRATORS · POST /API/ADMIN/ADMINISTRATORS · PUT
+            /API/ADMIN/ADMINISTRATORS/&#123;USER_ID&#125;
           </span>
           <h2>Equipe com Privilégio Administrativo</h2>
         </div>
+
+        <button type="button" class="primary-button small-btn" (click)="toggleRegisterForm()">
+          <app-icon [name]="showRegisterForm() ? 'close' : 'plus'" [size]="15" />
+          {{ showRegisterForm() ? 'Fechar cadastro' : 'Cadastrar Administrador' }}
+        </button>
       </div>
+
+      @if (showRegisterForm()) {
+        <form class="admin-register-form" (submit)="submitRegisterAdmin($event)">
+          <h3>Novo Administrador Elegível</h3>
+
+          @if (registerError()) {
+            <div class="admin-error-banner" role="alert">
+              <app-icon name="close" [size]="15" />
+              <span>{{ registerError() }}</span>
+            </div>
+          }
+
+          <div class="register-grid">
+            <div class="filter-field">
+              <label for="new-admin-name">Nome de exibição *</label>
+              <span class="field-hint">Entre 2 e 50 caracteres</span>
+              <input
+                id="new-admin-name"
+                type="text"
+                class="admin-input"
+                required
+                minlength="2"
+                maxlength="50"
+                [value]="newAdminName()"
+                (input)="updateNewAdminName($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-email">E-mail elegível *</label>
+              <span class="field-hint">Precisa constar na lista de e-mails elegíveis</span>
+              <input
+                id="new-admin-email"
+                type="email"
+                class="admin-input"
+                required
+                [value]="newAdminEmail()"
+                (input)="updateNewAdminEmail($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-password">Senha *</label>
+              <span class="field-hint">Mínimo de 6 caracteres</span>
+              <input
+                id="new-admin-password"
+                type="password"
+                class="admin-input"
+                required
+                minlength="6"
+                [value]="newAdminPassword()"
+                (input)="updateNewAdminPassword($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-age">Idade *</label>
+              <span class="field-hint">Mínimo 18 anos</span>
+              <input
+                id="new-admin-age"
+                type="number"
+                class="admin-input"
+                required
+                min="18"
+                step="1"
+                [value]="newAdminAge()"
+                (input)="updateNewAdminAge($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-birth-date">Data de nascimento</label>
+              <span class="field-hint">Opcional (YYYY-MM-DD)</span>
+              <input
+                id="new-admin-birth-date"
+                type="date"
+                class="admin-input"
+                [value]="newAdminBirthDate()"
+                (input)="updateNewAdminBirthDate($event)"
+              />
+            </div>
+          </div>
+
+          <div class="register-form-actions">
+            <button type="submit" class="primary-button small-btn" [disabled]="isRegistering()">
+              <app-icon name="check" [size]="15" />
+              {{ isRegistering() ? 'Cadastrando...' : 'Criar conta admin' }}
+            </button>
+            <button type="button" class="outline-button small-btn" (click)="toggleRegisterForm()">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      }
 
       <div tabindex="0" role="region" aria-labelledby="admins-table-caption" class="table-wrapper">
         <table class="admin-table admins-table">
@@ -188,7 +289,7 @@
                 </th>
                 <td>{{ admin.email }}</td>
                 <td>
-                  @if (admin.age !== null) {
+                  @if (admin.age !== null && admin.age !== undefined) {
                     {{ admin.age }} anos
                   } @else {
                     Não informada
@@ -202,8 +303,13 @@
                   }
                 </td>
                 <td>
-                  <button type="button" class="revoke-btn" (click)="revokeAdmin(admin.user_id)">
-                    Revogar acesso
+                  <button
+                    type="button"
+                    class="revoke-btn"
+                    [disabled]="updatingUserId() === admin.user_id"
+                    (click)="revokeAdmin(admin.user_id)"
+                  >
+                    {{ updatingUserId() === admin.user_id ? 'Revogando...' : 'Revogar acesso' }}
                   </button>
                 </td>
               </tr>
