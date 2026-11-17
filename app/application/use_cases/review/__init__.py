@@ -12,6 +12,9 @@ from app.application.use_cases.review.get_recently_interacted_tracks import (
 from app.application.use_cases.review.get_track_reviews import (
     GetTrackReviewsUseCase,
 )
+from app.application.use_cases.review.get_user_reviews import (
+    GetUserReviewsUseCase,
+)
 from app.application.use_cases.review.like_review_comment import (
     LikeReviewCommentUseCase,
 )
@@ -30,6 +33,7 @@ __all__ = [
     "GetCommunityFeedUseCase",
     "GetRecentlyInteractedTracksUseCase",
     "GetTrackReviewsUseCase",
+    "GetUserReviewsUseCase",
     "LikeReviewCommentUseCase",
     "PublishReviewUseCase",
     "SaveSearchTrackLikeUseCase",
