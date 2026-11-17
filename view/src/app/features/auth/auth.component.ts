@@ -140,6 +140,7 @@ export class AuthComponent implements OnInit {
   readonly confirmPasswordDraft = signal<string>('');
   readonly selectedPlanId = signal<number>(1);
   readonly errorMessage = signal<string>('');
+  readonly infoMessage = signal<string>('');
   readonly isSubmitting = signal<boolean>(false);
 
   readonly authView = computed<'login' | 'register' | 'forgot-password'>(() => {
@@ -177,6 +178,22 @@ export class AuthComponent implements OnInit {
       return 'Cadastro direto permitido apenas para maiores de 18 anos.';
     }
     return '';
+  });
+
+  readonly passwordTooShort = computed<boolean>(() => {
+    const len = this.passwordDraft().length;
+    return len > 0 && len < 6;
+  });
+
+  readonly passwordRequirementHint = computed<string>(() => {
+    const len = this.passwordDraft().length;
+    if (len === 0) {
+      return 'A senha deve ter no mínimo 6 caracteres.';
+    }
+    if (len < 6) {
+      return `A senha precisa ter pelo menos 6 caracteres (${len}/6).`;
+    }
+    return 'Tamanho mínimo atingido (6+ caracteres).';
   });
 
   readonly passwordMismatch = computed<boolean>(() => {
@@ -224,6 +241,7 @@ export class AuthComponent implements OnInit {
           // Defer error surfacing until user triggers Google sign-in
         },
       });
+    this.handleGoogleOAuthReturn();
   }
 
   isRegister(): boolean {
@@ -236,6 +254,7 @@ export class AuthComponent implements OnInit {
 
   toggleView(): void {
     this.errorMessage.set('');
+    this.infoMessage.set('');
     this.forgotSubmitted.set(false);
     this.showGoogleFallbackButton.set(false);
     this.selectedPlanId.set(1);
@@ -246,6 +265,7 @@ export class AuthComponent implements OnInit {
 
   onForgot(): void {
     this.errorMessage.set('');
+    this.infoMessage.set('');
     this.forgotSubmitted.set(false);
     this.showGoogleFallbackButton.set(false);
     this.authMode.set('forgot-password');
@@ -254,6 +274,7 @@ export class AuthComponent implements OnInit {
 
   backToLogin(): void {
     this.errorMessage.set('');
+    this.infoMessage.set('');
     this.forgotSubmitted.set(false);
     this.showGoogleFallbackButton.set(false);
     this.authMode.set('login');
@@ -292,12 +313,92 @@ export class AuthComponent implements OnInit {
   onGoogleLogin(): void {
     if (this.isSubmitting() || this.isLoadingGoogleConfig() || this.isForgot()) return;
     this.errorMessage.set('');
+    this.infoMessage.set('');
+    this.isLoadingGoogleConfig.set(true);
+
+    this.authApi
+      .getGoogleAuthorizeUrl()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (res) => {
+          this.isLoadingGoogleConfig.set(false);
+          if (this.isSubmitting() || this.isForgot()) return;
+          const rawUrl = res.authorization_url?.trim();
+          if (this.isValidGoogleAuthorizeUrl(rawUrl)) {
+            this.navigateToExternalUrl(rawUrl);
+            return;
+          }
+          this.triggerGoogleIdentityServicesPrompt();
+        },
+        error: () => {
+          this.isLoadingGoogleConfig.set(false);
+          this.triggerGoogleIdentityServicesPrompt();
+        },
+      });
+  }
+
+  triggerGoogleIdentityServicesPrompt(): void {
+    if (this.isSubmitting() || this.isLoadingGoogleConfig() || this.isForgot()) return;
     const clientId = this.googleClientId();
     if (clientId) {
       this.promptGoogleIdentity(clientId);
       return;
     }
     this.fetchGoogleClientIdAndPrompt();
+  }
+
+  private handleGoogleOAuthReturn(): void {
+    if (typeof window === 'undefined' || !window.location.search) {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    const googleAuthStatus = params.get('google_auth');
+    if (googleAuthStatus === 'complete' || googleAuthStatus === 'register') {
+      window.history.replaceState({}, '', window.location.pathname);
+      this.isSubmitting.set(true);
+      this.errorMessage.set('');
+      this.infoMessage.set('');
+      this.authApi
+        .completeGoogleOAuthSession()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (response) => {
+            this.finishGoogleAuthSuccess(response);
+          },
+          error: (err: unknown) => {
+            this.handleGoogleAuthError(err);
+          },
+        });
+      return;
+    }
+
+    if (params.has('google_auth_error')) {
+      window.history.replaceState({}, '', window.location.pathname);
+      const rawError = params.get('google_auth_error');
+      const msg =
+        rawError === 'access_denied'
+          ? 'Autorização com o Google cancelada pelo usuário.'
+          : 'Não foi possível autenticar com o Google. Tente novamente.';
+      this.errorMessage.set(msg);
+    }
+  }
+
+  private isValidGoogleAuthorizeUrl(rawUrl: unknown): rawUrl is string {
+    if (typeof rawUrl !== 'string' || !rawUrl.trim()) {
+      return false;
+    }
+    try {
+      const parsed = new URL(rawUrl.trim());
+      return parsed.protocol === 'https:' && parsed.hostname === 'accounts.google.com';
+    } catch {
+      return false;
+    }
+  }
+
+  navigateToExternalUrl(url: string): void {
+    if (typeof window !== 'undefined') {
+      window.location.assign(url);
+    }
   }
 
   /** Authenticates directly against POST /api/auth/google using a Google Identity ID token. */
@@ -311,6 +412,7 @@ export class AuthComponent implements OnInit {
 
     this.isSubmitting.set(true);
     this.errorMessage.set('');
+    this.infoMessage.set('');
 
     this.authApi
       .loginWithGoogle({ id_token: trimmedToken })
@@ -320,10 +422,46 @@ export class AuthComponent implements OnInit {
           this.finishGoogleAuthSuccess(response);
         },
         error: (err: unknown) => {
-          this.isSubmitting.set(false);
-          this.errorMessage.set(toApiError(err).message);
+          this.handleGoogleAuthError(err);
         },
       });
+  }
+
+  private handleGoogleAuthError(err: unknown): void {
+    this.isSubmitting.set(false);
+    const apiErr = toApiError(err);
+    const details =
+      typeof apiErr.details === 'object' && apiErr.details !== null
+        ? (apiErr.details as Record<string, unknown>)
+        : null;
+    if (apiErr.status === 404 && details?.['registration_required'] === true) {
+      const email = typeof details['email'] === 'string' ? details['email'].trim() : '';
+      const displayName =
+        typeof details['display_name'] === 'string' ? details['display_name'].trim() : '';
+      this.forwardToGoogleRegistration(email, displayName);
+      return;
+    }
+    this.errorMessage.set(apiErr.message);
+  }
+
+  private forwardToGoogleRegistration(email: string, displayName: string): void {
+    this.errorMessage.set('');
+    this.forgotSubmitted.set(false);
+    this.showGoogleFallbackButton.set(false);
+    this.selectedPlanId.set(1);
+    if (displayName) {
+      this.nameDraft.set(displayName);
+    }
+    if (email) {
+      this.emailDraft.set(email);
+    }
+    this.passwordDraft.set('');
+    this.confirmPasswordDraft.set('');
+    this.authMode.set('register');
+    this.state.setAuthView('register');
+    this.infoMessage.set(
+      'Nenhuma conta Ribbit encontrada para este e-mail Google. Complete seu cadastro abaixo.',
+    );
   }
 
   private fetchGoogleClientIdAndPrompt(): void {
@@ -476,6 +614,7 @@ export class AuthComponent implements OnInit {
     event.preventDefault();
     if (this.isSubmitting()) return;
     this.errorMessage.set('');
+    this.infoMessage.set('');
 
     if (this.isForgot()) {
       this.submitForgotPassword();
