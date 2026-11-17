@@ -22,4 +22,3 @@
 - **Deck de amigo na Jam**: Envio direto de superlikes para o deck de outro participante não está modelado na V0. Definir tabela e use case quando a feature for detalhada.
 - **Perfis infantis**: Perfis sem e-mail/senha própria (dependentes sem conta Ribbit) ficaram fora do MVP.
 - **Playlists contextuais avançadas**: Filtros por localização, clima e atividade específica (treino, estudo) planejados mas não implementados.
-- **WebSocket para Jams**: `obter_estado_e_checar_progresso` é hoje um endpoint REST com polling. Migrar para WebSocket para UX em tempo real.
