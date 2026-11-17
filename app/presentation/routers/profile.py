@@ -214,6 +214,31 @@ def update_blocked_genres(
     return UserResponse.model_validate(user)
 
 
+@router.put(
+    "/api/profile/family/members/{member_id}/blocked-genres",
+    response_model=UserResponse,
+)
+def update_dependent_blocked_genres(
+    member_id: int,
+    req: BlockedGenresRequest,
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        UpdateBlockedGenresUseCase, Depends(provide(UpdateBlockedGenresUseCase))
+    ],
+) -> UserResponse:
+    if isinstance(req.blocked_genres, str):
+        blocked_list = [g.strip() for g in req.blocked_genres.split(",") if g.strip()]
+    else:
+        blocked_list = [str(g).strip() for g in req.blocked_genres if str(g).strip()]
+
+    dependent = use_case.execute_for_dependent(
+        primary_user_id=user_id,
+        dependent_user_id=member_id,
+        blocked_genres=blocked_list,
+    )
+    return UserResponse.model_validate(dependent)
+
+
 @router.get("/api/profile/favorite-genres", response_model=list[str])
 def list_favorite_genres(
     user_id: Annotated[int, Depends(require_user)],

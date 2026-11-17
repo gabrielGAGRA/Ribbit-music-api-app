@@ -42,6 +42,7 @@ from app.presentation.routers.profile import (
     list_plans,
     remove_family_member,
     update_blocked_genres,
+    update_dependent_blocked_genres,
     update_favorite_genres,
     update_preferred_theme,
     update_profile,
@@ -326,6 +327,29 @@ def test_update_blocked_genres_accepts_list_of_strings() -> None:
     )
 
 
+def test_update_dependent_blocked_genres_forwards_owner_member_and_genres() -> None:
+    mock_use_case = MagicMock(spec=UpdateBlockedGenresUseCase)
+    dependent = _sample_user(11)
+    dependent.link_primary_account(10)
+    dependent.update_blocked_genres(["rock", "pop"])
+    mock_use_case.execute_for_dependent.return_value = dependent
+
+    res = update_dependent_blocked_genres(
+        member_id=11,
+        req=BlockedGenresRequest(blocked_genres=" rock, pop "),
+        user_id=10,
+        use_case=mock_use_case,
+    )
+
+    assert res.user_id == 11
+    assert res.blocked_genres == frozenset({"rock", "pop"})
+    mock_use_case.execute_for_dependent.assert_called_once_with(
+        primary_user_id=10,
+        dependent_user_id=11,
+        blocked_genres=["rock", "pop"],
+    )
+
+
 def test_list_favorite_genres_returns_genre_strings() -> None:
     mock_use_case = MagicMock(spec=ListFavoriteGenresUseCase)
     mock_use_case.execute.return_value = ["electronic", "indie", "rock"]
@@ -519,4 +543,5 @@ def test_profile_router_keeps_canonical_and_legacy_history_routes() -> None:
     assert "/api/profile/history" not in paths
     assert "/api/profile/family/members" in paths
     assert "/api/profile/family/members/{member_id}" in paths
+    assert "/api/profile/family/members/{member_id}/blocked-genres" in paths
     assert paths.count("/api/profile/plan") == 2
