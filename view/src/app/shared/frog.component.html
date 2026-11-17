@@ -1,11 +1,53 @@
-<svg [class]="small() ? 'frog small' : 'frog'" viewBox="0 0 64 56" fill="none" aria-hidden="true">
-  <path d="M10 28C10 4 54 4 54 28" stroke="#74b4ff" stroke-width="5" />
-  <path d="M15 25C10 7 28 6 31 18c5-13 22-10 20 8 12 23-7 28-19 28S3 46 15 25" fill="#3887ff" />
-  <ellipse cx="22" cy="23" rx="5" ry="6" fill="#d5f0ff" />
-  <ellipse cx="43" cy="23" rx="5" ry="6" fill="#d5f0ff" />
-  <circle cx="23" cy="24" r="2.6" fill="#091326" />
-  <circle cx="42" cy="24" r="2.6" fill="#091326" />
-  <path d="M25 38q7 6 14 0" stroke="#091326" stroke-width="2.7" stroke-linecap="round" />
-  <rect x="4" y="24" width="9" height="18" rx="4" fill="#93d1ff" />
-  <rect x="52" y="24" width="9" height="18" rx="4" fill="#93d1ff" />
+<svg
+  [class]="
+    (small() ? 'frog small' : size() === 64 ? 'frog size-64' : 'frog') +
+    ' mood-' +
+    mood() +
+    (speaking() ? ' is-speaking' : '')
+  "
+  [attr.width]="size()"
+  [attr.height]="size() ? (size()! * 56) / 64 : null"
+  viewBox="0 0 64 56"
+  fill="none"
+  aria-hidden="true"
+>
+  <g class="frog-headband">
+    <path d="M10 28C10 4 54 4 54 28" stroke="#74b4ff" stroke-width="5" />
+    <rect x="4" y="24" width="9" height="18" rx="4" fill="#93d1ff" />
+    <rect x="52" y="24" width="9" height="18" rx="4" fill="#93d1ff" />
+  </g>
+  <path
+    class="frog-body"
+    d="M15 25C10 7 28 6 31 18c5-13 22-10 20 8 12 23-7 28-19 28S3 46 15 25"
+    fill="#3887ff"
+  />
+  <g class="frog-eyes">
+    <ellipse cx="22" cy="23" rx="5" ry="6" fill="#d5f0ff" />
+    <ellipse cx="43" cy="23" rx="5" ry="6" fill="#d5f0ff" />
+    <circle class="frog-pupil" cx="23" cy="24" r="2.6" fill="#091326" />
+    <circle class="frog-pupil" cx="42" cy="24" r="2.6" fill="#091326" />
+    <circle cx="24" cy="22.5" r="1" fill="#ffffff" />
+    <circle cx="43" cy="22.5" r="1" fill="#ffffff" />
+  </g>
+  @if (mood() === 'excited' || mood() === 'celebrate') {
+    <ellipse cx="17" cy="33" rx="3.5" ry="2" fill="#ff7eb6" opacity="0.55" />
+    <ellipse cx="47" cy="33" rx="3.5" ry="2" fill="#ff7eb6" opacity="0.55" />
+  }
+  @if (speaking() || mood() === 'talk' || mood() === 'celebrate') {
+    <path class="frog-mouth-open" d="M24 37C24 37 28 45 32 45C36 45 40 37 40 37Z" fill="#091326" />
+    <path
+      d="M28 42C29.5 40.5 34.5 40.5 36 42"
+      stroke="#ff7eb6"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+  } @else {
+    <path
+      class="frog-mouth"
+      d="M25 38q7 6 14 0"
+      stroke="#091326"
+      stroke-width="2.7"
+      stroke-linecap="round"
+    />
+  }
 </svg>

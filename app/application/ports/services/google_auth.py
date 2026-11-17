@@ -17,4 +17,13 @@ class GoogleIdpVerifierPort(Protocol):
     def verify_id_token(self, id_token: str) -> GoogleUserInfo: ...
 
 
-__all__ = ["GoogleIdpVerifierPort", "GoogleUserInfo"]
+@runtime_checkable
+class GoogleOAuthPort(Protocol):
+    def build_authorize_url(
+        self, state: str, code_challenge: str | None = None
+    ) -> str: ...
+
+    def exchange_code(self, code: str, code_verifier: str | None = None) -> str: ...
+
+
+__all__ = ["GoogleIdpVerifierPort", "GoogleOAuthPort", "GoogleUserInfo"]

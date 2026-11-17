@@ -59,7 +59,13 @@
           Rejeitadas
           <span class="library-count">{{ rejectedCount() }}</span>
         </button>
-        @for (p of state.playlists().slice(0, 2); track p.name) {
+        <button [class.active]="state.activePage() === 'family'" (click)="changePage('family')">
+          <span class="library-icon">
+            <app-icon name="users" [size]="15" />
+          </span>
+          Plano Família
+        </button>
+        @for (p of state.playlists().slice(0, 2); track p.playlistId ?? $index) {
           <button (click)="changePage('playlists')">
             <span class="library-icon">
               <app-icon name="music" [size]="15" />
@@ -70,16 +76,31 @@
       </div>
 
       <div class="sidebar-bottom">
-        <div class="jam-promo">
-          <span class="promo-icon">
-            <app-icon name="users" [size]="22" />
-          </span>
-          <strong>Música boa é compartilhada.</strong>
-          <p>Chame seus amigos e descubram juntos.</p>
-          <button (click)="openJamModal()">
-            Criar uma Jam <app-icon name="arrow" [size]="16" />
-          </button>
-        </div>
+        @if (!state.jamState().active && !state.jamState().roomId) {
+          <div class="jam-promo">
+            <span class="promo-icon">
+              <app-icon name="users" [size]="22" />
+            </span>
+            <strong>Música boa é compartilhada.</strong>
+            <p>Chame seus amigos e descubram juntos.</p>
+            <button (click)="openJamModal()">
+              Criar uma Jam <app-icon name="arrow" [size]="16" />
+            </button>
+          </div>
+        } @else {
+          <div class="jam-promo jam-promo-active">
+            <span class="promo-icon green">
+              <app-icon name="users" [size]="22" />
+            </span>
+            <strong>Jam em andamento!</strong>
+            <p>
+              Código da sala: <code>{{ state.jamState().code }}</code>
+            </p>
+            <button (click)="changePage('jams')">
+              Ir para a Jam <app-icon name="arrow" [size]="16" />
+            </button>
+          </div>
+        }
         <div class="sidebar-settings-row">
           <button
             class="sidebar-settings-btn"
@@ -113,6 +134,16 @@
         </div>
         <div class="topbar-actions">
           <span class="live-status"> <i></i> Na sua frequência </span>
+          <button
+            type="button"
+            class="ribby-tutorial-btn"
+            (click)="openTutorial()"
+            title="Falar com o Ribby e ver o tutorial"
+            aria-label="Abrir tutorial com o Ribby"
+          >
+            <app-frog [small]="true" mood="wave" />
+            <span>Tutorial Ribby</span>
+          </button>
           <button
             class="icon-button notification-button"
             aria-label="Notificações"
@@ -150,155 +181,7 @@
           <!-- Feature Routing -->
           <router-outlet />
         </section>
-
-        <!-- Right Rail -->
-        <aside class="right-rail">
-          <div class="daily-card">
-            <div class="eyebrow">
-              <span class="blue">
-                <app-icon name="sparkles" [size]="15" />
-              </span>
-              SEU RITMO, TODO DIA <span class="day-badge">HOJE</span>
-            </div>
-            <h2>
-              Um pouco mais de<br />
-              <span>você em cada swipe.</span>
-            </h2>
-            <p>Quanto mais você descobre, mais a gente entra na sua frequência.</p>
-            <div class="daily-progress">
-              <span>
-                <strong>{{ dailyDiscoveries() }}</strong> / 20 descobertas
-              </span>
-              <span>{{ dailyProgressPercent() }}%</span>
-            </div>
-            <div class="progress-track">
-              <i [appWidthPercent]="dailyProgressPercent()"></i>
-            </div>
-            <div class="daily-footer">
-              <span class="tiny-frog">
-                <app-frog [small]="true" />
-              </span>
-              Seu gosto não cabe numa caixa.
-            </div>
-          </div>
-
-          <section class="recent-section">
-            <div class="section-title">
-              <h3>Últimas descobertas</h3>
-              <button (click)="changePage('likes')" aria-label="Ver todas as descobertas">
-                <app-icon name="arrow" [size]="17" />
-              </button>
-            </div>
-            @for (s of recentDiscoveries(); track s.title; let i = $index) {
-              <div class="song-row">
-                <div class="song-cover">
-                  <img [src]="s.image" alt="" />
-                </div>
-                <div class="song-description">
-                  <strong>{{ s.title }}</strong>
-                  <span>{{ s.artist }}</span>
-                </div>
-                <app-icon
-                  [name]="i % 2 === 0 ? 'heart' : 'star'"
-                  [size]="16"
-                  [className]="i % 2 === 0 ? 'green' : 'pink'"
-                />
-              </div>
-            }
-            <button class="text-button view-collection" (click)="changePage('likes')">
-              Ver minhas curtidas <app-icon name="chevron" [size]="14" />
-            </button>
-          </section>
-
-          <section class="preferences-panel">
-            <div class="section-title">
-              <h3>Suas referências agora</h3>
-              <span class="online-dot"></span>
-            </div>
-            <div class="preferences-tags">
-              @for (g of state.selectedGenres(); track g) {
-                <button (click)="openFilters()">{{ g }}</button>
-              }
-            </div>
-            <p>Uma mistura que é só sua.</p>
-            <button class="text-button" (click)="openFilters()">
-              Refinar preferências <app-icon name="filter" [size]="13" />
-            </button>
-          </section>
-
-          <div class="rail-footer">
-            <span>Feito para ouvir. Feito para sentir.</span>
-            <app-frog [small]="true" />
-          </div>
-        </aside>
       </main>
-
-      <!-- Persistent Bottom Player -->
-      <footer class="player">
-        <div class="player-mobile-progress" aria-hidden="true">
-          <i [appWidthPercent]="player.progress()"></i>
-        </div>
-        <div class="player-track">
-          <img [src]="currentSong().image" alt="Capa da faixa atual" />
-          <div>
-            <strong>{{ currentSong().title }}</strong>
-            <span>{{ currentSong().artist }}</span>
-          </div>
-          <button
-            class="icon-button"
-            [class.green]="isCurrentSongLiked()"
-            (click)="likeCurrentSong()"
-            aria-label="Curtir faixa atual"
-          >
-            <app-icon name="heart" [size]="18" />
-          </button>
-        </div>
-
-        <div class="player-center">
-          <button class="icon-button" (click)="undoSwipe()" aria-label="Faixa anterior">
-            <app-icon name="undo" [size]="16" />
-          </button>
-          <button
-            class="player-play"
-            (click)="togglePlayback()"
-            [attr.aria-label]="
-              player.isPlaying() ? 'Pausar demonstração' : 'Reproduzir demonstração'
-            "
-          >
-            <app-icon [name]="player.isPlaying() ? 'pause' : 'play'" [size]="16" />
-          </button>
-          <button class="icon-button" (click)="nextSong()" aria-label="Próxima faixa">
-            <app-icon name="arrow" [size]="17" />
-          </button>
-
-          <span>0:{{ formattedPlayerTime() }}</span>
-          <input
-            class="player-progress"
-            aria-label="Progresso da prévia"
-            type="range"
-            [value]="player.progress()"
-            min="0"
-            max="100"
-            (input)="onProgressChange($event)"
-          />
-          <span>0:30</span>
-        </div>
-
-        <div class="player-volume">
-          <span class="preview-label">
-            {{ player.usingRealAudio() ? 'PRÉVIA DE ÁUDIO' : 'PRÉVIA VISUAL' }}
-          </span>
-          <app-icon name="volume" [size]="17" />
-          <input
-            aria-label="Volume"
-            type="range"
-            min="0"
-            max="100"
-            [value]="player.volume()"
-            (input)="onVolumeChange($event)"
-          />
-        </div>
-      </footer>
     </div>
 
     <!-- Mobile Navigation -->

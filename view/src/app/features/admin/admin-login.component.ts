@@ -1,6 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { safeInject } from '../../core/safe-inject';
 import { FrogComponent } from '../../shared/frog.component';
 import { IconComponent } from '../../shared/icon.component';
 import { AdminStateService } from './admin-state.service';
@@ -15,12 +14,13 @@ import { AdminStateService } from './admin-state.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AdminLoginComponent {
-  protected readonly adminState = safeInject(AdminStateService, new AdminStateService());
-  private readonly router = safeInject<Router | null>(Router, null);
+  protected readonly adminState = inject(AdminStateService);
+  private readonly router = inject(Router, { optional: true });
 
   protected readonly emailDraft = signal<string>('');
   protected readonly passwordDraft = signal<string>('');
   protected readonly errorMessage = signal<string>('');
+  protected readonly isSubmitting = signal<boolean>(false);
   protected readonly emailBlurred = signal<boolean>(false);
   protected readonly passwordBlurred = signal<boolean>(false);
 
@@ -54,28 +54,36 @@ export class AdminLoginComponent {
     this.passwordBlurred.set(true);
   }
 
-  protected fillDemoCredentials(): void {
-    this.errorMessage.set('');
-    this.emailDraft.set(this.adminState.defaultAdminEmail);
-    this.passwordDraft.set(this.adminState.defaultAdminPassword);
-  }
-
   protected authenticateAdmin(event: Event): void {
     event.preventDefault();
+    if (this.isSubmitting()) return;
+
     this.errorMessage.set('');
     this.emailBlurred.set(true);
     this.passwordBlurred.set(true);
 
-    try {
-      this.adminState.loginAdmin(this.emailDraft(), this.passwordDraft());
-      if (this.router) {
-        this.router.navigate(['/admin/dashboard']).catch(() => {});
-      }
-    } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : 'Não foi possível autenticar no console.';
-      this.errorMessage.set(message);
+    const email = this.emailDraft().trim();
+    const password = this.passwordDraft();
+    if (!email || !password) {
+      this.errorMessage.set('Informe e-mail e senha de administrador.');
+      return;
     }
+
+    this.isSubmitting.set(true);
+    this.adminState.loginAdmin(email, password).subscribe({
+      next: () => {
+        this.isSubmitting.set(false);
+        if (this.router) {
+          this.router.navigate(['/admin/dashboard']).catch(() => {});
+        }
+      },
+      error: (error: unknown) => {
+        this.isSubmitting.set(false);
+        const message =
+          error instanceof Error ? error.message : 'Não foi possível autenticar no console.';
+        this.errorMessage.set(message);
+      },
+    });
   }
 
   protected returnToListenerApp(): void {

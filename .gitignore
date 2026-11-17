@@ -236,6 +236,7 @@ coverage/
 *-key.json
 *credentials*.json
 *service-account*.json
+client_secret*.json
 gcp*.json
 secrets/
 

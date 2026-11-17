@@ -1,8 +1,8 @@
 """Use case for authenticating users via Google Identity Provider."""
 
-import secrets
 from dataclasses import dataclass
 
+from app.domain.exceptions import EntityNotFoundError
 lazy from app.application.dtos.auth_dtos import (
     AuthenticateWithGoogleCommand,
     AuthResult,
@@ -10,12 +10,11 @@ lazy from app.application.dtos.auth_dtos import (
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.application.ports.services.google_auth import GoogleIdpVerifierPort
 lazy from app.application.ports.services.token_service import TokenServicePort
-lazy from app.domain.models.user import User
 
 
 @dataclass(slots=True, frozen=True)
 class AuthenticateWithGoogleUseCase:
-    """Verifies Google ID token and resolves or auto-provisions a Ribbit user."""
+    """Verifies Google ID token and authenticates an existing Ribbit user."""
 
     user_repo: UserRepositoryPort
     token_service: TokenServicePort
@@ -26,14 +25,15 @@ class AuthenticateWithGoogleUseCase:
 
         user = self.user_repo.find_by_email(info.email)
         if user is None:
-            new_user = User(
-                email=info.email,
-                password_hash=f"oauth_google:{secrets.token_hex(16)}",
-                display_name=info.name,
-                age=None,
-                plan_id=1,
+            raise EntityNotFoundError(
+                "Nenhuma conta Ribbit encontrada para este e-mail Google. Conclua seu cadastro.",
+                entity_name="User",
+                details={
+                    "registration_required": True,
+                    "email": info.email,
+                    "display_name": info.name,
+                },
             )
-            user = self.user_repo.save(new_user)
 
         if user.user_id is None:
             raise RuntimeError("Authenticated user is missing its persisted ID.")

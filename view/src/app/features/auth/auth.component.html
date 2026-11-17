@@ -20,16 +20,30 @@
     <div class="auth-card">
       <span class="auth-mobile-logo"> <app-frog [small]="true" /> ribbit. </span>
       <div class="eyebrow blue">
-        {{ isRegister() ? 'BEM-VINDO AO LAGO' : 'QUE BOM TER VOCÊ DE VOLTA' }}
+        {{
+          authView() === 'forgot-password'
+            ? 'RECUPERAÇÃO DE CONTA'
+            : isRegister()
+              ? 'BEM-VINDO AO LAGO'
+              : 'QUE BOM TER VOCÊ DE VOLTA'
+        }}
       </div>
       <h2>
-        {{ isRegister() ? 'Crie sua frequência.' : 'Entre no seu universo.' }}
+        {{
+          authView() === 'forgot-password'
+            ? 'Esqueceu sua senha?'
+            : isRegister()
+              ? 'Crie sua frequência.'
+              : 'Entre no seu universo.'
+        }}
       </h2>
       <p>
         {{
-          isRegister()
-            ? 'Preencha suas informações para criar sua conta no Ribbit.'
-            : 'Suas descobertas estão esperando por você.'
+          authView() === 'forgot-password'
+            ? 'Informe seu e-mail cadastrado para enviarmos as instruções de recuperação.'
+            : isRegister()
+              ? 'Preencha suas informações para criar sua conta no Ribbit.'
+              : 'Suas descobertas estão esperando por você.'
         }}
       </p>
 
@@ -40,135 +54,228 @@
         </div>
       }
 
-      <form (submit)="onSubmit($event)">
-        @if (isRegister()) {
+      @if (infoMessage()) {
+        <div class="auth-alert info" role="status">
+          <app-icon name="check" [size]="14" />
+          <span>{{ infoMessage() }}</span>
+        </div>
+      }
+
+      @if (authView() === 'forgot-password' && forgotSubmitted()) {
+        <div class="auth-success-box">
+          <app-icon name="check" [size]="32" />
+          <h3>E-mail enviado!</h3>
+          <p>Se este e-mail estiver cadastrado, enviamos as instruções de recuperação.</p>
+          <button type="button" class="primary-button full-width" (click)="backToLogin()">
+            <app-icon name="arrow-left" [size]="16" />
+            Voltar ao Login
+          </button>
+        </div>
+      } @else if (authView() === 'forgot-password') {
+        <form (submit)="onSubmit($event)">
           <label>
-            Nome de exibição *
+            E-mail *
             <input
-              name="name"
+              name="email"
+              type="email"
               required
-              minlength="2"
-              placeholder="Ex: João Lucas"
-              autocomplete="name"
-              [value]="nameDraft()"
-              (input)="onNameChange($event)"
+              placeholder="voce@email.com"
+              autocomplete="email"
+              [value]="emailDraft()"
+              (input)="onEmailChange($event)"
             />
           </label>
-        }
 
-        <label>
-          E-mail *
-          <input
-            name="email"
-            type="email"
-            required
-            placeholder="voce@email.com"
-            autocomplete="email"
-            [value]="emailDraft()"
-            (input)="onEmailChange($event)"
-          />
-        </label>
+          <button
+            class="primary-button full-width"
+            type="submit"
+            [disabled]="isSubmitting() || !emailDraft().trim().includes('@')"
+          >
+            {{ isSubmitting() ? 'Enviando...' : 'Enviar link de recuperação' }}
+            <app-icon name="arrow" [size]="17" />
+          </button>
+        </form>
 
-        @if (isRegister()) {
+        <p class="auth-switch">
+          Lembrou da senha?
+          <button type="button" (click)="backToLogin()">
+            <app-icon name="arrow-left" [size]="13" />
+            Voltar ao login
+          </button>
+        </p>
+      } @else {
+        <form (submit)="onSubmit($event)">
+          @if (isRegister()) {
+            <label>
+              Nome de exibição *
+              <input
+                name="name"
+                required
+                minlength="2"
+                placeholder="Ex: João Lucas"
+                autocomplete="name"
+                [value]="nameDraft()"
+                (input)="onNameChange($event)"
+              />
+            </label>
+          }
+
           <label>
-            Data de nascimento *
+            E-mail *
             <input
-              name="birthDate"
-              type="date"
+              name="email"
+              type="email"
               required
-              [max]="maxBirthDate()"
-              [value]="birthDateDraft()"
-              (input)="onBirthDateChange($event)"
+              placeholder="voce@email.com"
+              autocomplete="email"
+              [value]="emailDraft()"
+              (input)="onEmailChange($event)"
             />
-            @if (underageWarning()) {
-              <small class="auth-field-error">{{ underageWarning() }}</small>
-            }
           </label>
 
-          <label>
-            Plano inicial *
-            <select name="planId" [value]="selectedPlanId()" (change)="onPlanChange($event)">
-              @for (plan of planOptions(); track plan.id) {
-                <option [value]="plan.id">{{ plan.label }}</option>
+          @if (isRegister()) {
+            <label>
+              Data de nascimento *
+              <input
+                name="birthDate"
+                type="date"
+                required
+                [max]="maxBirthDate()"
+                [value]="birthDateDraft()"
+                (input)="onBirthDateChange($event)"
+              />
+              @if (underageWarning()) {
+                <small class="auth-field-error">{{ underageWarning() }}</small>
               }
-            </select>
-          </label>
-        }
+            </label>
 
-        <label>
-          Senha *
-          <input
-            name="password"
-            type="password"
-            required
-            minlength="6"
-            placeholder="Mínimo de 6 caracteres"
-            [attr.autocomplete]="isRegister() ? 'new-password' : 'current-password'"
-            [value]="passwordDraft()"
-            (input)="onPasswordChange($event)"
-          />
-        </label>
+            <label>
+              Plano inicial *
+              <select name="planId" [value]="selectedPlanId()" (change)="onPlanChange($event)">
+                @for (plan of planOptions(); track plan.id) {
+                  <option [value]="plan.id">{{ plan.label }}</option>
+                }
+              </select>
+            </label>
+          }
 
-        @if (isRegister()) {
           <label>
-            Confirmar senha *
+            Senha *
             <input
-              name="confirmPassword"
+              name="password"
               type="password"
               required
               minlength="6"
-              placeholder="Digite a senha novamente"
-              autocomplete="new-password"
-              [value]="confirmPasswordDraft()"
-              (input)="onConfirmPasswordChange($event)"
+              placeholder="Mínimo de 6 caracteres"
+              [attr.autocomplete]="isRegister() ? 'new-password' : 'current-password'"
+              [value]="passwordDraft()"
+              (input)="onPasswordChange($event)"
             />
-            @if (passwordMismatch()) {
-              <small class="auth-field-error">As senhas digitadas não coincidem.</small>
+            @if (isRegister()) {
+              <small
+                class="auth-field-hint"
+                [class.auth-field-error]="passwordTooShort()"
+                [class.valid]="passwordDraft().length >= 6"
+              >
+                {{ passwordRequirementHint() }}
+              </small>
             }
           </label>
 
-          <label class="checkbox-label auth-check">
-            <input type="checkbox" required /> Declaro que tenho mais de 18 anos e concordo com os
-            Termos de uso e Política de privacidade do Ribbit.
-          </label>
-        } @else {
-          <button type="button" class="forgot-button" (click)="onForgot()">
-            Esqueci minha senha
+          @if (isRegister()) {
+            <label>
+              Confirmar senha *
+              <input
+                name="confirmPassword"
+                type="password"
+                required
+                minlength="6"
+                placeholder="Digite a senha novamente"
+                autocomplete="new-password"
+                [value]="confirmPasswordDraft()"
+                (input)="onConfirmPasswordChange($event)"
+              />
+              @if (passwordMismatch()) {
+                <small class="auth-field-error">As senhas digitadas não coincidem.</small>
+              }
+            </label>
+
+            <label class="checkbox-label auth-check">
+              <input type="checkbox" required /> Declaro que tenho mais de 18 anos e concordo com os
+              Termos de uso e Política de privacidade do Ribbit.
+            </label>
+          } @else {
+            <button type="button" class="forgot-button" (click)="onForgot()">
+              Esqueceu sua senha?
+            </button>
+          }
+
+          <button
+            class="primary-button full-width"
+            type="submit"
+            [disabled]="isSubmitting() || (isRegister() && !canSubmitRegister())"
+          >
+            {{
+              isSubmitting()
+                ? 'Conectando...'
+                : isRegister()
+                  ? 'Criar minha conta'
+                  : 'Entrar no Ribbit'
+            }}
+            <app-icon name="arrow" [size]="17" />
           </button>
-        }
+        </form>
+
+        <div class="auth-divider"><span>ou</span></div>
 
         <button
-          class="primary-button full-width"
-          type="submit"
-          [disabled]="isSubmitting() || (isRegister() && !canSubmitRegister())"
+          type="button"
+          class="outline-button full-width google-login-btn"
+          [class.hidden]="showGoogleFallbackButton()"
+          [disabled]="isSubmitting() || isLoadingGoogleConfig()"
+          (click)="onGoogleLogin()"
         >
-          {{
-            isSubmitting()
-              ? 'Conectando...'
-              : isRegister()
-                ? 'Criar minha conta'
-                : 'Entrar no Ribbit'
-          }}
-          <app-icon name="arrow" [size]="17" />
+          <span class="google-icon-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" focusable="false">
+              <path
+                fill="#4285F4"
+                d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 24c3.3 0 6.08-1.09 8.1-2.96l-3.88-3.05c-1.09.73-2.48 1.16-4.22 1.16-3.24 0-5.99-2.19-6.97-5.14H1.02v3.14C3.03 21.14 7.19 24 12 24Z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.03 14.01c-.25-.73-.39-1.51-.39-2.31s.14-1.58.39-2.31V6.25H1.02A11.98 11.98 0 0 0 0 11.7c0 1.93.46 3.76 1.02 5.45l4.01-3.14Z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 4.75c1.8 0 3.41.62 4.68 1.83l3.51-3.51C18.07 1.19 15.3 0 12 0 7.19 0 3.03 2.86 1.02 6.25l4.01 3.14c.98-2.95 3.73-4.64 6.97-4.64Z"
+              />
+            </svg>
+          </span>
+          Continuar com Google
         </button>
-      </form>
 
-      <div class="auth-divider"><span>ou</span></div>
+        <div
+          class="google-gsi-fallback"
+          [class.visible]="showGoogleFallbackButton()"
+          tabindex="-1"
+          aria-label="Continuar com o Google"
+        ></div>
 
-      <button type="button" class="outline-button full-width" (click)="onGoogleLogin()">
-        Continuar com Google
-      </button>
+        <p class="auth-switch">
+          {{ isRegister() ? 'Já faz parte do lago?' : 'Novo por aqui?' }}
+          <button type="button" (click)="toggleView()">
+            {{ isRegister() ? 'Fazer login' : 'Criar conta' }}
+          </button>
+        </p>
 
-      <p class="auth-switch">
-        {{ isRegister() ? 'Já faz parte do lago?' : 'Novo por aqui?' }}
-        <button type="button" (click)="toggleView()">
-          {{ isRegister() ? 'Fazer login' : 'Criar conta' }}
+        <button type="button" class="auth-demo" (click)="openAdminConsole()">
+          Acessar Console Admin
         </button>
-      </p>
-
-      <button type="button" class="auth-demo" (click)="openAdminConsole()">
-        Acessar Console Admin
-      </button>
+      }
     </div>
   </section>
 </div>

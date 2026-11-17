@@ -1,10 +1,9 @@
-import type { OnDestroy } from '@angular/core';
-import { ChangeDetectionStrategy, Component, computed, signal } from '@angular/core';
+import type { OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import type { Subscription } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import type { NavigationItem } from '@ribbit/shared-types';
-import { safeInject } from '../../core/safe-inject';
 import { FrogComponent } from '../../shared/frog.component';
 import { IconComponent } from '../../shared/icon.component';
 import { AdminStateService } from './admin-state.service';
@@ -29,21 +28,21 @@ const ADMIN_SECTIONS: Readonly<Record<string, AdminSectionMeta>> = {
     titlePrefix: 'Usuários registrados e ',
     titleHighlight: 'administradores.',
     description:
-      'Consulte assinantes por plano, promova novos administradores e gerencie credenciais privilegiadas.',
+      'Consulte assinantes por plano, cadastre novos administradores e gerencie permissões privilegiadas.',
   },
   plans: {
     eyebrow: 'MONETIZAÇÃO & TIERS',
     titlePrefix: 'Configuração de ',
     titleHighlight: 'planos de assinatura.',
     description:
-      'Ajuste nomenclatura, mensalidade e cotas máximas de perfis vinculados com validação de capacidade.',
+      'Ajuste nomenclatura, mensalidade e cotas máximas de perfis vinculados com validação no servidor.',
   },
   moderation: {
     eyebrow: 'CURADORIA & CONFORMIDADE',
     titlePrefix: 'Moderação de catálogo e ',
     titleHighlight: 'avaliações.',
     description:
-      'Pesquise faixas ativas, aplique bloqueios ou classificação +18 e remova avaliações abusivas.',
+      'Pesquise faixas ativas, aplique bloqueios, edite gêneros ou classificação +18 e gerencie o catálogo.',
   },
 };
 
@@ -56,9 +55,9 @@ const ADMIN_SECTIONS: Readonly<Record<string, AdminSectionMeta>> = {
   styleUrl: './admin-shell.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AdminShellComponent implements OnDestroy {
-  protected readonly adminState = safeInject(AdminStateService, new AdminStateService());
-  private readonly router = safeInject<Router | null>(Router, null);
+export class AdminShellComponent implements OnInit, OnDestroy {
+  protected readonly adminState = inject(AdminStateService);
+  private readonly router = inject(Router, { optional: true });
   private readonly routeSubscription: Subscription | null;
 
   protected readonly navItems: readonly NavigationItem[] = [
@@ -87,6 +86,8 @@ export class AdminShellComponent implements OnDestroy {
     return found ? found.label : 'Visão Executiva';
   });
 
+  protected readonly hasSyncError = computed<boolean>(() => Boolean(this.adminState.syncError()));
+
   protected readonly adminInitials = computed<string>(() => {
     const name = this.adminState.currentAdmin()?.display_name ?? 'Admin';
     const parts = name
@@ -114,6 +115,16 @@ export class AdminShellComponent implements OnDestroy {
     }
   }
 
+  ngOnInit(): void {
+    if (
+      this.adminState.isAuthenticated() &&
+      !this.adminState.hasHydrated() &&
+      !this.adminState.isLoading()
+    ) {
+      this.adminState.hydrateFromBackend();
+    }
+  }
+
   ngOnDestroy(): void {
     this.routeSubscription?.unsubscribe();
   }
@@ -125,8 +136,8 @@ export class AdminShellComponent implements OnDestroy {
     }
   }
 
-  protected resetDemo(): void {
-    this.adminState.resetDemoData();
+  protected refreshBackend(): void {
+    this.adminState.hydrateFromBackend();
   }
 
   protected openListenerApp(): void {

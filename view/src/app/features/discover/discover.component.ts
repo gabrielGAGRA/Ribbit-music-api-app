@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import type { DecisionKind, Song } from '@ribbit/shared-types';
+import type { DecisionKind, Playlist, Song } from '@ribbit/shared-types';
 import { AudioPlayerService } from '../../core/audio-player.service';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+import { PlaylistService } from '../../core/services/playlist.service';
 import {
   TransformStyleDirective,
   WaveBarStyleDirective,
@@ -21,6 +22,61 @@ import { IconComponent } from '../../shared/icon.component';
 export class DiscoverComponent {
   protected readonly state = inject(RibbitStateService);
   protected readonly player = inject(AudioPlayerService);
+  private readonly playlistService = inject(PlaylistService);
+
+  readonly selectedTargetPlaylistId = signal<number | null>(null);
+
+  readonly targetPlaylist = computed<Playlist | null>(() => {
+    const id = this.selectedTargetPlaylistId();
+    if (id === null) return null;
+    return this.state.playlists().find((p) => p.playlistId === id) ?? null;
+  });
+
+  selectTargetPlaylist(playlistId: number | null): void {
+    this.selectedTargetPlaylistId.set(playlistId);
+    if (playlistId !== null) {
+      const pl = this.state.playlists().find((p) => p.playlistId === playlistId);
+      if (pl) {
+        this.state.notify(`Swipes configurados para a playlist "${pl.name}"`);
+      }
+    } else {
+      this.state.notify('Swipes configurados para Meu Perfil (Geral)');
+    }
+  }
+
+  openCreatePlaylist(): void {
+    this.state.setModal('playlist');
+  }
+
+  getPlaylistCover(playlist: Playlist): string {
+    const pId = playlist.playlistId;
+    if (pId !== undefined) {
+      const cached = this.playlistService.coverBlobUrls()[pId];
+      if (cached) return cached;
+      if (
+        playlist.coverImageUrl &&
+        !playlist.coverImageUrl.startsWith('http') &&
+        !playlist.coverImageUrl.startsWith('data:') &&
+        !playlist.coverImageUrl.startsWith('blob:')
+      ) {
+        this.playlistService.loadCoverBlob(pId);
+      }
+    }
+    return (
+      playlist.coverImageUrl ??
+      'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=400&q=80'
+    );
+  }
+
+  onTargetPlaylistChange(event: Event): void {
+    const select = event.target as HTMLSelectElement;
+    const val = select.value;
+    if (!val) {
+      this.selectTargetPlaylist(null);
+    } else {
+      this.selectTargetPlaylist(Number(val));
+    }
+  }
 
   protected readonly availableModes: readonly string[] = [
     'Para você',
@@ -85,7 +141,22 @@ export class DiscoverComponent {
   handleDecision(kind: DecisionKind): void {
     if (this.animation()) return;
     this.animation.set(kind);
+    const target = this.targetPlaylist();
+    const song = this.currentSong();
+
     setTimeout(() => {
+      if ((kind === 'like' || kind === 'love') && target && target.playlistId && song.trackId) {
+        this.playlistService.addTrackToPlaylist(target.playlistId, song.trackId, kind).subscribe({
+          next: () => {
+            this.state.refreshPlaylists();
+            this.state.notify(`"${song.title}" adicionada à playlist "${target.name}"!`);
+          },
+          error: () => {
+            // Notification handled or fallback
+          },
+        });
+      }
+
       this.state.decide(kind);
       this.player.resetProgress();
       this.animation.set('');
@@ -99,7 +170,15 @@ export class DiscoverComponent {
   }
 
   togglePlay(): void {
-    this.player.togglePlay();
+    if (this.player.isPlaying()) {
+      this.player.pause();
+      return;
+    }
+    const previewUrl = this.currentSong().previewUrl;
+    if ((previewUrl ?? null) !== this.player.activePreviewUrl()) {
+      this.player.loadTrack(previewUrl);
+    }
+    this.player.play();
   }
 
   openFilters(): void {

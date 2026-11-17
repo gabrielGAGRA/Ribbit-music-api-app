@@ -1,191 +1,273 @@
-<div class="discovery-toolbar">
-  <div class="segmented">
-    @for (m of availableModes; track m) {
-      <button [class.selected]="state.mode() === m" (click)="selectMode(m)">
-        @if (m === 'Para você') {
-          <app-icon name="sparkles" [size]="15" />
-        }
-        {{ m }}
-      </button>
-    }
-  </div>
-  <button class="filter-button" (click)="openFilters()">
-    <app-icon name="filter" [size]="16" /> Ajustar filtros
-  </button>
-</div>
+<div class="discover-layout">
+  <div class="discover-deck-column">
+    <div class="discovery-stage">
+      <div class="deck-back back-one"></div>
+      <div class="deck-back back-two"></div>
 
-<div class="discovery-stage">
-  <div class="deck-back back-one"></div>
-  <div class="deck-back back-two"></div>
-
-  @if (state.isDeckEmpty()) {
-    <div class="empty-card">
-      <app-frog />
-      <h2>Você explorou o lago inteiro.</h2>
-      <p>Suas escolhas já estão no perfil. Mais descobertas chegam em breve.</p>
-      <button class="primary-button" (click)="handleUndo()">
-        <app-icon name="undo" [size]="16" />
-        Rever última faixa
-      </button>
-    </div>
-  } @else {
-    <article
-      class="discovery-card"
-      [class.like]="animation() === 'like'"
-      [class.love]="animation() === 'love'"
-      [class.reject]="animation() === 'reject'"
-      [appTransform]="cardTransform()"
-      (pointerdown)="onPointerDown($event)"
-      (pointermove)="onPointerMove($event)"
-      (pointerup)="onPointerUp()"
-      (pointercancel)="onPointerCancel()"
-    >
-      <img
-        class="album-art"
-        [src]="currentSong().image"
-        [alt]="'Arte de capa: ' + currentSong().title + ', ' + currentSong().artist"
-      />
-      <div class="art-shade"></div>
-
-      <div class="card-top">
-        <button class="card-more" aria-label="Detalhes da música" (click)="openDetails()">
-          •••
-        </button>
-      </div>
-
-      <div class="album-lettering">
-        <span>{{ currentSong().artist.toUpperCase() }}</span>
-        <strong>{{ currentSong().title.toUpperCase() }}</strong>
-        <small>{{ currentSong().album }} · {{ currentSong().year }}</small>
-      </div>
-
-      <div class="card-bottom">
-        <span class="recommendation">
-          <i></i>
-          @switch (state.mode()) {
-            @case ('Por Referência') {
-              Baseado nas suas referências favoritas
-            }
-            @case ('Fora da bolha') {
-              Um passo além da sua zona de conforto
-            }
-            @default {
-              Baseado nas suas curtidas
-            }
-          }
-        </span>
-
-        <div class="track-heading">
-          <div>
-            <h2>{{ currentSong().title }}</h2>
-            <p>{{ currentSong().artist }}</p>
-          </div>
-          <button
-            class="preview-play"
-            (click)="togglePlay()"
-            [attr.aria-label]="
-              player.isPlaying() ? 'Pausar demonstração' : 'Reproduzir demonstração'
-            "
-          >
-            <app-icon [name]="player.isPlaying() ? 'pause' : 'play'" [size]="21" />
+      @if (state.isDeckEmpty()) {
+        <div class="empty-card">
+          <app-frog />
+          <h2>Você explorou o lago inteiro.</h2>
+          <p>Suas escolhas já estão no perfil. Mais descobertas chegam em breve.</p>
+          <button class="primary-button" (click)="handleUndo()">
+            <app-icon name="undo" [size]="16" />
+            Rever última faixa
           </button>
         </div>
-
-        <div class="track-tags">
-          <span>{{ currentSong().genre }}</span>
-          <span>Acústico</span>
-          <small>
-            <app-icon name="clock" [size]="12" />
-            {{ currentSong().time }}
-          </small>
-        </div>
-
-        <div
-          class="waveform"
-          [class.is-playing]="player.isPlaying()"
-          aria-label="Visualização de progresso"
+      } @else {
+        <article
+          class="discovery-card"
+          [class.like]="animation() === 'like'"
+          [class.love]="animation() === 'love'"
+          [class.reject]="animation() === 'reject'"
+          [appTransform]="cardTransform()"
+          (pointerdown)="onPointerDown($event)"
+          (pointermove)="onPointerMove($event)"
+          (pointerup)="onPointerUp()"
+          (pointercancel)="onPointerCancel()"
         >
-          @for (bar of waveformBars; track $index) {
-            <i [class.heard]="$index < player.progress() * 0.65" [appWaveBarIndex]="$index"></i>
-          }
-        </div>
+          <img
+            class="album-art"
+            [src]="currentSong().image"
+            [alt]="'Arte de capa: ' + currentSong().title + ', ' + currentSong().artist"
+          />
+          <div class="art-shade"></div>
 
-        <div class="preview-time">
-          <span>0:{{ formattedPreviewTime() }}</span>
-          <span>{{
-            player.usingRealAudio() ? 'Prévia de áudio · 0:30' : 'Prévia visual · 0:30'
-          }}</span>
-        </div>
+          <div class="card-top">
+            @if (activeDragAction() === 'like' || animation() === 'like') {
+              <div class="swipe-stamp-badge like" aria-hidden="true">
+                <app-icon name="heart" [size]="16" /> CURTIR
+              </div>
+            } @else if (activeDragAction() === 'love' || animation() === 'love') {
+              <div class="swipe-stamp-badge love" aria-hidden="true">
+                <app-icon name="star" [size]="16" /> SUPERLIKE
+              </div>
+            } @else if (activeDragAction() === 'reject' || animation() === 'reject') {
+              <div class="swipe-stamp-badge reject" aria-hidden="true">
+                <app-icon name="close" [size]="16" /> PASSAR
+              </div>
+            }
+            <button class="card-more" aria-label="Detalhes da música" (click)="openDetails()">
+              •••
+            </button>
+          </div>
+
+          <div class="card-bottom">
+            <span class="recommendation">
+              <i></i>
+              @switch (state.mode()) {
+                @case ('Por Referência') {
+                  Baseado nas suas referências favoritas
+                }
+                @case ('Fora da bolha') {
+                  Um passo além da sua zona de conforto
+                }
+                @default {
+                  Baseado nas suas curtidas
+                }
+              }
+            </span>
+
+            <div class="track-heading">
+              <div>
+                <h2>{{ currentSong().title }}</h2>
+                <p>{{ currentSong().artist }}</p>
+              </div>
+              <button
+                class="preview-play"
+                (click)="togglePlay()"
+                [attr.aria-label]="
+                  player.isPlaying() ? 'Pausar demonstração' : 'Reproduzir demonstração'
+                "
+              >
+                <app-icon [name]="player.isPlaying() ? 'pause' : 'play'" [size]="21" />
+              </button>
+            </div>
+
+            <div class="track-tags">
+              <span>{{ currentSong().genre }}</span>
+              <span>Acústico</span>
+              <small>
+                <app-icon name="clock" [size]="12" />
+                {{ currentSong().time }}
+              </small>
+            </div>
+
+            <div
+              class="waveform"
+              [class.is-playing]="player.isPlaying()"
+              aria-label="Visualização de progresso"
+            >
+              @for (bar of waveformBars; track $index) {
+                <i [class.heard]="$index < player.progress() * 0.65" [appWaveBarIndex]="$index"></i>
+              }
+            </div>
+
+            <div class="preview-time">
+              <span>0:{{ formattedPreviewTime() }}</span>
+              <span>{{
+                player.usingRealAudio() ? 'Prévia de áudio · 0:30' : 'Prévia visual · 0:30'
+              }}</span>
+            </div>
+          </div>
+        </article>
+      }
+    </div>
+
+    <div class="swipe-controls">
+      <div>
+        <button
+          class="swipe-button undo"
+          (click)="handleUndo()"
+          aria-label="Desfazer swipe"
+          title="Desfazer último swipe"
+        >
+          <app-icon name="undo" [size]="22" />
+        </button>
+        <span>Desfazer</span>
       </div>
-    </article>
-  }
-</div>
+      <div>
+        <button
+          class="swipe-button reject"
+          (click)="handleDecision('reject')"
+          [disabled]="state.isDeckEmpty()"
+          [class.highlight]="activeDragAction() === 'reject'"
+          aria-label="Rejeitar música"
+          title="Passar (Deslize para esquerda)"
+        >
+          <app-icon name="close" [size]="30" />
+        </button>
+        <span>Passar</span>
+      </div>
+      <div>
+        <button
+          class="swipe-button love"
+          (click)="handleDecision('love')"
+          [disabled]="state.isDeckEmpty()"
+          [class.highlight]="activeDragAction() === 'love'"
+          aria-label="Amar música"
+          title="Amar (Deslize para cima)"
+        >
+          <app-icon name="star" [size]="27" />
+        </button>
+        <span>Amar</span>
+      </div>
+      <div>
+        <button
+          class="swipe-button like"
+          (click)="handleDecision('like')"
+          [disabled]="state.isDeckEmpty()"
+          [class.highlight]="activeDragAction() === 'like'"
+          aria-label="Curtir música"
+          title="Curtir (Deslize para direita)"
+        >
+          <app-icon name="heart" [size]="29" />
+        </button>
+        <span>Curtir</span>
+      </div>
+      <div>
+        <button
+          class="swipe-button add"
+          (click)="openAddModal()"
+          aria-label="Adicionar à playlist"
+          title="Salvar na playlist"
+        >
+          <app-icon name="plus" [size]="23" />
+        </button>
+        <span>Playlist</span>
+      </div>
+    </div>
 
-<div class="swipe-controls">
-  <div>
-    <button
-      class="swipe-button undo"
-      (click)="handleUndo()"
-      aria-label="Desfazer swipe"
-      title="Desfazer último swipe"
-    >
-      <app-icon name="undo" [size]="22" />
-    </button>
-    <span>Desfazer</span>
+    <div class="swipe-hint">
+      <app-icon name="pond" [size]="15" />
+      <span>Deixe seu instinto escolher. Arraste e descubra.</span>
+    </div>
   </div>
-  <div>
-    <button
-      class="swipe-button reject"
-      (click)="handleDecision('reject')"
-      [disabled]="state.isDeckEmpty()"
-      [class.highlight]="activeDragAction() === 'reject'"
-      aria-label="Rejeitar música"
-      title="Passar (Deslize para esquerda)"
-    >
-      <app-icon name="close" [size]="30" />
-    </button>
-    <span>Passar</span>
-  </div>
-  <div>
-    <button
-      class="swipe-button love"
-      (click)="handleDecision('love')"
-      [disabled]="state.isDeckEmpty()"
-      [class.highlight]="activeDragAction() === 'love'"
-      aria-label="Amar música"
-      title="Amar (Deslize para cima)"
-    >
-      <app-icon name="star" [size]="27" />
-    </button>
-    <span>Amar</span>
-  </div>
-  <div>
-    <button
-      class="swipe-button like"
-      (click)="handleDecision('like')"
-      [disabled]="state.isDeckEmpty()"
-      [class.highlight]="activeDragAction() === 'like'"
-      aria-label="Curtir música"
-      title="Curtir (Deslize para direita)"
-    >
-      <app-icon name="heart" [size]="29" />
-    </button>
-    <span>Curtir</span>
-  </div>
-  <div>
-    <button
-      class="swipe-button add"
-      (click)="openAddModal()"
-      aria-label="Adicionar à playlist"
-      title="Salvar na playlist"
-    >
-      <app-icon name="plus" [size]="23" />
-    </button>
-    <span>Playlist</span>
-  </div>
-</div>
 
-<div class="swipe-hint">
-  <app-icon name="pond" [size]="15" />
-  <span>Deixe seu instinto escolher. Arraste e descubra.</span>
+  <aside class="discover-destination-rail">
+    <div class="destination-panel">
+      <div class="destination-panel-header">
+        <div class="eyebrow blue">DESTINO DO SWIPE</div>
+        <h2>Salvar Descobertas</h2>
+        <p>Defina para onde enviar as músicas que você curtir com swipe.</p>
+      </div>
+
+      <div class="active-destination-pill" [class.is-playlist]="targetPlaylist() !== null">
+        @if (targetPlaylist(); as target) {
+          <span class="status-pulse-dot green"></span>
+          <div class="pill-text">
+            <span class="pill-caption">Adicionando na playlist:</span>
+            <strong class="target-name">{{ target.name }}</strong>
+          </div>
+        } @else {
+          <span class="status-pulse-dot blue"></span>
+          <div class="pill-text">
+            <span class="pill-caption">Modo Padrão:</span>
+            <strong class="target-name">Meu Perfil (Curtidas Gerais)</strong>
+          </div>
+        }
+      </div>
+
+      <div class="destination-options">
+        <span class="options-subheading">SELECIONE O DESTINO</span>
+
+        <!-- Option: Meu Perfil (Default) -->
+        <button
+          type="button"
+          class="destination-option-card"
+          [class.active]="selectedTargetPlaylistId() === null"
+          (click)="selectTargetPlaylist(null)"
+          aria-label="Salvar apenas em Meu Perfil"
+        >
+          <div class="destination-card-icon general">
+            <app-icon name="heart" [size]="17" />
+          </div>
+          <div class="destination-card-info">
+            <strong>Meu Perfil</strong>
+            <span>Feed geral de curtidas</span>
+          </div>
+          <div class="destination-radio-indicator">
+            @if (selectedTargetPlaylistId() === null) {
+              <span class="radio-dot"></span>
+            }
+          </div>
+        </button>
+
+        <!-- User Playlists -->
+        @for (p of state.playlists(); track p.playlistId ?? $index) {
+          <button
+            type="button"
+            class="destination-option-card"
+            [class.active]="selectedTargetPlaylistId() === p.playlistId"
+            (click)="selectTargetPlaylist(p.playlistId ?? null)"
+            [attr.aria-label]="'Adicionar músicas à playlist ' + p.name"
+          >
+            <div class="destination-card-cover">
+              <img [src]="getPlaylistCover(p)" [alt]="'Capa de ' + p.name" />
+            </div>
+            <div class="destination-card-info">
+              <strong>{{ p.name }}</strong>
+              <span>{{ p.count }} faixas · {{ p.duration }}</span>
+            </div>
+            <div class="destination-radio-indicator">
+              @if (selectedTargetPlaylistId() === p.playlistId) {
+                <span class="radio-dot green"></span>
+              }
+            </div>
+          </button>
+        } @empty {
+          <div class="empty-destinations">
+            <p>Você ainda não possui playlists criadas.</p>
+          </div>
+        }
+      </div>
+
+      <div class="destination-panel-footer">
+        <button type="button" class="create-playlist-btn" (click)="openCreatePlaylist()">
+          <app-icon name="plus" [size]="14" />
+          Criar nova playlist
+        </button>
+      </div>
+    </div>
+  </aside>
 </div>

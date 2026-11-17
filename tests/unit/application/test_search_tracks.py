@@ -298,3 +298,39 @@ def test_search_tracks_spotify_fallback_enriches_itunes_and_writes_full_delta(
     assert delta_kwargs["cover_url"] == "https://itunes.example.com/fresh.jpg"
     assert delta_kwargs["preview_url"] == "https://itunes.example.com/fresh.m4a"
     assert delta_kwargs["spotify_id"] == "sp-new-1"
+
+
+def test_search_tracks_expands_start_year_and_end_year_range() -> None:
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="hash",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = []
+
+    use_case = SearchTracksUseCase(user_repo=user_repo, track_repo=track_repo)
+    use_case.execute(
+        SearchTracksCommand(
+            user_id=1,
+            artist="Queen",
+            start_year=2018,
+            end_year=2020,
+        )
+    )
+
+    track_repo.find_by_filters.assert_called_once_with(
+        artist="Queen",
+        album=None,
+        genre=None,
+        year=[2018, 2019, 2020],
+        query=None,
+        limit=50,
+        offset=0,
+    )

@@ -60,7 +60,7 @@
 .endpoint-tag {
   font-size: 11px;
   color: var(--muted);
-  background: #0e1118;
+  background: var(--surface-tint);
   border: 1px solid var(--line);
   padding: 3px 8px;
   border-radius: 999px;
@@ -84,7 +84,7 @@
 .kpi-label {
   font-size: 13.5px;
   font-weight: 600;
-  color: #dce3f2;
+  color: var(--ink);
 }
 
 .kpi-detail {
@@ -151,7 +151,7 @@
 }
 
 .admin-table thead th {
-  background: #10141d;
+  background: var(--panel-elev);
   color: var(--muted);
   font-size: 11.5px;
   font-weight: 700;
@@ -165,7 +165,7 @@
 .admin-table tbody th,
 .admin-table tbody td {
   padding: 13px 14px;
-  border-bottom: 1px solid rgba(34, 38, 49, 0.7);
+  border-bottom: 1px solid var(--line);
   text-align: left;
 }
 
@@ -180,7 +180,7 @@
   z-index: 1;
   background: var(--panel);
   font-weight: 600;
-  color: #eff2f8;
+  color: var(--ink);
 }
 
 .bar-cell {
@@ -193,7 +193,7 @@
   flex: 1;
   height: 7px;
   border-radius: 999px;
-  background: #0d1016;
+  background: var(--line);
   overflow: hidden;
   min-width: 72px;
 }
@@ -270,7 +270,7 @@
     position: sticky;
     inset-block-start: 0;
     z-index: 2;
-    background: #10141d;
+    background: var(--panel-elev);
   }
 
   .plan-breakdown-table td:nth-child(2)::before {

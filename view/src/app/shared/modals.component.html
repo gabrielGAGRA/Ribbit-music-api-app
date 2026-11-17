@@ -1,4 +1,265 @@
-@if (state.activeModal()) {
+@if (state.activeModal() === 'onboarding') {
+  <div
+    class="ribby-stage-overlay"
+    tabindex="-1"
+    (click)="onBackdropClick($event)"
+    (keydown.escape)="closeModal()"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Tutorial interativo com o Ribby"
+  >
+    <div class="pond-ambient-wave wave-one" aria-hidden="true"></div>
+    <div class="pond-ambient-wave wave-two" aria-hidden="true"></div>
+
+    <div class="ribby-stage-scene">
+      <!-- Top floating controls -->
+      <div class="ribby-stage-topbar">
+        <div class="ribby-scene-steps" role="tablist" aria-label="Cenas do tutorial com o Ribby">
+          <button
+            type="button"
+            class="ribby-step-pill"
+            [class.active]="onboardingStep() === 1"
+            (click)="goToOnboardingStep(1)"
+          >
+            <span>01</span> Como funciona
+          </button>
+          <button
+            type="button"
+            class="ribby-step-pill"
+            [class.active]="onboardingStep() === 2"
+            (click)="goToOnboardingStep(2)"
+          >
+            <span>02</span> Sua nuvem sonora
+          </button>
+          <button
+            type="button"
+            class="ribby-step-pill"
+            [class.active]="onboardingStep() === 3"
+            (click)="goToOnboardingStep(3)"
+          >
+            <span>03</span> Pronto pro Play
+          </button>
+        </div>
+
+        <button
+          type="button"
+          class="ribby-skip-btn"
+          (click)="finishOnboarding()"
+          aria-label="Pular tutorial"
+        >
+          Pular tutorial <app-icon name="close" [size]="14" />
+        </button>
+      </div>
+
+      <!-- Ribby Character & Organic Speech Cloud -->
+      <div class="ribby-character-dialogue">
+        <div class="ribby-actor-pedestal">
+          <button
+            type="button"
+            class="ribby-mascot-button"
+            (click)="pokeRibby()"
+            title="Clique no Ribby para receber uma dica!"
+          >
+            <div class="ribby-sound-halo" aria-hidden="true"></div>
+            <app-frog [size]="112" [mood]="ribbyMood()" [speaking]="true" />
+            <div class="ribby-lilypad" aria-hidden="true"></div>
+          </button>
+          <div class="ribby-voice-badge">
+            <span class="eq-bars" aria-hidden="true"> <i></i><i></i><i></i><i></i> </span>
+            <span>RIBBY · SEU GUIA</span>
+          </div>
+        </div>
+
+        <div class="ribby-speech-cloud">
+          <span class="speech-cloud-kicker">
+            @if (onboardingStep() === 1) {
+              FALANDO DIRETO DO LAGO
+            } @else if (onboardingStep() === 2) {
+              CALIBRANDO SEU RADAR
+            } @else {
+              FREQUÊNCIA SINTONIZADA
+            }
+          </span>
+          <p class="ribby-speech-text">{{ ribbySpeech() }}</p>
+        </div>
+      </div>
+
+      <!-- Interactive Floating Stage Content (No generic box) -->
+      @if (onboardingStep() === 1) {
+        <div class="ribby-interactive-deck tab-enter">
+          <div class="ribby-topic-pills" role="tablist" aria-label="Tópicos do tutorial">
+            <button
+              type="button"
+              class="topic-pill"
+              [class.active]="tutorialTopic() === 'swipe'"
+              (click)="selectTutorialTopic('swipe')"
+            >
+              <app-icon name="heart" [size]="15" /> Gesto de Swipe
+            </button>
+            <button
+              type="button"
+              class="topic-pill"
+              [class.active]="tutorialTopic() === 'playlists'"
+              (click)="selectTutorialTopic('playlists')"
+            >
+              <app-icon name="music" [size]="15" /> Playlists Contextuais
+            </button>
+            <button
+              type="button"
+              class="topic-pill"
+              [class.active]="tutorialTopic() === 'jams'"
+              (click)="selectTutorialTopic('jams')"
+            >
+              <app-icon name="users" [size]="15" /> Jams ao Vivo
+            </button>
+            <button
+              type="button"
+              class="topic-pill"
+              [class.active]="tutorialTopic() === 'family'"
+              (click)="selectTutorialTopic('family')"
+            >
+              <app-icon name="shield" [size]="15" /> Conta Pai &amp; Filhas
+            </button>
+          </div>
+
+          <!-- Interactive Swipe Simulator -->
+          <div class="ribby-swipe-simulator">
+            <div
+              class="sim-mini-card"
+              [class.sim-like]="tutorialDemoAction() === 'like'"
+              [class.sim-love]="tutorialDemoAction() === 'love'"
+              [class.sim-reject]="tutorialDemoAction() === 'reject'"
+            >
+              @if (tutorialDemoAction() === 'like') {
+                <span class="sim-stamp like">CURTIR</span>
+              } @else if (tutorialDemoAction() === 'love') {
+                <span class="sim-stamp love">SUPERLIKE ★</span>
+              } @else if (tutorialDemoAction() === 'reject') {
+                <span class="sim-stamp reject">PASSAR</span>
+              }
+
+              <div class="sim-card-vinyl">
+                <app-icon name="headphones" [size]="24" />
+              </div>
+              <div class="sim-card-meta">
+                <strong>Teste o movimento do Ribbit</strong>
+                <span>Clique nos botões ao lado para ver a reação do Ribby</span>
+              </div>
+            </div>
+
+            <div class="sim-controls-group">
+              <button
+                type="button"
+                class="sim-action-btn reject"
+                (click)="triggerDemoSwipe('reject')"
+              >
+                <app-icon name="close" [size]="16" />
+                <span>Esquerda: Passar</span>
+              </button>
+              <button type="button" class="sim-action-btn love" (click)="triggerDemoSwipe('love')">
+                <app-icon name="star" [size]="16" />
+                <span>Cima: Superlike</span>
+              </button>
+              <button type="button" class="sim-action-btn like" (click)="triggerDemoSwipe('like')">
+                <app-icon name="heart" [size]="16" />
+                <span>Direita: Curtir</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="ribby-stage-footer">
+            <span class="stage-hint"
+              >Dica: clique no próprio Ribby para ouvir segredos extras!</span
+            >
+            <button type="button" class="primary-button" (click)="nextOnboardingStep()">
+              Escolher meus gêneros com o Ribby <app-icon name="arrow" [size]="16" />
+            </button>
+          </div>
+        </div>
+      } @else if (onboardingStep() === 2) {
+        <div class="ribby-interactive-deck tab-enter">
+          <div class="genre-word-cloud floating-cloud" role="group" aria-label="Nuvem de gêneros">
+            @for (item of wordCloudGenres; track item.name) {
+              <button
+                type="button"
+                class="cloud-tag"
+                [class.chosen]="isWordCloudSelected(item.name)"
+                [class.limit-reached]="
+                  selectedWordCloudGenres().length >= 3 && !isWordCloudSelected(item.name)
+                "
+                (click)="toggleWordCloudGenre(item.name)"
+              >
+                {{ item.name }}
+              </button>
+            }
+          </div>
+
+          <div class="ribby-stage-footer">
+            <span class="stage-hint">
+              <strong>{{ selectedWordCloudGenres().length }}/3</strong> gênero(s) sintonizado(s) com
+              o Ribby (opcional)
+            </span>
+            <div class="onboarding-actions-group">
+              <button type="button" class="outline-button" (click)="prevOnboardingStep()">
+                <app-icon name="arrow-left" [size]="14" /> Voltar
+              </button>
+              <button type="button" class="primary-button" (click)="savePreferencesAndNext()">
+                Sintonizar frequências <app-icon name="arrow" [size]="16" />
+              </button>
+            </div>
+          </div>
+        </div>
+      } @else {
+        <div class="ribby-interactive-deck tab-enter">
+          <div class="onboarding-chips-summary floating-summary">
+            @for (genre of selectedWordCloudGenres(); track genre) {
+              <span class="onboarding-chip">
+                {{ genre }}
+              </span>
+            } @empty {
+              <span class="onboarding-chip"> Todos os gêneros (Descoberta livre) </span>
+            }
+          </div>
+
+          <div class="ribby-launch-cards">
+            <button
+              type="button"
+              class="launch-option-card"
+              (click)="finishAndNavigate('discover')"
+            >
+              <app-icon name="pond" [size]="22" />
+              <strong>Ir para a Descoberta</strong>
+              <span>Começar a deslizar músicas agora</span>
+            </button>
+            <button
+              type="button"
+              class="launch-option-card"
+              (click)="finishAndNavigate('playlists')"
+            >
+              <app-icon name="music" [size]="22" />
+              <strong>Suas Playlists</strong>
+              <span>Criar playlists por referência ou swipe</span>
+            </button>
+            <button type="button" class="launch-option-card" (click)="finishAndNavigate('family')">
+              <app-icon name="users" [size]="22" />
+              <strong>Plano Família</strong>
+              <span>Gerenciar Conta Pai e Contas Filhas</span>
+            </button>
+          </div>
+
+          <div class="ribby-stage-footer">
+            <button type="button" class="outline-button" (click)="prevOnboardingStep()">
+              <app-icon name="arrow-left" [size]="14" /> Ajustar gêneros
+            </button>
+            <button type="button" class="primary-button" (click)="finishOnboarding()">
+              Começar a explorar <app-icon name="check" [size]="16" />
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  </div>
+} @else if (state.activeModal()) {
   <div
     class="modal-backdrop"
     tabindex="-1"
@@ -48,7 +309,7 @@
           <app-icon name="filter" [size]="28" />
         </span>
         <h2>Filtrar sua busca</h2>
-        <p>Refine os resultados do catálogo por gênero e época.</p>
+        <p>Refine os resultados do catálogo por gênero, artista e data.</p>
         <h3>Gênero</h3>
         <div class="genre-options">
           @for (item of searchGenreOptions; track item) {
@@ -65,15 +326,34 @@
           }
         </div>
         <label>
-          Época
-          <select [value]="searchDecadeDraft()" (change)="onSearchDecadeChange($event)">
-            <option value="Todas as épocas">Todas as épocas</option>
-            <option value="Anos 2020">Anos 2020</option>
-            <option value="Anos 2010">Anos 2010</option>
-            <option value="Anos 2000">Anos 2000</option>
-            <option value="Anos 90">Anos 90</option>
-          </select>
+          Artista
+          <input
+            name="searchArtist"
+            placeholder="Ex.: Queen, Lorde, Kendrick Lamar..."
+            [value]="searchArtistDraft()"
+            (input)="onSearchArtistInput($event)"
+          />
         </label>
+        <div class="date-range-row">
+          <label>
+            Data Início
+            <input
+              name="searchStartDate"
+              type="date"
+              [value]="searchStartDateDraft()"
+              (input)="onSearchStartDateInput($event)"
+            />
+          </label>
+          <label>
+            Data Fim
+            <input
+              name="searchEndDate"
+              type="date"
+              [value]="searchEndDateDraft()"
+              (input)="onSearchEndDateInput($event)"
+            />
+          </label>
+        </div>
         <button class="primary-button full-width" (click)="applyFilters()">
           Aplicar filtros <app-icon name="check" [size]="16" />
         </button>
@@ -149,11 +429,22 @@
 
           @if (isFilterActive('Referência')) {
             <label>
-              Fonte de referência
+              Playlist de Referência (Base)
+              <select name="referencePlaylistId">
+                <option value="">Sem referência (Catálogo geral)</option>
+                @for (item of state.playlists(); track item.playlistId ?? item.name) {
+                  <option [value]="item.playlistId ?? item.name">
+                    {{ item.name }} ({{ item.count }} faixas)
+                  </option>
+                }
+              </select>
+            </label>
+            <label>
+              Fonte de referência adicional
               <select name="referenceSource">
+                <option value="playlists">Playlists da Biblioteca</option>
                 <option value="curtidas">Minhas Curtidas</option>
                 <option value="amadas">Minhas Amadas (Superlikes)</option>
-                <option value="playlists">Playlists da Biblioteca</option>
                 <option value="livre">Descoberta Livre</option>
               </select>
             </label>
@@ -163,14 +454,31 @@
             <label>
               Gênero musical
               <select name="genre">
-                <option value="Indie">Indie</option>
-                <option value="Pop">Pop</option>
-                <option value="Rock">Rock</option>
-                <option value="R&amp;B / Soul">R&amp;B / Soul</option>
-                <option value="Eletrônica">Eletrônica</option>
-                <option value="MPB">MPB</option>
-                <option value="Hip-hop">Hip-hop</option>
+                @for (g of allGenres; track g) {
+                  <option [value]="g">{{ g }}</option>
+                }
               </select>
+            </label>
+          }
+
+          @if (isFilterActive('País')) {
+            <label>
+              País
+              <input
+                name="country"
+                list="playlist-country-options"
+                placeholder="Brasil, Estados Unidos, Reino Unido..."
+              />
+              <datalist id="playlist-country-options">
+                <option value="Brasil"></option>
+                <option value="Estados Unidos"></option>
+                <option value="Reino Unido"></option>
+                <option value="Canadá"></option>
+                <option value="Japão"></option>
+                <option value="França"></option>
+                <option value="Alemanha"></option>
+                <option value="Coreia do Sul"></option>
+              </datalist>
             </label>
           }
 
@@ -188,57 +496,25 @@
             </label>
           }
 
-          @if (isFilterActive('Época')) {
-            <label>
-              Época
-              <select name="decade">
-                <option value="Atual">Atual</option>
-                <option value="Anos 2020">Anos 2020</option>
-                <option value="Anos 2010">Anos 2010</option>
-                <option value="Anos 2000">Anos 2000</option>
-                <option value="Anos 90">Anos 90</option>
-                <option value="Anos 80">Anos 80</option>
-                <option value="Clássicos">Clássicos</option>
-              </select>
-            </label>
-          }
-
-          @if (isFilterActive('Evento')) {
-            <div class="event-builder">
-              <div class="section-title">
-                <h3>Roteiro do evento</h3>
-                <span>Combine momentos em sequência</span>
-              </div>
-              <div class="event-builder-row">
-                <select aria-label="Tipo de filtro">
-                  <option>Gênero</option>
-                  <option>Artista</option>
-                  <option>Referência</option>
-                </select>
-                <input defaultValue="Pop" aria-label="Gênero, artista ou referência" />
-                <input type="number" min="0" max="12" defaultValue="1" aria-label="Horas" />
-                <span>h</span>
-                <input type="number" min="0" max="59" defaultValue="0" aria-label="Minutos" />
-                <span>min</span>
-              </div>
-              <div class="event-builder-row">
-                <select aria-label="Tipo de filtro">
-                  <option>Artista</option>
-                  <option>Gênero</option>
-                  <option>Referência</option>
-                </select>
-                <input defaultValue="Masego" aria-label="Gênero, artista ou referência" />
-                <input type="number" min="0" max="12" defaultValue="0" aria-label="Horas" />
-                <span>h</span>
-                <input type="number" min="0" max="59" defaultValue="45" aria-label="Minutos" />
-                <span>min</span>
-              </div>
+          @if (
+            isFilterActive('Data Início / Fim') ||
+            isFilterActive('Data Início e Fim') ||
+            isFilterActive('Época') ||
+            isFilterActive('Data')
+          ) {
+            <div class="date-range-row">
+              <label>
+                Data Início
+                <input name="startDate" type="date" value="2010-01-01" />
+              </label>
+              <label>
+                Data Fim
+                <input name="endDate" type="date" value="2026-12-31" />
+              </label>
             </div>
           }
 
-          <button class="primary-button full-width" type="submit">
-            Criar minha playlist <app-icon name="sparkles" [size]="17" />
-          </button>
+          <button class="primary-button full-width" type="submit">Criar minha playlist</button>
         </form>
       }
 
@@ -246,7 +522,7 @@
       @if (state.activeModal() === 'add') {
         <h2>Um lugar para {{ currentSong().title }}.</h2>
         <p>Adicione essa descoberta à sua playlist.</p>
-        @for (p of state.playlists(); track p.name; let i = $index) {
+        @for (p of state.playlists(); track p.playlistId ?? $index; let i = $index) {
           <button class="playlist-choice" (click)="addToExistingPlaylist(i)">
             <app-icon name="music" />
             <span>
@@ -305,6 +581,40 @@
               min="1"
               max="20"
               [defaultValue]="state.jamState().voteThreshold"
+            />
+          </label>
+          <label>
+            Fonte das músicas (Deck)
+            <select
+              name="deck_source"
+              [value]="jamDeckSource()"
+              (change)="onJamDeckSourceChange($event)"
+            >
+              <option value="livre">Descoberta Livre (Catálogo geral)</option>
+              <option value="curtidas">Minhas Curtidas</option>
+              <option value="playlist">Playlist da Biblioteca</option>
+            </select>
+          </label>
+          @if (jamDeckSource() === 'playlist') {
+            <label>
+              Playlist base
+              <select name="source_playlist_id">
+                @for (p of state.playlists(); track p.playlistId ?? p.name) {
+                  @if (p.playlistId) {
+                    <option [value]="p.playlistId">{{ p.name }} ({{ p.count }} faixas)</option>
+                  }
+                }
+              </select>
+            </label>
+          }
+          <label>
+            Limite de Superlikes da Sala
+            <input
+              name="max_superlikes"
+              type="number"
+              min="1"
+              max="50"
+              [defaultValue]="state.jamState().superlikesLimit || 5"
             />
           </label>
           <div class="info-note">
@@ -542,9 +852,7 @@
         </span>
         <h2>Na sua frequência.</h2>
         <p>Você está em dia. Continue explorando para encontrar sua próxima música favorita.</p>
-        <div class="info-note">
-          <app-icon name="sparkles" [size]="19" /> Seu radar de descobertas está pronto.
-        </div>
+        <div class="info-note">Seu radar de descobertas está pronto.</div>
         <button class="primary-button full-width" (click)="goToExploreRadar()">
           Explorar meu radar <app-icon name="arrow" [size]="17" />
         </button>

@@ -10,9 +10,7 @@ import type {
   JamStateApiDto,
   PaginatedTracksApiDto,
   SkipVoteApiDto,
-  Song,
 } from '@ribbit/shared-types';
-import { mapTrackDtoToSong } from '../../core/api-mappers';
 
 /** Coordinates collaborative Jam creation, joining, deck voting, and state polling via /api/jams. */
 @Injectable({ providedIn: 'root' })
@@ -36,12 +34,18 @@ export class JamService {
     return this.http.get<JamStateApiDto>(`/api/jams/${jamId}/state`);
   }
 
-  /** Loads candidate tracks for the Jam swipe deck. */
-  getJamDeck(jamId: number, limit = 20): Observable<readonly Song[]> {
-    const params = new HttpParams().set('limit', String(limit));
-    return this.http
-      .get<PaginatedTracksApiDto>(`/api/jams/${jamId}/deck`, { params })
-      .pipe(map((page) => page.items.map((dto) => mapTrackDtoToSong(dto))));
+  /** Advances the Jam to the next track in queue (host only) via POST /api/jams/${jamId}/advance. */
+  advanceJam(jamId: number): Observable<JamStateApiDto> {
+    return this.http.post<JamStateApiDto>(`/api/jams/${jamId}/advance`, {});
+  }
+
+  /** Loads candidate tracks for the Jam swipe deck with optional cursor pagination. */
+  getJamDeck(jamId: number, limit = 20, cursorId?: number): Observable<PaginatedTracksApiDto> {
+    let params = new HttpParams().set('limit', String(limit));
+    if (cursorId !== undefined && cursorId !== null) {
+      params = params.set('cursor_id', String(cursorId));
+    }
+    return this.http.get<PaginatedTracksApiDto>(`/api/jams/${jamId}/deck`, { params });
   }
 
   /** Votes on a Jam deck track with like (+1) or superlike (+2). */

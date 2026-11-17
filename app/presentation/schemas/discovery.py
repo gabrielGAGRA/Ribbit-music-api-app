@@ -54,6 +54,8 @@ class TrackSearchQuery(BaseModel):
     album: str | None = None
     genre: str | None = None
     year: int | None = None
+    start_year: int | None = None
+    end_year: int | None = None
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 
