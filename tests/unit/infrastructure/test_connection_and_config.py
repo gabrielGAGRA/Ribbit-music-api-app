@@ -246,6 +246,9 @@ def test_load_settings_resolves_google_client_id_from_credentials_file(
 
     monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_FILE", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("GOOGLE_REDIRECT_URI", raising=False)
     monkeypatch.delenv("GCS_MAX_INGEST_TRACKS", raising=False)
 
     sa_creds_path = Path(str(tmp_path)) / "sa_creds.json"
@@ -280,6 +283,93 @@ def test_load_settings_resolves_google_client_id_from_credentials_file(
     override = load_settings()
     assert override.google_client_id == "explicit-oauth-id.apps.googleusercontent.com"
     assert override.gcs_max_ingest_tracks is None
+
+
+def test_load_settings_resolves_google_oauth_from_client_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    import json
+    from pathlib import Path
+
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("GOOGLE_REDIRECT_URI", raising=False)
+    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+
+    oauth_file = Path(str(tmp_path)) / "client_secret.json"
+    oauth_file.write_text(
+        json.dumps(
+            {
+                "web": {
+                    "client_id": "test-oauth-id.apps.googleusercontent.com",
+                    "client_secret": "test-oauth-secret",
+                    "project_id": "test-project-123",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/custom-auth",
+                    "token_uri": "https://oauth2.googleapis.com/custom-token",
+                    "redirect_uris": ["http://localhost:4200/custom/callback"],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_FILE", str(oauth_file))
+
+    settings = load_settings()
+    assert settings.google_client_id == "test-oauth-id.apps.googleusercontent.com"
+    assert settings.google_client_secret == "test-oauth-secret"
+    assert settings.google_redirect_uri == "http://localhost:4200/custom/callback"
+    assert (
+        settings.google_auth_uri == "https://accounts.google.com/o/oauth2/custom-auth"
+    )
+    assert settings.google_token_uri == "https://oauth2.googleapis.com/custom-token"
+    assert settings.gcp_project_id == "test-project-123"
+
+    monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:4200/override/callback")
+    override_settings = load_settings()
+    assert (
+        override_settings.google_redirect_uri
+        == "http://localhost:4200/override/callback"
+    )
+
+
+def test_load_settings_does_not_enable_firestore_from_oauth_client_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
+) -> None:
+    import json
+    from pathlib import Path
+
+    from app.config import load_settings
+
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
+    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("GOOGLE_REDIRECT_URI", raising=False)
+    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
+    monkeypatch.delenv("FIRESTORE_ENABLED", raising=False)
+
+    oauth_file = Path(str(tmp_path)) / "client_secret.json"
+    oauth_file.write_text(
+        json.dumps(
+            {
+                "web": {
+                    "client_id": "oauth-client-id.apps.googleusercontent.com",
+                    "project_id": "oauth-only-project-id",
+                    "client_secret": "oauth-secret",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_FILE", str(oauth_file))
+
+    settings = load_settings()
+    assert settings.google_client_id == "oauth-client-id.apps.googleusercontent.com"
+    assert settings.gcp_project_id == "oauth-only-project-id"
+    assert settings.firestore_enabled is False
 
 
 def test_configure_system_ca_bundle_handles_corrupt_file_and_env_override(
