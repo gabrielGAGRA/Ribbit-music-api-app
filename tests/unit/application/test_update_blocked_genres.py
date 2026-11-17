@@ -99,3 +99,143 @@ def test_update_blocked_genres_premium_user_normalizes_and_saves() -> None:
 
     assert updated_user.blocked_genres == frozenset({"heavy metal", "country"})
     user_repo.save.assert_called_once_with(user)
+
+
+def test_update_blocked_genres_for_dependent_saves_only_linked_dependent() -> None:
+    primary = User(
+        user_id=1,
+        email="primary@test.com",
+        password_hash="hash",
+        display_name="Primary",
+        age=35,
+        plan_id=2,
+    )
+    dependent = User(
+        user_id=2,
+        email="dependent@test.com",
+        password_hash="hash",
+        display_name="Dependent",
+        age=14,
+        plan_id=2,
+        primary_account_id=1,
+    )
+    family_plan = Plan(
+        plan_id=2,
+        name="Family",
+        initial_monthly_price=19.90,
+        initial_max_profiles=4,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.side_effect = {1: primary, 2: dependent}.get
+    user_repo.save.side_effect = lambda user: user
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = family_plan
+
+    use_case = UpdateBlockedGenresUseCase(user_repo=user_repo, plan_repo=plan_repo)
+    updated = use_case.execute_for_dependent(
+        primary_user_id=1,
+        dependent_user_id=2,
+        blocked_genres=["  metal ", "rock"],
+    )
+
+    assert updated is dependent
+    assert dependent.blocked_genres == frozenset({"metal", "rock"})
+    user_repo.save.assert_called_once_with(dependent)
+
+
+def test_update_blocked_genres_for_dependent_rejects_unlinked_profile() -> None:
+    primary = User(
+        user_id=1,
+        email="primary@test.com",
+        password_hash="hash",
+        display_name="Primary",
+        age=35,
+        plan_id=2,
+    )
+    other_user = User(
+        user_id=2,
+        email="other@test.com",
+        password_hash="hash",
+        display_name="Other",
+        age=14,
+        plan_id=2,
+    )
+    family_plan = Plan(
+        plan_id=2,
+        name="Family",
+        initial_monthly_price=19.90,
+        initial_max_profiles=4,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.side_effect = {1: primary, 2: other_user}.get
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = family_plan
+
+    use_case = UpdateBlockedGenresUseCase(user_repo=user_repo, plan_repo=plan_repo)
+
+    with pytest.raises(PermissionDeniedError, match="does not belong"):
+        use_case.execute_for_dependent(
+            primary_user_id=1,
+            dependent_user_id=2,
+            blocked_genres=["rock"],
+        )
+
+    user_repo.save.assert_not_called()
+
+
+def test_update_blocked_genres_for_dependent_requires_family_plan() -> None:
+    primary = User(
+        user_id=1,
+        email="primary@test.com",
+        password_hash="hash",
+        display_name="Primary",
+        age=35,
+        plan_id=2,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = primary
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = Plan(
+        plan_id=2,
+        name="Premium",
+        initial_monthly_price=19.90,
+        initial_max_profiles=1,
+    )
+
+    use_case = UpdateBlockedGenresUseCase(user_repo=user_repo, plan_repo=plan_repo)
+
+    with pytest.raises(PermissionDeniedError, match="does not support family"):
+        use_case.execute_for_dependent(
+            primary_user_id=1,
+            dependent_user_id=2,
+            blocked_genres=["rock"],
+        )
+
+    user_repo.save.assert_not_called()
+
+
+def test_update_blocked_genres_for_dependent_rejects_dependent_as_primary() -> None:
+    dependent = User(
+        user_id=1,
+        email="dependent@test.com",
+        password_hash="hash",
+        display_name="Dependent",
+        age=14,
+        plan_id=2,
+        primary_account_id=9,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = dependent
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+
+    use_case = UpdateBlockedGenresUseCase(user_repo=user_repo, plan_repo=plan_repo)
+
+    with pytest.raises(PermissionDeniedError, match="cannot manage family"):
+        use_case.execute_for_dependent(
+            primary_user_id=1,
+            dependent_user_id=2,
+            blocked_genres=["rock"],
+        )
+
+    plan_repo.find_by_id.assert_not_called()
+    user_repo.save.assert_not_called()
