@@ -110,6 +110,7 @@ class GetPlaylistDeckUseCase:
         genre_f: list[str] | None,
         artist_f: list[str] | None,
         year_f: list[int] | None,
+        country_f: list[str] | None,
         user: User,
         excluded_ids: set[int],
     ) -> list[Track]:
@@ -119,10 +120,11 @@ class GetPlaylistDeckUseCase:
             if source_playlist is not None:
                 candidates = list(source_playlist.tracks)
 
-        if not candidates and (genre_f or artist_f or year_f):
+        if not candidates and (genre_f or artist_f or year_f or country_f):
             candidates = self.track_repo.find_by_filters(
                 artist=artist_f,
                 genre=genre_f,
+                country=country_f,
                 year=year_f,
                 limit=100,
             )
@@ -179,6 +181,7 @@ class GetPlaylistDeckUseCase:
             genre_f=genre_f,
             artist_f=artist_f,
             year_f=year_f,
+            country_f=country_f,
             user=user,
             excluded_ids=excluded_ids,
         )
