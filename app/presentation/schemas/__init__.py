@@ -12,6 +12,7 @@ from app.presentation.schemas.admin import (
 )
 from app.presentation.schemas.auth import (
     AuthResponse,
+    GoogleAuthorizeUrlResponse,
     GoogleClientIdResponse,
     GoogleLoginRequest,
     LoginRequest,
@@ -82,6 +83,7 @@ __all__ = [
     "GenreStatResponse",
     "DeckPlaylistRequest",
     "ExecutiveDashboardResponse",
+    "GoogleAuthorizeUrlResponse",
     "GoogleClientIdResponse",
     "GoogleLoginRequest",
     "InteractionRequest",
