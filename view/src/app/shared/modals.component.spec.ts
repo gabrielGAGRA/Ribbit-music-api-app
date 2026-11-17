@@ -291,5 +291,91 @@ describe('ModalsComponent', () => {
       expect(filters['reference_playlist_id']).toBe(15);
       expect(filters['source_playlist_id']).toBe(15);
     });
+
+    it('includes País in availableFilters and renders the country input field in playlist creation modal', () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+
+      const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+      const helper = component as unknown as {
+        availableFilters: readonly string[];
+        isFilterActive: (f: string) => boolean;
+        toggleFilter: (f: string) => void;
+      };
+
+      expect(helper.availableFilters).toContain('País');
+      expect(helper.isFilterActive('País')).toBe(false);
+      helper.toggleFilter('País');
+      expect(helper.isFilterActive('País')).toBe(true);
+    });
+
+    it('extracts genre and year together when both Gênero and Data Início / Fim are active', () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+
+      const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+      const form = document.createElement('form');
+      form.innerHTML = `
+        <input name="name" value="Rock Recente" />
+        <select name="genre">
+          <option value="Rock" selected>Rock</option>
+          <option value="Pop">Pop</option>
+        </select>
+        <input name="startDate" value="2018-01-01" />
+        <input name="endDate" value="2020-12-31" />
+      `;
+
+      const helper = component as unknown as {
+        toggleFilter: (f: string) => void;
+        isFilterActive: (f: string) => boolean;
+        extractPlaylistFilters: (f: HTMLFormElement) => Record<string, unknown>;
+      };
+      if (!helper.isFilterActive('Gênero')) helper.toggleFilter('Gênero');
+      if (!helper.isFilterActive('Data Início / Fim')) helper.toggleFilter('Data Início / Fim');
+
+      const filters = helper.extractPlaylistFilters(form);
+      expect(filters['genre']).toBe('Rock');
+      expect(filters['year']).toEqual([2018, 2019, 2020]);
+      expect(
+        (component as unknown as { availableFilters: readonly string[] }).availableFilters,
+      ).not.toContain('Evento');
+    });
+
+    it('applies artist search filter along with genre and decade filters', () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+
+      const state = TestBed.inject(RibbitStateService);
+      const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+
+      component.selectSearchGenre('Rock');
+      component.onSearchArtistInput({
+        target: { value: '  Queen  ' },
+      } as unknown as Event);
+      component.onSearchStartDateInput({
+        target: { value: '2015-01-01' },
+      } as unknown as Event);
+      component.onSearchEndDateInput({
+        target: { value: '2020-12-31' },
+      } as unknown as Event);
+      component.applyFilters();
+
+      expect(state.searchFilterGenre()).toBe('Rock');
+      expect(state.searchFilterArtist()).toBe('Queen');
+      expect(state.searchFilterStartDate()).toBe('2015-01-01');
+      expect(state.searchFilterEndDate()).toBe('2020-12-31');
+    });
   });
 });

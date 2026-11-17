@@ -258,6 +258,7 @@ describe('PlaylistsComponent', () => {
     req.flush({ items: [], next_cursor: null, has_more: false });
 
     expect(component.deckCandidates().length).toBe(0);
+    expect(component.activeTrack()).toBeNull();
   });
 
   it('should upload playlist cover image on file select', () => {
@@ -411,5 +412,26 @@ describe('PlaylistsComponent', () => {
 
     expect(component.isExportingSpotify()).toBe(false);
     expect(state.toast()).toContain('exportada com sucesso');
+  });
+
+  it('should reset selected playlist back to all playlists when state.resetPlaylistsView is triggered', () => {
+    component.openPlaylistView('Dias de sol');
+    expect(component.selectedPlaylist()?.name).toBe('Dias de sol');
+
+    state.resetPlaylistsView();
+    TestBed.flushEffects();
+
+    expect(component.selectedPlaylist()).toBeNull();
+    expect(component.isSwipeMode()).toBe(false);
+  });
+
+  it('should render Discover-style swipe card without green action buttons below library playlist cards', () => {
+    const template = readFileSync(resolve(__dirname, './playlists.component.html'), 'utf8');
+
+    expect(template).toContain('class="discovery-stage"');
+    expect(template).toContain('class="discovery-card playlist-swipe-card"');
+    expect(template).toContain('class="swipe-controls"');
+    expect(template).not.toContain('playlist-card-actions');
+    expect(template).not.toContain('quick-spotify-btn');
   });
 });

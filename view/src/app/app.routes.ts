@@ -23,7 +23,7 @@ export const routes: Routes = [
   { path: 'discover', component: DiscoverComponent, title: 'Ribbit - Descoberta' },
   { path: 'playlists', component: PlaylistsComponent, title: 'Ribbit - Playlists' },
   { path: 'jams', component: JamsComponent, title: 'Ribbit - Jams' },
-  { path: 'explore', component: ExploreComponent, title: 'Ribbit - Explorar' },
+  { path: 'explore', component: ExploreComponent, title: 'Ribbit - Comunidade' },
   { path: 'profile', component: ProfileComponent, title: 'Ribbit - Perfil' },
   { path: 'settings', component: SettingsComponent, title: 'Ribbit - Configurações' },
   { path: 'callback', component: SettingsComponent, title: 'Ribbit - Configurações' },

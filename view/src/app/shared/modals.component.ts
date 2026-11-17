@@ -34,23 +34,6 @@ export const BACKEND_GENRES: readonly string[] = [
   'Techno',
 ];
 
-function mapDecadeLabelToYear(decade: string): number | undefined {
-  switch (decade) {
-    case 'Anos 2020':
-      return 2022;
-    case 'Anos 2010':
-      return 2015;
-    case 'Anos 2000':
-      return 2005;
-    case 'Anos 90':
-      return 1995;
-    case 'Anos 80':
-      return 1985;
-    default:
-      return undefined;
-  }
-}
-
 function readNamedInputValue(form: HTMLFormElement, name: string): string {
   const item = form.elements.namedItem(name) as
     | HTMLInputElement
@@ -82,10 +65,10 @@ export class ModalsComponent {
   protected readonly availableFilters: readonly string[] = [
     'Referência',
     'Gênero',
+    'País',
     'Duração',
     'Data Início / Fim',
     'Lineup',
-    'Evento',
   ];
 
   protected readonly wordCloudGenres: readonly WordCloudItem[] = BACKEND_GENRES.map((name) => ({
@@ -144,7 +127,9 @@ export class ModalsComponent {
   protected readonly rating = signal<number>(5);
   protected readonly paymentMethod = signal<'card' | 'pix'>('card');
   protected readonly searchGenreDraft = signal<string>('Todos');
-  protected readonly searchDecadeDraft = signal<string>('Todas as épocas');
+  protected readonly searchArtistDraft = signal<string>('');
+  protected readonly searchStartDateDraft = signal<string>('');
+  protected readonly searchEndDateDraft = signal<string>('');
 
   readonly currentSong = computed<Song>(() => this.state.currentSong());
   readonly detailsSong = computed<Song>(() => this.state.detailsTargetSong());
@@ -202,13 +187,24 @@ export class ModalsComponent {
     this.searchGenreDraft.set(genre);
   }
 
-  onSearchDecadeChange(event: Event): void {
-    this.searchDecadeDraft.set((event.target as HTMLSelectElement).value);
+  onSearchArtistInput(event: Event): void {
+    this.searchArtistDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  onSearchStartDateInput(event: Event): void {
+    this.searchStartDateDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  onSearchEndDateInput(event: Event): void {
+    this.searchEndDateDraft.set((event.target as HTMLInputElement).value);
   }
 
   applyFilters(): void {
     this.state.searchFilterGenre.set(this.searchGenreDraft());
-    this.state.searchFilterYear.set(mapDecadeLabelToYear(this.searchDecadeDraft()));
+    this.state.searchFilterArtist.set(this.searchArtistDraft().trim());
+    this.state.searchFilterStartDate.set(this.searchStartDateDraft());
+    this.state.searchFilterEndDate.set(this.searchEndDateDraft());
+    this.state.searchFilterYear.set(undefined);
     this.closeModal();
     this.state.notify('Filtros de busca aplicados.');
   }
@@ -535,7 +531,7 @@ export class ModalsComponent {
   pokeRibby(): void {
     const phrases = [
       'Ribbit! Sabia que você pode usar uma playlist sua como referência pra criar outra?',
-      'Ribbit! Dica de ouro: no The Pond você escolhe na lateral direita se o swipe salva nas Curtidas ou direto numa Playlist!',
+      'Ribbit! Dica de ouro: na Descoberta você escolhe na lateral direita se o swipe salva nas Curtidas ou direto numa Playlist!',
       'Ribbit! Nas Jams, se a galera der Superlike suficiente, a música fura a fila na hora!',
     ];
     const random = phrases[Math.floor(Math.random() * phrases.length)] ?? phrases[0]!;

@@ -44,7 +44,6 @@
                 (click)="toggleSwipeMode()"
                 title="Adicionar novas músicas com Swipe"
               >
-                <app-icon name="sparkles" [size]="16" />
                 {{ isSwipeMode() ? 'Ver Faixas Salvas' : 'Adicionar com Swipe' }}
               </button>
             }
@@ -77,90 +76,142 @@
       @if (isSwipeMode() || selectedPlaylistTracks().length === 0) {
         <!-- Swipe-Add Deck for Playlist -->
         <div class="playlist-swipe-deck-section tab-enter">
-          <div class="section-title">
-            <div>
-              <h2>Adicionar com Swipe</h2>
-              <span
-                >Deslize para direita para adicionar faixas direto em
-                {{ activePlaylist.name }}</span
-              >
-            </div>
-            @if (selectedPlaylistTracks().length > 0) {
+          @if (selectedPlaylistTracks().length > 0) {
+            <div class="section-title">
               <button class="text-button" (click)="toggleSwipeMode()">
                 Ver faixas salvas ({{ selectedPlaylistTracks().length }})
               </button>
-            }
-          </div>
+            </div>
+          }
 
           @if (activeTrack(); as deckTrack) {
             <div class="deck-stage-wrapper">
-              <div
-                class="playlist-swipe-card"
-                [class.is-liking]="activeDeckDragAction() === 'like'"
-                [class.is-rejecting]="activeDeckDragAction() === 'dislike'"
-                [appTransform]="deckCardTransform()"
-                (pointerdown)="onDeckPointerDown($event)"
-                (pointermove)="onDeckPointerMove($event)"
-                (pointerup)="onDeckPointerUp()"
-                (pointercancel)="onDeckPointerCancel()"
-              >
-                <img [src]="deckTrack.image" [alt]="'Capa de ' + deckTrack.title" />
-                <div class="deck-card-shade"></div>
-                @if (activeDeckDragAction() === 'like') {
-                  <div class="swipe-stamp-badge like" aria-hidden="true">
-                    <app-icon name="plus" [size]="15" /> ADICIONAR
-                  </div>
-                } @else if (activeDeckDragAction() === 'dislike') {
-                  <div class="swipe-stamp-badge reject" aria-hidden="true">
-                    <app-icon name="close" [size]="15" /> PULAR
-                  </div>
-                }
-                <div class="deck-card-info">
-                  <div class="queue-card-heading">
-                    <div>
-                      <strong>{{ deckTrack.title }}</strong>
-                      <span
-                        >{{ deckTrack.artist }} · <small>{{ deckTrack.genre }}</small></span
-                      >
-                    </div>
+              <div class="discovery-stage">
+                <div class="deck-back back-one"></div>
+                <div class="deck-back back-two"></div>
+
+                <article
+                  class="discovery-card playlist-swipe-card"
+                  [class.is-liking]="activeDeckDragAction() === 'like'"
+                  [class.is-rejecting]="activeDeckDragAction() === 'dislike'"
+                  [appTransform]="deckCardTransform()"
+                  (pointerdown)="onDeckPointerDown($event)"
+                  (pointermove)="onDeckPointerMove($event)"
+                  (pointerup)="onDeckPointerUp()"
+                  (pointercancel)="onDeckPointerCancel()"
+                >
+                  <img
+                    class="album-art"
+                    [src]="deckTrack.image"
+                    [alt]="'Arte de capa: ' + deckTrack.title + ', ' + deckTrack.artist"
+                  />
+                  <div class="art-shade"></div>
+
+                  <div class="card-top">
+                    @if (activeDeckDragAction() === 'like') {
+                      <div class="swipe-stamp-badge like" aria-hidden="true">
+                        <app-icon name="plus" [size]="16" /> ADICIONAR
+                      </div>
+                    } @else if (activeDeckDragAction() === 'dislike') {
+                      <div class="swipe-stamp-badge reject" aria-hidden="true">
+                        <app-icon name="close" [size]="16" /> PASSAR
+                      </div>
+                    }
                     <button
                       type="button"
-                      class="preview-play"
-                      (click)="playTrack(deckTrack)"
-                      [attr.aria-label]="
-                        player.isPlaying() ? 'Pausar demonstração' : 'Reproduzir demonstração'
-                      "
+                      class="card-more"
+                      aria-label="Detalhes da música"
+                      (click)="openTrackDetails(deckTrack)"
                     >
-                      <app-icon [name]="player.isPlaying() ? 'pause' : 'play'" [size]="19" />
+                      •••
                     </button>
                   </div>
+
+                  <div class="card-bottom">
+                    <span class="recommendation">
+                      <i></i>
+                      Para a playlist {{ activePlaylist.name }}
+                    </span>
+
+                    <div class="track-heading">
+                      <div>
+                        <h2>{{ deckTrack.title }}</h2>
+                        <p>{{ deckTrack.artist }}</p>
+                      </div>
+                      <button
+                        type="button"
+                        class="preview-play"
+                        (click)="toggleDeckPlay(deckTrack)"
+                        [attr.aria-label]="
+                          player.isPlaying() ? 'Pausar demonstração' : 'Reproduzir demonstração'
+                        "
+                      >
+                        <app-icon [name]="player.isPlaying() ? 'pause' : 'play'" [size]="21" />
+                      </button>
+                    </div>
+
+                    <div class="track-tags">
+                      <span>{{ deckTrack.genre }}</span>
+                      <span>Acústico</span>
+                      <small>
+                        <app-icon name="clock" [size]="12" />
+                        {{ deckTrack.time }}
+                      </small>
+                    </div>
+
+                    <div
+                      class="waveform"
+                      [class.is-playing]="player.isPlaying()"
+                      aria-label="Visualização de progresso"
+                    >
+                      @for (bar of waveformBars; track $index) {
+                        <i
+                          [class.heard]="$index < player.progress() * 0.65"
+                          [appWaveBarIndex]="$index"
+                        ></i>
+                      }
+                    </div>
+
+                    <div class="preview-time">
+                      <span>0:{{ formattedPreviewTime() }}</span>
+                      <span>{{
+                        player.usingRealAudio() ? 'Prévia de áudio · 0:30' : 'Prévia visual · 0:30'
+                      }}</span>
+                    </div>
+                  </div>
+                </article>
+              </div>
+
+              <div class="swipe-controls">
+                <div>
+                  <button
+                    class="swipe-button reject"
+                    (click)="swipeDeckTrack('dislike')"
+                    [class.highlight]="activeDeckDragAction() === 'dislike'"
+                    aria-label="Passar música"
+                    title="Passar (Deslize para esquerda)"
+                  >
+                    <app-icon name="close" [size]="30" />
+                  </button>
+                  <span>Passar</span>
+                </div>
+                <div>
+                  <button
+                    class="swipe-button like"
+                    (click)="swipeDeckTrack('like')"
+                    [class.highlight]="activeDeckDragAction() === 'like'"
+                    aria-label="Adicionar à playlist"
+                    title="Adicionar à playlist (Deslize para direita)"
+                  >
+                    <app-icon name="plus" [size]="29" />
+                  </button>
+                  <span>Adicionar</span>
                 </div>
               </div>
 
-              <div class="deck-actions-row">
-                <button
-                  class="swipe-button reject"
-                  (click)="swipeDeckTrack('dislike')"
-                  aria-label="Passar música"
-                  title="Pular sugestão"
-                >
-                  <app-icon name="close" [size]="24" />
-                </button>
-                <button
-                  class="icon-button preview-btn"
-                  (click)="playTrack(deckTrack)"
-                  aria-label="Prévia de áudio"
-                >
-                  <app-icon name="play" [size]="20" />
-                </button>
-                <button
-                  class="swipe-button like"
-                  (click)="swipeDeckTrack('like')"
-                  aria-label="Adicionar à playlist"
-                  title="Adicionar à playlist"
-                >
-                  <app-icon name="plus" [size]="24" />
-                </button>
+              <div class="swipe-hint">
+                <app-icon name="pond" [size]="15" />
+                <span>Deixe seu instinto escolher. Arraste e descubra.</span>
               </div>
             </div>
           } @else {
@@ -242,32 +293,6 @@
               <strong>{{ p.name }}</strong>
               <span>{{ p.count }} faixas · {{ p.duration }}</span>
             </button>
-            <div class="playlist-card-actions">
-              @if (p.playlistId !== undefined) {
-                <button
-                  class="quick-spotify-btn"
-                  [disabled]="isExportingSpotify()"
-                  (click)="exportPlaylist(p.playlistId, p.name, $event)"
-                  title="Exportar para o Spotify"
-                >
-                  <app-icon name="globe" [size]="13" /> Exportar para o Spotify
-                </button>
-              }
-              <button
-                class="quick-spotify-btn"
-                (click)="openPlaylistSwipeDeck(p)"
-                title="Adicionar faixas com Swipe"
-              >
-                <app-icon name="sparkles" [size]="13" /> Adicionar com Swipe
-              </button>
-              <button
-                class="quick-spotify-btn"
-                (click)="openPlaylistView(p)"
-                title="Ver detalhes da playlist"
-              >
-                <app-icon name="music" [size]="13" /> Ver faixas
-              </button>
-            </div>
           </div>
         } @empty {
           <div class="panel">

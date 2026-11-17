@@ -1,11 +1,15 @@
+import type { OnInit } from '@angular/core';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import type { Song } from '@ribbit/shared-types';
+import type { CommunityReview, Song } from '@ribbit/shared-types';
+import { toApiError } from '../../core/api-error';
 import { AudioPlayerService } from '../../core/audio-player.service';
+import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+import { SongService } from '../../core/services/song.service';
 import { IconComponent } from '../../shared/icon.component';
 
-/** Displays user account overview, categorized track collections, and subscription shortcuts. */
+/** Displays user account overview, categorized track collections, user reviews, and subscription shortcuts. */
 @Component({
   selector: 'app-profile',
   standalone: true,
@@ -14,12 +18,15 @@ import { IconComponent } from '../../shared/icon.component';
   styleUrl: './profile.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ProfileComponent {
+export class ProfileComponent implements OnInit {
   protected readonly state = inject(RibbitStateService);
   protected readonly player = inject(AudioPlayerService);
+  private readonly songService = inject(SongService);
   private readonly router = inject(Router, { optional: true });
 
   readonly selectedTab = signal<'like' | 'love' | 'reject'>('like');
+  readonly playingSongKey = signal<string | null>(null);
+  protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
 
   readonly userInitials = computed<string>(() => {
     const parts = this.state
@@ -52,6 +59,23 @@ export class ProfileComponent {
     }
     return this.state.rejectedSongs().slice(0, 6);
   });
+
+  readonly userReviews = computed<readonly CommunityReview[]>(() => {
+    const uid = this.state.userId();
+    const userName = this.state.userName().trim().toLowerCase();
+    return this.songService.reviews().filter((review) => {
+      if (uid !== null && review.userId !== undefined) {
+        return review.userId === uid;
+      }
+      return Boolean(userName) && review.author.trim().toLowerCase() === userName;
+    });
+  });
+
+  ngOnInit(): void {
+    if (readAuthToken() && this.songService.reviews().length === 0) {
+      this.state.refreshCatalogAndFeed();
+    }
+  }
 
   selectTab(tab: 'like' | 'love' | 'reject'): void {
     this.selectedTab.set(tab);
@@ -88,10 +112,33 @@ export class ProfileComponent {
     void this.router?.navigate([`/${route}`]).catch(() => false);
   }
 
+  isSongPlaying(song: Song): boolean {
+    return this.player.isPlaying() && this.playingSongKey() === `${song.title}::${song.artist}`;
+  }
+
   playSong(song: Song): void {
+    const key = `${song.title}::${song.artist}`;
+    if (this.player.isPlaying() && this.playingSongKey() === key) {
+      this.player.pause();
+      return;
+    }
+    this.playingSongKey.set(key);
     this.state.discoverySong.set(song);
     this.player.loadTrack(song.previewUrl);
     this.player.play();
+  }
+
+  deleteReview(review: CommunityReview): void {
+    if (!readAuthToken()) return;
+    this.songService.deleteReview(review.id).subscribe({
+      next: () => {
+        this.state.refreshCatalogAndFeed();
+        this.state.notify('Avaliação removida com sucesso.');
+      },
+      error: (err: unknown) => {
+        this.state.notify(toApiError(err).message);
+      },
+    });
   }
 
   cancelSubscription(): void {

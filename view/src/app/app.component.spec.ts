@@ -3,6 +3,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { AppComponent } from './app.component';
+import { AudioPlayerService } from './core/audio-player.service';
 import { authInterceptor } from './core/auth.interceptor';
 import { RibbitStateService } from './core/ribbit-state.service';
 
@@ -39,6 +40,26 @@ describe('AppComponent', () => {
     component.changePage('settings');
     expect(state.activePage()).toBe('settings');
     expect(component.breadcrumbLabel()).toBe('Configurações');
+  });
+
+  it('should use The Pond for Jams and Comunidade for Explore while keeping Descoberta distinct', () => {
+    component.changePage('discover');
+    expect(component.breadcrumbLabel()).toBe('Descoberta');
+    expect(component.currentHeading().eyebrow).not.toBe('THE POND');
+
+    component.changePage('jams');
+    expect(component.breadcrumbLabel()).toBe('Jams');
+    expect(component.currentHeading().eyebrow).toBe('THE POND');
+
+    component.changePage('explore');
+    expect(component.breadcrumbLabel()).toBe('Comunidade');
+    expect(component.currentHeading().eyebrow).toBe('COMUNIDADE');
+  });
+
+  it('should signal playlists view reset when clicking playlists in the sidebar', () => {
+    const before = state.playlistsViewReset();
+    component.changePage('playlists');
+    expect(state.playlistsViewReset()).toBe(before + 1);
   });
 
   it('should compute user initials and real library counts accurately', () => {
@@ -84,5 +105,16 @@ describe('AppComponent', () => {
     expect(component.resolveActivePageFromUrl('/settings?code=abc&state=xyz')).toBe('settings');
     expect(component.resolveActivePageFromUrl('/playlists#section')).toBe('playlists');
     expect(component.resolveActivePageFromUrl('/')).toBe('discover');
+  });
+
+  it('should pause playing audio when transitioning between screens', () => {
+    const player = TestBed.inject(AudioPlayerService);
+    player.play();
+    expect(player.isPlaying()).toBe(true);
+
+    component.changePage('explore');
+    TestBed.flushEffects();
+
+    expect(player.isPlaying()).toBe(false);
   });
 });

@@ -334,33 +334,6 @@
   transform: scale(0.97);
 }
 
-.quick-spotify-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 10px;
-  font-size: 11px;
-  color: #1db954;
-  background: rgba(29, 185, 84, 0.08);
-  border: 1px solid rgba(29, 185, 84, 0.25);
-  border-radius: 6px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.15s ease;
-}
-
-.quick-spotify-btn:hover {
-  background: rgba(29, 185, 84, 0.18);
-  border-color: #1db954;
-}
-
-.quick-spotify-btn:active {
-  transform: scale(0.97);
-}
-
 @media (hover: none) {
   .hero-play-badge {
     opacity: 1;
@@ -403,15 +376,7 @@
   }
 
   .deck-stage-wrapper {
-    max-width: min(360px, calc(100vw - 32px));
-  }
-
-  .playlist-swipe-card {
-    height: clamp(320px, calc(100dvh - 280px), 420px);
-  }
-
-  .deck-actions-row {
-    gap: 16px;
+    max-width: min(400px, calc(100vw - 28px));
   }
 
   .tracks-table {
@@ -446,110 +411,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
   width: 100%;
-  max-width: 360px;
+  max-width: 400px;
+}
+
+.deck-stage-wrapper .discovery-stage {
+  width: 100%;
 }
 
 .playlist-swipe-card {
-  position: relative;
-  width: 100%;
-  height: 420px;
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
-  cursor: grab;
   touch-action: pan-y;
-  user-select: none;
-  border: 1px solid var(--border);
-  background: var(--panel);
-}
-
-.playlist-swipe-card:active {
-  cursor: grabbing;
-}
-
-.playlist-swipe-card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-}
-
-.deck-card-shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, transparent 40%, rgba(13, 16, 22, 0.95) 100%);
-  pointer-events: none;
-}
-
-.deck-card-info {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  right: 20px;
-  color: var(--on-media-ink);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.deck-card-info strong {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--on-media-ink);
-}
-
-.deck-card-info span {
-  font-size: 13px;
-  color: var(--on-media-ink);
-  opacity: 0.85;
-}
-
-.deck-actions-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24px;
-}
-
-.deck-actions-row .swipe-button {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    transform 0.15s ease,
-    background 0.15s ease;
-}
-
-.deck-actions-row .swipe-button:active {
-  transform: scale(0.97);
-}
-
-.deck-actions-row .preview-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  color: var(--ink);
-  transition:
-    transform 0.15s ease,
-    background-color 0.15s ease;
-}
-
-.deck-actions-row .preview-btn:active {
-  transform: scale(0.97);
-}
-
-.playlist-card-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
 }
 
 .empty-deck-panel {
