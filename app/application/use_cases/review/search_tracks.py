@@ -103,6 +103,36 @@ class SearchTracksUseCase:
                 exc,
             )
 
+    @staticmethod
+    def _build_fallback_query(command: SearchTracksCommand) -> str | None:
+        artist = (command.artist or "").strip()
+        title = (command.query or "").strip()
+        if artist and title:
+            return f"artist:{artist} {title}"
+        if artist:
+            return f"artist:{artist}"
+        return (
+            command.query
+            or command.album
+            or command.genre
+            or (str(command.year) if command.year is not None else None)
+        )
+
+    @staticmethod
+    def _matches_search_filters(
+        track: Track, artist_filter: str, title_filter: str
+    ) -> bool:
+        if artist_filter:
+            return artist_filter in track.artist.lower() and (
+                not title_filter or title_filter in track.title.lower()
+            )
+        if title_filter:
+            return (
+                title_filter in track.title.lower()
+                or title_filter in track.artist.lower()
+            )
+        return True
+
     def execute(self, command: SearchTracksCommand) -> list[Track]:
         user = self.user_repo.find_by_id(command.user_id)
         if not user:
@@ -129,15 +159,19 @@ class SearchTracksUseCase:
             offset=command.offset,
         )
 
-        query_term = (
-            command.query
-            or command.artist
-            or command.album
-            or command.genre
-            or (str(command.year) if command.year is not None else None)
+        artist_filter = (command.artist or "").strip().lower()
+        title_filter = (command.query or "").strip().lower()
+        query_term = self._build_fallback_query(command)
+        needs_fallback = not tracks or (
+            bool(title_filter)
+            and not any(
+                title_filter in t.title.lower()
+                or (not artist_filter and title_filter in t.artist.lower())
+                for t in tracks
+            )
         )
         if (
-            not tracks
+            needs_fallback
             and query_term
             and self.music_service is not None
             and user.is_adult
@@ -149,13 +183,35 @@ class SearchTracksUseCase:
                 )
             for ct in catalog_tracks:
                 candidate = self._build_track_from_catalog(ct, query_term)
+                if not self._matches_search_filters(
+                    candidate, artist_filter, title_filter
+                ):
+                    continue
+                if user.is_track_restricted_for_minor(candidate):
+                    continue
                 saved = self.track_repo.save(candidate)
                 self._write_new_track_delta(saved)
                 tracks.append(saved)
 
-        return [
-            track for track in tracks if not user.is_track_restricted_for_minor(track)
+        results = [
+            track
+            for track in tracks
+            if not user.is_track_restricted_for_minor(track)
+            and self._matches_search_filters(track, artist_filter, title_filter)
         ]
+        if title_filter:
+            results.sort(
+                key=lambda t: (
+                    0
+                    if t.title.lower() == title_filter
+                    or t.artist.lower() == title_filter
+                    else 1
+                    if title_filter in t.title.lower()
+                    or title_filter in t.artist.lower()
+                    else 2
+                )
+            )
+        return results
 
 
 __all__ = ["SearchTracksUseCase"]
