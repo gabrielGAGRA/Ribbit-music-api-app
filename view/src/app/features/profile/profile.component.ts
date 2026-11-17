@@ -61,6 +61,10 @@ export class ProfileComponent implements OnInit {
   });
 
   readonly userReviews = computed<readonly CommunityReview[]>(() => {
+    const myReviews = this.songService.userReviews();
+    if (myReviews.length > 0) {
+      return myReviews;
+    }
     const uid = this.state.userId();
     const userName = this.state.userName().trim().toLowerCase();
     return this.songService.reviews().filter((review) => {
@@ -72,9 +76,16 @@ export class ProfileComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    if (readAuthToken() && this.songService.reviews().length === 0) {
+    if (!readAuthToken()) return;
+    if (this.songService.reviews().length === 0) {
       this.state.refreshCatalogAndFeed();
     }
+    this.songService
+      .loadUserReviews({
+        currentUserId: this.state.userId() ?? undefined,
+        currentUserName: this.state.userName(),
+      })
+      .subscribe({ error: () => undefined });
   }
 
   selectTab(tab: 'like' | 'love' | 'reject'): void {
