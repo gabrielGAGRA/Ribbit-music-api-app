@@ -187,3 +187,52 @@ def test_update_subscription_plan_capacity_below_active_dependents_raises_error(
         match="Plan profile limit cannot be less than currently linked member profiles",
     ):
         use_case.execute(command)
+
+
+def test_update_plan_allows_price_edit_when_max_profiles_is_unchanged() -> None:
+    plan = Plan(
+        plan_id=1,
+        name="Free",
+        initial_monthly_price=0.0,
+        initial_max_profiles=1,
+    )
+    holder = User(
+        user_id=10,
+        email="holder@ribbit.com",
+        password_hash="pw",
+        display_name="Holder",
+        age=40,
+        plan_id=1,
+        primary_account_id=None,
+    )
+    dep1 = User(
+        user_id=11,
+        email="dep1@ribbit.com",
+        password_hash="pw",
+        display_name="Dep 1",
+        age=12,
+        plan_id=1,
+        primary_account_id=10,
+    )
+
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = plan
+    plan_repo.find_by_name.return_value = plan
+    plan_repo.save.side_effect = lambda p: p
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.list_all.return_value = [holder, dep1]
+    user_repo.list_dependents.return_value = [dep1]
+
+    use_case = UpdateSubscriptionPlanUseCase(plan_repo=plan_repo, user_repo=user_repo)
+    updated = use_case.execute(
+        UpdateSubscriptionPlanCommand(
+            plan_id=1,
+            new_name="Free",
+            new_price=1.0,
+            max_profiles=1,
+        )
+    )
+
+    assert updated.monthly_price == 1.0
+    assert updated.max_profiles == 1

@@ -59,7 +59,10 @@ class UpdateSubscriptionPlanUseCase:
             plan.update_name(cleaned)
 
         if command.max_profiles is not None:
-            self._validate_max_profiles_capacity(command.plan_id, command.max_profiles)
+            if command.max_profiles < plan.max_profiles:
+                self._validate_max_profiles_capacity(
+                    command.plan_id, command.max_profiles
+                )
             plan.update_max_profiles(command.max_profiles)
 
         return self.plan_repo.save(plan)
