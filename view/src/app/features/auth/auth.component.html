@@ -54,6 +54,13 @@
         </div>
       }
 
+      @if (infoMessage()) {
+        <div class="auth-alert info" role="status">
+          <app-icon name="check" [size]="14" />
+          <span>{{ infoMessage() }}</span>
+        </div>
+      }
+
       @if (authView() === 'forgot-password' && forgotSubmitted()) {
         <div class="auth-success-box">
           <app-icon name="check" [size]="32" />
@@ -164,6 +171,15 @@
               [value]="passwordDraft()"
               (input)="onPasswordChange($event)"
             />
+            @if (isRegister()) {
+              <small
+                class="auth-field-hint"
+                [class.auth-field-error]="passwordTooShort()"
+                [class.valid]="passwordDraft().length >= 6"
+              >
+                {{ passwordRequirementHint() }}
+              </small>
+            }
           </label>
 
           @if (isRegister()) {

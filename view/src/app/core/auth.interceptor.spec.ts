@@ -47,6 +47,8 @@ describe('authInterceptor', () => {
   it('attaches Admin Authorization Bearer header for /api/admin requests and clears admin token on 401', () => {
     writeAuthToken('listener-jwt');
     writeAdminAuthToken('admin-jwt-999');
+    const adminSpy = vi.fn();
+    notifier.onAdminUnauthorized(adminSpy);
 
     http.get('/api/admin/dashboard').subscribe({ error: () => {} });
 
@@ -59,6 +61,7 @@ describe('authInterceptor', () => {
 
     expect(readAdminAuthToken()).toBeNull();
     expect(readAuthToken()).toBe('listener-jwt');
+    expect(adminSpy).toHaveBeenCalledTimes(1);
   });
 
   it('prioritizes admin token over listener token when createAdminHttpContext() is attached on non-/api/admin endpoints', () => {
@@ -78,6 +81,28 @@ describe('authInterceptor', () => {
 
     expect(readAdminAuthToken()).toBeNull();
     expect(readAuthToken()).toBe('expired-listener-jwt');
+  });
+
+  it('does not cross-fallback between listener and admin tokens even when on /admin routes', () => {
+    window.history.pushState({}, '', '/admin/dashboard');
+    try {
+      writeAuthToken('listener-only-jwt');
+      http.get('/api/admin/users').subscribe({ error: () => {} });
+      const adminReq = httpMock.expectOne('/api/admin/users');
+      expect(adminReq.request.headers.has('Authorization')).toBe(false);
+      adminReq.flush({}, { status: 401, statusText: 'Unauthorized' });
+      expect(readAuthToken()).toBe('listener-only-jwt');
+
+      clearAuthStorage();
+      writeAdminAuthToken('admin-only-jwt');
+      http.get('/api/jams/1/state').subscribe({ error: () => {} });
+      const listenerReq = httpMock.expectOne('/api/jams/1/state');
+      expect(listenerReq.request.headers.has('Authorization')).toBe(false);
+      listenerReq.flush({}, { status: 401, statusText: 'Unauthorized' });
+      expect(readAdminAuthToken()).toBe('admin-only-jwt');
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
   });
 
   it('attaches Authorization Bearer header when token is stored', () => {

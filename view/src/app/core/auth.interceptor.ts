@@ -104,20 +104,11 @@ function shouldClearSessionOn401(
   return !isSpotifyOAuthState401(url, err, token) && !isSecondaryCredential401(url, err, token);
 }
 
-function isAdminRouteActive(): boolean {
-  return typeof location !== 'undefined' && location.pathname.startsWith('/admin');
-}
-
 /** Attaches Bearer credentials to /api calls and normalizes backend errors. */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const notifier = inject(AuthSessionNotifier);
-  const isAdminRequest =
-    req.url.startsWith('/api/admin') ||
-    req.context.get(IS_ADMIN_API_REQUEST) ||
-    isAdminRouteActive();
-  const token = isAdminRequest
-    ? (readAdminAuthToken() ?? readAuthToken())
-    : (readAuthToken() ?? readAdminAuthToken());
+  const isAdminRequest = req.url.startsWith('/api/admin') || req.context.get(IS_ADMIN_API_REQUEST);
+  const token = isAdminRequest ? readAdminAuthToken() : readAuthToken();
 
   const shouldAttach =
     req.url.startsWith('/api') && token !== null && !req.headers.has('Authorization');
@@ -134,6 +125,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       ) {
         if (isAdminRequest) {
           clearAdminAuthToken();
+          notifier.notifyAdminUnauthorized();
         } else {
           clearAuthStorage();
           notifier.notifyUnauthorized();

@@ -78,10 +78,14 @@ describe('AuthComponent', () => {
   it('should detect password mismatches and enforce minimum length', () => {
     component.passwordDraft.set('12345');
     component.confirmPasswordDraft.set('12345');
+    expect(component.passwordTooShort()).toBe(true);
+    expect(component.passwordRequirementHint()).toContain('6 caracteres (5/6)');
     expect(component.canSubmitRegister()).toBe(false);
 
     component.passwordDraft.set('senhaForte123');
     component.confirmPasswordDraft.set('outraSenha');
+    expect(component.passwordTooShort()).toBe(false);
+    expect(component.passwordRequirementHint()).toContain('6+ caracteres');
     expect(component.passwordMismatch()).toBe(true);
     expect(component.canSubmitRegister()).toBe(false);
 
@@ -249,8 +253,8 @@ describe('AuthComponent', () => {
 
     expect(component.googleClientId()).toBe('prefetched-client-id.apps.googleusercontent.com');
 
-    component.onGoogleLogin();
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
+    component.triggerGoogleIdentityServicesPrompt();
     httpMock.expectNone('/api/auth/google/client-id');
     expect(initialize).toHaveBeenCalledTimes(1);
     expect(initialize).toHaveBeenCalledWith(
@@ -275,9 +279,9 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     expect(component.isLoadingGoogleConfig()).toBe(true);
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
 
     const clientIdReq = httpMock.expectOne('/api/auth/google/client-id');
     expect(clientIdReq.request.method).toBe('GET');
@@ -333,7 +337,7 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     const clientIdReq = httpMock.expectOne('/api/auth/google/client-id');
 
     component.emailDraft.set('user@ribbit.app');
@@ -369,7 +373,7 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     const successReq = httpMock.expectOne('/api/auth/google/client-id');
     component.onForgot();
     expect(component.authView()).toBe('forgot-password');
@@ -382,7 +386,7 @@ describe('AuthComponent', () => {
 
     component.backToLogin();
     component.googleClientId.set(null);
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     const failReq = httpMock.expectOne('/api/auth/google/client-id');
     component.onForgot();
 
@@ -395,21 +399,21 @@ describe('AuthComponent', () => {
   });
 
   it('should show clear errors when Google client_id is missing or fetch fails', () => {
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     const emptyReq = httpMock.expectOne('/api/auth/google/client-id');
     emptyReq.flush({ client_id: null });
     expect(component.errorMessage()).toBe(
       'Login com Google indisponível: GOOGLE_CLIENT_ID não configurado no servidor.',
     );
 
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     const whitespaceReq = httpMock.expectOne('/api/auth/google/client-id');
     whitespaceReq.flush({ client_id: '   ' });
     expect(component.errorMessage()).toBe(
       'Login com Google indisponível: GOOGLE_CLIENT_ID não configurado no servidor.',
     );
 
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     const errorReq = httpMock.expectOne('/api/auth/google/client-id');
     errorReq.flush(
       { detail: 'Failed to read Google config.' },
@@ -421,7 +425,7 @@ describe('AuthComponent', () => {
   it('should show clear error when GIS script is unavailable or prompt is suppressed', () => {
     component.googleClientId.set('12345.apps.googleusercontent.com');
 
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     expect(component.errorMessage()).toBe(
       'Serviço de autenticação do Google indisponível no navegador.',
     );
@@ -441,7 +445,7 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     expect(component.errorMessage()).toBe(
       'Não foi possível exibir o modal do Google. Verifique as permissões do navegador.',
     );
@@ -456,7 +460,7 @@ describe('AuthComponent', () => {
         listener?.({ isSkippedMoment: () => true });
       },
     );
-    component.onGoogleLogin();
+    component.triggerGoogleIdentityServicesPrompt();
     expect(component.errorMessage()).toBe(
       'Não foi possível exibir o modal do Google. Verifique as permissões do navegador.',
     );
@@ -500,6 +504,160 @@ describe('AuthComponent', () => {
 
     expect(component.authView()).toBe('login');
     expect(component.selectedPlanId()).toBe(1);
+  });
+
+  it('should request /api/auth/google/authorize on onGoogleLogin and navigate to external authorization URL', () => {
+    const navSpy = vi.spyOn(component, 'navigateToExternalUrl').mockImplementation(() => {});
+
+    component.onGoogleLogin();
+    expect(component.isLoadingGoogleConfig()).toBe(true);
+
+    const authReq = httpMock.expectOne('/api/auth/google/authorize');
+    expect(authReq.request.method).toBe('GET');
+    authReq.flush({
+      authorization_url: 'https://accounts.google.com/o/oauth2/auth?client_id=cid&state=xyz',
+    });
+
+    expect(component.isLoadingGoogleConfig()).toBe(false);
+    expect(navSpy).toHaveBeenCalledWith(
+      'https://accounts.google.com/o/oauth2/auth?client_id=cid&state=xyz',
+    );
+  });
+
+  it('should not navigate to external authorization URL if user navigated to forgot password or started submitting while in flight', () => {
+    const navSpy = vi.spyOn(component, 'navigateToExternalUrl').mockImplementation(() => {});
+
+    component.onGoogleLogin();
+    expect(component.isLoadingGoogleConfig()).toBe(true);
+
+    // User switches to forgot view while request is in flight
+    component.onForgot();
+    expect(component.isForgot()).toBe(true);
+
+    const authReq = httpMock.expectOne('/api/auth/google/authorize');
+    authReq.flush({
+      authorization_url: 'https://accounts.google.com/o/oauth2/auth?client_id=cid&state=xyz',
+    });
+
+    expect(component.isLoadingGoogleConfig()).toBe(false);
+    expect(navSpy).not.toHaveBeenCalled();
+  });
+
+  it('should complete Google OAuth session when URL query indicates google_auth=complete', () => {
+    window.history.pushState({}, '', '/discover?google_auth=complete');
+    const historySpy = vi.spyOn(window.history, 'replaceState');
+
+    try {
+      component.ngOnInit();
+      httpMock.expectOne('/api/plans').flush([]);
+      httpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
+
+      expect(historySpy).toHaveBeenCalledWith({}, '', '/discover');
+      expect(component.isSubmitting()).toBe(true);
+
+      const sessionReq = httpMock.expectOne('/api/auth/google/session');
+      expect(sessionReq.request.method).toBe('POST');
+      sessionReq.flush({
+        access_token: 'jwt-google-session',
+        token_type: 'bearer',
+        user: {
+          user_id: 33,
+          email: 'oauth.user@gmail.com',
+          display_name: 'OAuth User',
+          plan_id: 1,
+          is_admin: false,
+        },
+      });
+
+      expect(component.isSubmitting()).toBe(false);
+      expect(state.authView()).toBe('app');
+      expect(state.userName()).toBe('OAuth User');
+      expect(state.toast()).toContain('Conectado com Google como OAuth User.');
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
+  it('should surface friendly error when URL query indicates google_auth_error', () => {
+    window.history.pushState({}, '', '/discover?google_auth_error=access_denied');
+    const historySpy = vi.spyOn(window.history, 'replaceState');
+
+    try {
+      component.ngOnInit();
+      httpMock.expectOne('/api/plans').flush([]);
+      httpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
+
+      expect(historySpy).toHaveBeenCalledWith({}, '', '/discover');
+      expect(component.errorMessage()).toContain('cancelada');
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
+  it('should forward to pre-filled register view when URL query indicates google_auth=register', () => {
+    window.history.pushState({}, '', '/discover?google_auth=register');
+    const historySpy = vi.spyOn(window.history, 'replaceState');
+
+    try {
+      component.ngOnInit();
+      httpMock.expectOne('/api/plans').flush([]);
+      httpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
+
+      expect(historySpy).toHaveBeenCalledWith({}, '', '/discover');
+      expect(component.isSubmitting()).toBe(true);
+
+      const sessionReq = httpMock.expectOne('/api/auth/google/session');
+      expect(sessionReq.request.method).toBe('POST');
+      sessionReq.flush(
+        {
+          error: 'EntityNotFoundError',
+          message: 'Nenhuma conta Ribbit encontrada para este e-mail Google.',
+          details: {
+            entity_name: 'User',
+            registration_required: true,
+            email: 'new.oauth@gmail.com',
+            display_name: 'New OAuth User',
+          },
+        },
+        { status: 404, statusText: 'Not Found' },
+      );
+
+      expect(component.isSubmitting()).toBe(false);
+      expect(component.authView()).toBe('register');
+      expect(state.authView()).toBe('register');
+      expect(component.emailDraft()).toBe('new.oauth@gmail.com');
+      expect(component.nameDraft()).toBe('New OAuth User');
+      expect(component.errorMessage()).toBe('');
+      expect(component.infoMessage()).toContain('Complete seu cadastro');
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
+  it('should forward to pre-filled register view when POST /api/auth/google returns 404 registration_required', () => {
+    component.authenticateWithGoogleIdToken('valid-unregistered-google-jwt');
+    const req = httpMock.expectOne('/api/auth/google');
+    expect(req.request.method).toBe('POST');
+    req.flush(
+      {
+        error: 'EntityNotFoundError',
+        message: 'Nenhuma conta Ribbit encontrada.',
+        details: {
+          entity_name: 'User',
+          registration_required: true,
+          email: 'gis.new@gmail.com',
+          display_name: 'GIS New User',
+        },
+      },
+      { status: 404, statusText: 'Not Found' },
+    );
+
+    expect(component.isSubmitting()).toBe(false);
+    expect(component.authView()).toBe('register');
+    expect(component.emailDraft()).toBe('gis.new@gmail.com');
+    expect(component.nameDraft()).toBe('GIS New User');
+    expect(component.errorMessage()).toBe('');
+    expect(component.infoMessage()).toContain('Complete seu cadastro');
   });
 });
 
@@ -584,6 +742,9 @@ describe('AuthComponent DOM', () => {
 
     (fixture.nativeElement.querySelector('.google-login-btn') as HTMLElement).focus();
     googleButton?.click();
+    httpMock
+      .expectOne('/api/auth/google/authorize')
+      .flush({ detail: 'unavailable' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('.google-modal-card')).toBeNull();
@@ -634,6 +795,9 @@ describe('AuthComponent DOM', () => {
     );
 
     remountedGoogleButton?.click();
+    httpMock
+      .expectOne('/api/auth/google/authorize')
+      .flush({ detail: 'unavailable' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
 
     expect(initialize).toHaveBeenCalledTimes(1);
@@ -662,6 +826,9 @@ describe('AuthComponent DOM', () => {
       },
     );
     remountedGoogleButton?.click();
+    httpMock
+      .expectOne('/api/auth/google/authorize')
+      .flush({ detail: 'unavailable' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
     expect(renderButton).toHaveBeenCalledTimes(2);
     expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(true);
@@ -705,6 +872,9 @@ describe('AuthComponent DOM', () => {
       '.google-login-btn',
     ) as HTMLButtonElement | null;
     googleButton?.click();
+    httpMock
+      .expectOne('/api/auth/google/authorize')
+      .flush({ detail: 'unavailable' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
     expect(googleButton?.disabled).toBe(true);
 
@@ -743,6 +913,9 @@ describe('AuthComponent DOM', () => {
       '.google-login-btn',
     ) as HTMLButtonElement | null;
     googleButton?.click();
+    httpMock
+      .expectOne('/api/auth/google/authorize')
+      .flush({ detail: 'unavailable' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
     expect(capturedMomentListener).toBeDefined();
 
