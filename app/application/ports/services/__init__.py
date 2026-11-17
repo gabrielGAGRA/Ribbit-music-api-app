@@ -7,6 +7,7 @@ from app.application.ports.services.catalog_source import (
 )
 from app.application.ports.services.google_auth import (
     GoogleIdpVerifierPort,
+    GoogleOAuthPort,
     GoogleUserInfo,
 )
 from app.application.ports.services.music_service import (
@@ -35,6 +36,7 @@ __all__ = [
     "CatalogTrack",
     "CatalogVersionInfo",
     "GoogleIdpVerifierPort",
+    "GoogleOAuthPort",
     "GoogleUserInfo",
     "PasswordHasherPort",
     "PlaylistExportPort",

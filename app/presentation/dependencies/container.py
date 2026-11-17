@@ -22,4 +22,13 @@ def provide[T](dependency_type: type[T]) -> Callable[[Request], T]:
     return _dependency
 
 
-__all__ = ["get_container", "provide"]
+def provide_optional[T](dependency_type: type[T]) -> Callable[[Request], T | None]:
+    """Factory creating FastAPI dependencies that optionally resolve a component by its type."""
+
+    def _dependency(request: Request) -> T | None:
+        return get_container(request).resolve_optional(dependency_type)
+
+    return _dependency
+
+
+__all__ = ["get_container", "provide", "provide_optional"]
