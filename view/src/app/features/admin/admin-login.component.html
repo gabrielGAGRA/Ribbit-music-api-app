@@ -18,17 +18,12 @@
     <div class="admin-credential-box">
       <div class="credential-header">
         <app-icon name="shield" [size]="18" />
-        <strong>Credenciais locais de demonstração</strong>
+        <strong>Autenticação via JWT Administrativo</strong>
       </div>
       <p>
-        E-mail: <code>{{ adminState.defaultAdminEmail }}</code>
+        Utilize uma conta com privilégio administrativo cadastrado no servidor Ribbit para acessar
+        os painéis executivos e operacionais.
       </p>
-      <p>
-        Senha: <code>{{ adminState.defaultAdminPassword }}</code>
-      </p>
-      <button type="button" class="outline-button small-btn" (click)="fillDemoCredentials()">
-        Preencher credenciais demo
-      </button>
     </div>
   </section>
 
@@ -49,7 +44,7 @@
         <div class="admin-field">
           <label for="admin-login-email">E-mail corporativo *</label>
           <span id="admin-email-hint" class="field-hint">
-            Formato: nome&#64;ribbit.example.com
+            Informe o e-mail da sua conta de administrador
           </span>
           <input
             id="admin-login-email"
@@ -87,16 +82,17 @@
           <div class="field-error-msg">A senha deve possuir ao menos 6 caracteres.</div>
         </div>
 
-        <button type="submit" class="primary-button full-width admin-submit-btn">
-          Acessar Console Admin
+        <button
+          type="submit"
+          class="primary-button full-width admin-submit-btn"
+          [disabled]="isSubmitting()"
+        >
+          {{ isSubmitting() ? 'Autenticando...' : 'Acessar Console Admin' }}
           <app-icon name="arrow" [size]="17" />
         </button>
       </form>
 
       <div class="admin-login-actions">
-        <button type="button" class="outline-button full-width" (click)="fillDemoCredentials()">
-          Usar conta Administrador Local
-        </button>
         <button type="button" class="back-link-btn" (click)="returnToListenerApp()">
           <app-icon name="arrow-left" [size]="14" />
           Voltar para o app de ouvinte

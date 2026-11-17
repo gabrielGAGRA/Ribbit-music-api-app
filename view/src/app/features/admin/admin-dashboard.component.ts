@@ -1,6 +1,5 @@
-import { ChangeDetectionStrategy, Component, computed } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { safeInject } from '../../core/safe-inject';
 import { WidthPercentDirective } from '../../shared/dynamic-style.directive';
 import { IconComponent } from '../../shared/icon.component';
 import { AdminStateService } from './admin-state.service';
@@ -20,8 +19,8 @@ const BRL_FORMATTER = new Intl.NumberFormat('pt-BR', {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AdminDashboardComponent {
-  protected readonly adminState = safeInject(AdminStateService, new AdminStateService());
-  private readonly router = safeInject<Router | null>(Router, null);
+  protected readonly adminState = inject(AdminStateService);
+  private readonly router = inject(Router, { optional: true });
 
   protected readonly formattedNetRevenue = computed<string>(() =>
     BRL_FORMATTER.format(this.adminState.executiveDashboard().estimated_net_revenue),

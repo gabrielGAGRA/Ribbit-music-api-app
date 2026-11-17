@@ -122,6 +122,59 @@
   margin-top: 4px;
 }
 
+.section-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-register-form {
+  background: var(--panel-elev);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-register-form h3 {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.register-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.admin-input {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 13px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.admin-input:focus-visible {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.admin-input:user-invalid {
+  border-color: var(--danger);
+}
+
+.register-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

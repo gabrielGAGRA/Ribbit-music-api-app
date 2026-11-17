@@ -4,7 +4,7 @@
       >GET /API/ADMIN/PLANS · PUT /API/ADMIN/PLANS/&#123;PLAN_ID&#125;</span
     >
     <span class="muted">
-      Alterações recalculam imediatamente a receita líquida estimada do Dashboard Executivo.
+      Alterações recalculam a receita líquida estimada do Dashboard Executivo no servidor.
     </span>
   </div>
 
@@ -32,10 +32,6 @@
           <div>
             <dt>Assinantes vinculados</dt>
             <dd>{{ subscriberCount(plan.name) }} contas</dd>
-          </div>
-          <div>
-            <dt>Maior ocupação familiar atual</dt>
-            <dd>{{ occupiedProfiles(plan.plan_id) }} em uso</dd>
           </div>
         </dl>
 
@@ -78,7 +74,7 @@
 
               <div class="plan-field">
                 <label [attr.for]="'plan-profiles-' + plan.plan_id">Máx. perfis *</label>
-                <span class="field-hint">Mínimo atual: {{ occupiedProfiles(plan.plan_id) }}</span>
+                <span class="field-hint">Mínimo: 1 perfil (validado pelo servidor)</span>
                 <input
                   [attr.id]="'plan-profiles-' + plan.plan_id"
                   type="number"
@@ -92,11 +88,16 @@
             </div>
 
             <div class="plan-form-actions">
-              <button type="submit" class="primary-button small-btn">
+              <button type="submit" class="primary-button small-btn" [disabled]="isSaving()">
                 <app-icon name="check" [size]="15" />
-                Salvar plano
+                {{ isSaving() ? 'Salvando...' : 'Salvar plano' }}
               </button>
-              <button type="button" class="outline-button small-btn" (click)="cancelEditing()">
+              <button
+                type="button"
+                class="outline-button small-btn"
+                [disabled]="isSaving()"
+                (click)="cancelEditing()"
+              >
                 Cancelar
               </button>
             </div>

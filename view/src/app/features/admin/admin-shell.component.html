@@ -28,44 +28,34 @@
     </nav>
 
     <div class="admin-sidebar-footer">
-      <div class="admin-env-box" [class.fallback-active]="adminState.isUsingLocalFallback()">
-        @if (adminState.isUsingLocalFallback()) {
-          <div class="env-title fallback-title">
-            <app-icon name="sliders" [size]="15" />
-            <span>Fallback Local Ativo</span>
+      <div class="admin-env-box" [class.error-active]="hasSyncError()">
+        @if (adminState.syncError()) {
+          <div class="env-title error-title">
+            <app-icon name="close" [size]="15" />
+            <span>Erro de Sincronização</span>
           </div>
-          <p>
-            {{
-              adminState.fallbackReason() ||
-                'Operando sobre mocks em localStorage (sem conexão HttpClient com /api/admin).'
-            }}
-          </p>
-          <button
-            type="button"
-            class="outline-button small-btn full-width"
-            (click)="reconnectBackend()"
-          >
-            <app-icon name="repeat" [size]="14" />
-            Sincronizar com API
-          </button>
+          <p>{{ adminState.syncError() }}</p>
+        } @else if (adminState.isLoading()) {
+          <div class="env-title">
+            <app-icon name="repeat" [size]="15" />
+            <span>Sincronizando API...</span>
+          </div>
+          <p>Carregando métricas e registros em tempo real de <code>/api/admin</code>.</p>
         } @else {
           <div class="env-title">
             <app-icon name="check" [size]="15" />
             <span>API /api/admin Conectada</span>
           </div>
           <p>Dados sincronizados com o backend FastAPI via <code>HttpClient</code>.</p>
-          <button
-            type="button"
-            class="outline-button small-btn full-width"
-            (click)="reconnectBackend()"
-          >
-            <app-icon name="repeat" [size]="14" />
-            Atualizar dados da API
-          </button>
         }
-        <button type="button" class="outline-button small-btn full-width" (click)="resetDemo()">
-          <app-icon name="sliders" [size]="14" />
-          Forçar dados demo locais
+        <button
+          type="button"
+          class="outline-button small-btn full-width"
+          [disabled]="adminState.isLoading()"
+          (click)="refreshBackend()"
+        >
+          <app-icon name="repeat" [size]="14" />
+          {{ adminState.isLoading() ? 'Sincronizando...' : 'Atualizar dados da API' }}
         </button>
       </div>
 
@@ -104,13 +94,11 @@
       </div>
 
       <div class="admin-topbar-actions">
-        <span
-          class="admin-datasource-badge"
-          [class.fallback]="adminState.isUsingLocalFallback()"
-          [title]="adminState.dataSourceBanner()"
-        >
-          @if (adminState.isUsingLocalFallback()) {
-            FALLBACK LOCAL (Mocks)
+        <span class="admin-datasource-badge" [class.error]="hasSyncError()">
+          @if (adminState.syncError()) {
+            ERRO DE API
+          } @else if (adminState.isLoading()) {
+            SINCRONIZANDO...
           } @else {
             API REAL (/api/admin)
           }
@@ -127,7 +115,7 @@
           <span class="avatar small-avatar admin-avatar">{{ adminInitials() }}</span>
           <div class="admin-identity-text">
             <strong>{{ adminState.currentAdmin()?.display_name ?? 'Administrador' }}</strong>
-            <span>{{ adminState.currentAdmin()?.email ?? 'admin@ribbit.example.com' }}</span>
+            <span>{{ adminState.currentAdmin()?.email ?? '' }}</span>
           </div>
         </div>
       </div>
@@ -141,6 +129,16 @@
         </h1>
         <p>{{ sectionMeta().description }}</p>
       </header>
+
+      @if (adminState.syncError()) {
+        <div class="admin-sync-alert" role="alert">
+          <app-icon name="close" [size]="15" />
+          <span>{{ adminState.syncError() }}</span>
+          <button type="button" class="outline-button small-btn" (click)="refreshBackend()">
+            Tentar novamente
+          </button>
+        </div>
+      }
 
       <router-outlet />
     </main>
