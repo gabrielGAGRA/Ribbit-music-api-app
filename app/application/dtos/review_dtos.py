@@ -13,6 +13,8 @@ class SearchTracksCommand:
     album: str | None = None
     genre: str | None = None
     year: int | None = None
+    start_year: int | None = None
+    end_year: int | None = None
     query: str | None = None
     limit: int = 50
     offset: int = 0

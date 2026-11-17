@@ -106,19 +106,6 @@ def _append_like_clause(
     conditions.append(f"({' OR '.join(clauses)})")
 
 
-def _append_exact_clause(
-    conditions: list[str],
-    params: list[object],
-    column: str,
-    values: list[str],
-) -> None:
-    if not values:
-        return
-    clauses = " OR ".join(f"lower({column}) = ?" for _ in values)
-    conditions.append(f"({clauses})")
-    params.extend(v.lower() for v in values)
-
-
 def _append_in_clause(
     conditions: list[str],
     params: list[object],
@@ -137,6 +124,7 @@ def _build_filter_conditions(
     artist: str | Sequence[str] | None,
     album: str | Sequence[str] | None,
     genre: str | Sequence[str] | None,
+    country: str | Sequence[str] | None,
     year: int | Sequence[int] | None,
     query: str | None,
 ) -> tuple[list[str], list[object]]:
@@ -164,7 +152,10 @@ def _build_filter_conditions(
         conditions, params, "artist", _normalize_string_sequence(artist)
     )
     _append_like_clause(conditions, params, "album", _normalize_string_sequence(album))
-    _append_exact_clause(conditions, params, "genre", _normalize_string_sequence(genre))
+    _append_like_clause(conditions, params, "genre", _normalize_string_sequence(genre))
+    _append_like_clause(
+        conditions, params, "country", _normalize_string_sequence(country)
+    )
     _append_in_clause(
         conditions, params, "release_year", _normalize_year_sequence(year)
     )
@@ -384,6 +375,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         artist: str | Sequence[str] | None = None,
         album: str | Sequence[str] | None = None,
         genre: str | Sequence[str] | None = None,
+        country: str | Sequence[str] | None = None,
         year: int | Sequence[int] | None = None,
         query: str | None = None,
         limit: int = 50,
@@ -393,6 +385,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             artist=artist,
             album=album,
             genre=genre,
+            country=country,
             year=year,
             query=query,
         )

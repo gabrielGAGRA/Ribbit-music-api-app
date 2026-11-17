@@ -39,25 +39,41 @@ class CreateDeckPlaylistUseCase:
             return list(source_playlist.tracks)
 
         if any(deck_filters.values()):
+            artist_arg = (
+                deck_filters["artist"][0]
+                if len(deck_filters["artist"]) == 1
+                else deck_filters["artist"]
+            ) or None
+            genre_arg = (
+                deck_filters["genre"][0]
+                if len(deck_filters["genre"]) == 1
+                else deck_filters["genre"]
+            ) or None
+            year_arg = (
+                deck_filters["year"][0]
+                if len(deck_filters["year"]) == 1
+                else deck_filters["year"]
+            ) or None
+            country_arg = (
+                (
+                    deck_filters["country"][0]
+                    if len(deck_filters["country"]) == 1
+                    else deck_filters["country"]
+                )
+                if deck_filters["country"]
+                else None
+            )
+            if country_arg is not None:
+                return self.track_repo.find_by_filters(
+                    artist=artist_arg,
+                    genre=genre_arg,
+                    country=country_arg,
+                    year=year_arg,
+                )
             return self.track_repo.find_by_filters(
-                artist=(
-                    deck_filters["artist"][0]
-                    if len(deck_filters["artist"]) == 1
-                    else deck_filters["artist"]
-                )
-                or None,
-                genre=(
-                    deck_filters["genre"][0]
-                    if len(deck_filters["genre"]) == 1
-                    else deck_filters["genre"]
-                )
-                or None,
-                year=(
-                    deck_filters["year"][0]
-                    if len(deck_filters["year"]) == 1
-                    else deck_filters["year"]
-                )
-                or None,
+                artist=artist_arg,
+                genre=genre_arg,
+                year=year_arg,
             )
 
         return self.track_repo.list_active(
