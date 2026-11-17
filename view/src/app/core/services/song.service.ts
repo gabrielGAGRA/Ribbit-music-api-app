@@ -25,7 +25,13 @@ export interface SearchTracksParams {
   readonly album?: string;
   readonly genre?: string;
   readonly year?: number;
+  readonly startYear?: number;
+  readonly endYear?: number;
   readonly limit?: number;
+}
+
+function formatFiniteYear(value?: number): string | undefined {
+  return value !== undefined && Number.isFinite(value) ? String(value) : undefined;
 }
 
 function buildSearchHttpParams(params: SearchTracksParams): HttpParams {
@@ -35,10 +41,9 @@ function buildSearchHttpParams(params: SearchTracksParams): HttpParams {
     ['artist', params.artist],
     ['album', params.album],
     ['genre', params.genre && params.genre !== 'Todos' ? params.genre : undefined],
-    [
-      'year',
-      params.year !== undefined && Number.isFinite(params.year) ? String(params.year) : undefined,
-    ],
+    ['year', formatFiniteYear(params.year)],
+    ['start_year', formatFiniteYear(params.startYear)],
+    ['end_year', formatFiniteYear(params.endYear)],
   ];
   for (const [key, value] of optionalPairs) {
     if (value && value.length > 0) {
@@ -81,7 +86,13 @@ export class SongService {
   /** Searches the track catalog using /api/tracks/search. */
   searchSongs(params: SearchTracksParams = {}): Observable<readonly Song[]> {
     const httpParams = buildSearchHttpParams(params);
-    const isUnfiltered = !params.query && !params.genre && params.year === undefined;
+    const isUnfiltered =
+      !params.query &&
+      !params.genre &&
+      !params.artist &&
+      params.year === undefined &&
+      params.startYear === undefined &&
+      params.endYear === undefined;
     return this.http.get<readonly TrackApiDto[]>('/api/tracks/search', { params: httpParams }).pipe(
       map((dtos) => dtos.map((dto) => mapTrackDtoToSong(dto))),
       tap((songs) => {

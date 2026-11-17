@@ -184,6 +184,10 @@ export interface GoogleClientIdApiResponse {
   readonly client_id: string | null;
 }
 
+export interface GoogleAuthorizeUrlApiResponse {
+  readonly authorization_url: string;
+}
+
 export interface UserApiDto {
   readonly user_id: number;
   readonly email: string;
@@ -392,24 +396,29 @@ export type UsuarioResponse = UserApiDto;
 
 // --- Admin Console Contracts (/api/admin/*) ---
 
-export interface AdminAccount {
-  readonly user_id: number;
-  readonly email: string;
-  readonly password: string;
-  readonly display_name: string;
-  readonly age: number | null;
-  readonly plan_id: number;
-  readonly is_admin: boolean;
-  readonly primary_account_id?: number;
-  readonly blocked_genres: readonly string[];
-  readonly created_at: string;
-}
-
 export interface AdminSession {
   readonly user_id: number;
   readonly email: string;
   readonly display_name: string;
   readonly is_admin: boolean;
+}
+
+export interface RegisterAdminApiRequest {
+  readonly email: string;
+  readonly password: string;
+  readonly display_name: string;
+  readonly age?: number;
+  readonly birth_date?: string | null;
+}
+
+export interface TrackBlockApiResponse {
+  readonly track_id: number | null;
+  readonly blocked: boolean;
+}
+
+export interface TrackExplicitApiResponse {
+  readonly track_id: number;
+  readonly explicit: boolean;
 }
 
 export interface AdminUserPlanSummary {

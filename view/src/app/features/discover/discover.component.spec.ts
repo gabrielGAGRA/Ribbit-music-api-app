@@ -49,6 +49,8 @@ describe('DiscoverComponent', () => {
     expect(player.isPlaying()).toBe(false);
     component.togglePlay();
     expect(player.isPlaying()).toBe(true);
+    component.togglePlay();
+    expect(player.isPlaying()).toBe(false);
   });
 
   it('should handle mode selection', () => {
@@ -77,7 +79,7 @@ describe('DiscoverComponent', () => {
     const globalStyles = readFileSync(resolve(__dirname, '../../../styles.css'), 'utf8');
 
     expect(globalStyles).toMatch(/\.empty-card\s*\{[^}]*display:\s*flex/);
-    expect(globalStyles).toMatch(/\.album-lettering\s*\{[^}]*pointer-events:\s*none/);
+    expect(globalStyles).not.toMatch(/\.album-lettering/);
     expect(globalStyles).toMatch(
       /@media\s*\(max-width:\s*768px\)[\s\S]*\.discovery-toolbar\s*\{[^}]*flex-wrap:\s*wrap/,
     );
@@ -87,6 +89,14 @@ describe('DiscoverComponent', () => {
     expect(globalStyles).toMatch(
       /@media\s*\(max-width:\s*480px\)[\s\S]*\.swipe-controls\s*\{[^}]*gap:/,
     );
+  });
+
+  it('should not render overlay lettering with song and artist over the album artwork', () => {
+    const template = readFileSync(resolve(__dirname, './discover.component.html'), 'utf8');
+
+    expect(template).not.toContain('album-lettering');
+    expect(template).not.toContain('name="sparkles"');
+    expect(template).toContain('class="track-heading"');
   });
 
   it('should enforce full-width sizing on discovery stage and card containers to prevent horizontal flex collapse', () => {
@@ -104,10 +114,6 @@ describe('DiscoverComponent', () => {
     expect(globalStyles).toMatch(/\.discovery-stage\s*\{[^}]*(?:^|[;\s{])width:\s*100%/);
     expect(globalStyles).toMatch(/\.discovery-card\s*\{[^}]*(?:^|[;\s{])width:\s*100%/);
     expect(globalStyles).toMatch(/\.empty-card\s*\{[^}]*(?:^|[;\s{])width:\s*100%/);
-    expect(globalStyles).toMatch(/\.album-lettering\s*\{[^}]*padding:\s*0\s+52px/);
-    expect(globalStyles).toMatch(
-      /\.album-lettering\s+strong\s*\{[^}]*display:\s*-webkit-box[^}]*-webkit-line-clamp:\s*2[^}]*-webkit-box-orient:\s*vertical[^}]*line-clamp:\s*2[^}]*overflow:\s*hidden[^}]*overflow-wrap:\s*anywhere/,
-    );
     expect(globalStyles).toMatch(/\.track-heading\s*>\s*div\s*\{[^}]*min-width:\s*0[^}]*flex:\s*1/);
     expect(globalStyles).toMatch(/\.track-heading\s+h2\s*\{[^}]*text-overflow:\s*ellipsis/);
     expect(globalStyles).toMatch(/\.track-heading\s+p\s*\{[^}]*text-overflow:\s*ellipsis/);

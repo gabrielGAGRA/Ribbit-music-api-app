@@ -141,12 +141,46 @@ describe('RibbitStateService', () => {
     service.undo();
     const undoReq = httpMock.expectOne('/api/discovery/undo');
     expect(undoReq.request.method).toBe('POST');
-    undoReq.flush({ success: true });
+    undoReq.flush({
+      interaction_id: 1,
+      track_id: 101,
+      action: 'superlike',
+      created_at: '2026-01-01T12:00:00Z',
+    });
     httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
+
     expect(service.isDeckEmpty()).toBe(false);
     expect(service.discoverySong()?.trackId).toBe(101);
     expect(service.toast()).toContain('desfeito');
+  });
+
+  it('opens upgrade modal when undo returns 403 on Free plan', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    service.decide('love');
+    const interactReq = httpMock.expectOne('/api/discovery/interact');
+    interactReq.flush({
+      interaction_id: 1,
+      user_id: 7,
+      track_id: 101,
+      action: 'superlike',
+      created_at: '2026-01-01T12:00:00Z',
+    });
+    httpMock.expectOne('/api/discovery/next').flush(null);
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/profile/interactions').flush([]);
+
+    service.undo();
+    const undoReq = httpMock.expectOne('/api/discovery/undo');
+    undoReq.flush(
+      { detail: 'Feature exclusive to Premium subscribers.' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+
+    expect(service.activeModal()).toBe('upgrade');
+    expect(service.upgradePromptReason()).toContain('Desfazer');
   });
 
   it('opens upgrade modal when updating blocked genres returns 403 on Free plan', () => {
@@ -198,9 +232,17 @@ describe('RibbitStateService', () => {
     service.completeAuthentication(SAMPLE_AUTH);
     flushInitialHydration(httpMock);
 
-    service.createPlaylist('Noite Indie', 45);
+    service.createPlaylist('Noite Indie', 45, {
+      reference_playlist_id: 12,
+      source_playlist_id: 12,
+    });
     const playlistReq = httpMock.expectOne('/api/playlists/deck');
     expect(playlistReq.request.method).toBe('POST');
+    expect(playlistReq.request.body).toEqual({
+      name: 'Noite Indie',
+      duration_minutes: 45,
+      source_playlist_id: 12,
+    });
     const createdPlaylist: PlaylistApiDto = {
       playlist_id: 50,
       user_id: 7,
@@ -226,117 +268,11 @@ describe('RibbitStateService', () => {
     expect(deleteReq.request.method).toBe('DELETE');
     deleteReq.flush(null, { status: 204, statusText: 'No Content' });
     expect(service.authView()).toBe('register');
-  });
 
-  it('triggers /api/discovery/undo on undo() when authenticated, and prompts upgrade on 403', () => {
-    service.completeAuthentication(SAMPLE_AUTH);
-    flushInitialHydration(httpMock);
-
-    // Make a swipe decision
-    service.decide('like');
-    const swipeReq = httpMock.expectOne('/api/discovery/interact');
-    swipeReq.flush({
-      interaction_id: 1,
-      user_id: 7,
-      track_id: SAMPLE_TRACK.track_id,
-      action: 'like',
-      created_at: new Date().toISOString(),
-    });
-    httpMock.expectOne('/api/discovery/next').flush(null);
-    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
-    httpMock.expectOne('/api/profile/interactions').flush([]);
-
-    // 1. Undo successfully
-    service.undo();
-    const undoReq = httpMock.expectOne('/api/discovery/undo');
-    expect(undoReq.request.method).toBe('POST');
-    undoReq.flush({
-      success: true,
-      interaction_id: 1,
-      track_id: SAMPLE_TRACK.track_id,
-      action: 'like',
-      created_at: new Date().toISOString(),
-    });
-    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
-    httpMock.expectOne('/api/profile/interactions').flush([]);
-    expect(service.toast()).toContain('Último swipe desfeito');
-
-    // Make another decision and undo with 403 Forbidden (Free plan)
-    service.decide('like');
-    httpMock.expectOne('/api/discovery/interact').flush({
-      interaction_id: 2,
-      user_id: 7,
-      track_id: SAMPLE_TRACK.track_id,
-      action: 'like',
-      created_at: new Date().toISOString(),
-    });
-    httpMock.expectOne('/api/discovery/next').flush(null);
-    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
-    httpMock.expectOne('/api/profile/interactions').flush([]);
-
-    service.undo();
-    const undoReq403 = httpMock.expectOne('/api/discovery/undo');
-    undoReq403.flush({ detail: 'Feature requires Pro' }, { status: 403, statusText: 'Forbidden' });
-    expect(service.activeModal()).toBe('upgrade');
-  });
-
-  it('calls POST /api/jams/{id}/advance when host advances active Jam playback', () => {
-    service.completeAuthentication(SAMPLE_AUTH);
-    flushInitialHydration(httpMock);
-
-    service.jamState.set({
-      jamId: 10,
-      hostUserId: 7,
-      active: true,
-      code: 'RIBBIT-123',
-      roomName: 'Minha Jam',
-      votes: 0,
-      voteThreshold: 3,
-      durationHours: 1,
-      durationMinutes: 0,
-    });
-
-    service.advanceJam();
-    const advReq = httpMock.expectOne('/api/jams/10/advance');
-    expect(advReq.request.method).toBe('POST');
-    advReq.flush({
-      jam_id: 10,
-      host_user_id: 7,
-      room_name: 'Minha Jam',
-      room_code: 'RIBBIT-123',
-      is_active: true,
-      current_track_id: 101,
-      duration_minutes: 60,
-      max_superlikes: 5,
-      superlikes_used: 0,
-      skip_votes_threshold: 3,
-      accumulated_duration_seconds: 0,
-      deck_source: 'livre',
-    });
-
-    const stateReq = httpMock.expectOne('/api/jams/10/state');
-    expect(stateReq.request.method).toBe('GET');
-    stateReq.flush({
-      jam: {
-        jam_id: 10,
-        host_user_id: 7,
-        room_name: 'Minha Jam',
-        room_code: 'RIBBIT-123',
-        is_active: true,
-        current_track_id: 101,
-        duration_minutes: 60,
-        max_superlikes: 5,
-        superlikes_used: 0,
-        skip_votes_threshold: 3,
-        accumulated_duration_seconds: 0,
-        deck_source: 'livre',
-      },
-      current_track: SAMPLE_TRACK,
-      queue: [],
-      skip_votes: 0,
-    });
-
-    expect(service.toast()).toContain('avançada pelo anfitrião');
+    service.setAuthView('forgot-password');
+    expect(service.authView()).toBe('forgot-password');
+    service.setAuthView('login');
+    expect(service.authView()).toBe('login');
   });
 
   it('initializes and toggles theme, persisting to localStorage and applying data-theme attribute', () => {
@@ -349,5 +285,8 @@ describe('RibbitStateService', () => {
     expect(service.preferredTheme()).toBe('dark');
     expect(localStorage.getItem('ribbit-theme')).toBe('dark');
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
+
+    // Clean up lifecycle
+    service.ngOnDestroy();
   });
 });

@@ -72,7 +72,6 @@
 
         <div class="ribby-speech-cloud">
           <span class="speech-cloud-kicker">
-            <app-icon name="sparkles" [size]="13" />
             @if (onboardingStep() === 1) {
               FALANDO DIRETO DO LAGO
             } @else if (onboardingStep() === 2) {
@@ -215,12 +214,10 @@
           <div class="onboarding-chips-summary floating-summary">
             @for (genre of selectedWordCloudGenres(); track genre) {
               <span class="onboarding-chip">
-                <app-icon name="sparkles" [size]="12" /> {{ genre }}
+                {{ genre }}
               </span>
             } @empty {
-              <span class="onboarding-chip">
-                <app-icon name="sparkles" [size]="12" /> Todos os gêneros (Descoberta livre)
-              </span>
+              <span class="onboarding-chip"> Todos os gêneros (Descoberta livre) </span>
             }
           </div>
 
@@ -231,7 +228,7 @@
               (click)="finishAndNavigate('discover')"
             >
               <app-icon name="pond" [size]="22" />
-              <strong>Ir para o The Pond</strong>
+              <strong>Ir para a Descoberta</strong>
               <span>Começar a deslizar músicas agora</span>
             </button>
             <button
@@ -312,7 +309,7 @@
           <app-icon name="filter" [size]="28" />
         </span>
         <h2>Filtrar sua busca</h2>
-        <p>Refine os resultados do catálogo por gênero e época.</p>
+        <p>Refine os resultados do catálogo por gênero, artista e data.</p>
         <h3>Gênero</h3>
         <div class="genre-options">
           @for (item of searchGenreOptions; track item) {
@@ -329,15 +326,34 @@
           }
         </div>
         <label>
-          Época
-          <select [value]="searchDecadeDraft()" (change)="onSearchDecadeChange($event)">
-            <option value="Todas as épocas">Todas as épocas</option>
-            <option value="Anos 2020">Anos 2020</option>
-            <option value="Anos 2010">Anos 2010</option>
-            <option value="Anos 2000">Anos 2000</option>
-            <option value="Anos 90">Anos 90</option>
-          </select>
+          Artista
+          <input
+            name="searchArtist"
+            placeholder="Ex.: Queen, Lorde, Kendrick Lamar..."
+            [value]="searchArtistDraft()"
+            (input)="onSearchArtistInput($event)"
+          />
         </label>
+        <div class="date-range-row">
+          <label>
+            Data Início
+            <input
+              name="searchStartDate"
+              type="date"
+              [value]="searchStartDateDraft()"
+              (input)="onSearchStartDateInput($event)"
+            />
+          </label>
+          <label>
+            Data Fim
+            <input
+              name="searchEndDate"
+              type="date"
+              [value]="searchEndDateDraft()"
+              (input)="onSearchEndDateInput($event)"
+            />
+          </label>
+        </div>
         <button class="primary-button full-width" (click)="applyFilters()">
           Aplicar filtros <app-icon name="check" [size]="16" />
         </button>
@@ -445,6 +461,27 @@
             </label>
           }
 
+          @if (isFilterActive('País')) {
+            <label>
+              País
+              <input
+                name="country"
+                list="playlist-country-options"
+                placeholder="Brasil, Estados Unidos, Reino Unido..."
+              />
+              <datalist id="playlist-country-options">
+                <option value="Brasil"></option>
+                <option value="Estados Unidos"></option>
+                <option value="Reino Unido"></option>
+                <option value="Canadá"></option>
+                <option value="Japão"></option>
+                <option value="França"></option>
+                <option value="Alemanha"></option>
+                <option value="Coreia do Sul"></option>
+              </datalist>
+            </label>
+          }
+
           @if (isFilterActive('Lineup')) {
             <label>
               Artistas ou lineup
@@ -477,42 +514,7 @@
             </div>
           }
 
-          @if (isFilterActive('Evento')) {
-            <div class="event-builder">
-              <div class="section-title">
-                <h3>Roteiro do evento</h3>
-                <span>Combine momentos em sequência</span>
-              </div>
-              <div class="event-builder-row">
-                <select aria-label="Tipo de filtro">
-                  <option>Gênero</option>
-                  <option>Artista</option>
-                  <option>Referência</option>
-                </select>
-                <input defaultValue="Pop" aria-label="Gênero, artista ou referência" />
-                <input type="number" min="0" max="12" defaultValue="1" aria-label="Horas" />
-                <span>h</span>
-                <input type="number" min="0" max="59" defaultValue="0" aria-label="Minutos" />
-                <span>min</span>
-              </div>
-              <div class="event-builder-row">
-                <select aria-label="Tipo de filtro">
-                  <option>Artista</option>
-                  <option>Gênero</option>
-                  <option>Referência</option>
-                </select>
-                <input defaultValue="Masego" aria-label="Gênero, artista ou referência" />
-                <input type="number" min="0" max="12" defaultValue="0" aria-label="Horas" />
-                <span>h</span>
-                <input type="number" min="0" max="59" defaultValue="45" aria-label="Minutos" />
-                <span>min</span>
-              </div>
-            </div>
-          }
-
-          <button class="primary-button full-width" type="submit">
-            Criar minha playlist <app-icon name="sparkles" [size]="17" />
-          </button>
+          <button class="primary-button full-width" type="submit">Criar minha playlist</button>
         </form>
       }
 
@@ -850,9 +852,7 @@
         </span>
         <h2>Na sua frequência.</h2>
         <p>Você está em dia. Continue explorando para encontrar sua próxima música favorita.</p>
-        <div class="info-note">
-          <app-icon name="sparkles" [size]="19" /> Seu radar de descobertas está pronto.
-        </div>
+        <div class="info-note">Seu radar de descobertas está pronto.</div>
         <button class="primary-button full-width" (click)="goToExploreRadar()">
           Explorar meu radar <app-icon name="arrow" [size]="17" />
         </button>

@@ -1,7 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
 import { filter } from 'rxjs/operators';
 import type { NavigationItem, Song } from '@ribbit/shared-types';
+import { AudioPlayerService } from './core/audio-player.service';
 import { RibbitStateService } from './core/ribbit-state.service';
 import { AuthComponent } from './features/auth/auth.component';
 import { FrogComponent } from './shared/frog.component';
@@ -18,7 +26,7 @@ interface PageHeading {
 
 const PAGE_HEADINGS: Record<string, PageHeading> = {
   discover: {
-    eyebrow: 'THE POND',
+    eyebrow: 'FIND YOUR NEXT FAVORITE',
     description: '',
   },
   playlists: {
@@ -28,16 +36,16 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     description: 'Uma trilha sonora para cada versão de você.',
   },
   jams: {
-    eyebrow: 'BETTER TOGETHER',
+    eyebrow: 'THE POND',
     titlePrefix: 'A mesma música. ',
     titleHighlight: 'Juntos.',
     description: 'Conecte seus gostos e descubra com seus amigos.',
   },
   explore: {
-    eyebrow: 'NOVOS HORIZONTES',
+    eyebrow: 'COMUNIDADE',
     titlePrefix: 'Tem um mundo ',
     titleHighlight: 'pra ouvir.',
-    description: 'Explore artistas, gêneros e histórias que merecem um play.',
+    description: 'Busque faixas, explore lançamentos e acompanhe os reviews da comunidade.',
   },
   settings: {
     eyebrow: 'CONFIGURAÇÕES',
@@ -105,6 +113,7 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
 })
 export class AppComponent {
   protected readonly state = inject(RibbitStateService);
+  private readonly player = inject(AudioPlayerService);
   private readonly router = inject(Router, { optional: true });
 
   readonly isAdminRoute = signal<boolean>(
@@ -112,10 +121,10 @@ export class AppComponent {
   );
 
   protected readonly navigationItems: readonly NavigationItem[] = [
-    { id: 'discover', label: 'Descoberta', sub: 'The Pond', icon: 'pond' },
+    { id: 'discover', label: 'Descoberta', sub: 'Find your next favorite', icon: 'pond' },
     { id: 'playlists', label: 'Playlists', sub: 'Your Studio', icon: 'music' },
-    { id: 'jams', label: 'Jams', sub: 'Better together', icon: 'users' },
-    { id: 'explore', label: 'Explorar', sub: 'Find your next favorite', icon: 'search' },
+    { id: 'jams', label: 'Jams', sub: 'The Pond', icon: 'users' },
+    { id: 'explore', label: 'Comunidade', sub: 'Reviews & Busca', icon: 'search' },
     { id: 'profile', label: 'Meu perfil', sub: 'My Ribbit', icon: 'user' },
   ];
 
@@ -168,6 +177,16 @@ export class AppComponent {
   });
 
   constructor() {
+    let previousPage = this.state.activePage();
+    effect(() => {
+      const currentPage = this.state.activePage();
+      const authView = this.state.authView();
+      if (currentPage !== previousPage || authView !== 'app') {
+        previousPage = currentPage;
+        this.player.pause();
+      }
+    });
+
     if (this.router) {
       this.isAdminRoute.set(this.router.url.startsWith('/admin'));
       this.router.events
@@ -195,6 +214,9 @@ export class AppComponent {
   }
 
   changePage(id: string): void {
+    if (id === 'playlists') {
+      this.state.resetPlaylistsView();
+    }
     this.state.setPage(id);
     if (this.router) {
       void this.router.navigate([`/${id}`]).catch(() => false);

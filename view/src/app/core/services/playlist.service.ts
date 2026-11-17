@@ -89,7 +89,6 @@ export class PlaylistService {
       const val = payload[field];
       if (val !== undefined) cleanPayload[field] = val;
     }
-    if (refId != null) cleanPayload['reference_playlist_id'] = refId;
     if (srcId != null) cleanPayload['source_playlist_id'] = srcId;
 
     return this.http.post<PlaylistApiDto>('/api/playlists/deck', cleanPayload).pipe(

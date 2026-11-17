@@ -1,5 +1,5 @@
 <div class="secondary-page explore-page">
-  <div class="explore-search">
+  <form class="explore-search" (submit)="onSearchSubmit($event)">
     <label class="search-field">
       <app-icon name="search" />
       <input
@@ -8,15 +8,18 @@
         (input)="onQueryInput($event)"
       />
       @if (hasActiveSearch()) {
-        <button aria-label="Limpar busca" (click)="clearQuery()">
+        <button type="button" aria-label="Limpar busca" (click)="clearQuery()">
           <app-icon name="close" [size]="16" />
         </button>
       }
     </label>
-    <button class="filter-button search-filter-button" (click)="openSearchFilters()">
+    <button type="submit" class="primary-button search-submit-button" aria-label="Pesquisar">
+      <app-icon name="search" [size]="16" /> Pesquisar
+    </button>
+    <button type="button" class="filter-button search-filter-button" (click)="openSearchFilters()">
       <app-icon name="filter" [size]="16" /> Filtros
     </button>
-  </div>
+  </form>
 
   @if (hasActiveSearch()) {
     <div class="section-title">
@@ -119,6 +122,22 @@
             <strong>{{ review.author }}</strong>
             <small>{{ review.age }}</small>
           </div>
+          @if (review.rating !== undefined) {
+            <div
+              class="review-stars"
+              [attr.aria-label]="'Avaliação: ' + review.rating + ' de 5 estrelas'"
+            >
+              @for (star of starScale; track star) {
+                <app-icon
+                  name="star"
+                  [size]="12"
+                  [class.filled]="star <= review.rating"
+                  [class.empty]="star > review.rating"
+                />
+              }
+              <span>{{ review.rating }}/5</span>
+            </div>
+          }
           <p>{{ review.text }}</p>
           <button [class.liked]="reviewLikes()[review.id]" (click)="toggleReviewLike(review.id)">
             <app-icon name="heart" [size]="14" />

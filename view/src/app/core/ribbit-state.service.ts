@@ -178,7 +178,10 @@ export class RibbitStateService implements OnDestroy {
   readonly activeTrackReviews = signal<readonly CommunityReview[]>([]);
   readonly searchQuery = signal<string>('');
   readonly searchFilterGenre = signal<string>('Todos');
+  readonly searchFilterArtist = signal<string>('');
   readonly searchFilterYear = signal<number | undefined>(undefined);
+  readonly searchFilterStartDate = signal<string>('');
+  readonly searchFilterEndDate = signal<string>('');
 
   readonly superlikesGoal = signal<number>(3);
   readonly superlikesCount = computed<number>(() => this.lovedSongs().length);
@@ -244,6 +247,13 @@ export class RibbitStateService implements OnDestroy {
   /** Dismisses any active toast notification immediately. */
   clearToast(): void {
     this.toast.set('');
+  }
+
+  readonly playlistsViewReset = signal<number>(0);
+
+  /** Requests the playlists view to return to the full playlists grid. */
+  resetPlaylistsView(): void {
+    this.playlistsViewReset.update((v) => v + 1);
   }
 
   /** Updates the currently active navigation page identifier. */

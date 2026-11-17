@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
+import type { Subscription } from 'rxjs';
 import type { CommunityReview, Song } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
 import { mapTrackDtoToSong } from '../../core/api-mappers';
@@ -35,14 +36,27 @@ export class ExploreComponent implements OnInit {
   readonly historyExpanded = signal<boolean>(false);
   readonly reviewSort = signal<string>('recent');
   readonly reviewLikes = signal<Record<number, boolean>>({});
+  protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
   private readonly serverSearchResults = signal<readonly Song[] | null>(null);
   private readonly recentHistoryApiSongs = signal<readonly Song[]>([]);
+  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private activeSearchSub: Subscription | null = null;
 
   readonly hasActiveSearch = computed<boolean>(() => {
     const q = this.query().trim();
     const genre = this.state.searchFilterGenre();
+    const artist = this.state.searchFilterArtist().trim();
     const year = this.state.searchFilterYear();
-    return q.length > 0 || genre !== 'Todos' || year !== undefined;
+    const startDate = this.state.searchFilterStartDate().trim();
+    const endDate = this.state.searchFilterEndDate().trim();
+    return (
+      q.length > 0 ||
+      genre !== 'Todos' ||
+      artist.length > 0 ||
+      year !== undefined ||
+      startDate.length > 0 ||
+      endDate.length > 0
+    );
   });
 
   readonly filteredSongs = computed<readonly Song[]>(() => {
@@ -51,11 +65,42 @@ export class ExploreComponent implements OnInit {
     if (serverResults !== null) {
       return serverResults;
     }
-    const q = this.query().toLowerCase().trim();
     return this.state
       .songs()
-      .filter((s) => `${s.title} ${s.artist} ${s.genre} ${s.album}`.toLowerCase().includes(q));
+      .filter((s) => this.matchesLocalTextFilters(s) && this.matchesLocalDateRange(s));
   });
+
+  private matchesLocalTextFilters(song: Song): boolean {
+    const query = this.query().toLowerCase().trim();
+    if (
+      query &&
+      !`${song.title} ${song.artist} ${song.genre} ${song.album}`.toLowerCase().includes(query)
+    ) {
+      return false;
+    }
+    const genre = this.state.searchFilterGenre();
+    if (genre !== 'Todos' && !song.genre.toLowerCase().includes(genre.toLowerCase())) {
+      return false;
+    }
+    const artist = this.state.searchFilterArtist().toLowerCase().trim();
+    return !artist || song.artist.toLowerCase().includes(artist);
+  }
+
+  private matchesLocalDateRange(song: Song): boolean {
+    const startYear = this.parseDateYear(this.state.searchFilterStartDate());
+    const endYear = this.parseDateYear(this.state.searchFilterEndDate());
+    if (startYear === undefined && endYear === undefined) {
+      return true;
+    }
+    const trackYear = Number(song.year);
+    if (Number.isNaN(trackYear)) {
+      return false;
+    }
+    if (startYear !== undefined && trackYear < startYear) {
+      return false;
+    }
+    return endYear === undefined || trackYear <= endYear;
+  }
 
   readonly recentSongs = computed<readonly Song[]>(() => {
     const fromApi = this.recentHistoryApiSongs();
@@ -88,44 +133,82 @@ export class ExploreComponent implements OnInit {
 
   constructor() {
     effect((onCleanup) => {
-      const q = this.query().trim();
-      const genre = this.state.searchFilterGenre();
-      const year = this.state.searchFilterYear();
+      this.query();
+      this.state.searchFilterGenre();
+      this.state.searchFilterArtist();
+      this.state.searchFilterYear();
+      this.state.searchFilterStartDate();
+      this.state.searchFilterEndDate();
 
-      if (!readAuthToken()) {
+      if (!readAuthToken() || !this.hasActiveSearch()) {
         this.serverSearchResults.set(null);
         return;
       }
-      if (!q && genre === 'Todos' && year === undefined) {
-        this.serverSearchResults.set(null);
-        return;
-      }
 
-      const timer = setTimeout(() => {
-        const sub = this.songService
-          .searchSongs({
-            ...(q ? { query: q } : {}),
-            ...(genre !== 'Todos' ? { genre } : {}),
-            ...(year !== undefined ? { year } : {}),
-            limit: 30,
-          })
-          .subscribe({
-            next: (items) => {
-              this.serverSearchResults.set(items);
-            },
-            error: () => {
-              this.serverSearchResults.set(null);
-            },
-          });
-        onCleanup(() => {
-          sub.unsubscribe();
-        });
+      this.clearPendingSearch();
+      this.debounceTimer = setTimeout(() => {
+        this.runServerSearch();
       }, 500);
 
       onCleanup(() => {
-        clearTimeout(timer);
+        this.clearPendingSearch();
       });
     });
+  }
+
+  private clearPendingSearch(): void {
+    if (this.debounceTimer !== null) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+    if (this.activeSearchSub) {
+      this.activeSearchSub.unsubscribe();
+      this.activeSearchSub = null;
+    }
+  }
+
+  private runServerSearch(): void {
+    const q = this.query().trim();
+    const genre = this.state.searchFilterGenre();
+    const artist = this.state.searchFilterArtist().trim();
+    const year = this.state.searchFilterYear();
+    const startYear = this.parseDateYear(this.state.searchFilterStartDate());
+    const endYear = this.parseDateYear(this.state.searchFilterEndDate());
+
+    this.activeSearchSub = this.songService
+      .searchSongs({
+        ...(q ? { query: q } : {}),
+        ...(genre !== 'Todos' ? { genre } : {}),
+        ...(artist ? { artist } : {}),
+        ...(year !== undefined ? { year } : {}),
+        ...(startYear !== undefined ? { startYear } : {}),
+        ...(endYear !== undefined ? { endYear } : {}),
+        limit: 30,
+      })
+      .subscribe({
+        next: (items) => {
+          this.serverSearchResults.set(items);
+        },
+        error: () => {
+          this.serverSearchResults.set(null);
+        },
+      });
+  }
+
+  onSearchSubmit(event: Event): void {
+    event.preventDefault();
+    this.triggerSearch();
+  }
+
+  triggerSearch(): void {
+    this.clearPendingSearch();
+    if (!this.hasActiveSearch()) {
+      this.serverSearchResults.set(null);
+      return;
+    }
+    if (readAuthToken()) {
+      this.runServerSearch();
+    }
   }
 
   ngOnInit(): void {
@@ -149,10 +232,20 @@ export class ExploreComponent implements OnInit {
     this.query.set((event.target as HTMLInputElement).value);
   }
 
+  private parseDateYear(dateValue: string): number | undefined {
+    const trimmed = dateValue.trim();
+    if (!trimmed) return undefined;
+    const parsed = Number(trimmed.split('-')[0]);
+    return Number.isFinite(parsed) && parsed >= 1900 ? parsed : undefined;
+  }
+
   clearQuery(): void {
     this.query.set('');
     this.state.searchFilterGenre.set('Todos');
+    this.state.searchFilterArtist.set('');
     this.state.searchFilterYear.set(undefined);
+    this.state.searchFilterStartDate.set('');
+    this.state.searchFilterEndDate.set('');
   }
 
   toggleHistory(): void {
