@@ -5,7 +5,17 @@ import oxlint from 'eslint-plugin-oxlint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
 export default defineConfig(
-  globalIgnores(['app/**', 'tests/unit/**', 'docs/**', 'local/**']),
+  globalIgnores([
+    '.venv/**',
+    'app/**',
+    'tests/**',
+    'scripts/**',
+    'playwright.config.ts',
+    'docs/**',
+    'local/**',
+    'test-results/**',
+    'playwright-report/**',
+  ]),
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
 
   // Oxlint desativa regras duplicadas no ESLint
