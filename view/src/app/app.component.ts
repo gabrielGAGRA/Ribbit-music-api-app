@@ -252,4 +252,8 @@ export class AppComponent {
   openTutorial(): void {
     this.state.setModal('onboarding');
   }
+
+  setTheme(theme: 'light' | 'dark'): void {
+    this.state.setTheme(theme);
+  }
 }

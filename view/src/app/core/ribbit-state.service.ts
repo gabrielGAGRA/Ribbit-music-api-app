@@ -1,7 +1,7 @@
 import type { OnDestroy } from '@angular/core';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { forkJoin, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { catchError, finalize } from 'rxjs/operators';
 import type {
   AuthApiResponse,
   CommunityReview,
@@ -123,6 +123,7 @@ export class RibbitStateService implements OnDestroy {
   readonly songs = signal<readonly Song[]>(INITIAL_SONGS);
   readonly discoverySong = signal<Song | null>(null);
   readonly isDeckEmpty = signal<boolean>(false);
+  readonly isLoadingDiscovery = signal<boolean>(false);
   readonly lastSwiped = signal<{
     readonly song: Song;
     readonly kind: DecisionKind;
@@ -372,21 +373,30 @@ export class RibbitStateService implements OnDestroy {
   /** Fetches the next candidate song for the Discovery deck. */
   loadNextDiscoveryTrack(): void {
     if (!readAuthToken()) return;
-    this.songService.getNextDiscoverySong().subscribe({
-      next: (song) => {
-        if (song) {
-          this.discoverySong.set(song);
-          this.isDeckEmpty.set(false);
-          this.audioPlayer.loadTrack(song.previewUrl);
-        } else {
-          this.discoverySong.set(null);
-          this.isDeckEmpty.set(true);
-        }
-      },
-      error: (err: unknown) => {
-        this.notify(toApiError(err).message);
-      },
-    });
+    this.isLoadingDiscovery.set(true);
+    this.songService
+      .getNextDiscoverySong()
+      .pipe(
+        finalize(() => {
+          this.isLoadingDiscovery.set(false);
+        }),
+      )
+      .subscribe({
+        next: (song) => {
+          if (song) {
+            this.discoverySong.set(song);
+            this.isDeckEmpty.set(false);
+    this.isLoadingDiscovery.set(false);
+            this.audioPlayer.loadTrack(song.previewUrl);
+          } else {
+            this.discoverySong.set(null);
+            this.isDeckEmpty.set(true);
+          }
+        },
+        error: (err: unknown) => {
+          this.notify(toApiError(err).message);
+        },
+      });
   }
 
   /** Reloads the user's playlists from /api/playlists. */
@@ -626,12 +636,14 @@ export class RibbitStateService implements OnDestroy {
     this.notifySwipeDecision(kind);
 
     if (song.trackId !== undefined && readAuthToken()) {
+      this.isLoadingDiscovery.set(true);
       this.songService.recordSwipe(song.trackId, kind).subscribe({
         next: () => {
           this.loadNextDiscoveryTrack();
           this.refreshInteractedCollections();
         },
         error: (err: unknown) => {
+          this.isLoadingDiscovery.set(false);
           this.notify(toApiError(err).message);
         },
       });
@@ -657,6 +669,7 @@ export class RibbitStateService implements OnDestroy {
             this.discoverySong.set(last.song);
           }
           this.isDeckEmpty.set(false);
+    this.isLoadingDiscovery.set(false);
           this.lastSwiped.set(null);
           this.history.update((items) => items.slice(0, -1));
           this.audioPlayer.loadTrack(last.song.previewUrl);
@@ -681,6 +694,7 @@ export class RibbitStateService implements OnDestroy {
       this.discoverySong.set(last.song);
     }
     this.isDeckEmpty.set(false);
+    this.isLoadingDiscovery.set(false);
     this.lastSwiped.set(null);
     this.history.update((items) => items.slice(0, -1));
     this.audioPlayer.loadTrack(last.song.previewUrl);
@@ -704,6 +718,7 @@ export class RibbitStateService implements OnDestroy {
           if (currentKind === 'reject') {
             this.discoverySong.set(song);
             this.isDeckEmpty.set(false);
+    this.isLoadingDiscovery.set(false);
             this.notify(`"${song.title}" ganhou uma segunda chance!`);
           } else {
             this.notify(`"${song.title}" foi atualizada na sua coleção.`);
@@ -1389,6 +1404,7 @@ export class RibbitStateService implements OnDestroy {
     this.discoverySong.set(null);
     this.lastSwiped.set(null);
     this.isDeckEmpty.set(false);
+    this.isLoadingDiscovery.set(false);
     this.jamState.set(DEFAULT_JAM_STATE);
     this.userId.set(null);
     this.userEmail.set('');

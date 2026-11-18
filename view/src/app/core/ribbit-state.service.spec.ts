@@ -136,6 +136,7 @@ describe('RibbitStateService', () => {
       },
     ]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
+    expect(service.isLoadingDiscovery()).toBe(false);
     expect(service.isDeckEmpty()).toBe(true);
 
     service.undo();
@@ -160,6 +161,7 @@ describe('RibbitStateService', () => {
     flushInitialHydration(httpMock);
 
     service.decide('love');
+    expect(service.isLoadingDiscovery()).toBe(true);
     const interactReq = httpMock.expectOne('/api/discovery/interact');
     interactReq.flush({
       interaction_id: 1,
