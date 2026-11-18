@@ -804,9 +804,7 @@ def test_flow_6_reviews_and_catalog_search(
         json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
     )
     assert admin_login.status_code == 200, admin_login.text
-    admin_headers = {
-        "Authorization": f"Bearer {admin_login.json()['access_token']}"
-    }
+    admin_headers = {"Authorization": f"Bearer {admin_login.json()['access_token']}"}
 
     admin_review = client.post(
         "/api/reviews",

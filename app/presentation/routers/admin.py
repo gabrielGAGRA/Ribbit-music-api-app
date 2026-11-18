@@ -326,9 +326,7 @@ def get_top_moderation_reviews(
 )
 def delete_review(
     review_id: int,
-    use_case: Annotated[
-        DeleteReviewUseCase, Depends(provide(DeleteReviewUseCase))
-    ],
+    use_case: Annotated[DeleteReviewUseCase, Depends(provide(DeleteReviewUseCase))],
     admin_id: Annotated[int, Depends(require_admin)],
 ) -> ReviewActionResponse:
     success = use_case.execute_as_admin(review_id=review_id)
