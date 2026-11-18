@@ -728,7 +728,7 @@ class FirestoreSyncService:
             ),
             "blocked_genres": row["blocked_genres"],
             "favorite_genres": row["favorite_genres"],
-            "preferred_theme": row["preferred_theme"] or "light",
+            "preferred_theme": row["preferred_theme"] or "dark",
             "is_admin": bool(row["is_admin"]),
             "created_at": row["created_at"] or _utc_now_iso(),
             "is_deleted": False,
@@ -2079,7 +2079,7 @@ class FirestoreSyncService:
             primary_id,
             doc.get("blocked_genres"),
             doc.get("favorite_genres"),
-            str(doc.get("preferred_theme") or "light"),
+            str(doc.get("preferred_theme") or "dark"),
             1 if doc.get("is_admin") else 0,
             doc.get("birth_date"),
         )
