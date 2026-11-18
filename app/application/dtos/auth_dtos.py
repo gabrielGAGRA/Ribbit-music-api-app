@@ -16,7 +16,7 @@ class RegisterUserCommand:
     birth_date: str | None = None
     blocked_genres: tuple[str, ...] = ()
     favorite_genres: tuple[str, ...] = ()
-    preferred_theme: str = "light"
+    preferred_theme: str = "dark"
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

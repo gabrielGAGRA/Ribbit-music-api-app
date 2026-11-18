@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS users (
     primary_account_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
     blocked_genres TEXT,
     favorite_genres TEXT,
-    preferred_theme TEXT NOT NULL DEFAULT 'light',
+    preferred_theme TEXT NOT NULL DEFAULT 'dark',
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     birth_date TEXT

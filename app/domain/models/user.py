@@ -29,7 +29,7 @@ class User:
     primary_account_id: int | None = None
     blocked_genres: frozenset[str] = frozenset()
     favorite_genres: frozenset[str] = frozenset()
-    preferred_theme: str = "light"
+    preferred_theme: str = "dark"
     is_admin: bool = False
     created_at: datetime | None = None
     birth_date: str | None = None
