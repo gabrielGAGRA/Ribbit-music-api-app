@@ -24,9 +24,11 @@ from app.application.use_cases.admin import (
     UpdateTrackExplicitFlagUseCase,
 )
 from app.application.use_cases.auth import AuthenticateAdminUseCase
+from app.application.use_cases.review import DeleteReviewUseCase
 from app.domain.models import Plan, ReviewComment, Track, User
 from app.presentation.routers.admin import (
     block_track,
+    delete_review,
     get_audience_report,
     get_executive_dashboard,
     get_top_moderation_reviews,
@@ -96,6 +98,20 @@ def test_get_executive_dashboard_returns_aggregated_metrics() -> None:
     assert res.users_by_plan == {"Free": 25, "Premium": 25}
     assert res.revenue_by_plan == {"Free": 0.0, "Premium": 499.50}
     mock_use_case.execute.assert_called_once_with()
+
+
+def test_admin_delete_review_router_calls_use_case_and_returns_success() -> None:
+    mock_use_case = MagicMock(spec=DeleteReviewUseCase)
+    mock_use_case.execute_as_admin.return_value = True
+
+    response = delete_review(
+        review_id=50,
+        use_case=mock_use_case,
+        admin_id=1,
+    )
+
+    assert response.success is True
+    mock_use_case.execute_as_admin.assert_called_once_with(review_id=50)
 
 
 def test_list_users_returns_user_plan_summaries() -> None:

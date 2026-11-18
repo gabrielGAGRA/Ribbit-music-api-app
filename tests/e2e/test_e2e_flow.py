@@ -798,6 +798,41 @@ def test_flow_6_reviews_and_catalog_search(
     )
     assert author_delete.status_code == 200
 
+    # Admins can delete reviews authored by other users.
+    admin_login = client.post(
+        "/api/auth/login",
+        json={"email": ADMIN_EMAIL, "password": ADMIN_PASSWORD},
+    )
+    assert admin_login.status_code == 200, admin_login.text
+    admin_headers = {
+        "Authorization": f"Bearer {admin_login.json()['access_token']}"
+    }
+
+    admin_review = client.post(
+        "/api/reviews",
+        headers=author_headers,
+        json={
+            "track_id": track_id,
+            "rating": 4,
+            "text": "A second review for admin moderation.",
+        },
+    )
+    assert admin_review.status_code == 201, admin_review.text
+    admin_review_id = admin_review.json()["review_id"]
+
+    non_admin_delete = client.delete(
+        f"/api/admin/reviews/{admin_review_id}",
+        headers=reader_headers,
+    )
+    assert non_admin_delete.status_code == 403
+
+    admin_delete = client.delete(
+        f"/api/admin/reviews/{admin_review_id}",
+        headers=admin_headers,
+    )
+    assert admin_delete.status_code == 200, admin_delete.text
+    assert admin_delete.json()["success"] is True
+
 
 # ==============================================================================
 # FLOW 7: Admin Console

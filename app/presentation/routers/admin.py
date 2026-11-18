@@ -26,6 +26,7 @@ from app.application.use_cases.admin import (
     UpdateTrackGenreUseCase,
 )
 from app.application.use_cases.auth import AuthenticateAdminUseCase
+from app.application.use_cases.review import DeleteReviewUseCase
 from app.domain.exceptions import BusinessRuleViolationError, ExternalServiceError
 from app.presentation.dependencies import (
     get_container,
@@ -52,6 +53,7 @@ from app.presentation.schemas.admin import (
 from app.presentation.schemas.auth import AuthResponse, LoginRequest, UserResponse
 from app.presentation.schemas.tracks_reviews import (
     CatalogTrackResponse,
+    ReviewActionResponse,
     ReviewResponse,
 )
 
@@ -316,6 +318,21 @@ def get_top_moderation_reviews(
 ) -> list[ReviewResponse]:
     reviews = use_case.execute()
     return [ReviewResponse.model_validate(r) for r in reviews]
+
+
+@router.delete(
+    "/reviews/{review_id}",
+    response_model=ReviewActionResponse,
+)
+def delete_review(
+    review_id: int,
+    use_case: Annotated[
+        DeleteReviewUseCase, Depends(provide(DeleteReviewUseCase))
+    ],
+    admin_id: Annotated[int, Depends(require_admin)],
+) -> ReviewActionResponse:
+    success = use_case.execute_as_admin(review_id=review_id)
+    return ReviewActionResponse(success=success, sucesso=success)
 
 
 @router.post(
