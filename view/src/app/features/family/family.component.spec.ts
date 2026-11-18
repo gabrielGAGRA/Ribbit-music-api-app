@@ -231,7 +231,7 @@ describe('FamilyComponent', () => {
     expect(component.familyMembers().length).toBe(0);
   });
 
-  it('updates banned genres and artists for a child account via PUT /api/profile/family/members/{id}/parental-controls', () => {
+  it('updates banned genres for a child account via PUT /api/profile/family/members/{id}/blocked-genres', () => {
     writeAuthToken('parent-jwt');
     state.currentPlan.set('Família');
 
@@ -243,7 +243,6 @@ describe('FamilyComponent', () => {
       plan_id: 3,
       primary_account_id: 1,
       blocked_genres: ['Metal'],
-      blocked_artists: ['Artist A'],
       is_admin: false,
     };
     component.familyMembers.set([childMember]);
@@ -255,28 +254,22 @@ describe('FamilyComponent', () => {
     component.toggleDraftGenre('Funk');
     component.customGenreInput.set('Sertanejo');
     component.addCustomBlockedGenre();
-    component.artistBanInput.set('Artist B');
-    component.addBlockedArtist();
-    component.removeDraftArtist('Artist A');
 
     component.saveParentalControls(childMember);
 
-    const putReq = httpMock.expectOne('/api/profile/family/members/77/parental-controls');
+    const putReq = httpMock.expectOne('/api/profile/family/members/77/blocked-genres');
     expect(putReq.request.method).toBe('PUT');
     expect(putReq.request.body).toEqual({
       blocked_genres: ['Metal', 'Funk', 'Sertanejo'],
-      blocked_artists: ['Artist B'],
     });
 
     putReq.flush({
       ...childMember,
       blocked_genres: ['metal', 'funk', 'sertanejo'],
-      blocked_artists: ['artist b'],
     });
 
     expect(component.editingControlsMemberId()).toBeNull();
     expect(component.familyMembers()[0]?.blocked_genres).toEqual(['metal', 'funk', 'sertanejo']);
-    expect(component.familyMembers()[0]?.blocked_artists).toEqual(['artist b']);
   });
 
   it('surfaces backend errors when saving parental controls fails', () => {
@@ -298,7 +291,7 @@ describe('FamilyComponent', () => {
 
     component.saveParentalControls(childMember);
 
-    const putReq = httpMock.expectOne('/api/profile/family/members/77/parental-controls');
+    const putReq = httpMock.expectOne('/api/profile/family/members/77/blocked-genres');
     putReq.flush({ detail: 'Not Found' }, { status: 404, statusText: 'Not Found' });
 
     expect(component.isSavingControls()).toBe(false);
@@ -406,7 +399,7 @@ describe('FamilyComponent DOM', () => {
     mounted.openParentalControls(childB);
     expect(mounted.editingControlsMemberId()).toBe(10);
 
-    const putReq = httpMock.expectOne('/api/profile/family/members/10/parental-controls');
+    const putReq = httpMock.expectOne('/api/profile/family/members/10/blocked-genres');
     putReq.flush(childA);
     expect(mounted.isSavingControls()).toBe(false);
     expect(mounted.editingControlsMemberId()).toBeNull();

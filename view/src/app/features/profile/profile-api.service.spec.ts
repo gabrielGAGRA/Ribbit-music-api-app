@@ -113,21 +113,14 @@ describe('ProfileApiService', () => {
       is_admin: false,
     });
 
-    service
-      .updateFamilyMemberParentalControls(21, {
-        blocked_genres: ['Metal'],
-        blocked_artists: ['Eminem'],
-      })
-      .subscribe((res) => {
-        expect(res.blocked_genres).toEqual(['metal']);
-        expect(res.blocked_artists).toEqual(['eminem']);
-      });
+    service.updateFamilyMemberBlockedGenres(21, ['Metal']).subscribe((res) => {
+      expect(res.blocked_genres).toEqual(['metal']);
+    });
 
-    const controlsReq = httpMock.expectOne('/api/profile/family/members/21/parental-controls');
+    const controlsReq = httpMock.expectOne('/api/profile/family/members/21/blocked-genres');
     expect(controlsReq.request.method).toBe('PUT');
     expect(controlsReq.request.body).toEqual({
       blocked_genres: ['Metal'],
-      blocked_artists: ['Eminem'],
     });
     controlsReq.flush({
       user_id: 21,
@@ -136,7 +129,6 @@ describe('ProfileApiService', () => {
       age: 20,
       plan_id: 3,
       blocked_genres: ['metal'],
-      blocked_artists: ['eminem'],
       is_admin: false,
     });
   });

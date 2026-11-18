@@ -8,7 +8,6 @@ import type {
   SpotifyAuthorizeUrlApiResponse,
   SpotifyConnectCallbackApiRequest,
   SwipeApiAction,
-  UpdateMemberParentalControlsApiRequest,
   UserApiDto,
   UserProfileApiDto,
 } from '@ribbit/shared-types';
@@ -131,14 +130,13 @@ export class ProfileApiService {
     return this.http.delete<UserApiDto>(`/api/profile/family/members/${memberId}`);
   }
 
-  /** Updates parental control restrictions (blocked genres and artists) for a dependent account. */
-  updateFamilyMemberParentalControls(
+  /** Updates blocked genres for a dependent account in the family plan. */
+  updateFamilyMemberBlockedGenres(
     memberId: number,
-    payload: UpdateMemberParentalControlsApiRequest,
+    blockedGenres: readonly string[],
   ): Observable<UserApiDto> {
-    return this.http.put<UserApiDto>(
-      `/api/profile/family/members/${memberId}/parental-controls`,
-      payload,
-    );
+    return this.http.put<UserApiDto>(`/api/profile/family/members/${memberId}/blocked-genres`, {
+      blocked_genres: [...blockedGenres],
+    });
   }
 }
