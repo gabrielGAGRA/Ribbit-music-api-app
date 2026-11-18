@@ -150,13 +150,10 @@
           exclusivamente pela Conta Pai titular.
         </p>
 
-        @if (state.blockedGenres().length > 0 || state.blockedArtists().length > 0) {
+        @if (state.blockedGenres().length > 0) {
           <div class="child-notice-bans">
             @for (genre of state.blockedGenres(); track genre) {
               <span class="ban-chip is-genre">Gênero banido: {{ genre }}</span>
-            }
-            @for (artist of state.blockedArtists(); track artist) {
-              <span class="ban-chip is-artist">Artista banido: {{ artist }}</span>
             }
           </div>
         }
@@ -399,7 +396,7 @@
                 </div>
               </div>
 
-              <!-- Current Banned Genres & Artists Summary -->
+              <!-- Current Banned Genres Summary -->
               <div class="parental-summary-box">
                 <div class="parental-summary-header">
                   <span>Restrições parentais ativas</span>
@@ -414,25 +411,19 @@
                     {{
                       editingControlsMemberId() === member.user_id
                         ? 'Fechar Banimentos'
-                        : 'Banir Gêneros / Artistas'
+                        : 'Banir Gêneros'
                     }}
                   </button>
                 </div>
 
-                @if (
-                  (member.blocked_genres?.length ?? 0) === 0 &&
-                  (member.blocked_artists?.length ?? 0) === 0
-                ) {
+                @if ((member.blocked_genres?.length ?? 0) === 0) {
                   <p class="parental-empty-copy">
-                    Nenhum gênero ou artista banido para esta conta filha.
+                    Nenhum gênero banido para esta conta filha.
                   </p>
                 } @else {
                   <div class="parental-chips-row">
                     @for (genre of member.blocked_genres ?? []; track genre) {
                       <span class="ban-chip is-genre">Gênero: {{ genre }}</span>
-                    }
-                    @for (artist of member.blocked_artists ?? []; track artist) {
-                      <span class="ban-chip is-artist">Artista: {{ artist }}</span>
                     }
                   </div>
                 }
@@ -497,45 +488,6 @@
                         (click)="addCustomBlockedGenre()"
                       >
                         <app-icon name="plus" [size]="13" /> Banir Gênero
-                      </button>
-                    </div>
-                  </div>
-
-                  <div class="parental-editor-block">
-                    <span class="editor-block-title">Banir artistas</span>
-                    @if (draftBlockedArtists().length > 0) {
-                      <div class="parental-chips-row">
-                        @for (artist of draftBlockedArtists(); track artist) {
-                          <span class="ban-chip is-artist is-removable">
-                            {{ artist }}
-                            <button
-                              type="button"
-                              aria-label="Remover artista banido"
-                              (click)="removeDraftArtist(artist)"
-                            >
-                              <app-icon name="close" [size]="11" />
-                            </button>
-                          </span>
-                        }
-                      </div>
-                    } @else {
-                      <p class="parental-empty-copy">Nenhum artista selecionado para banimento.</p>
-                    }
-
-                    <div class="ban-add-row">
-                      <input
-                        type="text"
-                        placeholder="Nome do artista (ex.: Eminem)"
-                        [value]="artistBanInput()"
-                        (input)="onArtistBanInput($event)"
-                        (keydown.enter)="addBlockedArtist($event)"
-                      />
-                      <button
-                        type="button"
-                        class="outline-button small-ban-btn"
-                        (click)="addBlockedArtist()"
-                      >
-                        <app-icon name="plus" [size]="13" /> Banir Artista
                       </button>
                     </div>
                   </div>

@@ -9,7 +9,6 @@ import {
 import { Router } from '@angular/router';
 import type {
   AddFamilyMemberApiRequest,
-  UpdateMemberParentalControlsApiRequest,
   UserApiDto,
 } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
@@ -102,9 +101,7 @@ export class FamilyComponent {
   // Parental controls editor state (banned genres & artists per child)
   readonly editingControlsMemberId = signal<number | null>(null);
   readonly draftBlockedGenres = signal<readonly string[]>([]);
-  readonly draftBlockedArtists = signal<readonly string[]>([]);
   readonly customGenreInput = signal<string>('');
-  readonly artistBanInput = signal<string>('');
   readonly isSavingControls = signal<boolean>(false);
   readonly controlsError = signal<string>('');
 
@@ -425,9 +422,7 @@ export class FamilyComponent {
     }
     this.editingControlsMemberId.set(member.user_id);
     this.draftBlockedGenres.set([...(member.blocked_genres ?? [])]);
-    this.draftBlockedArtists.set([...(member.blocked_artists ?? [])]);
     this.customGenreInput.set('');
-    this.artistBanInput.set('');
     this.controlsError.set('');
     this.successMessage.set('');
   }
@@ -435,9 +430,7 @@ export class FamilyComponent {
   closeParentalControls(): void {
     this.editingControlsMemberId.set(null);
     this.draftBlockedGenres.set([]);
-    this.draftBlockedArtists.set([]);
     this.customGenreInput.set('');
-    this.artistBanInput.set('');
     this.controlsError.set('');
   }
 
@@ -478,33 +471,12 @@ export class FamilyComponent {
     );
   }
 
-  onArtistBanInput(event: Event): void {
-    this.artistBanInput.set((event.target as HTMLInputElement).value);
-  }
-
-  addBlockedArtist(event?: Event): void {
-    event?.preventDefault();
-    const cleaned = this.artistBanInput().trim();
-    if (!cleaned) return;
-    if (!containsCaseInsensitive(this.draftBlockedArtists(), cleaned)) {
-      this.draftBlockedArtists.update((list) => [...list, cleaned]);
-    }
-    this.artistBanInput.set('');
-  }
-
-  removeDraftArtist(artist: string): void {
-    this.draftBlockedArtists.update((list) => removeCaseInsensitive(list, artist));
-  }
-
   saveParentalControls(member: UserApiDto): void {
     this.controlsError.set('');
     this.errorMessage.set('');
     this.successMessage.set('');
 
-    const payload: UpdateMemberParentalControlsApiRequest = {
-      blocked_genres: [...this.draftBlockedGenres()],
-      blocked_artists: [...this.draftBlockedArtists()],
-    };
+    const blockedGenres = [...this.draftBlockedGenres()];
     const toastMsg = `Restrições parentais atualizadas para ${member.display_name}.`;
 
     if (!this.profileApi || !readAuthToken()) {
@@ -513,8 +485,7 @@ export class FamilyComponent {
           item.user_id === member.user_id
             ? {
                 ...item,
-                blocked_genres: payload.blocked_genres,
-                blocked_artists: payload.blocked_artists,
+                blocked_genres: blockedGenres,
               }
             : item,
         ),
@@ -526,7 +497,7 @@ export class FamilyComponent {
     }
 
     this.isSavingControls.set(true);
-    this.profileApi.updateFamilyMemberParentalControls(member.user_id, payload).subscribe({
+    this.profileApi.updateFamilyMemberBlockedGenres(member.user_id, blockedGenres).subscribe({
       next: (updatedMember) => {
         this.isSavingControls.set(false);
         this.familyMembers.update((list) =>
@@ -538,14 +509,7 @@ export class FamilyComponent {
       },
       error: (err: unknown) => {
         this.isSavingControls.set(false);
-        const apiErr = toApiError(err);
-        if (apiErr.status === 404 || apiErr.status === 405) {
-          this.controlsError.set(
-            `O backend ainda não possui o endpoint de persistência de restrições parentais para contas filhas (PUT /api/profile/family/members/{id}/parental-controls): ${apiErr.message}`,
-          );
-        } else {
-          this.controlsError.set(apiErr.message);
-        }
+        this.controlsError.set(toApiError(err).message);
       },
     });
   }
