@@ -643,10 +643,10 @@ export class AdminStateService implements OnDestroy {
       );
   }
 
-  /** Requests review deletion via DELETE /api/reviews/{id}. */
+  /** Requests review deletion via DELETE /api/admin/reviews/{id}. */
   deleteReview(reviewId: number): Observable<ActionSuccessApiDto> {
     return this.http
-      .delete<ActionSuccessApiDto>(`/api/reviews/${reviewId}`, {
+      .delete<ActionSuccessApiDto>(`/api/admin/reviews/${reviewId}`, {
         context: createAdminHttpContext(),
       })
       .pipe(

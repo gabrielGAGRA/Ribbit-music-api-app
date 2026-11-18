@@ -138,7 +138,7 @@ describe('AdminModerationComponent', () => {
     component['selectTab']('reviews');
     const reviewCount = component['topReviews']().length;
     component['removeReview'](502);
-    const deleteReviewReq = httpMock.expectOne('/api/reviews/502');
+    const deleteReviewReq = httpMock.expectOne('/api/admin/reviews/502');
     expect(deleteReviewReq.request.method).toBe('DELETE');
     deleteReviewReq.flush({ success: true });
     expect(component['topReviews']().length).toBe(reviewCount - 1);

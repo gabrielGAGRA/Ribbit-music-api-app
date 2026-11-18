@@ -405,14 +405,14 @@ describe('AdminStateService', () => {
       },
     });
     httpMock
-      .expectOne('/api/reviews/900')
+      .expectOne('/api/admin/reviews/900')
       .flush(
-        { error: 'ForbiddenError', message: 'Only the author can delete this review.' },
-        { status: 403, statusText: 'Forbidden' },
+        { error: 'EntityNotFoundError', message: 'Review with ID 900 not found.' },
+        { status: 404, statusText: 'Not Found' },
       );
     expect(deleteReviewError).toBeInstanceOf(AdminDomainError);
     expect((deleteReviewError as AdminDomainError).message).toBe(
-      'Only the author can delete this review.',
+      'Review with ID 900 not found.',
     );
   });
 

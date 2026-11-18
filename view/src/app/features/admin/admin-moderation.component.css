@@ -96,19 +96,6 @@
   font-size: 13px;
 }
 
-.moderation-route-notice {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 10px 14px;
-  border-radius: 12px;
-  background: rgba(89, 148, 255, 0.1);
-  border: 1px solid rgba(89, 148, 255, 0.3);
-  color: var(--ink-secondary);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-
 .section-head h2 {
   font-size: 19px;
   margin-top: 4px;
