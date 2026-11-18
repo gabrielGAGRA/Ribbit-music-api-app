@@ -118,7 +118,7 @@ def test_http_get_google_client_id_resolves_settings_via_di() -> None:
 
     from app.composition import create_app
     from app.config import Settings
-    from tests.e2e.test_client import TestClient
+    from tests.integration.test_client import TestClient
 
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.row_factory = sqlite3.Row
@@ -150,7 +150,7 @@ def test_http_get_google_client_id_uses_only_injected_settings_without_reloading
 
     from app.composition import create_app
     from app.config import Settings
-    from tests.e2e.test_client import TestClient
+    from tests.integration.test_client import TestClient
 
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.delenv("RIBBIT_SECRET_KEY", raising=False)
@@ -412,7 +412,7 @@ def test_google_callback_and_session_forward_unregistered_user_to_register() -> 
         _verify_cookie_payload,
         google_callback,
     )
-    from tests.e2e.test_client import TestClient
+    from tests.integration.test_client import TestClient
 
     settings = Settings(
         database_path=":memory:",
@@ -492,7 +492,7 @@ def test_google_callback_and_session_forward_unregistered_user_to_register() -> 
 def test_google_oauth_endpoints_via_fastapi_di_when_unconfigured() -> None:
     from app.composition import create_app
     from app.config import Settings
-    from tests.e2e.test_client import TestClient
+    from tests.integration.test_client import TestClient
 
     settings = Settings(
         database_path=":memory:",
