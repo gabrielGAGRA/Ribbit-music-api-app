@@ -310,19 +310,9 @@
       <section class="admin-card">
         <div class="section-head">
           <span class="eyebrow blue"
-            >GET /API/ADMIN/REVIEWS · DELETE /API/REVIEWS/&#123;REVIEW_ID&#125;</span
+            >GET /API/ADMIN/REVIEWS · DELETE /API/ADMIN/REVIEWS/&#123;REVIEW_ID&#125;</span
           >
           <h2>Avaliações Mais Curtidas (Últimos 30 Dias)</h2>
-        </div>
-
-        <div class="moderation-route-notice" role="note">
-          <app-icon name="shield" [size]="15" />
-          <span>
-            Nota: o endpoint dedicado
-            <code>DELETE /api/admin/reviews/&#123;review_id&#125;</code> ainda não existe no
-            backend; a rota atual <code>DELETE /api/reviews/&#123;review_id&#125;</code> permite
-            apenas a exclusão pelo autor original.
-          </span>
         </div>
 
         <div class="reviews-list">
