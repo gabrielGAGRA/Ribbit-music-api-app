@@ -28,37 +28,6 @@
     </nav>
 
     <div class="admin-sidebar-footer">
-      <div class="admin-env-box" [class.error-active]="hasSyncError()">
-        @if (adminState.syncError()) {
-          <div class="env-title error-title">
-            <app-icon name="close" [size]="15" />
-            <span>Erro de Sincronização</span>
-          </div>
-          <p>{{ adminState.syncError() }}</p>
-        } @else if (adminState.isLoading()) {
-          <div class="env-title">
-            <app-icon name="repeat" [size]="15" />
-            <span>Sincronizando API...</span>
-          </div>
-          <p>Carregando métricas e registros em tempo real de <code>/api/admin</code>.</p>
-        } @else {
-          <div class="env-title">
-            <app-icon name="check" [size]="15" />
-            <span>API /api/admin Conectada</span>
-          </div>
-          <p>Dados sincronizados com o backend FastAPI via <code>HttpClient</code>.</p>
-        }
-        <button
-          type="button"
-          class="outline-button small-btn full-width"
-          [disabled]="adminState.isLoading()"
-          (click)="refreshBackend()"
-        >
-          <app-icon name="repeat" [size]="14" />
-          {{ adminState.isLoading() ? 'Sincronizando...' : 'Atualizar dados da API' }}
-        </button>
-      </div>
-
       <div class="admin-footer-actions">
         <button type="button" class="admin-switch-btn" (click)="openListenerApp()">
           <app-icon name="headphones" [size]="17" />
@@ -100,7 +69,7 @@
           } @else if (adminState.isLoading()) {
             SINCRONIZANDO...
           } @else {
-            API REAL (/api/admin)
+            API CONECTADA
           }
         </span>
         <button

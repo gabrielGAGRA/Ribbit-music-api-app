@@ -29,7 +29,9 @@ export type IconName =
   | 'repeat'
   | 'sliders'
   | 'shield'
-  | 'chart';
+  | 'chart'
+  | 'sun'
+  | 'moon';
 
 export type DecisionKind = 'like' | 'love' | 'reject';
 

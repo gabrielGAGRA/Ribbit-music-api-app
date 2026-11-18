@@ -119,4 +119,14 @@ describe('DiscoverComponent', () => {
     expect(globalStyles).toMatch(/\.track-heading\s+p\s*\{[^}]*text-overflow:\s*ellipsis/);
     expect(globalStyles).toMatch(/\.preview-play\s*\{[^}]*flex-shrink:\s*0/);
   });
+
+  it('should render loading spinner markup and styles for song loading state', () => {
+    const template = readFileSync(resolve(__dirname, './discover.component.html'), 'utf8');
+    const globalStyles = readFileSync(resolve(__dirname, '../../../styles.css'), 'utf8');
+
+    expect(template).toContain('state.isLoadingDiscovery()');
+    expect(template).toContain('class="vinyl-spinner"');
+    expect(globalStyles).toContain('.vinyl-spinner');
+    expect(globalStyles).toContain('@media (prefers-reduced-motion: reduce)');
+  });
 });

@@ -68,7 +68,7 @@ interface GoogleGlobalScope {
 export const PLAN_OPTIONS: readonly PlanOption[] = [
   { id: 1, name: 'Free', label: 'Plano Free (R$ 0,00/mês)' },
   { id: 2, name: 'Individual', label: 'Ribbit Pro — Individual (R$ 14,90/mês)' },
-  { id: 3, name: 'Família', label: 'Ribbit Jam — Família (R$ 27,90/mês)' },
+  { id: 3, name: 'Família', label: 'Plano Família (R$ 27,90/mês)' },
 ];
 
 function getGoogleAccountsId(): GoogleAccountsId | null {

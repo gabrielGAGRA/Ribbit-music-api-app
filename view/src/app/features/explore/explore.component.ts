@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import type { Subscription } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 import type { CommunityReview, Song } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
 import { mapTrackDtoToSong } from '../../core/api-mappers';
@@ -34,6 +35,7 @@ export class ExploreComponent implements OnInit {
 
   readonly query = this.state.searchQuery;
   readonly historyExpanded = signal<boolean>(false);
+  readonly isSearching = signal<boolean>(false);
   readonly reviewSort = signal<string>('likes');
   readonly reviewLikes = signal<Record<number, boolean>>({});
   protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
@@ -165,6 +167,7 @@ export class ExploreComponent implements OnInit {
       this.activeSearchSub.unsubscribe();
       this.activeSearchSub = null;
     }
+    this.isSearching.set(false);
   }
 
   private runServerSearch(): void {
@@ -175,6 +178,7 @@ export class ExploreComponent implements OnInit {
     const startYear = this.parseDateYear(this.state.searchFilterStartDate());
     const endYear = this.parseDateYear(this.state.searchFilterEndDate());
 
+    this.isSearching.set(true);
     this.activeSearchSub = this.songService
       .searchSongs({
         ...(q ? { query: q } : {}),
@@ -185,6 +189,11 @@ export class ExploreComponent implements OnInit {
         ...(endYear !== undefined ? { endYear } : {}),
         limit: 30,
       })
+      .pipe(
+        finalize(() => {
+          this.isSearching.set(false);
+        }),
+      )
       .subscribe({
         next: (items) => {
           this.serverSearchResults.set(items);

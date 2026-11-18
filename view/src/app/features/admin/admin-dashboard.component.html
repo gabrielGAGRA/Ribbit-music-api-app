@@ -5,7 +5,6 @@
         <span class="kpi-icon green-bg">
           <app-icon name="sparkles" [size]="19" />
         </span>
-        <span class="endpoint-tag">GET /api/admin/dashboard</span>
       </div>
       <strong class="kpi-value">{{ formattedNetRevenue() }}</strong>
       <span class="kpi-label">Receita líquida mensal estimada</span>
@@ -31,7 +30,6 @@
         <span class="kpi-icon green-bg">
           <app-icon name="music" [size]="19" />
         </span>
-        <span class="endpoint-tag">GET /api/admin/audience</span>
       </div>
       <strong class="kpi-value">
         {{ adminState.audienceReport().active_tracks }} /
@@ -119,7 +117,6 @@
           <span class="eyebrow blue">PREFERÊNCIAS DE AUDIÊNCIA</span>
           <h2>Gêneros Mais Bloqueados</h2>
         </div>
-        <span class="endpoint-tag">GET /api/admin/audience</span>
       </div>
 
       <p class="panel-copy">
