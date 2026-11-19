@@ -13,6 +13,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
+    include: ['view/**/*.spec.ts'],
     setupFiles: ['./view/src/test-setup.ts'],
     env: {
       TUNNEL_URL: 'https://grumpy-books-scream.loca.lt',

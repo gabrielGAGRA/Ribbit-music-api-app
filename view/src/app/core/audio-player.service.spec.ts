@@ -77,12 +77,10 @@ describe('AudioPlayerService', () => {
       pause: pauseSpy,
     };
     const originalAudio = globalThis.Audio;
-    vi.stubGlobal(
-      'Audio',
-      vi.fn(() => {
-        return fakeAudio;
-      }),
-    );
+    function MockAudio() {
+      return fakeAudio;
+    }
+    vi.stubGlobal('Audio', MockAudio);
 
     try {
       player.loadTrack('https://cdn.ribbit.app/preview.mp3');

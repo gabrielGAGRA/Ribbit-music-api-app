@@ -609,21 +609,21 @@ Abra qualquer navegador moderno (Chrome, Edge, Firefox, Brave) e acesse:
 
 ## Testes Automatizados & Qualidade
 
-A suíte de testes é organizada em três camadas independentes:
+A suíte de testes é organizada em quatro frentes independentes:
 
 - **`tests/unit/`**: testes unitários do backend (domínio, casos de uso, adaptadores e routers isolados).
 - **`tests/integration/`**: testes de integração da API FastAPI + SQLite em memória (`test_e2e_flow.py` e `test_client.py`).
-- **`tests/e2e/`**: testes funcionais ponta a ponta no navegador com Playwright, exercitando `view/` + `app/` + banco juntos, com gravação automática de vídeos executando os fluxos principais do sistema.
+- **`tests/e2e/`**: testes funcionais ponta a ponta no navegador com Playwright (`*.e2e.ts`), exercitando `view/` + `app/` + banco SQLite juntos nos fluxos 1–4 e o painel administrativo Angular (`AdminStateService`) no fluxo 5 (rotas `/api/admin/*` validadas em `tests/integration/test_e2e_flow.py`), com gravação de vídeo `.webm`.
+- **`view/src/app/**/*.spec.ts`**: testes unitários do frontend Angular co-localizados com componentes e serviços (Vitest).
 
 ### Backend (Python)
-- **Executar suíte de testes unitários e de integração (888 testes):**
+- **Executar suíte de testes unitários e de integração:**
   ```bash
   source .venv/bin/activate
   python -m pytest
   ```
 - **Verificar cobertura de código (meta mínima de 85% configurada em [`pyproject.toml`](pyproject.toml)):**
   ```bash
-  uv pip install pytest-cov
   python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85
   ```
 - **Quality Gate Python (formatação, lint e tipagem estrita):**
@@ -634,11 +634,26 @@ A suíte de testes é organizada em três camadas independentes:
   ```
 
 ### Testes Funcionais Web (Playwright) & Vídeos
-- **Executar os testes ponta a ponta no navegador e gerar os vídeos de demonstração (mínimo de 5 fluxos funcionais distintos):**
+- **Instalar o navegador Chromium (primeira execução):**
   ```bash
-  npx playwright test
+  npx playwright install chromium
   ```
-  Os vídeos gravados durante a execução dos testes web ficam salvos na pasta de resultados gerada pelo Playwright a partir de `tests/e2e/`.
+- **Executar os testes E2E no navegador (5 fluxos funcionais distintos):**
+  ```bash
+  npm run test:e2e
+  ```
+- **Executar os testes E2E e exportar os 5 vídeos gravados para `docs/testing/videos/`:**
+  ```bash
+  npm run record:e2e
+  ```
+
+| Fluxo E2E | Teste Playwright | Vídeo Gravado |
+| :--- | :--- | :--- |
+| **1. Onboarding, Filtros de Gênero, Swipe e Coleções** | [`01-onboarding-discovery-swipe.e2e.ts`](tests/e2e/01-onboarding-discovery-swipe.e2e.ts) | [`01-onboarding-discovery-swipe.webm`](docs/testing/videos/01-onboarding-discovery-swipe.webm) |
+| **2. Playlists Contextuais e Fila de Reprodução** | [`02-contextual-playlists-and-queue.e2e.ts`](tests/e2e/02-contextual-playlists-and-queue.e2e.ts) | [`02-contextual-playlists-and-queue.webm`](docs/testing/videos/02-contextual-playlists-and-queue.webm) |
+| **3. Jam Colaborativa (Pond), Votação e Skip** | [`03-collaborative-jam-pond.e2e.ts`](tests/e2e/03-collaborative-jam-pond.e2e.ts) | [`03-collaborative-jam-pond.webm`](docs/testing/videos/03-collaborative-jam-pond.webm) |
+| **4. Busca no Catálogo, Reviews e Comunidade** | [`04-explore-search-and-community-reviews.e2e.ts`](tests/e2e/04-explore-search-and-community-reviews.e2e.ts) | [`04-explore-search-and-community-reviews.webm`](docs/testing/videos/04-explore-search-and-community-reviews.webm) |
+| **5. Painel Administrativo, Planos e Moderação** | [`05-admin-console-governance-and-moderation.e2e.ts`](tests/e2e/05-admin-console-governance-and-moderation.e2e.ts) | [`05-admin-console-governance-and-moderation.webm`](docs/testing/videos/05-admin-console-governance-and-moderation.webm) |
 
 ### Frontend (TypeScript / Angular)
 - **Executar testes unitários (97 testes em 21 arquivos com Vitest):**
