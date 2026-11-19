@@ -218,8 +218,6 @@ def get_track_reviews(
         GetUserReviewsUseCase,
         Depends(provide(GetTrackReviewsUseCase)),
     ],
-    *args: object,
-    **kwargs: object,
 ) -> list[ReviewResponse]:
     reviews = use_case.execute(track_id=track_id)
     return [ReviewResponse.model_validate(r) for r in reviews]

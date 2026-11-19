@@ -240,3 +240,10 @@ client_secret*.json
 gcp*.json
 secrets/
 
+# Playwright & E2E temporary artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+e2e.db*
+
