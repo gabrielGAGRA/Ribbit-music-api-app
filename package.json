@@ -14,11 +14,14 @@
     "lint:angular:fix": "eslint . --fix",
     "format": "oxfmt --write \"view/**/*.{ts,html,css,scss,json}\" *.mjs",
     "format:check": "oxfmt --check \"view/**/*.{ts,html,css,scss,json}\" *.mjs",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "record:e2e": "node scripts/record_e2e_videos.mjs"
   },
   "devDependencies": {
     "@angular-devkit/build-angular": "^22.2.4",
     "@angular/cli": "^22.2.4",
+    "@playwright/test": "^1.65.1",
     "@total-typescript/ts-reset": "^0.6.1",
     "@types/node": "^22.13.0",
     "angular-eslint": "^22.6.0",

@@ -11,7 +11,7 @@ from app.application.ports.services.spotify import SpotifyUserProfile
 from app.composition import create_app
 from app.config import Settings
 from app.domain.models.track import Track
-from tests.e2e.test_client import TestClient
+from tests.integration.test_client import TestClient
 
 ADMIN_EMAIL = "admin@ribbit.example.com"
 ADMIN_PASSWORD = "RibbitLocal2026!"
@@ -763,6 +763,10 @@ def test_flow_6_reviews_and_catalog_search(
     )
     assert review_res.status_code == 201, review_res.text
     review_id = review_res.json()["review_id"]
+
+    track_reviews = client.get(f"/api/reviews/track/{track_id}")
+    assert track_reviews.status_code == 200, track_reviews.text
+    assert any(r["review_id"] == review_id for r in track_reviews.json())
 
     # 3. Only 1 active review per user per track -> second review raises 400
     dup_review = client.post(

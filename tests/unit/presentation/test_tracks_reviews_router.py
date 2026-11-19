@@ -39,12 +39,6 @@ from app.presentation.schemas.tracks_reviews import (
 )
 
 
-def _request_with_track(track: Track) -> MagicMock:
-    request = MagicMock()
-    request.app.state.container.track_repo.find_by_id.return_value = track
-    return request
-
-
 def test_search_tracks_forwards_command_and_serializes_tracks() -> None:
     mock_use_case = MagicMock(spec=SearchTracksUseCase)
     track = Track(
@@ -219,13 +213,6 @@ def test_get_community_feed_defaults() -> None:
 
 def test_get_track_reviews_returns_review_list_for_active_track() -> None:
     mock_use_case = MagicMock()
-    track = Track(
-        track_id=101,
-        title="Song",
-        artist="Artist",
-        duration_seconds=200,
-        genre="Pop",
-    )
     review = ReviewComment(
         review_id=50,
         user_id=7,
@@ -238,7 +225,6 @@ def test_get_track_reviews_returns_review_list_for_active_track() -> None:
 
     result = get_track_reviews(
         track_id=101,
-        request=_request_with_track(track),
         use_case=mock_use_case,
     )
 

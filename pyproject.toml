@@ -14,8 +14,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "coverage>=7.6.0",
     "pyrefly>=1.4.0",
     "pytest>=9.1.1",
+    "pytest-cov>=6.0.0",
     "ruff>=0.17.2",
 ]
 
@@ -123,7 +125,8 @@ convention = "google"
 
 # Tests
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests/unit", "tests/integration", "tests/test_init_db.py"]
+norecursedirs = ["tests/e2e", "node_modules", ".venv"]
 pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
