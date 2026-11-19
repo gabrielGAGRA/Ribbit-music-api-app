@@ -5,12 +5,17 @@ import logging
 import os
 import sys
 import time
+from pathlib import Path
 
 import pyarrow as pa
 import pyarrow.parquet as pq
 from google.cloud import storage
 
-from app.config import load_settings
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from app.config import load_settings  # noqa: E402
 
 logger = logging.getLogger("scripts.bootstrap_local_gcs")
 logging.basicConfig(
@@ -76,20 +81,12 @@ def bootstrap_gcs_emulator() -> int:
                         "Estados Unidos",
                     ],
                     "release_year": [1975, 2017, 2013, 2020, 1991],
-                    "cover_url": [
-                        "https://example.com/bohemian.jpg",
-                        "https://example.com/shapeofyou.jpg",
-                        "https://example.com/rapgod.jpg",
-                        "https://example.com/blindinglights.jpg",
-                        "https://example.com/nirvana.jpg",
-                    ],
-                    "itunes_preview_url": [
-                        "https://example.com/bohemian_preview.mp3",
-                        "https://example.com/shapeofyou_preview.mp3",
-                        "https://example.com/rapgod_preview.mp3",
-                        "https://example.com/blindinglights_preview.mp3",
-                        "https://example.com/nirvana_preview.mp3",
-                    ],
+                    "cover_url": pa.array(
+                        [None, None, None, None, None], type=pa.string()
+                    ),
+                    "itunes_preview_url": pa.array(
+                        [None, None, None, None, None], type=pa.string()
+                    ),
                     "spotify_id": [
                         "spotify:track:bohemian123",
                         "spotify:track:shapeofyou123",

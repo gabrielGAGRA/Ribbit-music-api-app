@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node scripts/dev-server.mjs",
-    "dev:web": "node scripts/dev-server.mjs",
+    "start": "ng serve",
+    "dev:web": "ng serve",
     "build": "ng build",
     "typecheck": "node ./node_modules/typescript-7/bin/tsc --noEmit",
     "lint": "oxlint --type-aware view/ && eslint .",
@@ -12,8 +12,8 @@
     "lint:angular": "eslint .",
     "lint:fix": "oxlint --type-aware --fix view/ && eslint . --fix",
     "lint:angular:fix": "eslint . --fix",
-    "format": "oxfmt --write \"view/**/*.{ts,html,css,scss,json}\" *.mjs scripts/*.mjs",
-    "format:check": "oxfmt --check \"view/**/*.{ts,html,css,scss,json}\" *.mjs scripts/*.mjs",
+    "format": "oxfmt --write \"view/**/*.{ts,html,css,scss,json}\" *.mjs",
+    "format:check": "oxfmt --check \"view/**/*.{ts,html,css,scss,json}\" *.mjs",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "record:e2e": "node scripts/record_e2e_videos.mjs"
