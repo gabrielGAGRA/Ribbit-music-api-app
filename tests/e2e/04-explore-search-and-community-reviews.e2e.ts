@@ -74,7 +74,7 @@ test('catalog search with filters, track details, 5-star review lifecycle, and c
   const publishTempResponse = page.waitForResponse(
     (res) => res.url().endsWith('/api/reviews') && res.status() === 201,
   );
-  await humanClick(page, page.getByRole('button', { name: 'Publicar comentário' }), 200);
+  await humanClick(page, page.getByRole('button', { name: 'Publicar avaliação' }), 200);
   await publishTempResponse;
   await expect(page.locator('.comment-list')).toContainText(tempComment);
   await pauseForVideo(page, 850);
@@ -99,7 +99,7 @@ test('catalog search with filters, track details, 5-star review lifecycle, and c
   const publishResponse = page.waitForResponse(
     (res) => res.url().endsWith('/api/reviews') && res.status() === 201,
   );
-  await humanClick(page, page.getByRole('button', { name: 'Publicar comentário' }), 200);
+  await humanClick(page, page.getByRole('button', { name: 'Publicar avaliação' }), 200);
   await publishResponse;
 
   await expect(page.locator('.comment-list')).toContainText(commentText);
