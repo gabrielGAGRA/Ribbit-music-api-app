@@ -25,9 +25,9 @@ const backendCommand = `"${pythonBin}" scripts/prepare_e2e_db.py && "${pythonBin
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: '**/*.e2e.ts',
-  fullyParallel: false,
-  workers: 1,
-  timeout: 90_000,
+  fullyParallel: true,
+  workers: process.env['CI'] ? 2 : 5,
+  timeout: 180_000,
   expect: {
     timeout: 12_000,
   },
@@ -41,6 +41,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4200',
     headless: true,
+    launchOptions: {
+      slowMo: 220,
+    },
     viewport: { width: 1280, height: 720 },
     video: {
       mode: 'on',
