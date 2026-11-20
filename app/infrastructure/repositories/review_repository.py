@@ -9,6 +9,14 @@ from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.review import ReviewComment
 from app.infrastructure.repositories.connection import transaction
 
+_REVIEW_SORT_ORDERS: dict[str, str] = {
+    "recent": "r.created_at DESC, r.review_id DESC",
+    "oldest": "r.created_at ASC, r.review_id ASC",
+    "likes": "r.likes_count DESC, r.created_at DESC",
+    "rating_desc": "r.rating DESC, r.likes_count DESC, r.created_at DESC",
+    "rating_asc": "r.rating ASC, r.likes_count DESC, r.created_at DESC",
+}
+
 
 def _row_to_review(row: sqlite3.Row) -> ReviewComment:
     created_at = (
@@ -130,10 +138,13 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
             return self._find_by_id_local(new_id) or review
         return review
 
-    def list_by_track(self, track_id: int, limit: int) -> list[ReviewComment]:
+    def list_by_track(
+        self, track_id: int, limit: int, sort_by: str = "recent"
+    ) -> list[ReviewComment]:
         self._pull_deltas()
+        order_by = _REVIEW_SORT_ORDERS.get(sort_by, _REVIEW_SORT_ORDERS["recent"])
         cursor = self.conn.execute(
-            """
+            f"""
             SELECT
                 r.*,
                 u.display_name AS author_name,
@@ -143,20 +154,32 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
             FROM reviews r
             LEFT JOIN users u ON u.user_id = r.user_id
             LEFT JOIN tracks t ON t.track_id = r.track_id
-            WHERE r.track_id = ? AND r.is_deleted = 0
-            ORDER BY r.created_at DESC
+            WHERE r.track_id = ?
+              AND r.is_deleted = 0
+              AND COALESCE(t.is_deleted, 0) = 0
+            ORDER BY {order_by}
             LIMIT ?
-            """,
+            """,  # noqa: S608
             (track_id, limit),
         )
         rows = cursor.fetchall()
         return [_row_to_review(r) for r in rows]
 
-    def list_top_recent(self, days: int, limit: int) -> list[ReviewComment]:
+    def list_top_recent(
+        self, days: int | None = None, limit: int = 10, sort_by: str = "likes"
+    ) -> list[ReviewComment]:
         self._pull_deltas()
-        min_date_str = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+        order_by = _REVIEW_SORT_ORDERS.get(sort_by, _REVIEW_SORT_ORDERS["likes"])
+        conditions = ["r.is_deleted = 0", "COALESCE(t.is_deleted, 0) = 0"]
+        params: list[object] = []
+        if days is not None:
+            min_date_str = (datetime.now(UTC) - timedelta(days=days)).isoformat()
+            conditions.append("r.created_at >= ?")
+            params.append(min_date_str)
+        params.append(limit)
+        where_clause = " AND ".join(conditions)
         cursor = self.conn.execute(
-            """
+            f"""
             SELECT
                 r.*,
                 u.display_name AS author_name,
@@ -166,11 +189,11 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
             FROM reviews r
             LEFT JOIN users u ON u.user_id = r.user_id
             LEFT JOIN tracks t ON t.track_id = r.track_id
-            WHERE r.is_deleted = 0 AND r.created_at >= ?
-            ORDER BY r.likes_count DESC, r.created_at DESC
+            WHERE {where_clause}
+            ORDER BY {order_by}
             LIMIT ?
-            """,
-            (min_date_str, limit),
+            """,  # noqa: S608
+            tuple(params),
         )
         rows = cursor.fetchall()
         return [_row_to_review(r) for r in rows]
@@ -188,7 +211,9 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
             FROM reviews r
             LEFT JOIN users u ON u.user_id = r.user_id
             LEFT JOIN tracks t ON t.track_id = r.track_id
-            WHERE r.user_id = ? AND r.is_deleted = 0
+            WHERE r.user_id = ?
+              AND r.is_deleted = 0
+              AND COALESCE(t.is_deleted, 0) = 0
             ORDER BY r.created_at DESC
             LIMIT ?
             """,

@@ -1,6 +1,6 @@
 """Track catalog search and community reviews router."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
@@ -95,6 +95,8 @@ def search_tracks(
             year=query.year,
             start_year=query.start_year,
             end_year=query.end_year,
+            min_rating=query.min_rating,
+            sort_by=query.sort_by,
             limit=query.limit,
             offset=query.offset,
         )
@@ -193,10 +195,14 @@ def get_community_feed(
     use_case: Annotated[
         GetCommunityFeedUseCase, Depends(provide(GetCommunityFeedUseCase))
     ],
-    days: Annotated[int, Query(ge=1)] = 5,
+    days: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    sort_by: Annotated[
+        Literal["recent", "oldest", "likes", "rating_desc", "rating_asc"],
+        Query(),
+    ] = "likes",
 ) -> list[ReviewResponse]:
-    reviews = use_case.execute(days=days, limit=limit)
+    reviews = use_case.execute(days=days, limit=limit, sort_by=sort_by)
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 
@@ -215,11 +221,15 @@ def get_track_reviews(
     track_id: int,
     use_case: Annotated[
         GetTrackReviewsUseCase,
-        GetUserReviewsUseCase,
         Depends(provide(GetTrackReviewsUseCase)),
     ],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    sort_by: Annotated[
+        Literal["recent", "oldest", "likes", "rating_desc", "rating_asc"],
+        Query(),
+    ] = "recent",
 ) -> list[ReviewResponse]:
-    reviews = use_case.execute(track_id=track_id)
+    reviews = use_case.execute(track_id=track_id, limit=limit, sort_by=sort_by)
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 
