@@ -55,6 +55,8 @@ export interface Song {
   readonly country?: string;
   readonly explicit?: boolean;
   readonly durationSeconds?: number;
+  readonly averageRating?: number | null;
+  readonly reviewCount?: number;
 }
 
 export interface CommunityReview {
@@ -242,6 +244,8 @@ export interface TrackApiDto {
   readonly itunes_preview_url?: string | null;
   readonly explicit: boolean;
   readonly is_deleted: boolean;
+  readonly average_rating?: number | null;
+  readonly review_count?: number;
 }
 
 export interface InteractionApiDto {

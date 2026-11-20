@@ -26,6 +26,17 @@ def _row_to_track(row: sqlite3.Row) -> Track:
     created_at = (
         datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
     )
+    keys = row.keys() if hasattr(row, "keys") else ()
+    average_rating = (
+        float(row["avg_rating"])
+        if "avg_rating" in keys and row["avg_rating"] is not None
+        else None
+    )
+    review_count = (
+        int(row["review_count"])
+        if "review_count" in keys and row["review_count"] is not None
+        else 0
+    )
     return Track(
         track_id=row["track_id"],
         title=row["title"],
@@ -41,6 +52,8 @@ def _row_to_track(row: sqlite3.Row) -> Track:
         explicit=bool(row["explicit"]),
         is_deleted=bool(row["is_deleted"]),
         created_at=created_at,
+        average_rating=average_rating,
+        review_count=review_count,
     )
 
 
@@ -128,7 +141,7 @@ def _build_filter_conditions(
     year: int | Sequence[int] | None,
     query: str | None,
 ) -> tuple[list[str], list[object]]:
-    conditions: list[str] = ["is_deleted = 0"]
+    conditions: list[str] = ["t.is_deleted = 0"]
     params: list[object] = []
 
     if query:
@@ -136,31 +149,47 @@ def _build_filter_conditions(
         flex_like = f"%{_to_flexible_like(query)}%"
         if exact_like == flex_like:
             conditions.append(
-                "(lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?)"
+                "(lower(t.title) LIKE ? OR lower(t.artist) LIKE ? OR lower(t.album) LIKE ?)"
             )
             params.extend([exact_like, exact_like, exact_like])
         else:
             conditions.append(
                 "("
-                "lower(title) LIKE ? OR lower(artist) LIKE ? OR lower(album) LIKE ?"
-                " OR artist LIKE ? OR title LIKE ?"
+                "lower(t.title) LIKE ? OR lower(t.artist) LIKE ? OR lower(t.album) LIKE ?"
+                " OR t.artist LIKE ? OR t.title LIKE ?"
                 ")"
             )
             params.extend([exact_like, exact_like, exact_like, flex_like, flex_like])
 
     _append_like_clause(
-        conditions, params, "artist", _normalize_string_sequence(artist)
+        conditions, params, "t.artist", _normalize_string_sequence(artist)
     )
-    _append_like_clause(conditions, params, "album", _normalize_string_sequence(album))
-    _append_like_clause(conditions, params, "genre", _normalize_string_sequence(genre))
     _append_like_clause(
-        conditions, params, "country", _normalize_string_sequence(country)
+        conditions, params, "t.album", _normalize_string_sequence(album)
+    )
+    _append_like_clause(
+        conditions, params, "t.genre", _normalize_string_sequence(genre)
+    )
+    _append_like_clause(
+        conditions, params, "t.country", _normalize_string_sequence(country)
     )
     _append_in_clause(
-        conditions, params, "release_year", _normalize_year_sequence(year)
+        conditions, params, "t.release_year", _normalize_year_sequence(year)
     )
 
     return conditions, params
+
+
+_TRACK_SORT_ORDERS: dict[str, str] = {
+    "rating_desc": (
+        "CASE WHEN r_agg.avg_rating IS NULL THEN 1 ELSE 0 END ASC, "
+        "r_agg.avg_rating DESC, COALESCE(r_agg.review_count, 0) DESC, t.track_id ASC"
+    ),
+    "rating_asc": (
+        "CASE WHEN r_agg.avg_rating IS NULL THEN 1 ELSE 0 END ASC, "
+        "r_agg.avg_rating ASC, COALESCE(r_agg.review_count, 0) DESC, t.track_id ASC"
+    ),
+}
 
 
 class SQLiteTrackRepository(TrackRepositoryPort):
@@ -378,6 +407,8 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         country: str | Sequence[str] | None = None,
         year: int | Sequence[int] | None = None,
         query: str | None = None,
+        min_rating: float | None = None,
+        sort_by: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Track]:
@@ -389,8 +420,22 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             year=year,
             query=query,
         )
+        if min_rating is not None:
+            conditions.append("r_agg.avg_rating >= ?")
+            params.append(min_rating)
         where_clause = " AND ".join(conditions)
-        sql = f"SELECT * FROM tracks WHERE {where_clause} ORDER BY track_id ASC LIMIT ? OFFSET ?"  # noqa: S608
+        order_by = _TRACK_SORT_ORDERS.get(sort_by or "", "t.track_id ASC")
+        sql = (
+            "SELECT t.*, r_agg.avg_rating AS avg_rating, "  # noqa: S608
+            "COALESCE(r_agg.review_count, 0) AS review_count "
+            "FROM tracks t "
+            "LEFT JOIN ("
+            "SELECT track_id, ROUND(AVG(rating), 2) AS avg_rating, "
+            "COUNT(*) AS review_count "
+            "FROM reviews WHERE is_deleted = 0 GROUP BY track_id"
+            ") r_agg ON r_agg.track_id = t.track_id "
+            f"WHERE {where_clause} ORDER BY {order_by} LIMIT ? OFFSET ?"
+        )
         params.extend([limit, offset])
         cursor = self.conn.execute(sql, tuple(params))
         rows = cursor.fetchall()

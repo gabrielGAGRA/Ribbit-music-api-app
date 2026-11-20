@@ -39,6 +39,7 @@ import { MOCK_SONGS } from './mocks/songs.mock';
 import { PlanService } from './services/plan.service';
 import { PlaylistService } from './services/playlist.service';
 import { SongService } from './services/song.service';
+import type { ReviewSortOption } from './services/song.service';
 import { JamService } from '../features/jams/jam.service';
 import { ProfileApiService } from '../features/profile/profile-api.service';
 
@@ -182,6 +183,10 @@ export class RibbitStateService implements OnDestroy {
   readonly searchFilterYear = signal<number | undefined>(undefined);
   readonly searchFilterStartDate = signal<string>('');
   readonly searchFilterEndDate = signal<string>('');
+  readonly searchFilterMinRating = signal<number | null>(null);
+  readonly searchSortBy = signal<'default' | 'rating_desc' | 'rating_asc'>('default');
+  readonly communityFeedSort = signal<ReviewSortOption>('likes');
+  readonly trackReviewsSort = signal<ReviewSortOption>('recent');
 
   readonly superlikesGoal = signal<number>(3);
   readonly superlikesCount = computed<number>(() => this.lovedSongs().length);
@@ -432,6 +437,7 @@ export class RibbitStateService implements OnDestroy {
             trackLookup: lookup,
             currentUserId: this.userId() ?? undefined,
             currentUserName: this.userName(),
+            sortBy: this.communityFeedSort(),
           })
           .pipe(catchError(() => of([])))
           .subscribe();
@@ -1043,8 +1049,41 @@ export class RibbitStateService implements OnDestroy {
     }
   }
 
+  /** Reloads community reviews feed with the specified or active sort order. */
+  loadCommunityFeed(sortBy?: ReviewSortOption): void {
+    if (sortBy) {
+      this.communityFeedSort.set(sortBy);
+    }
+    if (!readAuthToken()) return;
+    const lookup = this.buildTrackLookup(this.songs());
+    this.songService
+      .loadCommunityFeed({
+        trackLookup: lookup,
+        currentUserId: this.userId() ?? undefined,
+        currentUserName: this.userName(),
+        sortBy: this.communityFeedSort(),
+      })
+      .pipe(catchError(() => of([])))
+      .subscribe();
+  }
+
+  /** Resets all search query and filter signals to their defaults. */
+  clearSearchFilters(): void {
+    this.searchQuery.set('');
+    this.searchFilterGenre.set('Todos');
+    this.searchFilterArtist.set('');
+    this.searchFilterYear.set(undefined);
+    this.searchFilterStartDate.set('');
+    this.searchFilterEndDate.set('');
+    this.searchFilterMinRating.set(null);
+    this.searchSortBy.set('default');
+  }
+
   /** Loads reviews for a specific track into activeTrackReviews. */
-  loadReviewsForTrack(song: Song): void {
+  loadReviewsForTrack(song: Song, sortBy?: ReviewSortOption): void {
+    if (sortBy) {
+      this.trackReviewsSort.set(sortBy);
+    }
     if (song.trackId === undefined) return;
     this.songService
       .getTrackReviews({
@@ -1052,6 +1091,7 @@ export class RibbitStateService implements OnDestroy {
         track: song,
         currentUserId: this.userId() ?? undefined,
         currentUserName: this.userName(),
+        sortBy: this.trackReviewsSort(),
       })
       .subscribe({
         next: (reviews) => {

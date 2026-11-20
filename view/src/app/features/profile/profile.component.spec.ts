@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ProfileComponent } from './profile.component';
 import { authInterceptor } from '../../core/auth.interceptor';
+import { writeAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
 import { SongService } from '../../core/services/song.service';
 
@@ -112,5 +113,33 @@ describe('ProfileComponent', () => {
     expect(component.userReviews().length).toBe(1);
     expect(component.userReviews()[0]?.id).toBe(1);
     expect(component.userReviews()[0]?.rating).toBe(5);
+  });
+
+  it('reloads user reviews immediately when deleteReview succeeds', () => {
+    writeAuthToken('jwt-profile-token');
+    const httpMock = TestBed.inject(HttpTestingController);
+    const state = TestBed.inject(RibbitStateService);
+    const refreshSpy = vi.spyOn(state, 'refreshCatalogAndFeed').mockImplementation(() => undefined);
+
+    component.deleteReview({
+      id: 77,
+      author: 'Eu',
+      initials: 'EU',
+      text: 'Teste',
+      likes: 0,
+      age: 'agora',
+      date: 100,
+    });
+
+    const delReq = httpMock.expectOne('/api/reviews/77');
+    expect(delReq.request.method).toBe('DELETE');
+    delReq.flush({ success: true });
+
+    const meReq = httpMock.expectOne('/api/reviews/me?limit=50');
+    expect(meReq.request.method).toBe('GET');
+    meReq.flush([]);
+
+    expect(refreshSpy).toHaveBeenCalledOnce();
+    localStorage.clear();
   });
 });

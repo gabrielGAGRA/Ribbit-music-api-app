@@ -54,6 +54,8 @@ class CatalogTrackResponse(BaseModel):
     itunes_preview_url: str | None = None
     explicit: bool = False
     is_deleted: bool = False
+    average_rating: float | None = None
+    review_count: int = 0
 
 
 class RecentInteractedTrackResponse(BaseModel):

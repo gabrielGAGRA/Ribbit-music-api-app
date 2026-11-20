@@ -1,7 +1,7 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BACKEND_GENRES, MAX_FAVORITE_GENRES, ModalsComponent } from './modals.component';
 import { authInterceptor } from '../core/auth.interceptor';
 import { RibbitStateService } from '../core/ribbit-state.service';
@@ -370,12 +370,42 @@ describe('ModalsComponent', () => {
       component.onSearchEndDateInput({
         target: { value: '2020-12-31' },
       } as unknown as Event);
+      component.onSearchMinRatingChange({
+        target: { value: '4' },
+      } as unknown as Event);
       component.applyFilters();
 
       expect(state.searchFilterGenre()).toBe('Rock');
       expect(state.searchFilterArtist()).toBe('Queen');
       expect(state.searchFilterStartDate()).toBe('2015-01-01');
       expect(state.searchFilterEndDate()).toBe('2020-12-31');
+      expect(state.searchFilterMinRating()).toBe(4);
+    });
+
+    it('allows star-only review submission without comment text', () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+
+      const state = TestBed.inject(RibbitStateService);
+      const publishSpy = vi.spyOn(state, 'publishTrackReview').mockImplementation(() => undefined);
+      const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+
+      component.rateSong(4);
+      const input: { value: string } = { value: '   ' };
+      const form = {
+        elements: { namedItem: () => input },
+      } as unknown as HTMLFormElement;
+
+      component.onCommentSubmit({
+        preventDefault: () => undefined,
+        target: form,
+      } as unknown as Event);
+
+      expect(publishSpy).toHaveBeenCalledWith(4, '');
     });
   });
 });

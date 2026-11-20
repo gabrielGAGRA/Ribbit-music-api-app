@@ -152,4 +152,43 @@ describe('ExploreComponent', () => {
     expect(template).toContain('review.rating');
     expect(component.displayedReviews().every((r) => typeof r.rating === 'number')).toBe(true);
   });
+
+  it('should send minRating and sortBy on server search and support rating sort in community feed', () => {
+    writeAuthToken('jwt-search-token');
+    const httpMock = TestBed.inject(HttpTestingController);
+    const state = TestBed.inject(RibbitStateService);
+    state.searchFilterMinRating.set(4);
+    state.searchSortBy.set('rating_desc');
+
+    component.triggerSearch();
+
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === '/api/tracks/search' &&
+        r.params.get('min_rating') === '4' &&
+        r.params.get('sort_by') === 'rating_desc',
+    );
+    req.flush([
+      {
+        track_id: 10,
+        title: 'Rated Hit',
+        artist: 'Artist',
+        genre: 'Pop',
+        duration_seconds: 200,
+        explicit: false,
+        is_deleted: false,
+        average_rating: 4.8,
+        review_count: 5,
+      },
+    ]);
+
+    expect(component.filteredSongs()[0]?.averageRating).toBe(4.8);
+    expect(component.filteredSongs()[0]?.reviewCount).toBe(5);
+
+    component.onSortChange({ target: { value: 'rating_asc' } } as unknown as Event);
+    const feedReq = httpMock.expectOne(
+      (r) => r.url === '/api/reviews/feed' && r.params.get('sort_by') === 'rating_asc',
+    );
+    feedReq.flush([]);
+  });
 });
