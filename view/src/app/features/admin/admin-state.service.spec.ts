@@ -483,4 +483,74 @@ describe('AdminStateService', () => {
     expect(service.accessHistory().length).toBe(1);
     expect(service.accessHistory()[0]?.track_is_deleted).toBe(true);
   });
+
+  it('computes plan revenuePercent against gross_revenue even when net revenue is negative, and updates costs', () => {
+    service.hydrateFromBackend();
+    httpMock.expectOne('/api/admin/plans').flush([
+      { plan_id: 1, name: 'Free', monthly_price: 0, max_profiles: 1 },
+      { plan_id: 2, name: 'Individual', monthly_price: 20, max_profiles: 1 },
+      { plan_id: 3, name: 'Família', monthly_price: 30, max_profiles: 6 },
+    ]);
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 4,
+      estimated_net_revenue: -50.0,
+      gross_revenue: 50.0,
+      content_cost: 40.0,
+      infrastructure_cost: 60.0,
+      total_costs: 100.0,
+      users_by_plan: { Free: 2, Individual: 1, Família: 1 },
+      revenue_by_plan: { Free: 0, Individual: 20, Família: 30 },
+    });
+    httpMock.expectOne('/api/admin/audience').flush({
+      total_users: 4,
+      total_tracks: 10,
+      active_tracks: 9,
+      blocked_genres: {},
+      total_accesses: 12,
+      accesses_by_track: [
+        { track_id: 1, title: 'Hit', artist: 'A', is_deleted: false, access_count: 8 },
+      ],
+      accesses_by_genre: [
+        { genre: 'Pop', access_count: 8 },
+        { genre: 'Rock', access_count: 4 },
+      ],
+    });
+    httpMock.expectOne('/api/admin/users').flush([]);
+    httpMock.expectOne('/api/admin/administrators').flush([]);
+    httpMock.expectOne('/api/tracks/search?limit=100').flush([]);
+    httpMock.expectOne('/api/admin/blocked-tracks').flush([]);
+    httpMock.expectOne('/api/admin/reviews').flush([]);
+
+    const breakdown = service.planBreakdown();
+    const indiv = breakdown.find((p) => p.planName === 'Individual');
+    const fam = breakdown.find((p) => p.planName === 'Família');
+    expect(indiv?.revenuePercent).toBe(40);
+    expect(fam?.revenuePercent).toBe(60);
+    expect(service.topAccessedTracks()[0]?.percent).toBe(100);
+    expect(service.accessesByGenreRanking()[1]?.percent).toBe(50);
+
+    service
+      .updatePlatformCosts({
+        content_cost_per_track: 0.05,
+        infrastructure_fixed_cost: 12,
+        infrastructure_cost_per_user: 0.5,
+      })
+      .subscribe();
+
+    const putReq = httpMock.expectOne('/api/admin/costs');
+    expect(putReq.request.method).toBe('PUT');
+    putReq.flush({
+      content_cost_per_track: 0.05,
+      infrastructure_fixed_cost: 12,
+      infrastructure_cost_per_user: 0.5,
+    });
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 4,
+      estimated_net_revenue: 35.5,
+      gross_revenue: 50.0,
+      users_by_plan: { Free: 2, Individual: 1, Família: 1 },
+      revenue_by_plan: { Free: 0, Individual: 20, Família: 30 },
+    });
+    expect(service.executiveDashboard().estimated_net_revenue).toBe(35.5);
+  });
 });

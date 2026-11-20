@@ -34,6 +34,29 @@ class ExecutiveDashboardResult:
     estimated_net_revenue: float
     users_by_plan: dict[str, int]
     revenue_by_plan: dict[str, float]
+    gross_revenue: float = 0.0
+    content_cost: float = 0.0
+    infrastructure_cost: float = 0.0
+    total_costs: float = 0.0
+    active_tracks_count: int = 0
+    content_cost_per_track: float = 0.0
+    infrastructure_fixed_cost: float = 0.0
+    infrastructure_cost_per_user: float = 0.0
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class TrackAccessRankResult:
+    track_id: int
+    title: str
+    artist: str
+    is_deleted: bool = False
+    access_count: int
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class GenreAccessCountResult:
+    genre: str
+    access_count: int
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -42,6 +65,16 @@ class AudienceReportResult:
     total_tracks: int
     active_tracks: int
     blocked_genres: dict[str, int] = field(default_factory=dict)
+    total_accesses: int = 0
+    accesses_by_track: list[TrackAccessRankResult] = field(default_factory=list)
+    accesses_by_genre: list[GenreAccessCountResult] = field(default_factory=list)
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class UpdatePlatformCostsCommand:
+    content_cost_per_track: float
+    infrastructure_fixed_cost: float
+    infrastructure_cost_per_user: float
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -64,8 +97,11 @@ __all__ = [
     "AudienceReportResult",
     "AuditLogEntryResult",
     "ExecutiveDashboardResult",
+    "GenreAccessCountResult",
     "RegisterAdministratorCommand",
+    "TrackAccessRankResult",
     "UpdateAdminRoleCommand",
+    "UpdatePlatformCostsCommand",
     "UpdateSubscriptionPlanCommand",
     "UserPlanSummaryResult",
 ]

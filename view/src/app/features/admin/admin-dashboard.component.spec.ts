@@ -77,4 +77,45 @@ describe('AdminDashboardComponent', () => {
     expect(component['blockedTrackCount']()).toBe(2);
     expect(component['catalogAvailabilityPercent']()).toBe(71);
   });
+
+  it('edits and saves platform operational costs and flags negative net revenue', () => {
+    const state = TestBed.inject(AdminStateService);
+    const component = TestBed.runInInjectionContext(() => new AdminDashboardComponent());
+
+    component['openCostEditor']();
+    expect(component['editingCosts']()).toBe(true);
+
+    component['costPerTrackInput'].set('0.10');
+    component['infraFixedInput'].set('100');
+    component['infraPerUserInput'].set('1.5');
+    component['savePlatformCosts'](new Event('submit'));
+
+    const putReq = httpMock.expectOne('/api/admin/costs');
+    expect(putReq.request.method).toBe('PUT');
+    expect(putReq.request.body).toEqual({
+      content_cost_per_track: 0.1,
+      infrastructure_fixed_cost: 100,
+      infrastructure_cost_per_user: 1.5,
+    });
+    putReq.flush({
+      content_cost_per_track: 0.1,
+      infrastructure_fixed_cost: 100,
+      infrastructure_cost_per_user: 1.5,
+    });
+
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 2,
+      estimated_net_revenue: -80,
+      gross_revenue: 23,
+      content_cost: 10,
+      infrastructure_cost: 93,
+      total_costs: 103,
+      users_by_plan: {},
+      revenue_by_plan: {},
+    });
+
+    expect(component['editingCosts']()).toBe(false);
+    expect(component['isNetNegative']()).toBe(true);
+    expect(state.executiveDashboard().total_costs).toBe(103);
+  });
 });

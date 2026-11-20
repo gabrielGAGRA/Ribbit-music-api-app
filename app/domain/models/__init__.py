@@ -7,6 +7,7 @@ from app.domain.models.interaction import (
 )
 from app.domain.models.jam import Jam, JamQueueItem
 from app.domain.models.plan import Plan
+from app.domain.models.platform_costs import PlatformCostSettings
 from app.domain.models.playlist import Playlist
 from app.domain.models.review import ReviewComment
 from app.domain.models.track import ExternalTrackId, Track, TrackId
@@ -28,6 +29,7 @@ __all__ = [
     "Jam",
     "JamQueueItem",
     "Plan",
+    "PlatformCostSettings",
     "Playlist",
     "ReviewComment",
     "Track",

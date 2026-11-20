@@ -191,3 +191,11 @@ Table track_accesses {
     (user_id, track_id) [name: 'idx_track_accesses_user_track']
   }
 }
+
+Table platform_cost_settings {
+  settings_id integer [pk]
+  content_cost_per_track real [not null, default: 0.04]
+  infrastructure_fixed_cost real [not null, default: 10.00]
+  infrastructure_cost_per_user real [not null, default: 0.50]
+  updated_at text [not null]
+}
