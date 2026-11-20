@@ -58,7 +58,7 @@ function flushInitialHydration(httpMock: HttpTestingController): void {
   httpMock.expectOne('/api/profile/favorite-genres').flush(['Indie']);
   httpMock.expectOne('/api/profile/theme').flush('dark');
   httpMock.expectOne('/api/tracks/search?limit=50').flush([SAMPLE_TRACK]);
-  httpMock.expectOne('/api/reviews/feed?days=1&limit=20').flush([]);
+  httpMock.expectOne('/api/reviews/feed?limit=20&sort_by=likes').flush([]);
   httpMock.expectOne('/api/playlists').flush([]);
   httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
   httpMock.expectOne('/api/profile/interactions').flush([]);

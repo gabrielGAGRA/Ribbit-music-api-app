@@ -14,5 +14,7 @@ class GetCommunityFeedUseCase:
 
     review_repo: ReviewRepositoryPort
 
-    def execute(self, days: int = 5, limit: int = 3) -> list[ReviewComment]:
-        return self.review_repo.list_top_recent(days=days, limit=limit)
+    def execute(
+        self, days: int | None = None, limit: int = 10, sort_by: str = "likes"
+    ) -> list[ReviewComment]:
+        return self.review_repo.list_top_recent(days=days, limit=limit, sort_by=sort_by)

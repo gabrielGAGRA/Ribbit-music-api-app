@@ -19,6 +19,8 @@ import {
 } from '../api-mappers';
 import { MOCK_SONGS } from '../mocks/songs.mock';
 
+export type ReviewSortOption = 'recent' | 'oldest' | 'likes' | 'rating_desc' | 'rating_asc';
+
 export interface SearchTracksParams {
   readonly query?: string;
   readonly artist?: string;
@@ -27,11 +29,13 @@ export interface SearchTracksParams {
   readonly year?: number;
   readonly startYear?: number;
   readonly endYear?: number;
+  readonly minRating?: number | null;
+  readonly sortBy?: 'rating_desc' | 'rating_asc' | null;
   readonly limit?: number;
 }
 
-function formatFiniteYear(value?: number): string | undefined {
-  return value !== undefined && Number.isFinite(value) ? String(value) : undefined;
+function formatFiniteNumber(value?: number | null): string | undefined {
+  return value != null && Number.isFinite(value) ? String(value) : undefined;
 }
 
 function buildSearchHttpParams(params: SearchTracksParams): HttpParams {
@@ -41,9 +45,11 @@ function buildSearchHttpParams(params: SearchTracksParams): HttpParams {
     ['artist', params.artist],
     ['album', params.album],
     ['genre', params.genre && params.genre !== 'Todos' ? params.genre : undefined],
-    ['year', formatFiniteYear(params.year)],
-    ['start_year', formatFiniteYear(params.startYear)],
-    ['end_year', formatFiniteYear(params.endYear)],
+    ['year', formatFiniteNumber(params.year)],
+    ['start_year', formatFiniteNumber(params.startYear)],
+    ['end_year', formatFiniteNumber(params.endYear)],
+    ['min_rating', formatFiniteNumber(params.minRating)],
+    ['sort_by', params.sortBy ?? undefined],
   ];
   for (const [key, value] of optionalPairs) {
     if (value && value.length > 0) {
@@ -92,9 +98,12 @@ export class SongService {
       !params.query &&
       !params.genre &&
       !params.artist &&
+      !params.album &&
       params.year === undefined &&
       params.startYear === undefined &&
-      params.endYear === undefined;
+      params.endYear === undefined &&
+      params.minRating == null &&
+      !params.sortBy;
     return this.http.get<readonly TrackApiDto[]>('/api/tracks/search', { params: httpParams }).pipe(
       map((dtos) => dtos.map((dto) => mapTrackDtoToSong(dto))),
       tap((songs) => {
@@ -124,13 +133,18 @@ export class SongService {
       readonly trackLookup?: ReadonlyMap<number, Song>;
       readonly currentUserId?: number;
       readonly currentUserName?: string;
-      readonly days?: number;
+      readonly days?: number | null;
       readonly limit?: number;
+      readonly sortBy?: ReviewSortOption;
     } = {},
   ): Observable<readonly CommunityReview[]> {
-    const params = new HttpParams()
-      .set('days', String(options.days ?? 1))
-      .set('limit', String(options.limit ?? 20));
+    let params = new HttpParams().set('limit', String(options.limit ?? 20));
+    if (options.days != null && Number.isFinite(options.days)) {
+      params = params.set('days', String(options.days));
+    }
+    if (options.sortBy) {
+      params = params.set('sort_by', options.sortBy);
+    }
     return this.http.get<readonly ReviewApiDto[]>('/api/reviews/feed', { params }).pipe(
       map((dtos) =>
         dtos.map((dto) =>
@@ -186,19 +200,26 @@ export class SongService {
     readonly track?: Song;
     readonly currentUserId?: number;
     readonly currentUserName?: string;
+    readonly sortBy?: ReviewSortOption;
   }): Observable<readonly CommunityReview[]> {
-    return this.http.get<readonly ReviewApiDto[]>(`/api/reviews/track/${options.trackId}`).pipe(
-      map((dtos) =>
-        dtos.map((dto) =>
-          mapReviewDtoToCommunityReview({
-            dto,
-            track: options.track,
-            currentUserId: options.currentUserId,
-            currentUserName: options.currentUserName,
-          }),
+    let params = new HttpParams();
+    if (options.sortBy) {
+      params = params.set('sort_by', options.sortBy);
+    }
+    return this.http
+      .get<readonly ReviewApiDto[]>(`/api/reviews/track/${options.trackId}`, { params })
+      .pipe(
+        map((dtos) =>
+          dtos.map((dto) =>
+            mapReviewDtoToCommunityReview({
+              dto,
+              track: options.track,
+              currentUserId: options.currentUserId,
+              currentUserName: options.currentUserName,
+            }),
+          ),
         ),
-      ),
-    );
+      );
   }
 
   /** Publishes a star rating and optional comment on a track. */

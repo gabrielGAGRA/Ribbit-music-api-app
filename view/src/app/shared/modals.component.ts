@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import type {
   CommunityReview,
@@ -9,6 +16,7 @@ import type {
 import { FrogComponent, type FrogMood } from './frog.component';
 import { IconComponent } from './icon.component';
 import { RibbitStateService } from '../core/ribbit-state.service';
+import type { ReviewSortOption } from '../core/services/song.service';
 
 interface WordCloudItem {
   readonly name: string;
@@ -130,6 +138,23 @@ export class ModalsComponent {
   protected readonly searchArtistDraft = signal<string>('');
   protected readonly searchStartDateDraft = signal<string>('');
   protected readonly searchEndDateDraft = signal<string>('');
+  protected readonly searchMinRatingDraft = signal<number | null>(null);
+  protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
+
+  constructor() {
+    effect(() => {
+      const modal = this.state.activeModal();
+      if (modal === 'search-filters') {
+        this.searchGenreDraft.set(this.state.searchFilterGenre());
+        this.searchArtistDraft.set(this.state.searchFilterArtist());
+        this.searchStartDateDraft.set(this.state.searchFilterStartDate());
+        this.searchEndDateDraft.set(this.state.searchFilterEndDate());
+        this.searchMinRatingDraft.set(this.state.searchFilterMinRating());
+      } else if (modal === 'details') {
+        this.rating.set(5);
+      }
+    });
+  }
 
   readonly currentSong = computed<Song>(() => this.state.currentSong());
   readonly detailsSong = computed<Song>(() => this.state.detailsTargetSong());
@@ -199,11 +224,24 @@ export class ModalsComponent {
     this.searchEndDateDraft.set((event.target as HTMLInputElement).value);
   }
 
+  onSearchMinRatingChange(event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value.trim();
+    if (!raw) {
+      this.searchMinRatingDraft.set(null);
+      return;
+    }
+    const parsed = Number(raw);
+    this.searchMinRatingDraft.set(
+      Number.isFinite(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null,
+    );
+  }
+
   applyFilters(): void {
     this.state.searchFilterGenre.set(this.searchGenreDraft());
     this.state.searchFilterArtist.set(this.searchArtistDraft().trim());
     this.state.searchFilterStartDate.set(this.searchStartDateDraft());
     this.state.searchFilterEndDate.set(this.searchEndDateDraft());
+    this.state.searchFilterMinRating.set(this.searchMinRatingDraft());
     this.state.searchFilterYear.set(undefined);
     this.closeModal();
     this.state.notify('Filtros de busca aplicados.');
@@ -333,10 +371,16 @@ export class ModalsComponent {
     const form = event.target as HTMLFormElement;
     const input = form.elements.namedItem('commentText') as HTMLInputElement;
     const text = input.value.trim();
-    if (text) {
-      this.state.publishTrackReview(this.rating(), text);
+    const currentRating = this.rating();
+    if (currentRating >= 1 && currentRating <= 5) {
+      this.state.publishTrackReview(currentRating, text);
       input.value = '';
     }
+  }
+
+  onTrackReviewSortChange(event: Event): void {
+    const sortBy = (event.target as HTMLSelectElement).value as ReviewSortOption;
+    this.state.loadReviewsForTrack(this.detailsSong(), sortBy);
   }
 
   deleteReview(reviewId: number): void {
