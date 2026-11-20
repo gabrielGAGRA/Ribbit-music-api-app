@@ -24,6 +24,9 @@ from app.infrastructure.repositories.playlist_repository import (
 from app.infrastructure.repositories.review_repository import (
     SQLiteReviewRepository,
 )
+from app.infrastructure.repositories.track_access_repository import (
+    SQLiteTrackAccessRepository,
+)
 from app.infrastructure.repositories.track_repository import (
     SQLiteTrackRepository,
 )
@@ -40,6 +43,7 @@ JamRepository = SQLiteJamRepository
 PlanRepository = SQLitePlanRepository
 PlaylistRepository = SQLitePlaylistRepository
 ReviewRepository = SQLiteReviewRepository
+TrackAccessRepository = SQLiteTrackAccessRepository
 TrackRepository = SQLiteTrackRepository
 UserRepository = SQLiteUserRepository
 UserStatsRepository = SQLiteUserStatsRepository
@@ -59,9 +63,11 @@ __all__ = [
     "SQLitePlanRepository",
     "SQLitePlaylistRepository",
     "SQLiteReviewRepository",
+    "SQLiteTrackAccessRepository",
     "SQLiteTrackRepository",
     "SQLiteUserRepository",
     "SQLiteUserStatsRepository",
+    "TrackAccessRepository",
     "TrackRepository",
     "UserRepository",
     "UserStatsRepository",

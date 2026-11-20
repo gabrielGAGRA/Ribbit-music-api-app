@@ -9,6 +9,7 @@ import type {
   ActionSuccessApiDto,
   AdminModerationReview,
   AdminSession,
+  AdminTrackAccessEntry,
   AdminUserPlanSummary,
   AudienceReportApiDto,
   AuthApiResponse,
@@ -272,6 +273,7 @@ export class AdminStateService implements OnDestroy {
   private readonly toastSignal = signal<string>('');
   private readonly hasHydratedSignal = signal<boolean>(false);
   private readonly lastCatalogQuerySignal = signal<string>('');
+  private readonly accessHistorySignal = signal<readonly AdminTrackAccessEntry[]>([]);
 
   private readonly unsubscribeAdminUnauthorized: () => void;
   private hydrationSub: Subscription | null = null;
@@ -293,6 +295,7 @@ export class AdminStateService implements OnDestroy {
   readonly toastMessage = this.toastSignal.asReadonly();
   readonly hasHydrated = this.hasHydratedSignal.asReadonly();
   readonly lastCatalogQuery = this.lastCatalogQuerySignal.asReadonly();
+  readonly accessHistory = this.accessHistorySignal.asReadonly();
 
   readonly topModerationReviews = computed<readonly AdminModerationReview[]>(() =>
     [...this.reviewsSignal()]
@@ -697,6 +700,7 @@ export class AdminStateService implements OnDestroy {
     this.sessionSignal.set(null);
     this.plansSignal.set([]);
     this.usersSignal.set([]);
+    this.accessHistorySignal.set([]);
     this.administratorsSignal.set([]);
     this.activeTracksSignal.set([]);
     this.blockedTracksSignal.set([]);
@@ -736,6 +740,28 @@ export class AdminStateService implements OnDestroy {
         this.syncErrorSignal.set(mapAdminDomainError(err).message);
       },
     });
+  }
+
+  loadAccessHistory(filters?: {
+    readonly userId?: number | null;
+    readonly onlyDeleted?: boolean;
+    readonly limit?: number;
+  }): void {
+    let params = new HttpParams().set('limit', String(filters?.limit ?? 100));
+    if (filters?.userId !== undefined && filters.userId !== null) {
+      params = params.set('user_id', String(filters.userId));
+    }
+    if (filters?.onlyDeleted) {
+      params = params.set('only_deleted', 'true');
+    }
+    this.runBackgroundRefresh(
+      this.http.get<readonly AdminTrackAccessEntry[]>('/api/admin/access-history', {
+        params,
+      }),
+      (entries) => {
+        this.accessHistorySignal.set(entries);
+      },
+    );
   }
 
   private refreshUsersAndMetrics(): void {

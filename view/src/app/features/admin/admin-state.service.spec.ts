@@ -411,9 +411,7 @@ describe('AdminStateService', () => {
         { status: 404, statusText: 'Not Found' },
       );
     expect(deleteReviewError).toBeInstanceOf(AdminDomainError);
-    expect((deleteReviewError as AdminDomainError).message).toBe(
-      'Review with ID 900 not found.',
-    );
+    expect((deleteReviewError as AdminDomainError).message).toBe('Review with ID 900 not found.');
   });
 
   it('cancels in-flight hydration when logoutAdmin is called before requests settle', () => {
@@ -453,5 +451,36 @@ describe('AdminStateService', () => {
     expect(service.isAuthenticated()).toBe(false);
     expect(service.hasHydrated()).toBe(false);
     expect(service.isLoading()).toBe(false);
+  });
+
+  it('loads global admin access history with optional userId and onlyDeleted filters', () => {
+    service.loadAccessHistory({ userId: 4, onlyDeleted: true, limit: 50 });
+
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === '/api/admin/access-history' &&
+        r.params.get('user_id') === '4' &&
+        r.params.get('only_deleted') === 'true' &&
+        r.params.get('limit') === '50',
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      {
+        access_id: 9,
+        user_id: 4,
+        user_display_name: 'Usuário Demo',
+        user_email: 'usuario@ribbit.example.com',
+        track_id: 593,
+        track_title: 'Faixa Removida',
+        track_artist: 'Ribbit Archive',
+        track_genre: 'Pop',
+        track_is_deleted: true,
+        source: 'play',
+        accessed_at: '2026-02-01T10:12:00+00:00',
+      },
+    ]);
+
+    expect(service.accessHistory().length).toBe(1);
+    expect(service.accessHistory()[0]?.track_is_deleted).toBe(true);
   });
 });

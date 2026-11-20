@@ -174,7 +174,9 @@ export class DiscoverComponent {
       this.player.pause();
       return;
     }
-    const previewUrl = this.currentSong().previewUrl;
+    const song = this.currentSong();
+    this.state.recordTrackAccess(song, 'play');
+    const previewUrl = song.previewUrl;
     if ((previewUrl ?? null) !== this.player.activePreviewUrl()) {
       this.player.loadTrack(previewUrl);
     }

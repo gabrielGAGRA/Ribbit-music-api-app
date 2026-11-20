@@ -7,10 +7,13 @@ import type {
   DecisionKind,
   InteractionApiDto,
   RecentInteractedTrackApiDto,
+  RecordTrackAccessApiDto,
   ReviewApiDto,
   Song,
+  TrackAccessSource,
   TrackApiDto,
   UndoInteractionApiDto,
+  UserAccessHistoryApiDto,
 } from '@ribbit/shared-types';
 import {
   mapDecisionToApiAction,
@@ -247,5 +250,21 @@ export class SongService {
         playlist_id: playlistId ?? null,
       })
       .pipe(map((res) => res.success));
+  }
+
+  /** Records an explicit user access to a track via POST /api/tracks/{id}/access. */
+  recordTrackAccess(
+    trackId: number,
+    source: TrackAccessSource,
+  ): Observable<RecordTrackAccessApiDto> {
+    return this.http.post<RecordTrackAccessApiDto>(`/api/tracks/${trackId}/access`, {
+      source,
+    });
+  }
+
+  /** Fetches the authenticated user's active access history and seen track IDs. */
+  getUserAccessHistory(limit = 100, offset = 0): Observable<UserAccessHistoryApiDto> {
+    const params = new HttpParams().set('limit', String(limit)).set('offset', String(offset));
+    return this.http.get<UserAccessHistoryApiDto>('/api/profile/access-history', { params });
   }
 }

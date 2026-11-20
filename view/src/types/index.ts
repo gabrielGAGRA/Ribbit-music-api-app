@@ -511,3 +511,55 @@ export interface SyncCatalogVersionApiResponse {
   readonly version: number;
   readonly message: string;
 }
+
+export type TrackAccessSource =
+  | 'swipe'
+  | 'play'
+  | 'details'
+  | 'search'
+  | 'playlist'
+  | 'profile'
+  | 'jam';
+
+export interface TrackAccessHistoryItem {
+  readonly access_id: number;
+  readonly user_id: number;
+  readonly track_id: number;
+  readonly track_title: string;
+  readonly track_artist: string;
+  readonly track_genre: string;
+  readonly track_album?: string | null;
+  readonly track_duration_seconds: number;
+  readonly track_cover_url?: string | null;
+  readonly track_preview_url?: string | null;
+  readonly track_explicit: boolean;
+  readonly source: TrackAccessSource;
+  readonly accessed_at: string;
+}
+
+export interface UserAccessHistoryApiDto {
+  readonly items: readonly TrackAccessHistoryItem[];
+  readonly seen_track_ids: readonly number[];
+}
+
+export interface RecordTrackAccessApiDto {
+  readonly access_id?: number | null;
+  readonly user_id: number;
+  readonly track_id: number;
+  readonly source: TrackAccessSource;
+  readonly accessed_at?: string | null;
+}
+
+export interface AdminTrackAccessEntry {
+  readonly access_id: number;
+  readonly user_id: number;
+  readonly user_display_name: string;
+  readonly user_email: string;
+  readonly track_id: number;
+  readonly track_title: string;
+  readonly track_artist: string;
+  readonly track_genre: string;
+  readonly track_is_deleted: boolean;
+  readonly source: TrackAccessSource;
+  readonly accessed_at: string;
+}

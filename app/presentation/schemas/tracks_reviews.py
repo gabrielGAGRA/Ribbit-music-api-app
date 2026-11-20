@@ -1,9 +1,11 @@
 """Review presentation schemas."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.domain.models.track_access import TrackAccessSource
 from app.presentation.schemas.discovery import InteractionResponse
 
 
@@ -79,10 +81,32 @@ class ReviewActionResponse(BaseModel):
     success: bool = True
 
 
+class RecordTrackAccessRequest(BaseModel):
+    """Payload to record an explicit user access to a track."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    source: TrackAccessSource = "play"
+
+
+class RecordTrackAccessResponse(BaseModel):
+    """Response representing a recorded track access event."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    access_id: int | None = None
+    user_id: int
+    track_id: int
+    source: Literal["play", "details", "search", "playlist", "profile", "jam", "swipe"]
+    accessed_at: datetime | None = None
+
+
 __all__ = [
     "CatalogTrackResponse",
     "PublishReviewRequest",
     "RecentInteractedTrackResponse",
+    "RecordTrackAccessRequest",
+    "RecordTrackAccessResponse",
     "ReviewActionResponse",
     "ReviewResponse",
     "SaveSearchTrackLikeRequest",

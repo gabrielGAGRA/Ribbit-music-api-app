@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from app.application.dtos import (
     AuthenticateAdminCommand,
@@ -15,6 +15,7 @@ from app.application.use_cases.admin import (
     GetAudienceReportUseCase,
     GetExecutiveDashboardUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminAccessHistoryUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
@@ -34,6 +35,7 @@ from app.presentation.dependencies import (
     require_admin,
 )
 from app.presentation.schemas.admin import (
+    AdminTrackAccessEntryResponse,
     AudienceReportResponse,
     BlockTrackRequest,
     CompactCatalogResponse,
@@ -365,6 +367,29 @@ def sync_catalog(
         version=result.version,
         message=result.message,
     )
+
+
+@router.get("/access-history", response_model=list[AdminTrackAccessEntryResponse])
+def get_admin_access_history(
+    use_case: Annotated[
+        ListAdminAccessHistoryUseCase,
+        Depends(provide(ListAdminAccessHistoryUseCase)),
+    ],
+    user_id: Annotated[int | None, Query()] = None,
+    track_id: Annotated[int | None, Query()] = None,
+    only_deleted: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> list[AdminTrackAccessEntryResponse]:
+    entries = use_case.execute(
+        user_id=user_id,
+        track_id=track_id,
+        only_deleted=only_deleted,
+        limit=limit,
+        offset=offset,
+    )
+    return [AdminTrackAccessEntryResponse.model_validate(entry) for entry in entries]
 
 
 __all__ = ["router"]

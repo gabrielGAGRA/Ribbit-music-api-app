@@ -19,6 +19,9 @@ from app.application.use_cases.admin.ingest_tracks import (
     IngestTracksFromCatalogUseCase,
     IngestTracksResult,
 )
+from app.application.use_cases.admin.list_admin_access_history import (
+    ListAdminAccessHistoryUseCase,
+)
 from app.application.use_cases.admin.list_administrators import (
     ListAdministratorsUseCase,
 )
@@ -61,6 +64,7 @@ __all__ = [
     "GetTopModerationReviewsUseCase",
     "IngestTracksFromCatalogUseCase",
     "IngestTracksResult",
+    "ListAdminAccessHistoryUseCase",
     "ListAdministratorsUseCase",
     "ListBlockedTracksUseCase",
     "ListUsersWithPlansUseCase",

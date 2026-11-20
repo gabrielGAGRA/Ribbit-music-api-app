@@ -12,12 +12,16 @@ from app.domain.models.interaction import (
     InteractionAction,
     InteractionSource,
 )
+from app.domain.models.track_access import TrackAccess
 lazy from app.application.dtos.review_dtos import SaveSearchTrackLikeCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
 lazy from app.application.ports.repositories.playlist_repository import (
     PlaylistRepositoryPort,
+)
+lazy from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -32,6 +36,7 @@ class SaveSearchTrackLikeUseCase:
     track_repo: TrackRepositoryPort
     interaction_repo: InteractionRepositoryPort
     playlist_repo: PlaylistRepositoryPort | None = None
+    track_access_repo: TrackAccessRepositoryPort | None = None
 
     def _resolve_args(
         self,
@@ -92,6 +97,10 @@ class SaveSearchTrackLikeUseCase:
             source=InteractionSource.SEARCH,
         )
         self.interaction_repo.save(interaction)
+        if self.track_access_repo is not None:
+            self.track_access_repo.record(
+                TrackAccess(user_id=uid, track_id=tid, source="search")
+            )
         return True
 
 

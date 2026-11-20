@@ -14,6 +14,9 @@ from app.application.ports.repositories.playlist_repository import (
 from app.application.ports.repositories.review_repository import (
     ReviewRepositoryPort,
 )
+from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
+)
 from app.application.ports.repositories.track_repository import (
     TrackRepositoryPort,
 )
@@ -29,6 +32,7 @@ __all__ = [
     "PlanRepositoryPort",
     "PlaylistRepositoryPort",
     "ReviewRepositoryPort",
+    "TrackAccessRepositoryPort",
     "TrackRepositoryPort",
     "UserRepositoryPort",
     "UserStatsRepositoryPort",
