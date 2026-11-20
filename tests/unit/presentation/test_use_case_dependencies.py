@@ -13,10 +13,12 @@ from app.application.ports.services import (
 )
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
+    CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
@@ -147,6 +149,8 @@ ALL_USE_CASES = [
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     BlockTrackUseCase,
+    CreateTrackUseCase,
+    ListAdminCatalogTracksUseCase,
     ListBlockedTracksUseCase,
     GetTopModerationReviewsUseCase,
     GetAudienceReportUseCase,

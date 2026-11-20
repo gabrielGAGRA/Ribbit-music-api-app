@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 lazy import sqlite3
 lazy from collections.abc import Sequence
 
+from app.application.dtos.admin_dtos import AdminCatalogTrackResult
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.track import Track, TrackId
@@ -161,6 +162,40 @@ def _build_filter_conditions(
     )
 
     return conditions, params
+
+
+_ADMIN_TRACK_SORT_ORDERS: dict[str, str] = {
+    "id_asc": "t.track_id ASC",
+    "dislikes_desc": "dislikes_count DESC, t.track_id ASC",
+    "likes_desc": "likes_count DESC, t.track_id ASC",
+    "superlikes_desc": "superlikes_count DESC, t.track_id ASC",
+    "recent": "t.created_at DESC, t.track_id DESC",
+}
+
+
+def _row_to_admin_catalog_track(row: sqlite3.Row) -> AdminCatalogTrackResult:
+    return AdminCatalogTrackResult(
+        track_id=int(row["track_id"]),
+        title=row["title"],
+        artist=row["artist"],
+        duration_seconds=int(row["duration_seconds"]),
+        genre=row["genre"],
+        spotify_id=row["spotify_id"],
+        album=row["album"],
+        country=row["country"],
+        release_year=row["release_year"],
+        cover_url=row["cover_url"],
+        itunes_preview_url=row["itunes_preview_url"],
+        explicit=bool(row["explicit"]),
+        is_deleted=bool(row["is_deleted"]),
+        likes_count=int(row["likes_count"]),
+        dislikes_count=int(row["dislikes_count"]),
+        superlikes_count=int(row["superlikes_count"]),
+        average_rating=(
+            float(row["avg_rating"]) if row["avg_rating"] is not None else None
+        ),
+        review_count=int(row["review_count"]),
+    )
 
 
 class SQLiteTrackRepository(TrackRepositoryPort):
@@ -428,6 +463,88 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         )
         rows = cursor.fetchall()
         return [_row_to_track(r) for r in rows]
+
+    def _query_admin_catalog(
+        self,
+        *,
+        where_clause: str,
+        params: list[object],
+        order_by: str,
+        limit: int | None,
+        offset: int,
+    ) -> list[AdminCatalogTrackResult]:
+        limit_clause = "LIMIT ? OFFSET ?" if limit is not None else ""
+        if limit is not None:
+            params.extend([limit, offset])
+        sql = (
+            "SELECT t.*, "  # noqa: S608
+            "COALESCE(i_agg.likes_count, 0) AS likes_count, "
+            "COALESCE(i_agg.dislikes_count, 0) AS dislikes_count, "
+            "COALESCE(i_agg.superlikes_count, 0) AS superlikes_count, "
+            "r_agg.avg_rating AS avg_rating, "
+            "COALESCE(r_agg.review_count, 0) AS review_count "
+            "FROM tracks t "
+            "LEFT JOIN ("
+            "SELECT track_id, "
+            "SUM(CASE WHEN action = 'like' THEN 1 ELSE 0 END) AS likes_count, "
+            "SUM(CASE WHEN action = 'dislike' THEN 1 ELSE 0 END) AS dislikes_count, "
+            "SUM(CASE WHEN action = 'superlike' THEN 1 ELSE 0 END) AS superlikes_count "
+            "FROM interactions GROUP BY track_id"
+            ") i_agg ON i_agg.track_id = t.track_id "
+            "LEFT JOIN ("
+            "SELECT track_id, ROUND(AVG(rating), 2) AS avg_rating, "
+            "COUNT(*) AS review_count "
+            "FROM reviews WHERE is_deleted = 0 GROUP BY track_id"
+            ") r_agg ON r_agg.track_id = t.track_id "
+            f"WHERE {where_clause} ORDER BY {order_by} {limit_clause}"
+        )
+        rows = self.conn.execute(sql, tuple(params)).fetchall()
+        return [_row_to_admin_catalog_track(r) for r in rows]
+
+    def list_blocked_with_metrics(self) -> list[AdminCatalogTrackResult]:
+        return self._query_admin_catalog(
+            where_clause="t.is_deleted = 1",
+            params=[],
+            order_by="t.track_id ASC",
+            limit=None,
+            offset=0,
+        )
+
+    def list_admin_catalog(
+        self,
+        *,
+        query: str | None = None,
+        include_deleted: bool = False,
+        min_dislikes: int | None = None,
+        sort_by: str = "id_asc",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[AdminCatalogTrackResult]:
+        conditions: list[str] = []
+        params: list[object] = []
+        if not include_deleted:
+            conditions.append("t.is_deleted = 0")
+        if query and query.strip():
+            like = f"%{query.strip().lower()}%"
+            conditions.append(
+                "(lower(t.title) LIKE ? OR lower(t.artist) LIKE ? "
+                "OR lower(COALESCE(t.album, '')) LIKE ? OR lower(t.genre) LIKE ?)"
+            )
+            params.extend([like, like, like, like])
+        if min_dislikes is not None:
+            conditions.append("COALESCE(i_agg.dislikes_count, 0) >= ?")
+            params.append(min_dislikes)
+        where_clause = " AND ".join(conditions) if conditions else "1 = 1"
+        order_by = _ADMIN_TRACK_SORT_ORDERS.get(
+            sort_by, _ADMIN_TRACK_SORT_ORDERS["id_asc"]
+        )
+        return self._query_admin_catalog(
+            where_clause=where_clause,
+            params=params,
+            order_by=order_by,
+            limit=limit,
+            offset=offset,
+        )
 
     @staticmethod
     def _track_insert_tuple(t: Track, now_iso: str) -> tuple[object, ...]:

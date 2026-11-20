@@ -60,9 +60,48 @@ class RegisterAdministratorCommand:
     birth_date: str | None = None
 
 
+@dataclass(slots=True, frozen=True, kw_only=True)
+class CreateTrackCommand:
+    title: str
+    artist: str
+    genre: str
+    duration_seconds: int
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    spotify_id: str | None = None
+    explicit: bool = False
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
+class AdminCatalogTrackResult:
+    track_id: int
+    title: str
+    artist: str
+    duration_seconds: int
+    genre: str
+    spotify_id: str | None = None
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    explicit: bool = False
+    is_deleted: bool = False
+    likes_count: int = 0
+    dislikes_count: int = 0
+    superlikes_count: int = 0
+    average_rating: float | None = None
+    review_count: int = 0
+
+
 __all__ = [
+    "AdminCatalogTrackResult",
     "AudienceReportResult",
     "AuditLogEntryResult",
+    "CreateTrackCommand",
     "ExecutiveDashboardResult",
     "RegisterAdministratorCommand",
     "UpdateAdminRoleCommand",

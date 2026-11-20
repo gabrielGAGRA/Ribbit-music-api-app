@@ -88,7 +88,7 @@ describe('AdminUsersComponent', () => {
         is_admin: true,
       },
     ]);
-    httpMock.expectOne('/api/tracks/search?limit=100').flush([]);
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([]);
     httpMock.expectOne('/api/admin/blocked-tracks').flush([]);
     httpMock.expectOne('/api/admin/reviews').flush([]);
 
