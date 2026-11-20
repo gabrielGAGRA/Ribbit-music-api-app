@@ -5,6 +5,7 @@ from app.application.use_cases.admin.compact_catalog import (
     CompactCatalogResult,
     CompactCatalogUseCase,
 )
+from app.application.use_cases.admin.create_track import CreateTrackUseCase
 from app.application.use_cases.admin.get_audience_report import (
     GetAudienceReportUseCase,
 )
@@ -18,6 +19,9 @@ from app.application.use_cases.admin.get_top_moderation_reviews import (
 from app.application.use_cases.admin.ingest_tracks import (
     IngestTracksFromCatalogUseCase,
     IngestTracksResult,
+)
+from app.application.use_cases.admin.list_admin_catalog_tracks import (
+    ListAdminCatalogTracksUseCase,
 )
 from app.application.use_cases.admin.list_administrators import (
     ListAdministratorsUseCase,
@@ -55,12 +59,14 @@ __all__ = [
     "BlockTrackUseCase",
     "CompactCatalogResult",
     "CompactCatalogUseCase",
+    "CreateTrackUseCase",
     "GetAudienceReportUseCase",
     "GetAuditLogsUseCase",
     "GetExecutiveDashboardUseCase",
     "GetTopModerationReviewsUseCase",
     "IngestTracksFromCatalogUseCase",
     "IngestTracksResult",
+    "ListAdminCatalogTracksUseCase",
     "ListAdministratorsUseCase",
     "ListBlockedTracksUseCase",
     "ListUsersWithPlansUseCase",
