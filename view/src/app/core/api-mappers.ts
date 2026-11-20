@@ -82,6 +82,8 @@ export function mapTrackDtoToSong(dto: TrackApiDto): Song {
     ...(dto.country ? { country: dto.country } : {}),
     explicit: dto.explicit,
     durationSeconds: dto.duration_seconds,
+    averageRating: dto.average_rating ?? null,
+    reviewCount: dto.review_count ?? 0,
   };
 }
 

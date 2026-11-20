@@ -796,6 +796,11 @@ INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, added_at) VALUES (
 INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (1, 4, 1, 5, 'Obra-prima atemporal do Queen, transição perfeita!', 2, 0, '2026-02-01T12:00:00+00:00');
 INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (2, 6, 4, 5, 'Sintetizadores incríveis, nunca enjoa.', 1, 0, '2026-02-03T19:00:00+00:00');
 INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (3, 5, 2, 4, 'Muito boa para estudar e correr.', 0, 0, '2026-02-04T09:00:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (4, 4, 3, 3, 'Boa batida, mas poderia ter um refrão mais marcante.', 1, 0, '2026-02-05T14:00:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (5, 5, 5, 2, 'Produção ok, porém repetitiva depois da metade.', 0, 0, '2026-02-06T11:30:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (6, 6, 7, 1, 'Não funcionou para mim, mixagem muito carregada.', 0, 0, '2026-02-07T16:45:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (7, 4, 8, 4, 'Clássico sólido para qualquer playlist.', 2, 0, '2026-02-08T10:15:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (8, 5, 1, 4, 'Solo de guitarra inesquecível.', 1, 0, '2026-02-09T20:00:00+00:00');
 INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (1, 5, '2026-02-02T14:10:00+00:00');
 INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (1, 6, '2026-02-03T18:10:00+00:00');
 INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (2, 4, '2026-02-04T10:00:00+00:00');
