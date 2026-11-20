@@ -74,7 +74,7 @@ describe('AdminStateService', () => {
         is_admin: true,
       },
     ]);
-    httpMock.expectOne('/api/tracks/search?limit=100').flush(
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush(
       overrides?.activeTracks ?? [
         {
           track_id: 500,
@@ -350,12 +350,12 @@ describe('AdminStateService', () => {
     flushHydration();
 
     service.fetchCatalogTracksFromBackend('no-match').subscribe();
-    const searchReq = httpMock.expectOne('/api/tracks/search?limit=100&query=no-match');
+    const searchReq = httpMock.expectOne('/api/admin/tracks?limit=100&query=no-match');
     searchReq.flush([]);
     expect(service.activeTracks().length).toBe(0);
 
     service.fetchCatalogTracksFromBackend('').subscribe();
-    httpMock.expectOne('/api/tracks/search?limit=100').flush([
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([
       {
         track_id: 500,
         title: 'Evidências',
@@ -377,6 +377,12 @@ describe('AdminStateService', () => {
       total_tracks: 120,
       active_tracks: 114,
       blocked_genres: {},
+    });
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 42,
+      estimated_net_revenue: 500,
+      users_by_plan: {},
+      revenue_by_plan: {},
     });
     expect(service.activeTracks().length).toBe(0);
     expect(service.blockedTracks().some((t) => t.track_id === 500)).toBe(true);
@@ -411,9 +417,7 @@ describe('AdminStateService', () => {
         { status: 404, statusText: 'Not Found' },
       );
     expect(deleteReviewError).toBeInstanceOf(AdminDomainError);
-    expect((deleteReviewError as AdminDomainError).message).toBe(
-      'Review with ID 900 not found.',
-    );
+    expect((deleteReviewError as AdminDomainError).message).toBe('Review with ID 900 not found.');
   });
 
   it('cancels in-flight hydration when logoutAdmin is called before requests settle', () => {
@@ -436,7 +440,7 @@ describe('AdminStateService', () => {
     const pendingAudience = httpMock.expectOne('/api/admin/audience');
     const pendingUsers = httpMock.expectOne('/api/admin/users');
     const pendingAdmins = httpMock.expectOne('/api/admin/administrators');
-    const pendingTracks = httpMock.expectOne('/api/tracks/search?limit=100');
+    const pendingTracks = httpMock.expectOne('/api/admin/tracks?limit=100');
     const pendingBlocked = httpMock.expectOne('/api/admin/blocked-tracks');
     const pendingReviews = httpMock.expectOne('/api/admin/reviews');
 
@@ -453,5 +457,36 @@ describe('AdminStateService', () => {
     expect(service.isAuthenticated()).toBe(false);
     expect(service.hasHydrated()).toBe(false);
     expect(service.isLoading()).toBe(false);
+  });
+
+  it('loads admin catalog with sortBy/minDislikes and normalizes track metrics', () => {
+    service
+      .loadAdminCatalog({
+        query: 'Rock',
+        sortBy: 'dislikes_desc',
+        minDislikes: 2,
+      })
+      .subscribe((tracks) => {
+        expect(tracks.length).toBe(1);
+        expect(tracks[0]?.dislikes_count).toBe(5);
+        expect(tracks[0]?.likes_count).toBe(0);
+      });
+
+    const req = httpMock.expectOne(
+      '/api/admin/tracks?limit=100&query=Rock&sort_by=dislikes_desc&min_dislikes=2',
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      {
+        track_id: 12,
+        title: 'Heavy Riff',
+        artist: 'Band',
+        duration_seconds: 220,
+        genre: 'Rock',
+        explicit: false,
+        is_deleted: false,
+        dislikes_count: 5,
+      },
+    ]);
   });
 });

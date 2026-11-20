@@ -37,7 +37,7 @@ describe('AdminModerationComponent', () => {
     });
     httpMock.expectOne('/api/admin/users').flush([]);
     httpMock.expectOne('/api/admin/administrators').flush([]);
-    httpMock.expectOne('/api/tracks/search?limit=100').flush([
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([
       {
         track_id: 101,
         title: 'Bohemian Rhapsody',
@@ -84,7 +84,7 @@ describe('AdminModerationComponent', () => {
 
     component['trackQuery'].set('Boogarins');
     component['searchTracks']('Boogarins');
-    const searchReq = httpMock.expectOne('/api/tracks/search?limit=100&query=Boogarins');
+    const searchReq = httpMock.expectOne('/api/admin/tracks?limit=100&query=Boogarins');
     expect(searchReq.request.method).toBe('GET');
     searchReq.flush([
       {
@@ -119,6 +119,12 @@ describe('AdminModerationComponent', () => {
       active_tracks: 1,
       blocked_genres: {},
     });
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 2,
+      estimated_net_revenue: 100,
+      users_by_plan: {},
+      revenue_by_plan: {},
+    });
     expect(component['blockedTracks']().some((item) => item.track_id === 107)).toBe(true);
 
     component['selectTab']('blocked');
@@ -132,6 +138,12 @@ describe('AdminModerationComponent', () => {
       total_tracks: 2,
       active_tracks: 2,
       blocked_genres: {},
+    });
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 2,
+      estimated_net_revenue: 100,
+      users_by_plan: {},
+      revenue_by_plan: {},
     });
     expect(component['blockedTracks']().some((item) => item.track_id === 107)).toBe(false);
 
@@ -195,12 +207,12 @@ describe('AdminModerationComponent', () => {
     component.ngOnInit();
 
     component['searchTracks']('a');
-    const firstReq = httpMock.expectOne('/api/tracks/search?limit=100&query=a');
+    const firstReq = httpMock.expectOne('/api/admin/tracks?limit=100&query=a');
 
     component['searchTracks']('Boogarins');
     expect(firstReq.cancelled).toBe(true);
 
-    const secondReq = httpMock.expectOne('/api/tracks/search?limit=100&query=Boogarins');
+    const secondReq = httpMock.expectOne('/api/admin/tracks?limit=100&query=Boogarins');
     secondReq.flush([
       {
         track_id: 107,
@@ -218,7 +230,7 @@ describe('AdminModerationComponent', () => {
 
     const reopened = TestBed.runInInjectionContext(() => new AdminModerationComponent());
     reopened.ngOnInit();
-    const resetReq = httpMock.expectOne('/api/tracks/search?limit=100');
+    const resetReq = httpMock.expectOne('/api/admin/tracks?limit=100');
     resetReq.flush([
       {
         track_id: 101,
@@ -242,5 +254,70 @@ describe('AdminModerationComponent', () => {
     expect(reopened['searchedActiveTracks']().length).toBe(2);
     expect(state.lastCatalogQuery()).toBe('');
     reopened.ngOnDestroy();
+  });
+
+  it('creates a new track via POST /api/admin/tracks and filters by dislikes', () => {
+    const component = TestBed.runInInjectionContext(() => new AdminModerationComponent());
+    component.ngOnInit();
+
+    component['toggleCreateTrackForm']();
+    expect(component['showCreateTrackForm']()).toBe(true);
+
+    component['newTrackTitle'].set('Neon Pulse');
+    component['newTrackArtist'].set('Synth Unit');
+    component['newTrackGenre'].set('Electronic');
+    component['newTrackDuration'].set('210');
+    component['submitCreateTrack'](new Event('submit'));
+
+    const postReq = httpMock.expectOne('/api/admin/tracks');
+    expect(postReq.request.method).toBe('POST');
+    expect(postReq.request.body).toEqual({
+      title: 'Neon Pulse',
+      artist: 'Synth Unit',
+      genre: 'Electronic',
+      duration_seconds: 210,
+      explicit: false,
+    });
+    postReq.flush({
+      track_id: 999,
+      title: 'Neon Pulse',
+      artist: 'Synth Unit',
+      duration_seconds: 210,
+      genre: 'Electronic',
+      explicit: false,
+      is_deleted: false,
+      likes_count: 0,
+      dislikes_count: 0,
+      superlikes_count: 0,
+    });
+    httpMock.expectOne('/api/admin/audience').flush({
+      total_users: 10,
+      total_tracks: 21,
+      active_tracks: 21,
+      blocked_genres: {},
+    });
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 10,
+      estimated_net_revenue: 100,
+      users_by_plan: {},
+      revenue_by_plan: {},
+    });
+
+    expect(component['showCreateTrackForm']()).toBe(false);
+    const adminState = TestBed.inject(AdminStateService);
+    expect(adminState.activeTracks().some((t) => t.track_id === 999)).toBe(true);
+
+    component['onCatalogSortChange']({
+      target: { value: 'dislikes_desc' },
+    } as unknown as Event);
+    const sortReq = httpMock.expectOne('/api/admin/tracks?limit=100&sort_by=dislikes_desc');
+    sortReq.flush([]);
+
+    component['toggleOnlyDisliked']();
+    const dislikeReq = httpMock.expectOne(
+      '/api/admin/tracks?limit=100&sort_by=dislikes_desc&min_dislikes=1',
+    );
+    dislikeReq.flush([]);
+    component.ngOnDestroy();
   });
 });

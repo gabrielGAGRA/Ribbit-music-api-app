@@ -135,10 +135,55 @@ class RegisterAdminRequest(BaseModel):
     birth_date: str | None = None
 
 
+class CreateTrackAdminRequest(BaseModel):
+    """Payload to register a new catalog track from the admin console."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1)
+    artist: str = Field(min_length=1)
+    genre: str = Field(min_length=1)
+    duration_seconds: int = Field(gt=0)
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    spotify_id: str | None = None
+    explicit: bool = False
+
+
+class AdminCatalogTrackResponse(BaseModel):
+    """Admin representation of a catalog track enriched with interaction and review metrics."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    track_id: int
+    title: str
+    artist: str
+    duration_seconds: int
+    genre: str
+    spotify_id: str | None = None
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    explicit: bool = False
+    is_deleted: bool = False
+    likes_count: int = 0
+    dislikes_count: int = 0
+    superlikes_count: int = 0
+    average_rating: float | None = None
+    review_count: int = 0
+
+
 __all__ = [
+    "AdminCatalogTrackResponse",
     "AudienceReportResponse",
     "BlockTrackRequest",
     "CompactCatalogResponse",
+    "CreateTrackAdminRequest",
     "ExecutiveDashboardResponse",
     "PlanResponse",
     "RegisterAdminRequest",

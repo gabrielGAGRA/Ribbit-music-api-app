@@ -1,4 +1,4 @@
-"""Unit tests for SQLite repositories implementing domain/application ports."""
+﻿"""Unit tests for SQLite repositories implementing domain/application ports."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -1148,3 +1148,106 @@ def test_review_repository_sorting_days_none_and_deleted_track_exclusion(
     assert [r.track_id for r in review_repo.list_by_user(u1.user_id)] == [
         active_track.track_id
     ]
+
+
+def test_track_repository_admin_catalog_metrics_and_blocked_metrics(
+    conn: sqlite3.Connection,
+) -> None:
+    plan = SQLitePlanRepository(conn).save(
+        Plan(name="Free", initial_monthly_price=0.0, initial_max_profiles=1)
+    )
+    user_repo = SQLiteUserRepository(conn)
+    track_repo = SQLiteTrackRepository(conn)
+    interaction_repo = SQLiteInteractionRepository(conn)
+    review_repo = SQLiteReviewRepository(conn)
+
+    u1 = user_repo.save(
+        User(
+            email="adm1@test.com",
+            password_hash="h",
+            display_name="A1",
+            age=24,
+            plan_id=plan.plan_id,
+        )
+    )
+    u2 = user_repo.save(
+        User(
+            email="adm2@test.com",
+            password_hash="h",
+            display_name="A2",
+            age=25,
+            plan_id=plan.plan_id,
+        )
+    )
+    assert u1.user_id is not None
+    assert u2.user_id is not None
+
+    t1 = track_repo.save(
+        Track(title="Loved Track", artist="Alpha", duration_seconds=200, genre="Pop")
+    )
+    t2 = track_repo.save(
+        Track(title="Disliked Track", artist="Beta", duration_seconds=210, genre="Rock")
+    )
+    t3 = track_repo.save(
+        Track(
+            title="Blocked Track",
+            artist="Gamma",
+            duration_seconds=190,
+            genre="Metal",
+            is_deleted=True,
+        )
+    )
+    assert t1.track_id is not None
+    assert t2.track_id is not None
+    assert t3.track_id is not None
+
+    interaction_repo.save(
+        Interaction(
+            user_id=u1.user_id, track_id=t1.track_id, action=InteractionAction.SUPERLIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u2.user_id, track_id=t1.track_id, action=InteractionAction.LIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u1.user_id, track_id=t2.track_id, action=InteractionAction.DISLIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u2.user_id, track_id=t2.track_id, action=InteractionAction.DISLIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u1.user_id, track_id=t3.track_id, action=InteractionAction.DISLIKE
+        )
+    )
+    review_repo.save(
+        ReviewComment(
+            user_id=u1.user_id, track_id=t1.track_id, initial_rating=5, text="Great"
+        )
+    )
+
+    by_dislikes = track_repo.list_admin_catalog(sort_by="dislikes_desc")
+    assert [t.title for t in by_dislikes] == ["Disliked Track", "Loved Track"]
+    assert by_dislikes[0].dislikes_count == 2
+    assert by_dislikes[1].superlikes_count == 1
+    assert by_dislikes[1].likes_count == 1
+    assert by_dislikes[1].average_rating == 5.0
+    assert by_dislikes[1].review_count == 1
+
+    min_dislikes = track_repo.list_admin_catalog(min_dislikes=2)
+    assert [t.title for t in min_dislikes] == ["Disliked Track"]
+
+    with_deleted = track_repo.list_admin_catalog(include_deleted=True, query="Blocked")
+    assert [t.title for t in with_deleted] == ["Blocked Track"]
+
+    blocked = track_repo.list_blocked_with_metrics()
+    assert len(blocked) == 1
+    assert blocked[0].track_id == t3.track_id
+    assert blocked[0].dislikes_count == 1
+

@@ -36,11 +36,13 @@ from app.application.ports.services import (
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
     CompactCatalogUseCase,
+    CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
     GetTopModerationReviewsUseCase,
     IngestTracksFromCatalogUseCase,
+    ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
@@ -272,6 +274,8 @@ class Container:
     update_track_genre_use_case: UpdateTrackGenreUseCase
     block_track_use_case: BlockTrackUseCase
     list_blocked_tracks_use_case: ListBlockedTracksUseCase
+    create_track_use_case: CreateTrackUseCase
+    list_admin_catalog_tracks_use_case: ListAdminCatalogTracksUseCase
     get_top_moderation_reviews_use_case: GetTopModerationReviewsUseCase
     get_audience_report_use_case: GetAudienceReportUseCase
     get_audit_logs_use_case: GetAuditLogsUseCase
@@ -700,6 +704,10 @@ def build_container(
         ),
         block_track_use_case=BlockTrackUseCase(track_repo),
         list_blocked_tracks_use_case=ListBlockedTracksUseCase(track_repo),
+        create_track_use_case=CreateTrackUseCase(
+            track_repo=track_repo, catalog_file_port=catalog_adapter
+        ),
+        list_admin_catalog_tracks_use_case=ListAdminCatalogTracksUseCase(track_repo),
         get_top_moderation_reviews_use_case=GetTopModerationReviewsUseCase(review_repo),
         get_audience_report_use_case=GetAudienceReportUseCase(user_repo, track_repo),
         get_audit_logs_use_case=GetAuditLogsUseCase(audit_log_repo),

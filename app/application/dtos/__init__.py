@@ -1,8 +1,10 @@
 """Application Data Transfer Objects (DTOs) for inbound commands and read projections."""
 
 from app.application.dtos.admin_dtos import (
+    AdminCatalogTrackResult,
     AudienceReportResult,
     AuditLogEntryResult,
+    CreateTrackCommand,
     ExecutiveDashboardResult,
     RegisterAdministratorCommand,
     UpdateSubscriptionPlanCommand,
@@ -44,6 +46,7 @@ from app.application.dtos.user_dtos import (
 
 __all__ = [
     "AddTrackToPlaylistCommand",
+    "AdminCatalogTrackResult",
     "AnnualStatsResult",
     "ArtistStat",
     "AudienceReportResult",
@@ -53,6 +56,7 @@ __all__ = [
     "AuthenticateWithGoogleCommand",
     "CreateDeckPlaylistCommand",
     "CreateJamCommand",
+    "CreateTrackCommand",
     "ExecutiveDashboardResult",
     "GenreStat",
     "JamStateResult",
