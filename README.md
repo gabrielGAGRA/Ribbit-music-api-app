@@ -571,11 +571,11 @@ Siga o passo a passo abaixo para validar todas as funcionalidades administrativa
 
 2. **Visão Executiva e Cálculo de Receita (`/admin/dashboard`):**
    - Ao entrar, o menu lateral exibe **Visão Executiva**.
-   - Verifique o total de usuários ativos, a distribuição por planos, os gêneros mais bloqueados e o cálculo da **Receita Líquida** *(acessos por conteúdo/categoria e dedução de custos de conteúdo/infraestrutura: placeholder — em implementação)*.
+   - Verifique o total de usuários ativos, a distribuição por planos, os gêneros mais bloqueados, o ranking de acessos por conteúdo e por categoria (gênero), e o demonstrativo financeiro da **Receita Líquida** (receita bruta menos custos configuráveis de conteúdo e infraestrutura via `GET/PUT /api/admin/costs`).
 
 3. **Gestão de Usuários & Administradores (`/admin/users`):**
    - No menu lateral, clique em **Usuários & Admins**.
-   - Consulte a listagem de usuários cadastrados e seus planos vinculados, promova/gerencie contas elegíveis a administrador ou cadastre um novo administrador *(consulta administrativa de histórico de acessos incluindo faixas removidas: placeholder — em implementação)*.
+   - Consulte a listagem de usuários cadastrados e seus planos vinculados, promova/gerencie contas elegíveis a administrador, cadastre um novo administrador ou consulte a aba **Histórico de Acessos** (`GET /api/admin/access-history`, preservando inclusive faixas removidas via Soft Delete).
 
 4. **Gestão de Planos & Preços (`/admin/plans`):**
    - No menu lateral, clique em **Planos & Preços**.
@@ -583,11 +583,11 @@ Siga o passo a passo abaixo para validar todas as funcionalidades administrativa
 
 5. **Moderação de Catálogo & Soft Delete (`/admin/moderation`):**
    - No menu lateral, clique em **Moderação**.
-   - Cadastre novas faixas *(placeholder — em implementação)*, pesquise faixas ativas do catálogo, altere a classificação `+18` (`explicit`) e teste a ação de **Soft Delete** em uma faixa (ela deixa de aparecer nas buscas públicas e no feed de descoberta, preservando os registros no histórico).
+   - Cadastre novas faixas no catálogo (`POST /api/admin/tracks`), pesquise e ordene faixas por métricas de interação (likes, superlikes e dislikes via `GET /api/admin/tracks`), altere a classificação `+18` (`explicit`) e teste a ação de **Soft Delete** em uma faixa (ela deixa de aparecer nas buscas públicas e no feed de descoberta, preservando os registros no histórico administrativo).
    - Na mesma seção, visualize e remova avaliações abusivas da comunidade.
 
 6. **Alternar para o App Ouvinte (`/discover`):**
-   - No rodapé do menu lateral ou no cabeçalho superior, clique em **Ir para App Ouvinte** para navegar até `/discover` e testar o fluxo de swipe, playlists inteligentes, Jams (Pond), busca e restrições de conteúdo para menores (`menor@ribbit.example.com`).
+   - No rodapé do menu lateral ou no cabeçalho superior, clique em **Ir para App Ouvinte** para navegar até `/discover` e testar o fluxo de swipe, playlists inteligentes, Jams (Pond), busca com filtros de nota mínima e ordenação por avaliação, selo **Ouvido** em faixas já acessadas e restrições de conteúdo para menores (`menor@ribbit.example.com`).
 
 ---
 

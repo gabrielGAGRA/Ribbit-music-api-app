@@ -554,7 +554,7 @@ describe('AdminStateService', () => {
     });
     httpMock.expectOne('/api/admin/users').flush([]);
     httpMock.expectOne('/api/admin/administrators').flush([]);
-    httpMock.expectOne('/api/tracks/search?limit=100').flush([]);
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([]);
     httpMock.expectOne('/api/admin/blocked-tracks').flush([]);
     httpMock.expectOne('/api/admin/reviews').flush([]);
 
@@ -591,4 +591,3 @@ describe('AdminStateService', () => {
     expect(service.executiveDashboard().estimated_net_revenue).toBe(35.5);
   });
 });
-

@@ -25,7 +25,7 @@ test('admin login, executive dashboard, plan pricing update, users audit, and ca
   await expect(page).toHaveURL(/\/admin\/dashboard$/);
   await expect(page.locator('.kpi-strip')).toContainText('Receita líquida mensal estimada');
   await expect(page.locator('.plan-breakdown-table')).toBeVisible();
-  await expect(page.locator('.genre-rank-list')).toBeVisible();
+  await expect(page.locator('.genre-rank-list').first()).toBeVisible();
   await pauseForVideo(page, 1100);
 
   // Update Individual subscription price and verify recalculation toast.

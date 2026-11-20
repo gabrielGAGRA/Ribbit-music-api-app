@@ -1,4 +1,4 @@
-﻿"""Unit tests for SQLite repositories implementing domain/application ports."""
+"""Unit tests for SQLite repositories implementing domain/application ports."""
 
 import sqlite3
 from datetime import UTC, datetime, timedelta
@@ -1250,4 +1250,3 @@ def test_track_repository_admin_catalog_metrics_and_blocked_metrics(
     assert len(blocked) == 1
     assert blocked[0].track_id == t3.track_id
     assert blocked[0].dislikes_count == 1
-
