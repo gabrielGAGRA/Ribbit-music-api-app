@@ -8,6 +8,7 @@ from app.application.dtos import (
     PublishReviewCommand,
     SearchTracksCommand,
 )
+from app.application.use_cases.discovery import RecordTrackAccessUseCase
 from app.application.use_cases.review import (
     DeleteReviewUseCase,
     GetCommunityFeedUseCase,
@@ -32,6 +33,8 @@ from app.presentation.schemas.tracks_reviews import (
     CatalogTrackResponse,
     PublishReviewRequest,
     RecentInteractedTrackResponse,
+    RecordTrackAccessRequest,
+    RecordTrackAccessResponse,
     ReviewActionResponse,
     ReviewResponse,
     SaveSearchTrackLikeRequest,
@@ -74,6 +77,7 @@ def _get_save_search_track_like_use_case(
             track_repo=container.track_repo,
             interaction_repo=container.interaction_repo,
             playlist_repo=container.playlist_repo,
+            track_access_repo=container.track_access_repo,
         )
 
 
@@ -231,6 +235,27 @@ def get_track_reviews(
 ) -> list[ReviewResponse]:
     reviews = use_case.execute(track_id=track_id, limit=limit, sort_by=sort_by)
     return [ReviewResponse.model_validate(r) for r in reviews]
+
+
+@router.post(
+    "/api/tracks/{track_id}/access",
+    response_model=RecordTrackAccessResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_track_access(
+    track_id: int,
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        RecordTrackAccessUseCase, Depends(provide(RecordTrackAccessUseCase))
+    ],
+    req: RecordTrackAccessRequest | None = None,
+) -> RecordTrackAccessResponse:
+    access = use_case.execute(
+        user_id=user_id,
+        track_id=track_id,
+        source=req.source if req is not None else "play",
+    )
+    return RecordTrackAccessResponse.model_validate(access)
 
 
 __all__ = ["router"]

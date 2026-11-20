@@ -37,6 +37,10 @@ from app.application.use_cases.user.list_favorite_genres import (
     ListFavoriteGenresUseCase,
 )
 from app.application.use_cases.user.list_plans import ListPlansUseCase
+from app.application.use_cases.user.list_user_access_history import (
+    ListUserAccessHistoryUseCase,
+    UserAccessHistoryResult,
+)
 from app.application.use_cases.user.list_user_interactions import (
     ListUserInteractionsUseCase,
 )
@@ -68,10 +72,12 @@ __all__ = [
     "ListFamilyMembersUseCase",
     "ListFavoriteGenresUseCase",
     "ListPlansUseCase",
+    "ListUserAccessHistoryUseCase",
     "ListUserInteractionsUseCase",
     "RemoveFamilyMemberUseCase",
     "UpdateBlockedGenresUseCase",
     "UpdateFavoriteGenresUseCase",
     "UpdatePreferredThemeUseCase",
     "UpdateProfileUseCase",
+    "UserAccessHistoryResult",
 ]

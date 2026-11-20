@@ -135,6 +135,7 @@ export class ProfileComponent implements OnInit {
     }
     this.playingSongKey.set(key);
     this.state.discoverySong.set(song);
+    this.state.recordTrackAccess(song, 'profile');
     this.player.loadTrack(song.previewUrl);
     this.player.play();
   }

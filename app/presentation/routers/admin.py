@@ -8,6 +8,7 @@ from app.application.dtos import (
     AuthenticateAdminCommand,
     CreateTrackCommand,
     RegisterAdministratorCommand,
+    UpdatePlatformCostsCommand,
     UpdateSubscriptionPlanCommand,
 )
 from app.application.use_cases.admin import (
@@ -16,7 +17,9 @@ from app.application.use_cases.admin import (
     CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetExecutiveDashboardUseCase,
+    GetPlatformCostsUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminAccessHistoryUseCase,
     ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
@@ -24,6 +27,7 @@ from app.application.use_cases.admin import (
     RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     UpdateTrackGenreUseCase,
@@ -38,12 +42,14 @@ from app.presentation.dependencies import (
 )
 from app.presentation.schemas.admin import (
     AdminCatalogTrackResponse,
+    AdminTrackAccessEntryResponse,
     AudienceReportResponse,
     BlockTrackRequest,
     CompactCatalogResponse,
     CreateTrackAdminRequest,
     ExecutiveDashboardResponse,
     PlanResponse,
+    PlatformCostSettingsResponse,
     RegisterAdminRequest,
     SyncCatalogVersionResponse,
     TrackBlockResponse,
@@ -51,6 +57,7 @@ from app.presentation.schemas.admin import (
     TrackGenreResponse,
     UpdateAdminRoleRequest,
     UpdatePlanAdminRequest,
+    UpdatePlatformCostsRequest,
     UpdateTrackExplicitRequest,
     UpdateTrackGenreRequest,
     UserPlanSummaryResponse,
@@ -434,6 +441,58 @@ def sync_catalog(
         version=result.version,
         message=result.message,
     )
+
+
+@router.get("/access-history", response_model=list[AdminTrackAccessEntryResponse])
+def get_admin_access_history(
+    use_case: Annotated[
+        ListAdminAccessHistoryUseCase,
+        Depends(provide(ListAdminAccessHistoryUseCase)),
+    ],
+    user_id: Annotated[int | None, Query()] = None,
+    track_id: Annotated[int | None, Query()] = None,
+    only_deleted: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> list[AdminTrackAccessEntryResponse]:
+    entries = use_case.execute(
+        user_id=user_id,
+        track_id=track_id,
+        only_deleted=only_deleted,
+        limit=limit,
+        offset=offset,
+    )
+    return [AdminTrackAccessEntryResponse.model_validate(entry) for entry in entries]
+
+
+@router.get("/costs", response_model=PlatformCostSettingsResponse)
+def get_platform_costs(
+    use_case: Annotated[
+        GetPlatformCostsUseCase, Depends(provide(GetPlatformCostsUseCase))
+    ],
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> PlatformCostSettingsResponse:
+    settings = use_case.execute()
+    return PlatformCostSettingsResponse.model_validate(settings)
+
+
+@router.put("/costs", response_model=PlatformCostSettingsResponse)
+def update_platform_costs(
+    req: UpdatePlatformCostsRequest,
+    use_case: Annotated[
+        UpdatePlatformCostsUseCase, Depends(provide(UpdatePlatformCostsUseCase))
+    ],
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> PlatformCostSettingsResponse:
+    updated = use_case.execute(
+        UpdatePlatformCostsCommand(
+            content_cost_per_track=req.content_cost_per_track,
+            infrastructure_fixed_cost=req.infrastructure_fixed_cost,
+            infrastructure_cost_per_user=req.infrastructure_cost_per_user,
+        )
+    )
+    return PlatformCostSettingsResponse.model_validate(updated)
 
 
 __all__ = ["router"]

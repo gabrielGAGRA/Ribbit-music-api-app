@@ -16,8 +16,10 @@ from app.application.ports.repositories import (
     InteractionRepositoryPort,
     JamRepositoryPort,
     PlanRepositoryPort,
+    PlatformCostRepositoryPort,
     PlaylistRepositoryPort,
     ReviewRepositoryPort,
+    TrackAccessRepositoryPort,
     TrackRepositoryPort,
     UserRepositoryPort,
 )
@@ -40,8 +42,10 @@ from app.application.use_cases.admin import (
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
+    GetPlatformCostsUseCase,
     GetTopModerationReviewsUseCase,
     IngestTracksFromCatalogUseCase,
+    ListAdminAccessHistoryUseCase,
     ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
@@ -50,6 +54,7 @@ from app.application.use_cases.admin import (
     RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     UpdateTrackGenreUseCase,
@@ -65,6 +70,7 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.discovery import (
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    RecordTrackAccessUseCase,
     UndoLatestDiscoveryInteractionUseCase,
 )
 from app.application.use_cases.jam import (
@@ -121,6 +127,7 @@ from app.application.use_cases.user import (
     ListFamilyMembersUseCase,
     ListFavoriteGenresUseCase,
     ListPlansUseCase,
+    ListUserAccessHistoryUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
@@ -149,8 +156,10 @@ from app.infrastructure.repositories import (
     SQLiteInteractionRepository,
     SQLiteJamRepository,
     SQLitePlanRepository,
+    SQLitePlatformCostRepository,
     SQLitePlaylistRepository,
     SQLiteReviewRepository,
+    SQLiteTrackAccessRepository,
     SQLiteTrackRepository,
     SQLiteUserRepository,
     SQLiteUserStatsRepository,
@@ -194,6 +203,8 @@ class Container:
     jam_repo: SQLiteJamRepository
     review_repo: SQLiteReviewRepository
     audit_log_repo: SQLiteAuditLogRepository
+    track_access_repo: SQLiteTrackAccessRepository
+    platform_cost_repo: SQLitePlatformCostRepository
     google_verifier: GoogleIdpVerifierPort
     google_oauth: GoogleOAuthPort | None = None
     spotify_user_profile: SpotifyUserProfilePort
@@ -207,6 +218,7 @@ class Container:
     # Discovery
     get_next_discovery_track_use_case: GetNextDiscoveryTrackUseCase
     record_swipe_interaction_use_case: RecordSwipeInteractionUseCase
+    record_track_access_use_case: RecordTrackAccessUseCase
     undo_latest_discovery_interaction_use_case: UndoLatestDiscoveryInteractionUseCase
     # Playlist
     create_deck_playlist_use_case: CreateDeckPlaylistUseCase
@@ -255,6 +267,7 @@ class Container:
     get_preferred_theme_use_case: GetPreferredThemeUseCase
     update_preferred_theme_use_case: UpdatePreferredThemeUseCase
     list_user_interactions_use_case: ListUserInteractionsUseCase
+    list_user_access_history_use_case: ListUserAccessHistoryUseCase
     change_track_interaction_use_case: ChangeTrackInteractionUseCase
     get_annual_listening_stats_use_case: GetAnnualListeningStatsUseCase
     link_spotify_account_use_case: LinkSpotifyAccountUseCase
@@ -281,6 +294,9 @@ class Container:
     get_audit_logs_use_case: GetAuditLogsUseCase
     promote_user_to_admin_use_case: PromoteUserToAdminUseCase
     register_administrator_use_case: RegisterAdministratorUseCase
+    list_admin_access_history_use_case: ListAdminAccessHistoryUseCase
+    get_platform_costs_use_case: GetPlatformCostsUseCase
+    update_platform_costs_use_case: UpdatePlatformCostsUseCase
     catalog_file_port: TrackCatalogFilePort | None = None
     ingest_tracks_from_catalog_use_case: IngestTracksFromCatalogUseCase | None = None
     compact_catalog_use_case: CompactCatalogUseCase | None = None
@@ -315,6 +331,8 @@ class Container:
         registry[JamRepositoryPort] = self.jam_repo
         registry[ReviewRepositoryPort] = self.review_repo
         registry[AuditLogRepositoryPort] = self.audit_log_repo
+        registry[TrackAccessRepositoryPort] = self.track_access_repo
+        registry[PlatformCostRepositoryPort] = self.platform_cost_repo
 
         optional_mappings: tuple[tuple[type, Any], ...] = (
             (GoogleOAuthPort, self.google_oauth),
@@ -418,6 +436,8 @@ def build_container(
     jam_repo = SQLiteJamRepository(conn)
     review_repo = SQLiteReviewRepository(conn, sync_service=firestore_sync)
     audit_log_repo = SQLiteAuditLogRepository(conn)
+    track_access_repo = SQLiteTrackAccessRepository(conn)
+    platform_cost_repo = SQLitePlatformCostRepository(conn)
 
     catalog_adapter = (
         GCSTrackCatalogAdapter(
@@ -517,6 +537,8 @@ def build_container(
         jam_repo=jam_repo,
         review_repo=review_repo,
         audit_log_repo=audit_log_repo,
+        track_access_repo=track_access_repo,
+        platform_cost_repo=platform_cost_repo,
         google_verifier=google_verifier,
         google_oauth=google_oauth,
         spotify_user_profile=spotify_user_profile,
@@ -553,7 +575,13 @@ def build_container(
             catalog_file_port=catalog_adapter,
         ),
         record_swipe_interaction_use_case=RecordSwipeInteractionUseCase(
-            user_repo, track_repo, interaction_repo
+            user_repo,
+            track_repo,
+            interaction_repo,
+            track_access_repo=track_access_repo,
+        ),
+        record_track_access_use_case=RecordTrackAccessUseCase(
+            user_repo, track_repo, track_access_repo
         ),
         undo_latest_discovery_interaction_use_case=UndoLatestDiscoveryInteractionUseCase(
             user_repo, plan_repo, interaction_repo
@@ -566,7 +594,11 @@ def build_container(
             user_repo, playlist_repo, track_repo, interaction_repo
         ),
         add_track_to_playlist_use_case=AddTrackToPlaylistUseCase(
-            user_repo, track_repo, playlist_repo, interaction_repo=interaction_repo
+            user_repo,
+            track_repo,
+            playlist_repo,
+            interaction_repo=interaction_repo,
+            track_access_repo=track_access_repo,
         ),
         remove_track_from_playlist_use_case=RemoveTrackFromPlaylistUseCase(
             user_repo, playlist_repo
@@ -596,7 +628,11 @@ def build_container(
         ),
         get_jam_state_use_case=GetJamStateUseCase(jam_repo, user_repo, track_repo),
         vote_jam_track_use_case=VoteJamTrackUseCase(
-            jam_repo, user_repo, track_repo, interaction_repo=interaction_repo
+            jam_repo,
+            user_repo,
+            track_repo,
+            interaction_repo=interaction_repo,
+            track_access_repo=track_access_repo,
         ),
         vote_skip_jam_track_use_case=VoteSkipJamTrackUseCase(
             jam_repo, user_repo, track_repo
@@ -610,6 +646,7 @@ def build_container(
             track_repo,
             interaction_repo,
             playlist_repo=playlist_repo,
+            track_access_repo=track_access_repo,
         ),
         close_jam_use_case=CloseJamUseCase(jam_repo),
         # Review
@@ -632,11 +669,21 @@ def build_container(
             user_repo, interaction_repo, track_repo
         ),
         save_search_track_like_use_case=SaveSearchTrackLikeUseCase(
-            user_repo, track_repo, interaction_repo, playlist_repo=playlist_repo
+            user_repo,
+            track_repo,
+            interaction_repo,
+            playlist_repo=playlist_repo,
+            track_access_repo=track_access_repo,
         ),
         # User
         get_user_profile_use_case=GetUserProfileUseCase(
-            user_repo, plan_repo, interaction_repo=interaction_repo
+            user_repo,
+            plan_repo,
+            interaction_repo=interaction_repo,
+            track_repo=track_repo,
+        ),
+        list_user_access_history_use_case=ListUserAccessHistoryUseCase(
+            user_repo, track_repo, track_access_repo
         ),
         update_profile_use_case=UpdateProfileUseCase(user_repo, password_hasher),
         delete_user_account_use_case=DeleteUserAccountUseCase(
@@ -679,7 +726,10 @@ def build_container(
         ),
         # Admin
         get_executive_dashboard_use_case=GetExecutiveDashboardUseCase(
-            user_repo, plan_repo
+            user_repo,
+            plan_repo,
+            track_repo=track_repo,
+            cost_repo=platform_cost_repo,
         ),
         list_users_with_plans_use_case=ListUsersWithPlansUseCase(user_repo, plan_repo),
         list_administrators_use_case=ListAdministratorsUseCase(user_repo),
@@ -709,9 +759,16 @@ def build_container(
         ),
         list_admin_catalog_tracks_use_case=ListAdminCatalogTracksUseCase(track_repo),
         get_top_moderation_reviews_use_case=GetTopModerationReviewsUseCase(review_repo),
-        get_audience_report_use_case=GetAudienceReportUseCase(user_repo, track_repo),
+        get_audience_report_use_case=GetAudienceReportUseCase(
+            user_repo, track_repo, track_access_repo=track_access_repo
+        ),
         get_audit_logs_use_case=GetAuditLogsUseCase(audit_log_repo),
         promote_user_to_admin_use_case=PromoteUserToAdminUseCase(user_repo),
+        list_admin_access_history_use_case=ListAdminAccessHistoryUseCase(
+            track_access_repo
+        ),
+        get_platform_costs_use_case=GetPlatformCostsUseCase(platform_cost_repo),
+        update_platform_costs_use_case=UpdatePlatformCostsUseCase(platform_cost_repo),
         catalog_file_port=catalog_adapter,
         ingest_tracks_from_catalog_use_case=ingest_tracks_use_case,
         compact_catalog_use_case=compact_catalog_use_case,

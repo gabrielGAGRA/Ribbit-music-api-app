@@ -15,6 +15,8 @@ import type {
   RecentInteractedTrackApiDto,
   Song,
   SubscriptionPlan,
+  TrackAccessHistoryItem,
+  TrackAccessSource,
   UserApiDto,
 } from '@ribbit/shared-types';
 import {
@@ -120,8 +122,11 @@ export class RibbitStateService implements OnDestroy {
   private readonly hasInitialToken = readAuthToken() !== null;
   private jamPollTimer: ReturnType<typeof setInterval> | null = null;
   private readonly unsubscribeUnauthorized: () => void;
+  private readonly recentAccessTimestamps = new Map<string, number>();
 
   readonly songs = signal<readonly Song[]>(INITIAL_SONGS);
+  readonly accessHistory = signal<readonly TrackAccessHistoryItem[]>([]);
+  readonly seenTrackIds = signal<ReadonlySet<number>>(new Set());
   readonly discoverySong = signal<Song | null>(null);
   readonly isDeckEmpty = signal<boolean>(false);
   readonly lastSwiped = signal<{
@@ -273,6 +278,7 @@ export class RibbitStateService implements OnDestroy {
       const target = this.detailsTargetSong();
       if (target.trackId !== undefined) {
         this.loadReviewsForTrack(target);
+        this.recordTrackAccess(target, 'details');
       }
     } else if (modal === null) {
       this.selectedDetailsSong.set(null);
@@ -343,7 +349,58 @@ export class RibbitStateService implements OnDestroy {
     this.refreshCatalogAndFeed();
     this.refreshPlaylists();
     this.refreshInteractedCollections();
+    this.refreshAccessHistory();
     this.loadNextDiscoveryTrack();
+  }
+
+  /** Reloads active track access history and distinct seen track IDs from /api/profile/access-history. */
+  refreshAccessHistory(): void {
+    if (!readAuthToken()) return;
+    this.songService
+      .getUserAccessHistory(100, 0)
+      .pipe(catchError(() => of(null)))
+      .subscribe((res) => {
+        if (res === null) return;
+        this.accessHistory.set(res.items);
+        this.seenTrackIds.set(new Set(res.seen_track_ids));
+      });
+  }
+
+  /** Checks whether the given track ID has already been seen/listened by the user. */
+  isTrackSeen(trackId?: number): boolean {
+    if (trackId === undefined) return false;
+    return this.seenTrackIds().has(trackId);
+  }
+
+  /** Records an explicit track access, updating seenTrackIds optimistically and deduplicating rapid clicks. */
+  recordTrackAccess(song: Song, source: TrackAccessSource): void {
+    const trackId = song.trackId;
+    if (trackId === undefined) return;
+
+    this.seenTrackIds.update((prev) => {
+      if (prev.has(trackId)) return prev;
+      const next = new Set(prev);
+      next.add(trackId);
+      return next;
+    });
+
+    const dedupeKey = `${String(trackId)}:${source}`;
+    const now = Date.now();
+    const lastRecorded = this.recentAccessTimestamps.get(dedupeKey);
+    if (lastRecorded !== undefined && now - lastRecorded < 5000) {
+      return;
+    }
+    this.recentAccessTimestamps.set(dedupeKey, now);
+
+    if (!readAuthToken()) return;
+    this.songService.recordTrackAccess(trackId, source).subscribe({
+      next: () => {
+        this.refreshAccessHistory();
+      },
+      error: () => {
+        // Non-blocking telemetry: keep optimistic seen state
+      },
+    });
   }
 
   /** Synchronizes blocked genres, favorite genres, and theme preference from /api/profile/*. */
@@ -631,11 +688,22 @@ export class RibbitStateService implements OnDestroy {
     this.applyLocalSwipeCollectionUpdate(song, kind);
     this.notifySwipeDecision(kind);
 
+    if (song.trackId !== undefined) {
+      const swipedTrackId = song.trackId;
+      this.seenTrackIds.update((prev) => {
+        if (prev.has(swipedTrackId)) return prev;
+        const next = new Set(prev);
+        next.add(swipedTrackId);
+        return next;
+      });
+    }
+
     if (song.trackId !== undefined && readAuthToken()) {
       this.songService.recordSwipe(song.trackId, kind).subscribe({
         next: () => {
           this.loadNextDiscoveryTrack();
           this.refreshInteractedCollections();
+          this.refreshAccessHistory();
         },
         error: (err: unknown) => {
           this.notify(toApiError(err).message);
@@ -1424,6 +1492,9 @@ export class RibbitStateService implements OnDestroy {
     this.likedSongs.set([]);
     this.lovedSongs.set([]);
     this.rejectedSongs.set([]);
+    this.accessHistory.set([]);
+    this.seenTrackIds.set(new Set());
+    this.recentAccessTimestamps.clear();
     this.playlists.set([]);
     this.activeTrackReviews.set([]);
     this.discoverySong.set(null);
