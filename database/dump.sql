@@ -166,6 +166,26 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS track_accesses (
+    access_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    track_id INTEGER NOT NULL REFERENCES tracks(track_id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    accessed_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_track_accesses_user_time ON track_accesses(user_id, accessed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_track_accesses_track_id ON track_accesses(track_id);
+CREATE INDEX IF NOT EXISTS idx_track_accesses_user_track ON track_accesses(user_id, track_id);
+
+CREATE TABLE IF NOT EXISTS platform_cost_settings (
+    settings_id INTEGER PRIMARY KEY CHECK (settings_id = 1),
+    content_cost_per_track REAL NOT NULL DEFAULT 0.04,
+    infrastructure_fixed_cost REAL NOT NULL DEFAULT 10.00,
+    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.50,
+    updated_at TEXT NOT NULL
+);
+
 -- Plans
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (1, 'Free', 0.0, 1);
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (2, 'Individual', 14.9, 1);
@@ -814,6 +834,19 @@ INSERT OR IGNORE INTO jam_participants (jam_id, user_id, joined_at) VALUES (1, 4
 INSERT OR IGNORE INTO jam_participants (jam_id, user_id, joined_at) VALUES (1, 6, '2026-02-05T20:01:00+00:00');
 INSERT OR IGNORE INTO jam_queue_items (jam_queue_id, jam_id, track_id, vote_points, added_at) VALUES (1, 1, 4, 2, '2026-02-05T20:02:00+00:00');
 INSERT OR IGNORE INTO jam_queue_items (jam_queue_id, jam_id, track_id, vote_points, added_at) VALUES (2, 1, 2, 1, '2026-02-05T20:03:00+00:00');
+
+-- Sample Soft-Deleted Track & Track Accesses
+INSERT OR IGNORE INTO tracks (track_id, title, artist, album, duration_seconds, genre, country, release_year, cover_url, itunes_preview_url, explicit, is_deleted, created_at) VALUES (593, 'Faixa Removida (Arquivo)', 'Ribbit Archive', 'Single', 195, 'Pop', NULL, 2024, NULL, NULL, 0, 1, '2026-01-01T00:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (1, 4, 1, 'swipe', '2026-02-01T10:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (2, 4, 2, 'play', '2026-02-01T10:05:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (3, 4, 4, 'details', '2026-02-01T10:10:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (4, 4, 593, 'play', '2026-02-01T10:12:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (5, 5, 2, 'search', '2026-02-02T14:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (6, 6, 3, 'playlist', '2026-02-03T18:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (7, 6, 1, 'jam', '2026-02-05T20:00:00+00:00');
+
+-- Default Platform Cost Settings
+INSERT OR IGNORE INTO platform_cost_settings (settings_id, content_cost_per_track, infrastructure_fixed_cost, infrastructure_cost_per_user, updated_at) VALUES (1, 0.04, 10.00, 0.50, '1970-01-01T00:00:00+00:00');
 
 COMMIT;
 PRAGMA foreign_keys = ON;

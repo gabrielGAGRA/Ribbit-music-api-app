@@ -1,6 +1,7 @@
 """Presentation schemas package exposing all request and response models."""
 
 from app.presentation.schemas.admin import (
+    AdminTrackAccessEntryResponse,
     AudienceReportResponse,
     ExecutiveDashboardResponse,
     PlanResponse,
@@ -56,7 +57,9 @@ from app.presentation.schemas.profile import (
     SourceStatResponse,
     ThemePreferenceRequest,
     UpdateProfileRequest,
+    UserAccessHistoryResponse,
     UserProfileResponse,
+    UserTrackAccessResponse,
     YearlyInteractionStatResponse,
 )
 from app.presentation.schemas.spotify import (
@@ -65,12 +68,15 @@ from app.presentation.schemas.spotify import (
 )
 from app.presentation.schemas.tracks_reviews import (
     PublishReviewRequest,
+    RecordTrackAccessRequest,
+    RecordTrackAccessResponse,
     ReviewResponse,
 )
 
 __all__ = [
     "ActionSuccessResponse",
     "AddFamilyMemberRequest",
+    "AdminTrackAccessEntryResponse",
     "AnnualStatsResponse",
     "ArtistStatResponse",
     "AudienceReportResponse",
@@ -98,6 +104,8 @@ __all__ = [
     "PlanResponse",
     "PlaylistResponse",
     "PublishReviewRequest",
+    "RecordTrackAccessRequest",
+    "RecordTrackAccessResponse",
     "RegisterUserRequest",
     "ReleaseYearStatResponse",
     "ReviewResponse",
@@ -115,9 +123,11 @@ __all__ = [
     "UpdatePlanAdminRequest",
     "UpdateProfileRequest",
     "UpdateTrackExplicitRequest",
+    "UserAccessHistoryResponse",
     "UserProfileResponse",
     "UserPlanSummaryResponse",
     "UserResponse",
+    "UserTrackAccessResponse",
     "VoteJamTrackRequest",
     "YearlyInteractionStatResponse",
 ]

@@ -75,6 +75,9 @@
               }
             </span>
           </div>
+          @if (state.isTrackSeen(item.trackId)) {
+            <span class="seen-badge"> <app-icon name="check" [size]="12" /> Ouvido </span>
+          }
           <button
             class="icon-button like-track-btn"
             (click)="likeAndSaveTrack(item)"
@@ -114,6 +117,9 @@
             <strong>{{ item.title }}</strong>
             <span>{{ item.artist }}</span>
           </div>
+          @if (state.isTrackSeen(item.trackId)) {
+            <span class="seen-badge"> <app-icon name="check" [size]="12" /> Ouvido </span>
+          }
           <button
             class="icon-button"
             (click)="openSongDetails(item)"
@@ -122,11 +128,15 @@
             <app-icon name="chevron" [size]="17" />
           </button>
         </div>
+      } @empty {
+        <p class="muted">Nenhuma faixa ouvida recentemente. Explore ou descubra novas músicas!</p>
       }
-      <button class="text-button history-toggle" (click)="toggleHistory()">
-        {{ historyExpanded() ? 'Mostrar menos' : 'Ver histórico completo' }}
-        <app-icon [name]="historyExpanded() ? 'undo' : 'arrow'" [size]="14" />
-      </button>
+      @if (recentSongs().length > 0) {
+        <button class="text-button history-toggle" (click)="toggleHistory()">
+          {{ historyExpanded() ? 'Mostrar menos' : 'Ver histórico completo' }}
+          <app-icon [name]="historyExpanded() ? 'undo' : 'arrow'" [size]="14" />
+        </button>
+      }
     </div>
 
     <div class="reviews-heading">

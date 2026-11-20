@@ -177,3 +177,25 @@ Table audit_logs {
   status text [not null]
   created_at text [not null]
 }
+
+Table track_accesses {
+  access_id integer [pk, increment]
+  user_id integer [not null, ref: > users.user_id]
+  track_id integer [not null, ref: > tracks.track_id]
+  source text [not null]
+  accessed_at text [not null]
+
+  indexes {
+    (user_id, accessed_at) [name: 'idx_track_accesses_user_time']
+    track_id [name: 'idx_track_accesses_track_id']
+    (user_id, track_id) [name: 'idx_track_accesses_user_track']
+  }
+}
+
+Table platform_cost_settings {
+  settings_id integer [pk]
+  content_cost_per_track real [not null, default: 0.04]
+  infrastructure_fixed_cost real [not null, default: 10.00]
+  infrastructure_cost_per_user real [not null, default: 0.50]
+  updated_at text [not null]
+}

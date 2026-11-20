@@ -13,12 +13,18 @@ from app.application.use_cases.admin.get_audit_logs import GetAuditLogsUseCase
 from app.application.use_cases.admin.get_executive_dashboard import (
     GetExecutiveDashboardUseCase,
 )
+from app.application.use_cases.admin.get_platform_costs import (
+    GetPlatformCostsUseCase,
+)
 from app.application.use_cases.admin.get_top_moderation_reviews import (
     GetTopModerationReviewsUseCase,
 )
 from app.application.use_cases.admin.ingest_tracks import (
     IngestTracksFromCatalogUseCase,
     IngestTracksResult,
+)
+from app.application.use_cases.admin.list_admin_access_history import (
+    ListAdminAccessHistoryUseCase,
 )
 from app.application.use_cases.admin.list_admin_catalog_tracks import (
     ListAdminCatalogTracksUseCase,
@@ -45,6 +51,9 @@ from app.application.use_cases.admin.sync_catalog_version import (
 from app.application.use_cases.admin.update_admin_role import (
     UpdateAdminRoleUseCase,
 )
+from app.application.use_cases.admin.update_platform_costs import (
+    UpdatePlatformCostsUseCase,
+)
 from app.application.use_cases.admin.update_subscription_plan import (
     UpdateSubscriptionPlanUseCase,
 )
@@ -63,9 +72,11 @@ __all__ = [
     "GetAudienceReportUseCase",
     "GetAuditLogsUseCase",
     "GetExecutiveDashboardUseCase",
+    "GetPlatformCostsUseCase",
     "GetTopModerationReviewsUseCase",
     "IngestTracksFromCatalogUseCase",
     "IngestTracksResult",
+    "ListAdminAccessHistoryUseCase",
     "ListAdminCatalogTracksUseCase",
     "ListAdministratorsUseCase",
     "ListBlockedTracksUseCase",
@@ -75,6 +86,7 @@ __all__ = [
     "SyncCatalogVersionResult",
     "SyncCatalogVersionUseCase",
     "UpdateAdminRoleUseCase",
+    "UpdatePlatformCostsUseCase",
     "UpdateSubscriptionPlanUseCase",
     "UpdateTrackExplicitFlagUseCase",
     "UpdateTrackGenreUseCase",

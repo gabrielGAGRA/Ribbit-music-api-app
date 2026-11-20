@@ -9,22 +9,27 @@ import type {
   ActionSuccessApiDto,
   AdminModerationReview,
   AdminSession,
+  AdminTrackAccessEntry,
   AdminUserPlanSummary,
   AudienceReportApiDto,
   AuthApiResponse,
   BlockedGenreEntry,
   CompactCatalogApiResponse,
   ExecutiveDashboardApiDto,
+  GenreAccessCountApiDto,
   PlanApiDto,
   PlanBreakdownEntry,
+  PlatformCostSettingsApiDto,
   RegisterAdminApiRequest,
   ReviewApiDto,
   SyncCatalogVersionApiResponse,
+  TrackAccessRankApiDto,
   TrackApiDto,
   TrackBlockApiResponse,
   TrackExplicitApiResponse,
   TrackGenreApiResponse,
   UpdateAdminPlanPayload,
+  UpdatePlatformCostsPayload,
   UserApiDto,
 } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
@@ -179,7 +184,11 @@ function buildBreakdownFromDashboard(
   plans: readonly PlanApiDto[],
 ): readonly PlanBreakdownEntry[] {
   const totalUsers = dashboard.total_users;
-  const totalRevenue = dashboard.estimated_net_revenue;
+  const planRevenueSum = Object.values(dashboard.revenue_by_plan).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const grossRevenue = dashboard.gross_revenue ?? planRevenueSum;
   return plans.map((plan) => {
     const count = dashboard.users_by_plan[plan.name] ?? 0;
     const rev = Math.round((dashboard.revenue_by_plan[plan.name] ?? 0) * 100) / 100;
@@ -188,7 +197,7 @@ function buildBreakdownFromDashboard(
       userCount: count,
       userPercent: toPercent(count, totalUsers),
       revenue: rev,
-      revenuePercent: toPercent(rev, totalRevenue),
+      revenuePercent: toPercent(rev, grossRevenue),
     };
   });
 }
@@ -312,6 +321,7 @@ export class AdminStateService implements OnDestroy {
   private readonly toastSignal = signal<string>('');
   private readonly hasHydratedSignal = signal<boolean>(false);
   private readonly lastCatalogQuerySignal = signal<string>('');
+  private readonly accessHistorySignal = signal<readonly AdminTrackAccessEntry[]>([]);
 
   private readonly unsubscribeAdminUnauthorized: () => void;
   private hydrationSub: Subscription | null = null;
@@ -333,6 +343,7 @@ export class AdminStateService implements OnDestroy {
   readonly toastMessage = this.toastSignal.asReadonly();
   readonly hasHydrated = this.hasHydratedSignal.asReadonly();
   readonly lastCatalogQuery = this.lastCatalogQuerySignal.asReadonly();
+  readonly accessHistory = this.accessHistorySignal.asReadonly();
 
   readonly topModerationReviews = computed<readonly AdminModerationReview[]>(() =>
     [...this.reviewsSignal()]
@@ -348,6 +359,28 @@ export class AdminStateService implements OnDestroy {
   readonly blockedGenreRanking = computed<readonly BlockedGenreEntry[]>(() =>
     buildBlockedGenreEntries(this.audienceSignal().blocked_genres),
   );
+
+  readonly accessesByGenreRanking = computed<
+    readonly (GenreAccessCountApiDto & { readonly percent: number })[]
+  >(() => {
+    const list = this.audienceSignal().accesses_by_genre ?? [];
+    const maxCount = list[0]?.access_count ?? 0;
+    return list.map((item) => ({
+      ...item,
+      percent: maxCount > 0 ? Math.round((item.access_count / maxCount) * 100) : 0,
+    }));
+  });
+
+  readonly topAccessedTracks = computed<
+    readonly (TrackAccessRankApiDto & { readonly percent: number })[]
+  >(() => {
+    const list = this.audienceSignal().accesses_by_track ?? [];
+    const maxCount = list[0]?.access_count ?? 0;
+    return list.map((item) => ({
+      ...item,
+      percent: maxCount > 0 ? Math.round((item.access_count / maxCount) * 100) : 0,
+    }));
+  });
 
   constructor() {
     clearLegacyAdminMockStorage();
@@ -767,6 +800,7 @@ export class AdminStateService implements OnDestroy {
     this.sessionSignal.set(null);
     this.plansSignal.set([]);
     this.usersSignal.set([]);
+    this.accessHistorySignal.set([]);
     this.administratorsSignal.set([]);
     this.activeTracksSignal.set([]);
     this.blockedTracksSignal.set([]);
@@ -806,6 +840,55 @@ export class AdminStateService implements OnDestroy {
         this.syncErrorSignal.set(mapAdminDomainError(err).message);
       },
     });
+  }
+
+  loadAccessHistory(filters?: {
+    readonly userId?: number | null;
+    readonly onlyDeleted?: boolean;
+    readonly limit?: number;
+  }): void {
+    let params = new HttpParams().set('limit', String(filters?.limit ?? 100));
+    if (filters?.userId !== undefined && filters.userId !== null) {
+      params = params.set('user_id', String(filters.userId));
+    }
+    if (filters?.onlyDeleted) {
+      params = params.set('only_deleted', 'true');
+    }
+    this.runBackgroundRefresh(
+      this.http.get<readonly AdminTrackAccessEntry[]>('/api/admin/access-history', {
+        params,
+      }),
+      (entries) => {
+        this.accessHistorySignal.set(entries);
+      },
+    );
+  }
+
+  updatePlatformCosts(payload: UpdatePlatformCostsPayload): Observable<PlatformCostSettingsApiDto> {
+    if (
+      !Number.isFinite(payload.content_cost_per_track) ||
+      payload.content_cost_per_track < 0 ||
+      !Number.isFinite(payload.infrastructure_fixed_cost) ||
+      payload.infrastructure_fixed_cost < 0 ||
+      !Number.isFinite(payload.infrastructure_cost_per_user) ||
+      payload.infrastructure_cost_per_user < 0
+    ) {
+      return throwError(
+        () => new AdminDomainError('Os custos operacionais não podem ser negativos.', 'RULE'),
+      );
+    }
+    return this.http.put<PlatformCostSettingsApiDto>('/api/admin/costs', payload).pipe(
+      tap(() => {
+        this.notify('Custos operacionais atualizados com sucesso.');
+        this.runBackgroundRefresh(
+          this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
+          (dashboard) => {
+            this.dashboardSignal.set(dashboard);
+          },
+        );
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
   }
 
   private refreshUsersAndMetrics(): void {

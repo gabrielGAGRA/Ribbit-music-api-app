@@ -24,6 +24,18 @@
         <app-icon name="shield" [size]="16" />
         Administradores ({{ adminState.administrators().length }})
       </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'access-history'"
+        [class.active]="activeTab() === 'access-history'"
+        (click)="selectTab('access-history')"
+      >
+        <app-icon name="clock" [size]="16" />
+        Histórico de Acessos
+      </button>
     </div>
 
     <div class="filters-row">
@@ -61,6 +73,36 @@
             }
           </select>
         </div>
+      }
+
+      @if (activeTab() === 'access-history') {
+        <div class="filter-field">
+          <label for="admin-access-user-filter">Filtrar por usuário</label>
+          <span class="field-hint">Ouvinte ou admin</span>
+          <select
+            id="admin-access-user-filter"
+            class="admin-select"
+            [value]="accessUserFilter() === null ? 'all' : accessUserFilter()"
+            (change)="updateAccessUserFilter($event)"
+          >
+            <option value="all">Todos os usuários</option>
+            @for (user of adminState.usersWithPlans(); track user.user_id) {
+              @if (user.user_id !== null) {
+                <option [value]="user.user_id">{{ user.display_name }} ({{ user.email }})</option>
+              }
+            }
+          </select>
+        </div>
+
+        <label class="toggle-pill" for="admin-access-only-deleted">
+          <input
+            id="admin-access-only-deleted"
+            type="checkbox"
+            [checked]="accessOnlyDeleted()"
+            (change)="toggleAccessOnlyDeleted($event)"
+          />
+          <span>Somente removidas (Soft Delete)</span>
+        </label>
       }
     </div>
 
@@ -153,7 +195,7 @@
         </table>
       </div>
     </section>
-  } @else {
+  } @else if (activeTab() === 'admins') {
     <section class="admin-card">
       <div class="section-header-row section-header-actions">
         <div>
@@ -316,6 +358,72 @@
             } @empty {
               <tr>
                 <td colspan="5" class="empty-cell">Nenhum administrador corresponde à busca.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  } @else if (activeTab() === 'access-history') {
+    <section class="admin-card">
+      <div class="section-header-row">
+        <div>
+          <span class="eyebrow blue">GET /API/ADMIN/ACCESS-HISTORY</span>
+          <h2>Histórico Global de Acessos</h2>
+        </div>
+      </div>
+
+      <div
+        tabindex="0"
+        role="region"
+        aria-labelledby="access-history-caption"
+        class="table-wrapper"
+      >
+        <table class="admin-table access-history-table">
+          <caption id="access-history-caption" class="sr-only">
+            Registro global de acessos às faixas incluindo faixas removidas via soft delete
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Timestamp</th>
+              <th scope="col">Usuário</th>
+              <th scope="col">Faixa</th>
+              <th scope="col">Origem</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of filteredAccessHistory(); track entry.access_id) {
+              <tr>
+                <td>{{ formatAccessTimestamp(entry.accessed_at) }}</td>
+                <td>
+                  <div class="user-cell">
+                    <strong>{{ entry.user_display_name }}</strong>
+                    <small>{{ entry.user_email }}</small>
+                  </div>
+                </td>
+                <td>
+                  <div class="user-cell">
+                    <strong>{{ entry.track_title }}</strong>
+                    <small>{{ entry.track_artist }} · {{ entry.track_genre }}</small>
+                  </div>
+                </td>
+                <td>
+                  <span class="plan-chip">{{ entry.source }}</span>
+                </td>
+                <td>
+                  @if (entry.track_is_deleted) {
+                    <span class="status-badge deleted-track">Removida (Soft Delete)</span>
+                  } @else {
+                    <span class="status-badge active-track">Ativa</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="empty-cell">
+                  Nenhum acesso encontrado para os filtros selecionados.
+                </td>
               </tr>
             }
           </tbody>
