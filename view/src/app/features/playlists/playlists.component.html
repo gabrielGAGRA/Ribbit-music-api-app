@@ -153,6 +153,9 @@
                     <div class="track-tags">
                       <span>{{ deckTrack.genre }}</span>
                       <span>Acústico</span>
+                      @if (state.isTrackSeen(deckTrack.trackId)) {
+                        <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+                      }
                       <small>
                         <app-icon name="clock" [size]="12" />
                         {{ deckTrack.time }}
@@ -243,6 +246,9 @@
                     >{{ track.artist }} · <small>{{ track.genre }}</small></span
                   >
                 </div>
+                @if (state.isTrackSeen(track.trackId)) {
+                  <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+                }
                 <span class="song-duration">{{ track.time }}</span>
 
                 <div class="track-item-actions">

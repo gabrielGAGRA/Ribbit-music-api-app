@@ -9,6 +9,7 @@ from app.application.ports.repositories import (
     PlanRepositoryPort,
     PlaylistRepositoryPort,
     ReviewRepositoryPort,
+    TrackAccessRepositoryPort,
     TrackRepositoryPort,
     UserRepositoryPort,
 )
@@ -32,8 +33,10 @@ from app.infrastructure.repositories import (
     SQLitePlanRepository,
     SQLitePlaylistRepository,
     SQLiteReviewRepository,
+    SQLiteTrackAccessRepository,
     SQLiteTrackRepository,
     SQLiteUserRepository,
+    TrackAccessRepository,
     TrackRepository,
     UserRepository,
 )
@@ -74,6 +77,10 @@ def test_repository_contract_compliance() -> None:
         audit_repo = AuditLogRepository(conn)
         assert isinstance(audit_repo, AuditLogRepositoryPort)
         assert isinstance(SQLiteAuditLogRepository(conn), AuditLogRepositoryPort)
+
+        track_access_repo = TrackAccessRepository(conn)
+        assert isinstance(track_access_repo, TrackAccessRepositoryPort)
+        assert isinstance(SQLiteTrackAccessRepository(conn), TrackAccessRepositoryPort)
     finally:
         conn.close()
 

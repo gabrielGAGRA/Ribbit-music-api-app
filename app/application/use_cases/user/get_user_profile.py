@@ -8,6 +8,7 @@ lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
 lazy from app.application.ports.repositories.plan_repository import PlanRepositoryPort
+lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.domain.models.interaction import Interaction
 
@@ -19,6 +20,7 @@ class GetUserProfileUseCase:
     user_repo: UserRepositoryPort
     plan_repo: PlanRepositoryPort
     interaction_repo: InteractionRepositoryPort | None = None
+    track_repo: TrackRepositoryPort | None = None
 
     def execute(self, user_id: int) -> UserProfileResult:
         user = self.user_repo.find_by_id(user_id)
@@ -31,7 +33,21 @@ class GetUserProfileUseCase:
 
         recent_interactions: list[Interaction] = []
         if self.interaction_repo is not None:
-            recent_interactions = list(self.interaction_repo.list_by_user(user_id)[:5])
+            raw_interactions = self.interaction_repo.list_by_user(user_id)
+            if self.track_repo is None:
+                recent_interactions = list(raw_interactions[:5])
+            else:
+                for interaction in raw_interactions:
+                    track = self.track_repo.find_by_id(interaction.track_id)
+                    if (
+                        track is None
+                        or track.is_deleted
+                        or user.is_track_restricted_for_minor(track)
+                    ):
+                        continue
+                    recent_interactions.append(interaction)
+                    if len(recent_interactions) >= 5:
+                        break
 
         return UserProfileResult(
             user=user,

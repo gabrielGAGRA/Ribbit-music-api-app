@@ -1,5 +1,7 @@
 """Administrative presentation schemas."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -135,7 +137,26 @@ class RegisterAdminRequest(BaseModel):
     birth_date: str | None = None
 
 
+class AdminTrackAccessEntryResponse(BaseModel):
+    """Admin-facing track access log entry preserving soft-deleted track state."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    access_id: int
+    user_id: int
+    user_display_name: str
+    user_email: str
+    track_id: int
+    track_title: str
+    track_artist: str
+    track_genre: str
+    track_is_deleted: bool
+    source: str
+    accessed_at: datetime
+
+
 __all__ = [
+    "AdminTrackAccessEntryResponse",
     "AudienceReportResponse",
     "BlockTrackRequest",
     "CompactCatalogResponse",

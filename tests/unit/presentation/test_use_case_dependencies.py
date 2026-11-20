@@ -17,6 +17,7 @@ from app.application.use_cases.admin import (
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminAccessHistoryUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
@@ -35,6 +36,7 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.discovery import (
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    RecordTrackAccessUseCase,
 )
 from app.application.use_cases.jam import (
     AdvanceJamPlaybackUseCase,
@@ -82,6 +84,7 @@ from app.application.use_cases.user import (
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
     ListPlansUseCase,
+    ListUserAccessHistoryUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
@@ -101,6 +104,7 @@ ALL_USE_CASES = [
     ConnectSpotifyAccountUseCase,
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    RecordTrackAccessUseCase,
     CreateDeckPlaylistUseCase,
     GetPlaylistDeckUseCase,
     AddTrackToPlaylistUseCase,
@@ -137,6 +141,7 @@ ALL_USE_CASES = [
     ListBlockedGenresUseCase,
     UpdateBlockedGenresUseCase,
     ListUserInteractionsUseCase,
+    ListUserAccessHistoryUseCase,
     ChangeTrackInteractionUseCase,
     GetAnnualListeningStatsUseCase,
     LinkSpotifyAccountUseCase,
@@ -153,6 +158,7 @@ ALL_USE_CASES = [
     GetAuditLogsUseCase,
     PromoteUserToAdminUseCase,
     RegisterAdministratorUseCase,
+    ListAdminAccessHistoryUseCase,
 ]
 
 

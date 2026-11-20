@@ -177,3 +177,17 @@ Table audit_logs {
   status text [not null]
   created_at text [not null]
 }
+
+Table track_accesses {
+  access_id integer [pk, increment]
+  user_id integer [not null, ref: > users.user_id]
+  track_id integer [not null, ref: > tracks.track_id]
+  source text [not null]
+  accessed_at text [not null]
+
+  indexes {
+    (user_id, accessed_at) [name: 'idx_track_accesses_user_time']
+    track_id [name: 'idx_track_accesses_track_id']
+    (user_id, track_id) [name: 'idx_track_accesses_user_track']
+  }
+}

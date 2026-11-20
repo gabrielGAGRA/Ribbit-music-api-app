@@ -152,4 +152,20 @@ describe('ExploreComponent', () => {
     expect(template).toContain('review.rating');
     expect(component.displayedReviews().every((r) => typeof r.rating === 'number')).toBe(true);
   });
+
+  it('returns empty recentSongs when no access or interaction history exists and records search access on selectSong', () => {
+    const state = TestBed.inject(RibbitStateService);
+    expect(component.recentSongs()).toEqual([]);
+
+    const song = state.songs()[0];
+    expect(song).toBeDefined();
+    if (song && song.trackId !== undefined) {
+      component.selectSong(song);
+      expect(state.isTrackSeen(song.trackId)).toBe(true);
+    }
+
+    const template = readFileSync(resolve(__dirname, './explore.component.html'), 'utf8');
+    expect(template).toContain('Nenhuma faixa ouvida recentemente');
+    expect(template).toContain('Ouvido');
+  });
 });
