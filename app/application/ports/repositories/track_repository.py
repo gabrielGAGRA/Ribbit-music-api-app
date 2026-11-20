@@ -3,6 +3,7 @@
 from typing import Protocol, runtime_checkable
 lazy from collections.abc import Sequence
 
+lazy from app.application.dtos.admin_dtos import AdminCatalogTrackResult
 lazy from app.domain.models.track import Track, TrackId
 
 
@@ -50,3 +51,16 @@ class TrackRepositoryPort(Protocol):
     def find_by_title_and_artist(self, title: str, artist: str) -> Track | None: ...
 
     def list_blocked(self) -> list[Track]: ...
+
+    def list_blocked_with_metrics(self) -> list[AdminCatalogTrackResult]: ...
+
+    def list_admin_catalog(
+        self,
+        *,
+        query: str | None = None,
+        include_deleted: bool = False,
+        min_dislikes: int | None = None,
+        sort_by: str = "id_asc",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[AdminCatalogTrackResult]: ...

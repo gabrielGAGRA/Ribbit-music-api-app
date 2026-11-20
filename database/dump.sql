@@ -780,6 +780,9 @@ INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, c
 INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (4, 4, 7, 'like', '2026-02-01T10:15:00+00:00', 'discovery', NULL);
 INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (5, 5, 2, 'like', '2026-02-02T14:00:00+00:00', 'discovery', NULL);
 INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (6, 6, 3, 'superlike', '2026-02-03T18:00:00+00:00', 'discovery', NULL);
+INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (7, 4, 5, 'dislike', '2026-02-04T11:00:00+00:00', 'discovery', NULL);
+INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (8, 5, 5, 'dislike', '2026-02-04T11:15:00+00:00', 'discovery', NULL);
+INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (9, 6, 6, 'superlike', '2026-02-04T12:00:00+00:00', 'discovery', NULL);
 
 -- Sample Playlists
 INSERT OR IGNORE INTO playlists (playlist_id, user_id, name, description, is_exported, created_at, max_duration_seconds) VALUES (1, 4, 'Clássicos & Favoritas', 'Seleção inicial de rock e pop para o dia a dia', 0, '2026-02-01T11:00:00+00:00', 1800);

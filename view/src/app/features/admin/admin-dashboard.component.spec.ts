@@ -47,7 +47,7 @@ describe('AdminDashboardComponent', () => {
       { user_id: 1, email: 'a@ribbit.app', display_name: 'Admin 1', plan_id: 1, is_admin: true },
       { user_id: 2, email: 'b@ribbit.app', display_name: 'Admin 2', plan_id: 1, is_admin: true },
     ]);
-    httpMock.expectOne('/api/tracks/search?limit=100').flush([]);
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([]);
     httpMock.expectOne('/api/admin/blocked-tracks').flush([
       {
         track_id: 10,

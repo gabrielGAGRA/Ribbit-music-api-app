@@ -10,8 +10,9 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Subject, merge, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import type { AdminModerationReview, TrackApiDto } from '@ribbit/shared-types';
+import type { AdminModerationReview } from '@ribbit/shared-types';
 import { IconComponent } from '../../shared/icon.component';
+import type { AdminTrackItem, AdminTrackSortOption } from './admin-state.service';
 import { AdminStateService } from './admin-state.service';
 
 type ModerationTab = 'catalog' | 'blocked' | 'reviews';
@@ -38,17 +39,28 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
   protected readonly catalogActionStatus = signal<string>('');
   protected readonly editingTrackId = signal<number | null>(null);
   protected readonly editGenreDraft = signal<string>('');
+  protected readonly catalogSort = signal<AdminTrackSortOption>('id_asc');
+  protected readonly onlyDisliked = signal<boolean>(false);
+  protected readonly showCreateTrackForm = signal<boolean>(false);
+  protected readonly isCreatingTrack = signal<boolean>(false);
+  protected readonly newTrackTitle = signal<string>('');
+  protected readonly newTrackArtist = signal<string>('');
+  protected readonly newTrackGenre = signal<string>('');
+  protected readonly newTrackDuration = signal<string>('180');
+  protected readonly newTrackAlbum = signal<string>('');
+  protected readonly newTrackYear = signal<string>('');
+  protected readonly newTrackExplicit = signal<boolean>(false);
 
   private readonly immediateSearch$ = new Subject<string>();
   private readonly debouncedSearch$ = new Subject<string>();
   private statusTimer: ReturnType<typeof setTimeout> | null = null;
   private searchPipelineInitialized = false;
 
-  protected readonly searchedActiveTracks = computed<readonly TrackApiDto[]>(() =>
+  protected readonly searchedActiveTracks = computed<readonly AdminTrackItem[]>(() =>
     this.adminState.activeTracks(),
   );
 
-  protected readonly blockedTracks = computed<readonly TrackApiDto[]>(() =>
+  protected readonly blockedTracks = computed<readonly AdminTrackItem[]>(() =>
     this.adminState.blockedTracks(),
   );
 
@@ -94,7 +106,7 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
     return `${mins}:${secs}`;
   }
 
-  protected toggleExplicit(track: TrackApiDto): void {
+  protected toggleExplicit(track: AdminTrackItem): void {
     this.moderationError.set('');
     this.adminState.setTrackExplicit(track.track_id, !track.explicit).subscribe({
       error: (error: unknown) => {
@@ -176,7 +188,7 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
     });
   }
 
-  protected startEditingGenre(track: TrackApiDto): void {
+  protected startEditingGenre(track: AdminTrackItem): void {
     this.editingTrackId.set(track.track_id);
     this.editGenreDraft.set(track.genre);
     this.moderationError.set('');
@@ -210,6 +222,97 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
     });
   }
 
+  protected onCatalogSortChange(event: Event): void {
+    const sortBy = (event.target as HTMLSelectElement).value as AdminTrackSortOption;
+    this.catalogSort.set(sortBy);
+    this.searchTracks(this.trackQuery());
+  }
+
+  protected toggleOnlyDisliked(): void {
+    this.onlyDisliked.update((v) => !v);
+    this.searchTracks(this.trackQuery());
+  }
+
+  protected toggleCreateTrackForm(): void {
+    this.moderationError.set('');
+    this.showCreateTrackForm.update((v) => !v);
+  }
+
+  protected updateTextSignal(targetSignal: { set: (value: string) => void }, event: Event): void {
+    targetSignal.set((event.target as HTMLInputElement).value);
+  }
+
+  protected toggleNewTrackExplicit(): void {
+    this.newTrackExplicit.update((v) => !v);
+  }
+
+  private parseOptionalReleaseYear(): number | null | 'invalid' {
+    const rawYear = this.newTrackYear().trim();
+    if (!rawYear) return null;
+    const parsed = Number(rawYear);
+    return Number.isFinite(parsed) && parsed >= 1900 ? Math.round(parsed) : 'invalid';
+  }
+
+  private buildCreateTrackPayload(): ReturnType<AdminStateService['createTrack']> | null {
+    const title = this.newTrackTitle().trim();
+    const artist = this.newTrackArtist().trim();
+    const genre = this.newTrackGenre().trim();
+    const duration = Number(this.newTrackDuration().trim());
+    if (!title || !artist || !genre) {
+      this.moderationError.set('Preencha título, artista e gênero da faixa.');
+      return null;
+    }
+    if (!Number.isFinite(duration) || duration <= 0) {
+      this.moderationError.set('Informe uma duração válida em segundos (> 0).');
+      return null;
+    }
+    const parsedYear = this.parseOptionalReleaseYear();
+    if (parsedYear === 'invalid') {
+      this.moderationError.set('Informe um ano de lançamento válido.');
+      return null;
+    }
+    const album = this.newTrackAlbum().trim();
+    return this.adminState.createTrack({
+      title,
+      artist,
+      genre,
+      duration_seconds: Math.round(duration),
+      ...(album ? { album } : {}),
+      ...(parsedYear !== null ? { release_year: parsedYear } : {}),
+      explicit: this.newTrackExplicit(),
+    });
+  }
+
+  private resetCreateTrackForm(): void {
+    this.showCreateTrackForm.set(false);
+    this.newTrackTitle.set('');
+    this.newTrackArtist.set('');
+    this.newTrackGenre.set('');
+    this.newTrackDuration.set('180');
+    this.newTrackAlbum.set('');
+    this.newTrackYear.set('');
+    this.newTrackExplicit.set(false);
+  }
+
+  protected submitCreateTrack(event: Event): void {
+    event.preventDefault();
+    const request$ = this.buildCreateTrackPayload();
+    if (!request$) return;
+
+    this.moderationError.set('');
+    this.isCreatingTrack.set(true);
+    request$.subscribe({
+      next: () => {
+        this.isCreatingTrack.set(false);
+        this.resetCreateTrackForm();
+      },
+      error: (err: unknown) => {
+        this.isCreatingTrack.set(false);
+        this.moderationError.set(err instanceof Error ? err.message : 'Erro ao cadastrar faixa.');
+      },
+    });
+  }
+
   protected starArray(rating: number): readonly number[] {
     const count = Math.max(1, Math.min(5, Math.round(rating)));
     return Array.from({ length: count }, (_, idx) => idx);
@@ -227,14 +330,20 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
         switchMap((query) => {
           this.moderationError.set('');
           this.isSearchingTracks.set(true);
-          return this.adminState.fetchCatalogTracksFromBackend(query).pipe(
-            catchError((err: unknown) => {
-              this.moderationError.set(
-                err instanceof Error ? err.message : 'Erro ao pesquisar faixas no catálogo.',
-              );
-              return of(null);
-            }),
-          );
+          return this.adminState
+            .loadAdminCatalog({
+              query,
+              sortBy: this.catalogSort(),
+              minDislikes: this.onlyDisliked() ? 1 : null,
+            })
+            .pipe(
+              catchError((err: unknown) => {
+                this.moderationError.set(
+                  err instanceof Error ? err.message : 'Erro ao pesquisar faixas no catálogo.',
+                );
+                return of(null);
+              }),
+            );
         }),
         takeUntilDestroyed(this.destroyRef),
       )
