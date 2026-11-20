@@ -449,6 +449,27 @@ export interface ExecutiveDashboardApiDto {
   readonly estimated_net_revenue: number;
   readonly users_by_plan: Readonly<Record<string, number>>;
   readonly revenue_by_plan: Readonly<Record<string, number>>;
+  readonly gross_revenue?: number;
+  readonly content_cost?: number;
+  readonly infrastructure_cost?: number;
+  readonly total_costs?: number;
+  readonly active_tracks_count?: number;
+  readonly content_cost_per_track?: number;
+  readonly infrastructure_fixed_cost?: number;
+  readonly infrastructure_cost_per_user?: number;
+}
+
+export interface TrackAccessRankApiDto {
+  readonly track_id: number;
+  readonly title: string;
+  readonly artist: string;
+  readonly is_deleted: boolean;
+  readonly access_count: number;
+}
+
+export interface GenreAccessCountApiDto {
+  readonly genre: string;
+  readonly access_count: number;
 }
 
 export interface AudienceReportApiDto {
@@ -456,6 +477,22 @@ export interface AudienceReportApiDto {
   readonly total_tracks: number;
   readonly active_tracks: number;
   readonly blocked_genres: Readonly<Record<string, number>>;
+  readonly total_accesses?: number;
+  readonly accesses_by_track?: readonly TrackAccessRankApiDto[];
+  readonly accesses_by_genre?: readonly GenreAccessCountApiDto[];
+}
+
+export interface PlatformCostSettingsApiDto {
+  readonly content_cost_per_track: number;
+  readonly infrastructure_fixed_cost: number;
+  readonly infrastructure_cost_per_user: number;
+  readonly updated_at?: string | null;
+}
+
+export interface UpdatePlatformCostsPayload {
+  readonly content_cost_per_track: number;
+  readonly infrastructure_fixed_cost: number;
+  readonly infrastructure_cost_per_user: number;
 }
 
 export interface UpdateAdminPlanPayload {

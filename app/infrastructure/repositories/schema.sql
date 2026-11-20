@@ -173,3 +173,11 @@ CREATE TABLE IF NOT EXISTS track_accesses (
 CREATE INDEX IF NOT EXISTS idx_track_accesses_user_time ON track_accesses(user_id, accessed_at DESC);
 CREATE INDEX IF NOT EXISTS idx_track_accesses_track_id ON track_accesses(track_id);
 CREATE INDEX IF NOT EXISTS idx_track_accesses_user_track ON track_accesses(user_id, track_id);
+
+CREATE TABLE IF NOT EXISTS platform_cost_settings (
+    settings_id INTEGER PRIMARY KEY CHECK (settings_id = 1),
+    content_cost_per_track REAL NOT NULL DEFAULT 0.04,
+    infrastructure_fixed_cost REAL NOT NULL DEFAULT 10.00,
+    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.50,
+    updated_at TEXT NOT NULL
+);

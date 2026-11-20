@@ -16,6 +16,7 @@ from app.application.ports.repositories import (
     InteractionRepositoryPort,
     JamRepositoryPort,
     PlanRepositoryPort,
+    PlatformCostRepositoryPort,
     PlaylistRepositoryPort,
     ReviewRepositoryPort,
     TrackAccessRepositoryPort,
@@ -40,6 +41,7 @@ from app.application.use_cases.admin import (
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
+    GetPlatformCostsUseCase,
     GetTopModerationReviewsUseCase,
     IngestTracksFromCatalogUseCase,
     ListAdminAccessHistoryUseCase,
@@ -50,6 +52,7 @@ from app.application.use_cases.admin import (
     RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     UpdateTrackGenreUseCase,
@@ -151,6 +154,7 @@ from app.infrastructure.repositories import (
     SQLiteInteractionRepository,
     SQLiteJamRepository,
     SQLitePlanRepository,
+    SQLitePlatformCostRepository,
     SQLitePlaylistRepository,
     SQLiteReviewRepository,
     SQLiteTrackAccessRepository,
@@ -198,6 +202,7 @@ class Container:
     review_repo: SQLiteReviewRepository
     audit_log_repo: SQLiteAuditLogRepository
     track_access_repo: SQLiteTrackAccessRepository
+    platform_cost_repo: SQLitePlatformCostRepository
     google_verifier: GoogleIdpVerifierPort
     google_oauth: GoogleOAuthPort | None = None
     spotify_user_profile: SpotifyUserProfilePort
@@ -286,6 +291,8 @@ class Container:
     promote_user_to_admin_use_case: PromoteUserToAdminUseCase
     register_administrator_use_case: RegisterAdministratorUseCase
     list_admin_access_history_use_case: ListAdminAccessHistoryUseCase
+    get_platform_costs_use_case: GetPlatformCostsUseCase
+    update_platform_costs_use_case: UpdatePlatformCostsUseCase
     catalog_file_port: TrackCatalogFilePort | None = None
     ingest_tracks_from_catalog_use_case: IngestTracksFromCatalogUseCase | None = None
     compact_catalog_use_case: CompactCatalogUseCase | None = None
@@ -321,6 +328,7 @@ class Container:
         registry[ReviewRepositoryPort] = self.review_repo
         registry[AuditLogRepositoryPort] = self.audit_log_repo
         registry[TrackAccessRepositoryPort] = self.track_access_repo
+        registry[PlatformCostRepositoryPort] = self.platform_cost_repo
 
         optional_mappings: tuple[tuple[type, Any], ...] = (
             (GoogleOAuthPort, self.google_oauth),
@@ -425,6 +433,7 @@ def build_container(
     review_repo = SQLiteReviewRepository(conn, sync_service=firestore_sync)
     audit_log_repo = SQLiteAuditLogRepository(conn)
     track_access_repo = SQLiteTrackAccessRepository(conn)
+    platform_cost_repo = SQLitePlatformCostRepository(conn)
 
     catalog_adapter = (
         GCSTrackCatalogAdapter(
@@ -525,6 +534,7 @@ def build_container(
         review_repo=review_repo,
         audit_log_repo=audit_log_repo,
         track_access_repo=track_access_repo,
+        platform_cost_repo=platform_cost_repo,
         google_verifier=google_verifier,
         google_oauth=google_oauth,
         spotify_user_profile=spotify_user_profile,
@@ -712,7 +722,10 @@ def build_container(
         ),
         # Admin
         get_executive_dashboard_use_case=GetExecutiveDashboardUseCase(
-            user_repo, plan_repo
+            user_repo,
+            plan_repo,
+            track_repo=track_repo,
+            cost_repo=platform_cost_repo,
         ),
         list_users_with_plans_use_case=ListUsersWithPlansUseCase(user_repo, plan_repo),
         list_administrators_use_case=ListAdministratorsUseCase(user_repo),
@@ -738,12 +751,16 @@ def build_container(
         block_track_use_case=BlockTrackUseCase(track_repo),
         list_blocked_tracks_use_case=ListBlockedTracksUseCase(track_repo),
         get_top_moderation_reviews_use_case=GetTopModerationReviewsUseCase(review_repo),
-        get_audience_report_use_case=GetAudienceReportUseCase(user_repo, track_repo),
+        get_audience_report_use_case=GetAudienceReportUseCase(
+            user_repo, track_repo, track_access_repo=track_access_repo
+        ),
         get_audit_logs_use_case=GetAuditLogsUseCase(audit_log_repo),
         promote_user_to_admin_use_case=PromoteUserToAdminUseCase(user_repo),
         list_admin_access_history_use_case=ListAdminAccessHistoryUseCase(
             track_access_repo
         ),
+        get_platform_costs_use_case=GetPlatformCostsUseCase(platform_cost_repo),
+        update_platform_costs_use_case=UpdatePlatformCostsUseCase(platform_cost_repo),
         catalog_file_port=catalog_adapter,
         ingest_tracks_from_catalog_use_case=ingest_tracks_use_case,
         compact_catalog_use_case=compact_catalog_use_case,

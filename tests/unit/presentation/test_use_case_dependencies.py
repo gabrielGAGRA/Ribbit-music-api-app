@@ -16,6 +16,7 @@ from app.application.use_cases.admin import (
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
+    GetPlatformCostsUseCase,
     GetTopModerationReviewsUseCase,
     ListAdminAccessHistoryUseCase,
     ListAdministratorsUseCase,
@@ -24,6 +25,7 @@ from app.application.use_cases.admin import (
     PromoteUserToAdminUseCase,
     RegisterAdministratorUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
 )
@@ -149,6 +151,7 @@ ALL_USE_CASES = [
     ListUsersWithPlansUseCase,
     ListAdministratorsUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     BlockTrackUseCase,
@@ -159,6 +162,7 @@ ALL_USE_CASES = [
     PromoteUserToAdminUseCase,
     RegisterAdministratorUseCase,
     ListAdminAccessHistoryUseCase,
+    GetPlatformCostsUseCase,
 ]
 
 

@@ -178,6 +178,14 @@ CREATE INDEX IF NOT EXISTS idx_track_accesses_user_time ON track_accesses(user_i
 CREATE INDEX IF NOT EXISTS idx_track_accesses_track_id ON track_accesses(track_id);
 CREATE INDEX IF NOT EXISTS idx_track_accesses_user_track ON track_accesses(user_id, track_id);
 
+CREATE TABLE IF NOT EXISTS platform_cost_settings (
+    settings_id INTEGER PRIMARY KEY CHECK (settings_id = 1),
+    content_cost_per_track REAL NOT NULL DEFAULT 0.04,
+    infrastructure_fixed_cost REAL NOT NULL DEFAULT 10.00,
+    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.50,
+    updated_at TEXT NOT NULL
+);
+
 -- Plans
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (1, 'Free', 0.0, 1);
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (2, 'Individual', 14.9, 1);
@@ -828,6 +836,9 @@ INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, acce
 INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (5, 5, 2, 'search', '2026-02-02T14:00:00+00:00');
 INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (6, 6, 3, 'playlist', '2026-02-03T18:00:00+00:00');
 INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (7, 6, 1, 'jam', '2026-02-05T20:00:00+00:00');
+
+-- Default Platform Cost Settings
+INSERT OR IGNORE INTO platform_cost_settings (settings_id, content_cost_per_track, infrastructure_fixed_cost, infrastructure_cost_per_user, updated_at) VALUES (1, 0.04, 10.00, 0.50, '1970-01-01T00:00:00+00:00');
 
 COMMIT;
 PRAGMA foreign_keys = ON;
