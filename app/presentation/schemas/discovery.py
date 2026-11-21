@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.presentation.schemas.playlists import TrackResponse
+
 
 class InteractionRequest(BaseModel):
     """Payload to record a swipe interaction on a track."""
@@ -44,6 +46,7 @@ class UndoInteractionResponse(BaseModel):
     track_id: int
     action: str
     created_at: datetime | None = None
+    track: TrackResponse | None = None
 
 
 class TrackSearchQuery(BaseModel):

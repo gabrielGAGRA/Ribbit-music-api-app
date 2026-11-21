@@ -40,11 +40,11 @@
             <app-icon name="repeat" [size]="15" />
             <span>Sincronizando API...</span>
           </div>
-          <p>Carregando métricas e registros em tempo real de <code>/api/admin</code>.</p>
+          <p>Carregando métricas e registros em tempo real.</p>
         } @else {
           <div class="env-title">
             <app-icon name="check" [size]="15" />
-            <span>API /api/admin Conectada</span>
+            <span>API Conectada</span>
           </div>
           <p>Dados sincronizados com o backend FastAPI via <code>HttpClient</code>.</p>
         }
@@ -100,7 +100,7 @@
           } @else if (adminState.isLoading()) {
             SINCRONIZANDO...
           } @else {
-            API REAL (/api/admin)
+            API REAL
           }
         </span>
         <button

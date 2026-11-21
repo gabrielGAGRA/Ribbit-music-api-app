@@ -40,7 +40,7 @@
 
     @if (activeTab() === 'catalog') {
       <div class="search-field">
-        <label for="moderation-track-search">Pesquisar faixas ativas (GET /api/admin/tracks)</label>
+        <label for="moderation-track-search">Pesquisar faixas ativas</label>
         <span id="moderation-search-hint" class="field-hint">
           Busque por título, artista ou álbum para bloquear, editar gênero ou aplicar selo +18
         </span>
@@ -92,7 +92,7 @@
 
       @if (showCreateTrackForm()) {
         <form class="create-track-form" (submit)="submitCreateTrack($event)">
-          <h3>Cadastrar Nova Faixa (POST /api/admin/tracks)</h3>
+          <h3>Cadastrar Nova Faixa</h3>
           <div class="create-track-grid">
             <label>
               Título *
@@ -187,10 +187,6 @@
       <section class="admin-card">
         <div class="section-head catalog-header-row">
           <div>
-            <span class="eyebrow blue">
-              PUT /API/ADMIN/TRACKS/&#123;ID&#125;/EXPLICIT · PUT
-              /API/ADMIN/TRACKS/&#123;ID&#125;/BLOCK · PUT /API/ADMIN/TRACKS/&#123;ID&#125;/GENRE
-            </span>
             <h2>Catálogo Musical Disponível</h2>
           </div>
           <div class="catalog-actions-group">
@@ -354,9 +350,6 @@
     @case ('blocked') {
       <section class="admin-card">
         <div class="section-head">
-          <span class="eyebrow blue">
-            GET /API/ADMIN/BLOCKED-TRACKS · PUT /API/ADMIN/TRACKS/&#123;TRACK_ID&#125;/BLOCK
-          </span>
           <h2>Faixas Bloqueadas (Soft-Delete)</h2>
         </div>
 
@@ -450,9 +443,6 @@
     @case ('reviews') {
       <section class="admin-card">
         <div class="section-head">
-          <span class="eyebrow blue"
-            >GET /API/ADMIN/REVIEWS · DELETE /API/ADMIN/REVIEWS/&#123;REVIEW_ID&#125;</span
-          >
           <h2>Avaliações Mais Curtidas (Últimos 30 Dias)</h2>
         </div>
 

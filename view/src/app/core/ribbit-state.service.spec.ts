@@ -335,4 +335,82 @@ describe('RibbitStateService', () => {
       seen_track_ids: [101],
     });
   });
+
+  it('restores undone track from POST /api/discovery/undo even when local undo stack is empty', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    service.undo();
+
+    const undoReq = httpMock.expectOne('/api/discovery/undo');
+    expect(undoReq.request.method).toBe('POST');
+    undoReq.flush({
+      success: true,
+      interaction_id: 99,
+      track_id: 101,
+      action: 'like',
+      created_at: '2026-01-01T12:00:00Z',
+      track: {
+        track_id: 101,
+        title: 'Luzes da Avenida',
+        artist: 'Terno Rei',
+        album: 'Gêmeos',
+        duration_seconds: 215,
+        genre: 'Indie',
+        release_year: 2022,
+        explicit: false,
+      },
+    });
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/profile/interactions').flush([]);
+
+    expect(service.discoverySong()?.trackId).toBe(101);
+    expect(service.discoverySong()?.title).toBe('Luzes da Avenida');
+    expect(service.isDeckEmpty()).toBe(false);
+  });
+
+  it('triggers upgrade modal when Free user calls undo() before any local swipe', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    service.undo();
+
+    const undoReq = httpMock.expectOne('/api/discovery/undo');
+    undoReq.flush({ detail: 'Premium required' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(service.activeModal()).toBe('upgrade');
+  });
+
+  it('blocks Family plan selection for minor users while allowing Individual', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+    service.applyUserDto({
+      ...SAMPLE_AUTH.user,
+      age: 15,
+    });
+    service.setModal(null);
+
+    service.initiatePlanSelection({
+      planId: 3,
+      name: 'Família',
+      displayName: 'Ribbit Família',
+      price: 'R$ 27,90',
+      maxProfiles: 6,
+      copy: '',
+      features: [],
+    });
+    expect(service.activeModal()).toBeNull();
+    expect(service.toast()).toContain('Menores de 18 anos');
+
+    service.initiatePlanSelection({
+      planId: 2,
+      name: 'Individual',
+      displayName: 'Ribbit Pro',
+      price: 'R$ 14,90',
+      maxProfiles: 1,
+      copy: '',
+      features: [],
+    });
+    expect(service.activeModal()).toBe('checkout');
+  });
 });
