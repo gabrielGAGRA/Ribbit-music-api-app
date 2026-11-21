@@ -651,6 +651,9 @@
             <h2>{{ detailsSong().title }}</h2>
             <p>{{ detailsSong().artist }} · {{ detailsSong().year }}</p>
             <span>{{ detailsSong().genre }} · {{ detailsSong().time }}</span>
+            @if (state.isTrackSeen(detailsSong().trackId)) {
+              <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+            }
           </div>
         </div>
         <h3>O que esse som te faz sentir?</h3>
@@ -789,37 +792,6 @@
             </div>
           }
 
-          @if (state.isMinorUser()) {
-            <div class="info-note">
-              Conta de menor de 18 anos: para ativar o Plano Individual, informe e confirme a
-              autorização de um responsável maior de idade.
-            </div>
-            <label>
-              Nome do responsável (18+) *
-              <input
-                name="guardianName"
-                required
-                minlength="2"
-                placeholder="Nome completo do responsável"
-                [defaultValue]="state.guardianName() ?? ''"
-              />
-            </label>
-            <label>
-              E-mail do responsável *
-              <input
-                name="guardianEmail"
-                type="email"
-                required
-                placeholder="responsavel@email.com"
-                [defaultValue]="state.guardianEmail() ?? ''"
-              />
-            </label>
-            <label class="checkbox-label">
-              <input name="guardianConfirmed" type="checkbox" required />
-              Confirmo que o responsável é maior de 18 anos e autoriza a assinatura Individual.
-            </label>
-          }
-
           <div class="info-note">
             Ambiente acadêmico: nenhum dado bancário real é necessário e nenhuma cobrança é
             realizada.
@@ -898,6 +870,9 @@
               <strong>{{ s.title }}</strong>
               <span>{{ s.artist }}</span>
             </div>
+            @if (state.isTrackSeen(s.trackId)) {
+              <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+            }
             <span class="song-time">{{ s.time }}</span>
           </div>
         }

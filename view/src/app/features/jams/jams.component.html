@@ -86,6 +86,9 @@
                 >{{ currentJamDeckSong().artist }} ·
                 <small>{{ currentJamDeckSong().genre }}</small></span
               >
+              @if (state.isTrackSeen(currentJamDeckSong().trackId)) {
+                <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+              }
             </div>
           </div>
         </div>
@@ -176,6 +179,9 @@
             <strong>{{ currentSong().title }}</strong>
             <span>{{ currentSong().artist }}</span>
           </div>
+          @if (state.isTrackSeen(currentSong().trackId)) {
+            <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+          }
           <span class="song-time">{{ currentSong().time }}</span>
         </div>
 
@@ -210,6 +216,9 @@
               <strong>{{ entry.song.title }}</strong>
               <span>{{ entry.song.artist }}</span>
             </div>
+            @if (state.isTrackSeen(entry.song.trackId)) {
+              <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+            }
             <div class="jam-track-actions">
               <span>
                 <app-icon name="star" [size]="14" />

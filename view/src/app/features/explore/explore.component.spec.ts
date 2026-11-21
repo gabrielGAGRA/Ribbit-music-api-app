@@ -61,12 +61,6 @@ describe('ExploreComponent', () => {
     expect(component.hasActiveSearch()).toBe(false);
   });
 
-  it('should toggle history expansion', () => {
-    expect(component.historyExpanded()).toBe(false);
-    component.toggleHistory();
-    expect(component.historyExpanded()).toBe(true);
-  });
-
   it('should toggle review likes and sort reviews', () => {
     const reviewId = 1;
     expect(component.reviewLikes()[reviewId]).toBeFalsy();
@@ -192,9 +186,8 @@ describe('ExploreComponent', () => {
     feedReq.flush([]);
   });
 
-  it('returns empty recentSongs when no access or interaction history exists and records search access on selectSong', () => {
+  it('records search access on selectSong and renders Ouvido badge in search results', () => {
     const state = TestBed.inject(RibbitStateService);
-    expect(component.recentSongs()).toEqual([]);
 
     const song = state.songs()[0];
     expect(song).toBeDefined();
@@ -204,7 +197,7 @@ describe('ExploreComponent', () => {
     }
 
     const template = readFileSync(resolve(__dirname, './explore.component.html'), 'utf8');
-    expect(template).toContain('Nenhuma faixa ouvida recentemente');
+    expect(template).not.toContain('Nenhuma faixa ouvida recentemente');
     expect(template).toContain('Ouvido');
   });
 });

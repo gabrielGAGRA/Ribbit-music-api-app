@@ -99,46 +99,6 @@
       }
     </div>
   } @else {
-    <div class="section-title">
-      <h2>Ouvidas recentemente</h2>
-      <span>Seu histórico de interações</span>
-    </div>
-    <div class="panel listening-history">
-      @for (item of recentSongs(); track item.title) {
-        <div class="song-row">
-          <button
-            class="song-cover"
-            (click)="selectSong(item)"
-            [attr.aria-label]="'Descobrir ' + item.title"
-          >
-            <img [src]="item.image" [alt]="'Capa de ' + item.title" />
-          </button>
-          <div class="song-description">
-            <strong>{{ item.title }}</strong>
-            <span>{{ item.artist }}</span>
-          </div>
-          @if (state.isTrackSeen(item.trackId)) {
-            <span class="seen-badge"> <app-icon name="check" [size]="12" /> Ouvido </span>
-          }
-          <button
-            class="icon-button"
-            (click)="openSongDetails(item)"
-            [attr.aria-label]="'Abrir detalhes de ' + item.title"
-          >
-            <app-icon name="chevron" [size]="17" />
-          </button>
-        </div>
-      } @empty {
-        <p class="muted">Nenhuma faixa ouvida recentemente. Explore ou descubra novas músicas!</p>
-      }
-      @if (recentSongs().length > 0) {
-        <button class="text-button history-toggle" (click)="toggleHistory()">
-          {{ historyExpanded() ? 'Mostrar menos' : 'Ver histórico completo' }}
-          <app-icon [name]="historyExpanded() ? 'undo' : 'arrow'" [size]="14" />
-        </button>
-      }
-    </div>
-
     <div class="reviews-heading">
       <div class="section-title">
         <h2>Reviews da comunidade</h2>
