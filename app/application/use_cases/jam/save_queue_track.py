@@ -14,12 +14,16 @@ from app.domain.models.interaction import (
     InteractionAction,
     InteractionSource,
 )
+from app.domain.models.track_access import TrackAccess
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.playlist_repository import (
     PlaylistRepositoryPort,
+)
+lazy from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -35,6 +39,7 @@ class SaveQueueTrackUseCase:
     track_repo: TrackRepositoryPort
     interaction_repo: InteractionRepositoryPort
     playlist_repo: PlaylistRepositoryPort | None = None
+    track_access_repo: TrackAccessRepositoryPort | None = None
 
     def _resolve_params(
         self,
@@ -68,6 +73,12 @@ class SaveQueueTrackUseCase:
             )
         playlist.add_track(track)
         self.playlist_repo.save(playlist)
+
+    def _record_access(self, user_id: int, track_id: int) -> None:
+        if self.track_access_repo is not None:
+            self.track_access_repo.record(
+                TrackAccess(user_id=user_id, track_id=track_id, source="jam")
+            )
 
     def execute(
         self,
@@ -121,4 +132,5 @@ class SaveQueueTrackUseCase:
                 source=InteractionSource.JAM,
             )
         )
+        self._record_access(eff_user_id, eff_track_id)
         return True

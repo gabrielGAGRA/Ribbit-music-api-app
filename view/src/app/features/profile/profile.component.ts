@@ -135,6 +135,7 @@ export class ProfileComponent implements OnInit {
     }
     this.playingSongKey.set(key);
     this.state.discoverySong.set(song);
+    this.state.recordTrackAccess(song, 'profile');
     this.player.loadTrack(song.previewUrl);
     this.player.play();
   }
@@ -143,6 +144,12 @@ export class ProfileComponent implements OnInit {
     if (!readAuthToken()) return;
     this.songService.deleteReview(review.id).subscribe({
       next: () => {
+        this.songService
+          .loadUserReviews({
+            currentUserId: this.state.userId() ?? undefined,
+            currentUserName: this.state.userName(),
+          })
+          .subscribe();
         this.state.refreshCatalogAndFeed();
         this.state.notify('Avaliação removida com sucesso.');
       },

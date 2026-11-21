@@ -16,7 +16,30 @@ import { readAuthToken } from '../../core/auth-token.storage';
 import { MOCK_REVIEWS } from '../../core/mocks/reviews.mock';
 import { RibbitStateService } from '../../core/ribbit-state.service';
 import { SongService } from '../../core/services/song.service';
+import type { ReviewSortOption } from '../../core/services/song.service';
 import { IconComponent } from '../../shared/icon.component';
+
+function compareByRating(a: CommunityReview, b: CommunityReview, asc: boolean): number {
+  const diff = asc ? (a.rating ?? 0) - (b.rating ?? 0) : (b.rating ?? 0) - (a.rating ?? 0);
+  return diff || b.likes - a.likes;
+}
+
+function compareReviews(
+  a: CommunityReview,
+  b: CommunityReview,
+  sort: string,
+  likes: Readonly<Record<number, boolean>>,
+): number {
+  if (sort === 'rating_desc' || sort === 'rating_asc') {
+    return compareByRating(a, b, sort === 'rating_asc');
+  }
+  if (sort === 'likes') {
+    const aLikes = a.likes + (likes[a.id] ? 1 : 0);
+    const bLikes = b.likes + (likes[b.id] ? 1 : 0);
+    return bLikes - aLikes;
+  }
+  return sort === 'oldest' ? a.date - b.date : b.date - a.date;
+}
 
 /** Provides catalog search, recent interacted tracks history, and community review feed. */
 @Component({
@@ -49,13 +72,17 @@ export class ExploreComponent implements OnInit {
     const year = this.state.searchFilterYear();
     const startDate = this.state.searchFilterStartDate().trim();
     const endDate = this.state.searchFilterEndDate().trim();
+    const minRating = this.state.searchFilterMinRating();
+    const sortBy = this.state.searchSortBy();
     return (
       q.length > 0 ||
       genre !== 'Todos' ||
       artist.length > 0 ||
       year !== undefined ||
       startDate.length > 0 ||
-      endDate.length > 0
+      endDate.length > 0 ||
+      minRating !== null ||
+      sortBy !== 'default'
     );
   });
 
@@ -65,9 +92,23 @@ export class ExploreComponent implements OnInit {
     if (serverResults !== null) {
       return serverResults;
     }
-    return this.state
+    const minRating = this.state.searchFilterMinRating();
+    const sortBy = this.state.searchSortBy();
+    const filtered = this.state
       .songs()
-      .filter((s) => this.matchesLocalTextFilters(s) && this.matchesLocalDateRange(s));
+      .filter(
+        (s) =>
+          this.matchesLocalTextFilters(s) &&
+          this.matchesLocalDateRange(s) &&
+          (minRating === null || (s.averageRating ?? 0) >= minRating),
+      );
+    if (sortBy === 'rating_desc') {
+      return [...filtered].sort((a, b) => (b.averageRating ?? -1) - (a.averageRating ?? -1));
+    }
+    if (sortBy === 'rating_asc') {
+      return [...filtered].sort((a, b) => (a.averageRating ?? 6) - (b.averageRating ?? 6));
+    }
+    return filtered;
   });
 
   private matchesLocalTextFilters(song: Song): boolean {
@@ -103,8 +144,28 @@ export class ExploreComponent implements OnInit {
   }
 
   readonly recentSongs = computed<readonly Song[]>(() => {
-    const fromApi = this.recentHistoryApiSongs();
-    const source = fromApi.length > 0 ? fromApi : [...this.state.songs()].reverse();
+    const accessEntries = this.state.accessHistory();
+    const seen = new Set<number>();
+    const fromAccess: Song[] = [];
+    for (const entry of accessEntries) {
+      if (seen.has(entry.track_id)) continue;
+      seen.add(entry.track_id);
+      fromAccess.push({
+        trackId: entry.track_id,
+        title: entry.track_title,
+        artist: entry.track_artist,
+        genre: entry.track_genre,
+        album: entry.track_album ?? entry.track_title,
+        durationSeconds: entry.track_duration_seconds,
+        time: `${Math.floor(entry.track_duration_seconds / 60)}:${String(entry.track_duration_seconds % 60).padStart(2, '0')}`,
+        image: entry.track_cover_url ?? '',
+        year: '',
+        match: 0,
+        ...(entry.track_preview_url ? { previewUrl: entry.track_preview_url } : {}),
+        explicit: entry.track_explicit,
+      });
+    }
+    const source = fromAccess.length > 0 ? fromAccess : this.recentHistoryApiSongs();
     return this.historyExpanded() ? source : source.slice(0, 3);
   });
 
@@ -114,17 +175,7 @@ export class ExploreComponent implements OnInit {
     const apiReviews = this.songService.reviews();
     const reviews = apiReviews.length > 0 || readAuthToken() ? apiReviews : MOCK_REVIEWS;
 
-    return [...reviews].sort((a, b) => {
-      if (sort === 'likes') {
-        const aLikes = a.likes + (likes[a.id] ? 1 : 0);
-        const bLikes = b.likes + (likes[b.id] ? 1 : 0);
-        return bLikes - aLikes;
-      }
-      if (sort === 'oldest') {
-        return a.date - b.date;
-      }
-      return b.date - a.date;
-    });
+    return [...reviews].sort((a, b) => compareReviews(a, b, sort, likes));
   });
 
   readonly displayedReviews = computed<readonly CommunityReview[]>(() =>
@@ -139,6 +190,8 @@ export class ExploreComponent implements OnInit {
       this.state.searchFilterYear();
       this.state.searchFilterStartDate();
       this.state.searchFilterEndDate();
+      this.state.searchFilterMinRating();
+      this.state.searchSortBy();
 
       if (!readAuthToken() || !this.hasActiveSearch()) {
         this.serverSearchResults.set(null);
@@ -174,6 +227,8 @@ export class ExploreComponent implements OnInit {
     const year = this.state.searchFilterYear();
     const startYear = this.parseDateYear(this.state.searchFilterStartDate());
     const endYear = this.parseDateYear(this.state.searchFilterEndDate());
+    const minRating = this.state.searchFilterMinRating();
+    const sortBy = this.state.searchSortBy();
 
     this.activeSearchSub = this.songService
       .searchSongs({
@@ -183,6 +238,8 @@ export class ExploreComponent implements OnInit {
         ...(year !== undefined ? { year } : {}),
         ...(startYear !== undefined ? { startYear } : {}),
         ...(endYear !== undefined ? { endYear } : {}),
+        ...(minRating !== null ? { minRating } : {}),
+        ...(sortBy !== 'default' ? { sortBy } : {}),
         limit: 30,
       })
       .subscribe({
@@ -240,12 +297,19 @@ export class ExploreComponent implements OnInit {
   }
 
   clearQuery(): void {
-    this.query.set('');
-    this.state.searchFilterGenre.set('Todos');
-    this.state.searchFilterArtist.set('');
-    this.state.searchFilterYear.set(undefined);
-    this.state.searchFilterStartDate.set('');
-    this.state.searchFilterEndDate.set('');
+    this.state.clearSearchFilters();
+  }
+
+  clearMinRatingFilter(): void {
+    this.state.searchFilterMinRating.set(null);
+  }
+
+  onSearchSortChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value as
+      | 'default'
+      | 'rating_desc'
+      | 'rating_asc';
+    this.state.searchSortBy.set(value);
   }
 
   toggleHistory(): void {
@@ -253,7 +317,11 @@ export class ExploreComponent implements OnInit {
   }
 
   onSortChange(event: Event): void {
-    this.reviewSort.set((event.target as HTMLSelectElement).value);
+    const sort = (event.target as HTMLSelectElement).value as ReviewSortOption;
+    this.reviewSort.set(sort);
+    if (readAuthToken()) {
+      this.state.loadCommunityFeed(sort);
+    }
   }
 
   toggleReviewLike(id: number): void {
@@ -278,6 +346,7 @@ export class ExploreComponent implements OnInit {
   }
 
   selectSong(song: Song): void {
+    this.state.recordTrackAccess(song, 'search');
     this.state.discoverySong.set(song);
     this.state.setPage('discover');
     void this.router?.navigate(['/discover']).catch(() => false);
@@ -288,6 +357,7 @@ export class ExploreComponent implements OnInit {
     this.songService.likeAndSaveSearchTrack(song.trackId).subscribe({
       next: () => {
         this.state.refreshInteractedCollections();
+        this.state.refreshAccessHistory();
         this.state.notify(`"${song.title}" adicionada às suas curtidas!`);
       },
       error: (err: unknown) => {

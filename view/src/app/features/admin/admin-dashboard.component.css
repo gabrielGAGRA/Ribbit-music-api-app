@@ -241,6 +241,87 @@
   padding: 18px;
 }
 
+.negative-value {
+  color: #ef4444;
+}
+
+.featured-kpi.negative-kpi {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.financial-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px;
+}
+
+.fin-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--panel-elev);
+  border: 1px solid var(--line);
+}
+
+.fin-metric span {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.fin-metric strong {
+  font-size: 18px;
+}
+
+.cost-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.cost-inputs-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.cost-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.cost-field input {
+  background: var(--panel-elev);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.cost-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.cost-error {
+  color: #ef4444;
+  font-size: 13px;
+  margin: 0;
+}
+
+.deleted-tag {
+  color: #ef4444;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
 @container (width < 560px) {
   .plan-breakdown-table,
   .plan-breakdown-table thead,

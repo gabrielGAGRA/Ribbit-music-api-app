@@ -331,6 +331,7 @@ export class PlaylistsComponent {
       this.player.pause();
       return;
     }
+    this.state.recordTrackAccess(song, 'playlist');
     this.player.loadTrack(song.previewUrl);
     this.player.play();
   }
@@ -347,6 +348,7 @@ export class PlaylistsComponent {
     }
     const first = this.selectedPlaylistTracks()[0];
     if (first) {
+      this.state.recordTrackAccess(first, 'playlist');
       this.player.loadTrack(first.previewUrl);
       this.player.play();
       this.state.notify(`Reproduzindo "${first.title}".`);
@@ -358,6 +360,7 @@ export class PlaylistsComponent {
   }
 
   playTrack(song: Song): void {
+    this.state.recordTrackAccess(song, 'playlist');
     this.player.loadTrack(song.previewUrl);
     this.player.play();
     this.state.notify(`Tocando "${song.title}" de ${song.artist}.`);

@@ -87,6 +87,9 @@
             <div class="track-tags">
               <span>{{ currentSong().genre }}</span>
               <span>Acústico</span>
+              @if (state.isTrackSeen(currentSong().trackId)) {
+                <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+              }
               <small>
                 <app-icon name="clock" [size]="12" />
                 {{ currentSong().time }}

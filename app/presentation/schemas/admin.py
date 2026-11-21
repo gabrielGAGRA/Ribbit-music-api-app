@@ -1,5 +1,7 @@
 """Administrative presentation schemas."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -65,10 +67,39 @@ class ExecutiveDashboardResponse(BaseModel):
     estimated_net_revenue: float
     users_by_plan: dict[str, int] = Field(default_factory=dict)
     revenue_by_plan: dict[str, float] = Field(default_factory=dict)
+    gross_revenue: float = 0.0
+    content_cost: float = 0.0
+    infrastructure_cost: float = 0.0
+    total_costs: float = 0.0
+    active_tracks_count: int = 0
+    content_cost_per_track: float = 0.0
+    infrastructure_fixed_cost: float = 0.0
+    infrastructure_cost_per_user: float = 0.0
+
+
+class TrackAccessRankResponse(BaseModel):
+    """Ranked track access count item."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    track_id: int
+    title: str
+    artist: str
+    is_deleted: bool = False
+    access_count: int
+
+
+class GenreAccessCountResponse(BaseModel):
+    """Aggregated genre access count item."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    genre: str
+    access_count: int
 
 
 class AudienceReportResponse(BaseModel):
-    """Aggregate volume counts of registered users, catalog tracks, and blocked genres."""
+    """Aggregate volume counts of registered users, catalog tracks, blocked genres, and accesses."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -76,6 +107,30 @@ class AudienceReportResponse(BaseModel):
     total_tracks: int
     active_tracks: int
     blocked_genres: dict[str, int] = Field(default_factory=dict)
+    total_accesses: int = 0
+    accesses_by_track: list[TrackAccessRankResponse] = Field(default_factory=list)
+    accesses_by_genre: list[GenreAccessCountResponse] = Field(default_factory=list)
+
+
+class PlatformCostSettingsResponse(BaseModel):
+    """Public representation of platform operational cost settings."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    content_cost_per_track: float
+    infrastructure_fixed_cost: float
+    infrastructure_cost_per_user: float
+    updated_at: datetime | None = None
+
+
+class UpdatePlatformCostsRequest(BaseModel):
+    """Payload to update platform operational cost parameters."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    content_cost_per_track: float = Field(ge=0.0)
+    infrastructure_fixed_cost: float = Field(ge=0.0)
+    infrastructure_cost_per_user: float = Field(ge=0.0)
 
 
 class UserPlanSummaryResponse(BaseModel):
@@ -135,19 +190,87 @@ class RegisterAdminRequest(BaseModel):
     birth_date: str | None = None
 
 
+class CreateTrackAdminRequest(BaseModel):
+    """Payload to register a new catalog track from the admin console."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1)
+    artist: str = Field(min_length=1)
+    genre: str = Field(min_length=1)
+    duration_seconds: int = Field(gt=0)
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    spotify_id: str | None = None
+    explicit: bool = False
+
+
+class AdminCatalogTrackResponse(BaseModel):
+    """Admin representation of a catalog track enriched with interaction and review metrics."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    track_id: int
+    title: str
+    artist: str
+    duration_seconds: int
+    genre: str
+    spotify_id: str | None = None
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    explicit: bool = False
+    is_deleted: bool = False
+    likes_count: int = 0
+    dislikes_count: int = 0
+    superlikes_count: int = 0
+    average_rating: float | None = None
+    review_count: int = 0
+
+
+class AdminTrackAccessEntryResponse(BaseModel):
+    """Admin-facing track access log entry preserving soft-deleted track state."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    access_id: int
+    user_id: int
+    user_display_name: str
+    user_email: str
+    track_id: int
+    track_title: str
+    track_artist: str
+    track_genre: str
+    track_is_deleted: bool
+    source: str
+    accessed_at: datetime
+
+
 __all__ = [
+    "AdminCatalogTrackResponse",
+    "AdminTrackAccessEntryResponse",
     "AudienceReportResponse",
     "BlockTrackRequest",
     "CompactCatalogResponse",
+    "CreateTrackAdminRequest",
     "ExecutiveDashboardResponse",
+    "GenreAccessCountResponse",
     "PlanResponse",
+    "PlatformCostSettingsResponse",
     "RegisterAdminRequest",
     "SyncCatalogVersionResponse",
+    "TrackAccessRankResponse",
     "TrackBlockResponse",
     "TrackExplicitResponse",
     "TrackGenreResponse",
     "UpdateAdminRoleRequest",
     "UpdatePlanAdminRequest",
+    "UpdatePlatformCostsRequest",
     "UpdateTrackExplicitRequest",
     "UpdateTrackGenreRequest",
     "UserPlanSummaryResponse",
