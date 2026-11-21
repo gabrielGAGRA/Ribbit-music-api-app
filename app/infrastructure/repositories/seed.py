@@ -18,8 +18,6 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "spotify_access_token": "TEXT",
         "spotify_refresh_token": "TEXT",
         "spotify_token_expires_at": "TEXT",
-        "guardian_name": "TEXT",
-        "guardian_email": "TEXT",
     },
     "playlists": {
         "max_duration_seconds": "INTEGER",
@@ -70,7 +68,7 @@ def _seed_plans(conn: sqlite3.Connection) -> int:
     standard_plans = [
         {"name": "Free", "monthly_price": 0.00, "max_profiles": 1},
         {"name": "Individual", "monthly_price": 14.90, "max_profiles": 1},
-        {"name": "Família", "monthly_price": 27.90, "max_profiles": 6},
+        {"name": "Família", "monthly_price": 27.90, "max_profiles": 4},
     ]
 
     for p in standard_plans:

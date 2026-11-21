@@ -134,7 +134,7 @@ export class FamilyComponent {
         p.name.toLowerCase().includes('famíl') ||
         p.name.toLowerCase().includes('famil'),
     );
-    return familyPlan?.max_profiles ?? 6;
+    return familyPlan?.max_profiles ?? 4;
   });
 
   readonly maxChildAccounts = computed<number>(() => Math.max(1, this.maxProfiles() - 1));

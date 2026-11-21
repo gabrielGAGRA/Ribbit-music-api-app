@@ -17,9 +17,6 @@ class RegisterUserCommand:
     blocked_genres: tuple[str, ...] = ()
     favorite_genres: tuple[str, ...] = ()
     preferred_theme: str = "light"
-    guardian_name: str | None = None
-    guardian_email: str | None = None
-    guardian_confirmed_adult: bool = False
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -126,9 +126,6 @@ def register(
             blocked_genres=tuple(req.blocked_genres),
             favorite_genres=tuple(req.favorite_genres),
             preferred_theme=req.preferred_theme,
-            guardian_name=req.guardian_name,
-            guardian_email=req.guardian_email,
-            guardian_confirmed_adult=req.guardian_confirmed_adult,
         )
     )
     if user.user_id is None:

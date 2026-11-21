@@ -8,7 +8,7 @@ import { mapPlanDtoToSubscriptionPlan } from '../api-mappers';
 const DEFAULT_PLAN_DTOS: readonly PlanApiDto[] = [
   { plan_id: 1, name: 'Free', monthly_price: 0, max_profiles: 1 },
   { plan_id: 2, name: 'Individual', monthly_price: 14.9, max_profiles: 1 },
-  { plan_id: 3, name: 'Família', monthly_price: 27.9, max_profiles: 6 },
+  { plan_id: 3, name: 'Família', monthly_price: 27.9, max_profiles: 4 },
 ];
 
 /** Fetches subscription tiers and manages plan changes via /api/plans and /api/profile/plan. */
@@ -47,21 +47,9 @@ export class PlanService {
   }
 
   /** Switches the authenticated user's active subscription plan. */
-  changePlan(
-    newPlanId: number,
-    guardian?: {
-      readonly guardianName?: string;
-      readonly guardianEmail?: string;
-      readonly guardianConfirmedAdult?: boolean;
-    },
-  ): Observable<UserApiDto> {
+  changePlan(newPlanId: number): Observable<UserApiDto> {
     return this.http.put<UserApiDto>('/api/profile/plan', {
       new_plan_id: newPlanId,
-      ...(guardian?.guardianName ? { guardian_name: guardian.guardianName } : {}),
-      ...(guardian?.guardianEmail ? { guardian_email: guardian.guardianEmail } : {}),
-      ...(guardian?.guardianConfirmedAdult !== undefined
-        ? { guardian_confirmed_adult: guardian.guardianConfirmedAdult }
-        : {}),
     });
   }
 
