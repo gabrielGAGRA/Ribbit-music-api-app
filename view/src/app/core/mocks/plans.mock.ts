@@ -25,9 +25,9 @@ export const MOCK_PLANS: readonly SubscriptionPlan[] = [
     name: 'Família',
     displayName: 'Ribbit Jam',
     price: 'R$ 34,90',
-    copy: 'Até seis perfis, cada um no seu ritmo.',
+    copy: 'Até 4 perfis, cada um no seu ritmo.',
     features: [
-      'Até 6 contas',
+      'Até 4 contas',
       'Jams privadas ilimitadas',
       'Controle familiar',
       'Recomendações separadas',

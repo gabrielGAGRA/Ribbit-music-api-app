@@ -381,7 +381,7 @@ describe('RibbitStateService', () => {
     expect(service.activeModal()).toBe('upgrade');
   });
 
-  it('blocks Family plan selection for minor users while allowing Individual', () => {
+  it('blocks paid plan selection (Family and Individual) for minor users', () => {
     service.completeAuthentication(SAMPLE_AUTH);
     flushInitialHydration(httpMock);
     service.applyUserDto({
@@ -395,12 +395,12 @@ describe('RibbitStateService', () => {
       name: 'Família',
       displayName: 'Ribbit Família',
       price: 'R$ 27,90',
-      maxProfiles: 6,
+      maxProfiles: 4,
       copy: '',
       features: [],
     });
     expect(service.activeModal()).toBeNull();
-    expect(service.toast()).toContain('Menores de 18 anos');
+    expect(service.toast()).toContain('Somente usuários maiores de 18 anos');
 
     service.initiatePlanSelection({
       planId: 2,
@@ -411,6 +411,7 @@ describe('RibbitStateService', () => {
       copy: '',
       features: [],
     });
-    expect(service.activeModal()).toBe('checkout');
+    expect(service.activeModal()).toBeNull();
+    expect(service.toast()).toContain('Somente usuários maiores de 18 anos');
   });
 });

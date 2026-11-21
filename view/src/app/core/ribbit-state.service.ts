@@ -158,8 +158,6 @@ export class RibbitStateService implements OnDestroy {
   readonly userEmail = signal<string>(this.initialUser?.email ?? '');
   readonly userName = signal<string>(this.initialUser?.display_name ?? 'Visitante');
   readonly userAge = signal<number | null>(this.initialUser?.age ?? null);
-  readonly guardianName = signal<string | null>(this.initialUser?.guardian_name ?? null);
-  readonly guardianEmail = signal<string | null>(this.initialUser?.guardian_email ?? null);
   readonly isMinorUser = computed<boolean>(() => {
     const age = this.userAge();
     return age !== null && age < 18;
@@ -585,8 +583,8 @@ export class RibbitStateService implements OnDestroy {
       this.notify(`Você já está no plano ${plan.displayName}.`);
       return;
     }
-    if (this.isMinorUser() && (plan.maxProfiles ?? 1) > 1) {
-      this.notify('Menores de 18 anos não podem assinar o Plano Família como titular.');
+    if (this.isMinorUser() && plan.name !== 'Free') {
+      this.notify('Somente usuários maiores de 18 anos podem assinar planos pagos.');
       return;
     }
     if (plan.name === 'Free') {
@@ -598,21 +596,14 @@ export class RibbitStateService implements OnDestroy {
   }
 
   /** Completes simulated payment and persists the new subscription tier on the backend. */
-  confirmMockPlanCheckout(
-    paymentMethod: 'card' | 'pix',
-    guardian?: {
-      readonly guardianName?: string;
-      readonly guardianEmail?: string;
-      readonly guardianConfirmedAdult?: boolean;
-    },
-  ): void {
+  confirmMockPlanCheckout(paymentMethod: 'card' | 'pix'): void {
     const targetPlan = this.pendingCheckoutPlan();
     if (!targetPlan) return;
 
     const resolvedPlanId =
       targetPlan.planId ?? this.planService.resolvePlanIdByName(targetPlan.name);
 
-    this.planService.changePlan(resolvedPlanId, guardian).subscribe({
+    this.planService.changePlan(resolvedPlanId).subscribe({
       next: (updatedUser) => {
         this.applyUserDto(updatedUser);
         this.currentPlan.set(targetPlan.name);
@@ -1314,8 +1305,6 @@ export class RibbitStateService implements OnDestroy {
     this.userEmail.set(user.email);
     this.userName.set(user.display_name);
     this.userAge.set(user.age ?? null);
-    this.guardianName.set(user.guardian_name ?? null);
-    this.guardianEmail.set(user.guardian_email ?? null);
     this.currentPlanId.set(user.plan_id);
     this.spotifyId.set(user.spotify_id ?? null);
     this.spotifyPremium.set(Boolean(user.spotify_premium));
@@ -1562,8 +1551,6 @@ export class RibbitStateService implements OnDestroy {
     this.userEmail.set('');
     this.userName.set('Visitante');
     this.userAge.set(null);
-    this.guardianName.set(null);
-    this.guardianEmail.set(null);
     this.currentPlan.set('Free');
     this.currentPlanId.set(1);
     this.spotifyId.set(null);

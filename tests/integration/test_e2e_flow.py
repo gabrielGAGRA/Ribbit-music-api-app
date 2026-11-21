@@ -362,8 +362,8 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
     )
     assert dep_res.status_code in (200, 201), dep_res.text
 
-    # 4. Add dependents up to max limit (1 titular + 5 dependents)
-    for i in range(2, 5):
+    # 4. Add dependents up to max limit (1 titular + 3 dependents = 4 profiles)
+    for i in range(2, 3):
         resp = client.post(
             "/api/profile/family/members",
             headers=headers,
@@ -523,53 +523,56 @@ def test_discovery_undo_removes_latest_swipe(client: TestClient) -> None:
     assert client.post("/api/discovery/undo", headers=headers).status_code == 404
 
 
-def test_minor_can_register_and_use_individual_plan_with_guardian_and_minor_filters(
+def test_minor_blocked_from_paid_plans_and_filtered_as_family_dependent(
     client: TestClient,
 ) -> None:
     plans = client.get("/api/plans").json()
     indiv_id = next(plan["plan_id"] for plan in plans if plan["name"] == "Individual")
     family_id = next(plan["plan_id"] for plan in plans if plan["name"] == "Família")
 
-    # Minor cannot register for Family plan as titular even with guardian
-    fam_minor = client.post(
-        "/api/auth/register",
+    # Minor cannot register directly for Individual or Family plans
+    for blocked_plan_id, email in (
+        (indiv_id, "minor_indiv_blocked@example.com"),
+        (family_id, "minor_fam_blocked@example.com"),
+    ):
+        res = client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "Password123!",
+                "display_name": "Minor Blocked",
+                "birth_date": "2012-05-15",
+                "plan_id": blocked_plan_id,
+            },
+        )
+        assert res.status_code == 400
+
+    # Adult titular creates a Family account and adds a minor dependent
+    _, titular_headers = _register_and_login(
+        client, "adult_family_holder@example.com", "1988-05-15", family_id
+    )
+    dep_res = client.post(
+        "/api/profile/family/members",
+        headers=titular_headers,
         json={
-            "email": "minor_fam_blocked@example.com",
+            "email": "minor_family_dep@example.com",
             "password": "Password123!",
-            "display_name": "Minor Fam",
+            "display_name": "Minor Dependent",
             "birth_date": "2012-05-15",
-            "plan_id": family_id,
-            "guardian_name": "Ana Responsavel",
-            "guardian_email": "ana@responsavel.com",
-            "guardian_confirmed_adult": True,
         },
     )
-    assert fam_minor.status_code == 400
+    assert dep_res.status_code in (200, 201), dep_res.text
 
-    # Minor CAN register for Individual plan with guardian authorization
-    reg = client.post(
-        "/api/auth/register",
-        json={
-            "email": "minor_individual@example.com",
-            "password": "Password123!",
-            "display_name": "Minor Individual",
-            "birth_date": "2012-05-15",
-            "plan_id": indiv_id,
-            "guardian_name": "Ana Responsavel",
-            "guardian_email": "ana@responsavel.com",
-            "guardian_confirmed_adult": True,
-        },
+    login_res = client.post(
+        "/api/auth/login",
+        json={"email": "minor_family_dep@example.com", "password": "Password123!"},
     )
-    assert reg.status_code == 201, reg.text
-    user_data = reg.json()["user"]
-    assert user_data["plan_id"] == indiv_id
-    assert user_data["guardian_name"] == "Ana Responsavel"
-    assert user_data["guardian_email"] == "ana@responsavel.com"
+    assert login_res.status_code == 200
+    minor_headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
 
-    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
-    # Minor content protections remain active on Individual plan ("Rap God" is explicit/Hip Hop)
+    # Minor content protections remain active ("Rap God" is explicit/Hip Hop)
     for _ in range(5):
-        next_res = client.get("/api/discovery/next", headers=headers)
+        next_res = client.get("/api/discovery/next", headers=minor_headers)
         assert next_res.status_code == 200
         if not next_res.json():
             break
@@ -578,14 +581,9 @@ def test_minor_can_register_and_use_individual_plan_with_guardian_and_minor_filt
         assert track["title"] != "Rap God"
         client.post(
             "/api/discovery/interact",
-            headers=headers,
+            headers=minor_headers,
             json={"track_id": track["track_id"], "action": "dislike"},
         )
-
-    # Paid Individual undo works for the guardian-authorized minor
-    undo_res = client.post("/api/discovery/undo", headers=headers)
-    assert undo_res.status_code == 200
-    assert undo_res.json()["track"] is not None
 
 
 def test_discovery_undo_is_unavailable_for_free_plan(client: TestClient) -> None:

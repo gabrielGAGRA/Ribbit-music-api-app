@@ -171,9 +171,6 @@ export interface RegisterUserApiRequest {
   readonly birth_date?: string | null;
   readonly preferred_theme?: 'light' | 'dark';
   readonly favorite_genres?: readonly string[];
-  readonly guardian_name?: string | null;
-  readonly guardian_email?: string | null;
-  readonly guardian_confirmed_adult?: boolean;
 }
 
 export interface LoginApiRequest {
@@ -209,8 +206,6 @@ export interface UserApiDto {
   readonly favorite_genres?: readonly string[];
   readonly is_admin: boolean;
   readonly created_at?: string | null;
-  readonly guardian_name?: string | null;
-  readonly guardian_email?: string | null;
 }
 
 export interface AuthApiResponse {

@@ -25,9 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
     preferred_theme TEXT NOT NULL DEFAULT 'light',
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
-    birth_date TEXT,
-    guardian_name TEXT,
-    guardian_email TEXT
+    birth_date TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
