@@ -24,3 +24,5 @@ CREATE TABLE IF NOT EXISTS tracks (
 CREATE INDEX IF NOT EXISTS idx_tracks_title ON tracks(title);
 CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
 CREATE INDEX IF NOT EXISTS idx_tracks_genre ON tracks(genre);
+CREATE INDEX IF NOT EXISTS idx_tracks_spotify_id ON tracks(spotify_id);
+CREATE INDEX IF NOT EXISTS idx_tracks_title_artist ON tracks(lower(title), lower(artist));
