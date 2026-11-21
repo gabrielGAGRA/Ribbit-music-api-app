@@ -20,6 +20,8 @@ Table users {
   is_admin integer [not null, default: 0]
   created_at text [not null]
   birth_date text
+  guardian_name text
+  guardian_email text
 
   indexes {
     email [name: 'idx_users_email']

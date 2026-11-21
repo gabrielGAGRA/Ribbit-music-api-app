@@ -33,6 +33,8 @@ class User:
     is_admin: bool = False
     created_at: datetime | None = None
     birth_date: str | None = None
+    guardian_name: str | None = None
+    guardian_email: str | None = None
 
     @staticmethod
     def _normalize_genre(genre: str) -> str:
@@ -54,6 +56,11 @@ class User:
             raise ValueError("Age cannot be negative.")
         if self.birth_date is not None:
             self.birth_date = self.birth_date.strip() or None
+        if self.guardian_name is not None:
+            self.guardian_name = self.guardian_name.strip() or None
+        if self.guardian_email is not None:
+            cleaned_guardian_email = self.guardian_email.strip().lower()
+            self.guardian_email = cleaned_guardian_email or None
         self.blocked_genres = frozenset(
             self._normalize_genre(genre)
             for genre in self.blocked_genres
@@ -137,6 +144,22 @@ class User:
 
     def change_plan(self, plan_id: int) -> Self:
         self.plan_id = plan_id
+        return self
+
+    def has_guardian(self) -> bool:
+        return bool(self.guardian_name and self.guardian_email)
+
+    def assign_guardian(self, guardian_name: str, guardian_email: str) -> Self:
+        cleaned_name = guardian_name.strip()
+        cleaned_email = guardian_email.strip().lower()
+        if len(cleaned_name) < 2:
+            raise ValueError("Guardian name must have at least 2 characters.")
+        if "@" not in cleaned_email or "." not in cleaned_email.split("@")[-1]:
+            raise ValueError("Guardian email must be valid.")
+        if cleaned_email == self.email.strip().lower():
+            raise ValueError("Guardian email must differ from the minor account email.")
+        self.guardian_name = cleaned_name
+        self.guardian_email = cleaned_email
         return self
 
     def unlink_primary_account(self, fallback_plan_id: int) -> Self:
