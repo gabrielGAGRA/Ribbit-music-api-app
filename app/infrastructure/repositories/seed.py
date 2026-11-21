@@ -18,6 +18,8 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "spotify_access_token": "TEXT",
         "spotify_refresh_token": "TEXT",
         "spotify_token_expires_at": "TEXT",
+        "guardian_name": "TEXT",
+        "guardian_email": "TEXT",
     },
     "playlists": {
         "max_duration_seconds": "INTEGER",

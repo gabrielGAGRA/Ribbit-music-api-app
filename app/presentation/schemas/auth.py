@@ -24,6 +24,8 @@ class UserResponse(BaseModel):
     preferred_theme: str = "light"
     is_admin: bool = False
     created_at: datetime | None = None
+    guardian_name: str | None = None
+    guardian_email: str | None = None
 
 
 class RegisterUserRequest(BaseModel):
@@ -40,6 +42,9 @@ class RegisterUserRequest(BaseModel):
     blocked_genres: list[str] = Field(default_factory=list)
     favorite_genres: list[str] = Field(default_factory=list)
     preferred_theme: str = Field(default="light")
+    guardian_name: str | None = Field(default=None, max_length=100)
+    guardian_email: str | None = Field(default=None, max_length=254)
+    guardian_confirmed_adult: bool = False
 
 
 class GoogleLoginRequest(BaseModel):

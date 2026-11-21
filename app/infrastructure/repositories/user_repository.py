@@ -28,6 +28,8 @@ def _row_to_user(row: sqlite3.Row) -> User:
         datetime.fromisoformat(row["created_at"]) if row["created_at"] else None
     )
     birth_date = row["birth_date"] if "birth_date" in keys else None
+    guardian_name = row["guardian_name"] if "guardian_name" in keys else None
+    guardian_email = row["guardian_email"] if "guardian_email" in keys else None
     preferred_theme = (
         row["preferred_theme"]
         if "preferred_theme" in keys and row["preferred_theme"]
@@ -67,6 +69,8 @@ def _row_to_user(row: sqlite3.Row) -> User:
         is_admin=bool(row["is_admin"]),
         created_at=created_at,
         birth_date=birth_date,
+        guardian_name=guardian_name,
+        guardian_email=guardian_email,
     )
 
 
@@ -148,6 +152,8 @@ class SQLiteUserRepository(UserRepositoryPort):
                         preferred_theme = ?,
                         is_admin = ?,
                         birth_date = ?,
+                        guardian_name = ?,
+                        guardian_email = ?,
                         created_at = CASE
                             WHEN created_at = '1970-01-01T00:00:00+00:00' THEN ?
                             ELSE created_at
@@ -175,6 +181,8 @@ class SQLiteUserRepository(UserRepositoryPort):
                         user.preferred_theme,
                         1 if user.is_admin else 0,
                         user.birth_date,
+                        user.guardian_name,
+                        user.guardian_email,
                         datetime.now(UTC).isoformat(),
                         user.user_id,
                     ),
@@ -192,8 +200,9 @@ class SQLiteUserRepository(UserRepositoryPort):
                     spotify_access_token, spotify_refresh_token, spotify_token_expires_at,
                     display_name, age,
                     plan_id, primary_account_id, blocked_genres, favorite_genres,
-                    preferred_theme, is_admin, created_at, birth_date
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    preferred_theme, is_admin, created_at, birth_date,
+                    guardian_name, guardian_email
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     user.email.lower().strip(),
@@ -217,6 +226,8 @@ class SQLiteUserRepository(UserRepositoryPort):
                     1 if user.is_admin else 0,
                     created_at_str,
                     user.birth_date,
+                    user.guardian_name,
+                    user.guardian_email,
                 ),
             )
             new_id = cursor.lastrowid

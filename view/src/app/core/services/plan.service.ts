@@ -47,9 +47,21 @@ export class PlanService {
   }
 
   /** Switches the authenticated user's active subscription plan. */
-  changePlan(newPlanId: number): Observable<UserApiDto> {
+  changePlan(
+    newPlanId: number,
+    guardian?: {
+      readonly guardianName?: string;
+      readonly guardianEmail?: string;
+      readonly guardianConfirmedAdult?: boolean;
+    },
+  ): Observable<UserApiDto> {
     return this.http.put<UserApiDto>('/api/profile/plan', {
       new_plan_id: newPlanId,
+      ...(guardian?.guardianName ? { guardian_name: guardian.guardianName } : {}),
+      ...(guardian?.guardianEmail ? { guardian_email: guardian.guardianEmail } : {}),
+      ...(guardian?.guardianConfirmedAdult !== undefined
+        ? { guardian_confirmed_adult: guardian.guardianConfirmedAdult }
+        : {}),
     });
   }
 

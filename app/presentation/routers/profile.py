@@ -108,10 +108,23 @@ def change_plan(
         Depends(provide(ChangeSubscriptionPlanUseCase)),
     ],
 ) -> UserResponse:
-    user = use_case.execute(
-        user_id=user_id,
-        new_plan_id=req.new_plan_id,
-    )
+    if (
+        req.guardian_name is not None
+        or req.guardian_email is not None
+        or req.guardian_confirmed_adult
+    ):
+        user = use_case.execute(
+            user_id=user_id,
+            new_plan_id=req.new_plan_id,
+            guardian_name=req.guardian_name,
+            guardian_email=req.guardian_email,
+            guardian_confirmed_adult=req.guardian_confirmed_adult,
+        )
+    else:
+        user = use_case.execute(
+            user_id=user_id,
+            new_plan_id=req.new_plan_id,
+        )
     return UserResponse.model_validate(user)
 
 
