@@ -1,9 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import type { AdminUserPlanSummary, UserApiDto } from '@ribbit/shared-types';
+import type { AdminTrackAccessEntry, AdminUserPlanSummary, UserApiDto } from '@ribbit/shared-types';
 import { IconComponent } from '../../shared/icon.component';
 import { AdminStateService } from './admin-state.service';
 
-type UsersTab = 'all' | 'admins';
+type UsersTab = 'all' | 'admins' | 'access-history';
 
 /** User directory and administrator role management screen backing /api/admin/users and /api/admin/administrators. */
 @Component({
@@ -20,6 +20,8 @@ export class AdminUsersComponent {
   protected readonly activeTab = signal<UsersTab>('all');
   protected readonly searchQuery = signal<string>('');
   protected readonly selectedPlanFilter = signal<string>('all');
+  protected readonly accessUserFilter = signal<number | null>(null);
+  protected readonly accessOnlyDeleted = signal<boolean>(false);
   protected readonly actionError = signal<string>('');
   protected readonly updatingUserId = signal<number | null>(null);
 
@@ -63,10 +65,58 @@ export class AdminUsersComponent {
     );
   });
 
+  protected readonly filteredAccessHistory = computed<readonly AdminTrackAccessEntry[]>(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    const entries = this.adminState.accessHistory();
+    if (!query) return entries;
+    return entries.filter(
+      (entry) =>
+        entry.user_display_name.toLowerCase().includes(query) ||
+        entry.user_email.toLowerCase().includes(query) ||
+        entry.track_title.toLowerCase().includes(query) ||
+        entry.track_artist.toLowerCase().includes(query) ||
+        entry.track_genre.toLowerCase().includes(query) ||
+        entry.source.toLowerCase().includes(query),
+    );
+  });
+
   protected selectTab(tab: UsersTab): void {
     this.actionError.set('');
     this.registerError.set('');
     this.activeTab.set(tab);
+    if (tab === 'access-history') {
+      this.reloadAccessHistory();
+    }
+  }
+
+  protected updateAccessUserFilter(event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    if (!raw || raw === 'all') {
+      this.accessUserFilter.set(null);
+    } else {
+      const parsed = Number(raw);
+      this.accessUserFilter.set(Number.isFinite(parsed) ? parsed : null);
+    }
+    this.reloadAccessHistory();
+  }
+
+  protected toggleAccessOnlyDeleted(event: Event): void {
+    this.accessOnlyDeleted.set((event.target as HTMLInputElement).checked);
+    this.reloadAccessHistory();
+  }
+
+  protected formatAccessTimestamp(iso: string): string {
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return iso;
+    return parsed.toLocaleString('pt-BR');
+  }
+
+  private reloadAccessHistory(): void {
+    this.adminState.loadAccessHistory({
+      userId: this.accessUserFilter(),
+      onlyDeleted: this.accessOnlyDeleted(),
+      limit: 100,
+    });
   }
 
   protected updateSearch(event: Event): void {

@@ -1,5 +1,7 @@
 """User profile and membership presentation schemas."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.presentation.schemas.admin import PlanResponse
@@ -164,6 +166,35 @@ class AnnualStatsResponse(BaseModel):
     total_jams_participated: int = 0
 
 
+class UserTrackAccessResponse(BaseModel):
+    """Listener-facing track access history item."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    access_id: int
+    user_id: int
+    track_id: int
+    track_title: str
+    track_artist: str
+    track_genre: str
+    track_album: str | None = None
+    track_duration_seconds: int = 0
+    track_cover_url: str | None = None
+    track_preview_url: str | None = None
+    track_explicit: bool = False
+    source: str
+    accessed_at: datetime
+
+
+class UserAccessHistoryResponse(BaseModel):
+    """Response containing active access history and distinct seen track IDs."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    items: list[UserTrackAccessResponse] = Field(default_factory=list)
+    seen_track_ids: list[int] = Field(default_factory=list)
+
+
 __all__ = [
     "AddFamilyMemberRequest",
     "AnnualStatsResponse",
@@ -178,6 +209,8 @@ __all__ = [
     "SourceStatResponse",
     "ThemePreferenceRequest",
     "UpdateProfileRequest",
+    "UserAccessHistoryResponse",
     "UserProfileResponse",
+    "UserTrackAccessResponse",
     "YearlyInteractionStatResponse",
 ]

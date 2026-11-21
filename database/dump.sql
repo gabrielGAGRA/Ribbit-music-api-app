@@ -166,6 +166,26 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS track_accesses (
+    access_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    track_id INTEGER NOT NULL REFERENCES tracks(track_id) ON DELETE CASCADE,
+    source TEXT NOT NULL,
+    accessed_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_track_accesses_user_time ON track_accesses(user_id, accessed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_track_accesses_track_id ON track_accesses(track_id);
+CREATE INDEX IF NOT EXISTS idx_track_accesses_user_track ON track_accesses(user_id, track_id);
+
+CREATE TABLE IF NOT EXISTS platform_cost_settings (
+    settings_id INTEGER PRIMARY KEY CHECK (settings_id = 1),
+    content_cost_per_track REAL NOT NULL DEFAULT 0.04,
+    infrastructure_fixed_cost REAL NOT NULL DEFAULT 10.00,
+    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.50,
+    updated_at TEXT NOT NULL
+);
+
 -- Plans
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (1, 'Free', 0.0, 1);
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (2, 'Individual', 14.9, 1);
@@ -780,6 +800,9 @@ INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, c
 INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (4, 4, 7, 'like', '2026-02-01T10:15:00+00:00', 'discovery', NULL);
 INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (5, 5, 2, 'like', '2026-02-02T14:00:00+00:00', 'discovery', NULL);
 INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (6, 6, 3, 'superlike', '2026-02-03T18:00:00+00:00', 'discovery', NULL);
+INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (7, 4, 5, 'dislike', '2026-02-04T11:00:00+00:00', 'discovery', NULL);
+INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (8, 5, 5, 'dislike', '2026-02-04T11:15:00+00:00', 'discovery', NULL);
+INSERT OR IGNORE INTO interactions (interaction_id, user_id, track_id, action, created_at, source, jam_id) VALUES (9, 6, 6, 'superlike', '2026-02-04T12:00:00+00:00', 'discovery', NULL);
 
 -- Sample Playlists
 INSERT OR IGNORE INTO playlists (playlist_id, user_id, name, description, is_exported, created_at, max_duration_seconds) VALUES (1, 4, 'Clássicos & Favoritas', 'Seleção inicial de rock e pop para o dia a dia', 0, '2026-02-01T11:00:00+00:00', 1800);
@@ -796,6 +819,11 @@ INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, added_at) VALUES (
 INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (1, 4, 1, 5, 'Obra-prima atemporal do Queen, transição perfeita!', 2, 0, '2026-02-01T12:00:00+00:00');
 INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (2, 6, 4, 5, 'Sintetizadores incríveis, nunca enjoa.', 1, 0, '2026-02-03T19:00:00+00:00');
 INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (3, 5, 2, 4, 'Muito boa para estudar e correr.', 0, 0, '2026-02-04T09:00:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (4, 4, 3, 3, 'Boa batida, mas poderia ter um refrão mais marcante.', 1, 0, '2026-02-05T14:00:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (5, 5, 5, 2, 'Produção ok, porém repetitiva depois da metade.', 0, 0, '2026-02-06T11:30:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (6, 6, 7, 1, 'Não funcionou para mim, mixagem muito carregada.', 0, 0, '2026-02-07T16:45:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (7, 4, 8, 4, 'Clássico sólido para qualquer playlist.', 2, 0, '2026-02-08T10:15:00+00:00');
+INSERT OR IGNORE INTO reviews (review_id, user_id, track_id, rating, text, likes_count, is_deleted, created_at) VALUES (8, 5, 1, 4, 'Solo de guitarra inesquecível.', 1, 0, '2026-02-09T20:00:00+00:00');
 INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (1, 5, '2026-02-02T14:10:00+00:00');
 INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (1, 6, '2026-02-03T18:10:00+00:00');
 INSERT OR IGNORE INTO review_likes (review_id, user_id, created_at) VALUES (2, 4, '2026-02-04T10:00:00+00:00');
@@ -806,6 +834,19 @@ INSERT OR IGNORE INTO jam_participants (jam_id, user_id, joined_at) VALUES (1, 4
 INSERT OR IGNORE INTO jam_participants (jam_id, user_id, joined_at) VALUES (1, 6, '2026-02-05T20:01:00+00:00');
 INSERT OR IGNORE INTO jam_queue_items (jam_queue_id, jam_id, track_id, vote_points, added_at) VALUES (1, 1, 4, 2, '2026-02-05T20:02:00+00:00');
 INSERT OR IGNORE INTO jam_queue_items (jam_queue_id, jam_id, track_id, vote_points, added_at) VALUES (2, 1, 2, 1, '2026-02-05T20:03:00+00:00');
+
+-- Sample Soft-Deleted Track & Track Accesses
+INSERT OR IGNORE INTO tracks (track_id, title, artist, album, duration_seconds, genre, country, release_year, cover_url, itunes_preview_url, explicit, is_deleted, created_at) VALUES (593, 'Faixa Removida (Arquivo)', 'Ribbit Archive', 'Single', 195, 'Pop', NULL, 2024, NULL, NULL, 0, 1, '2026-01-01T00:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (1, 4, 1, 'swipe', '2026-02-01T10:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (2, 4, 2, 'play', '2026-02-01T10:05:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (3, 4, 4, 'details', '2026-02-01T10:10:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (4, 4, 593, 'play', '2026-02-01T10:12:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (5, 5, 2, 'search', '2026-02-02T14:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (6, 6, 3, 'playlist', '2026-02-03T18:00:00+00:00');
+INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (7, 6, 1, 'jam', '2026-02-05T20:00:00+00:00');
+
+-- Default Platform Cost Settings
+INSERT OR IGNORE INTO platform_cost_settings (settings_id, content_cost_per_track, infrastructure_fixed_cost, infrastructure_cost_per_user, updated_at) VALUES (1, 0.04, 10.00, 0.50, '1970-01-01T00:00:00+00:00');
 
 COMMIT;
 PRAGMA foreign_keys = ON;

@@ -76,6 +76,7 @@ export class CollectionComponent {
     const firstSong = list[0];
     if (firstSong) {
       this.state.discoverySong.set(firstSong);
+      this.state.recordTrackAccess(firstSong, 'profile');
       this.player.loadTrack(firstSong.previewUrl);
       this.player.play();
       this.state.notify(`Reproduzindo "${firstSong.title}".`);
@@ -86,6 +87,7 @@ export class CollectionComponent {
 
   onSongClick(song: Song): void {
     this.state.discoverySong.set(song);
+    this.state.recordTrackAccess(song, 'profile');
     this.player.loadTrack(song.previewUrl);
     this.player.resetProgress();
     this.state.setPage('discover');

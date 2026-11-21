@@ -354,6 +354,21 @@
             />
           </label>
         </div>
+        <label>
+          Nota mínima
+          <select
+            name="searchMinRating"
+            [value]="searchMinRatingDraft() ?? ''"
+            (change)="onSearchMinRatingChange($event)"
+          >
+            <option value="">Qualquer</option>
+            <option value="1">1★+</option>
+            <option value="2">2★+</option>
+            <option value="3">3★+</option>
+            <option value="4">4★+</option>
+            <option value="5">5★</option>
+          </select>
+        </label>
         <button class="primary-button full-width" (click)="applyFilters()">
           Aplicar filtros <app-icon name="check" [size]="16" />
         </button>
@@ -653,8 +668,8 @@
         </div>
         <p class="small-copy">Sua avaliação: {{ rating() }}/5 estrelas</p>
         <form class="comment-form" (submit)="onCommentSubmit($event)">
-          <input required name="commentText" placeholder="Compartilhe sua impressão..." />
-          <button class="primary-button" aria-label="Publicar comentário" type="submit">
+          <input name="commentText" placeholder="Compartilhe sua impressão (opcional)..." />
+          <button class="primary-button" aria-label="Publicar avaliação" type="submit">
             <app-icon name="send" [size]="17" />
           </button>
         </form>
@@ -663,6 +678,16 @@
             <h3>Reviews desta música</h3>
             <span>{{ trackReviews().length }} opiniões</span>
           </div>
+          <select
+            [value]="state.trackReviewsSort()"
+            (change)="onTrackReviewSortChange($event)"
+            aria-label="Ordenar reviews da faixa"
+          >
+            <option value="recent">Mais recentes</option>
+            <option value="rating_desc">Maiores notas</option>
+            <option value="rating_asc">Menores notas</option>
+            <option value="likes">Mais curtidas</option>
+          </select>
         </div>
         <div class="comment-list">
           @for (review of trackReviews(); track review.id) {
@@ -672,7 +697,25 @@
                 <strong>
                   {{ review.author }} <small>· {{ review.age }}</small>
                 </strong>
-                <p>{{ review.text }}</p>
+                @if (review.rating !== undefined) {
+                  <div
+                    class="review-stars"
+                    [attr.aria-label]="'Avaliação: ' + review.rating + ' de 5 estrelas'"
+                  >
+                    @for (star of starScale; track star) {
+                      <app-icon
+                        name="star"
+                        [size]="12"
+                        [class.filled]="star <= review.rating"
+                        [class.empty]="star > review.rating"
+                      />
+                    }
+                    <span>{{ review.rating }}/5</span>
+                  </div>
+                }
+                @if (review.text) {
+                  <p>{{ review.text }}</p>
+                }
                 @if (isOwnReview(review)) {
                   <button type="button" (click)="deleteReview(review.id)">Excluir</button>
                 }

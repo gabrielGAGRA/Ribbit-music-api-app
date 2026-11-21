@@ -960,3 +960,293 @@ def test_playlist_jam_review_interaction_updates_and_missing_cases(
     assert persisted is not None
     assert persisted.jam_id is None
     assert persisted.action == InteractionAction.LIKE
+
+
+def test_track_repository_rating_filters_and_sorting(
+    conn: sqlite3.Connection,
+) -> None:
+    plan = SQLitePlanRepository(conn).save(
+        Plan(name="Free", initial_monthly_price=0.0, initial_max_profiles=1)
+    )
+    user_repo = SQLiteUserRepository(conn)
+    track_repo = SQLiteTrackRepository(conn)
+    review_repo = SQLiteReviewRepository(conn)
+
+    u1 = user_repo.save(
+        User(
+            email="r1@test.com",
+            password_hash="h",
+            display_name="R1",
+            age=22,
+            plan_id=plan.plan_id,
+        )
+    )
+    u2 = user_repo.save(
+        User(
+            email="r2@test.com",
+            password_hash="h",
+            display_name="R2",
+            age=23,
+            plan_id=plan.plan_id,
+        )
+    )
+    assert u1.user_id is not None
+    assert u2.user_id is not None
+
+    t_high = track_repo.save(
+        Track(title="High", artist="Band", duration_seconds=180, genre="Rock")
+    )
+    t_mid = track_repo.save(
+        Track(title="Mid", artist="Band", duration_seconds=180, genre="Rock")
+    )
+    t_unrated = track_repo.save(
+        Track(title="Unrated", artist="Band", duration_seconds=180, genre="Rock")
+    )
+    assert t_high.track_id is not None
+    assert t_mid.track_id is not None
+    assert t_unrated.track_id is not None
+
+    review_repo.save(
+        ReviewComment(
+            user_id=u1.user_id, track_id=t_high.track_id, initial_rating=5, text="Top"
+        )
+    )
+    review_repo.save(
+        ReviewComment(
+            user_id=u2.user_id, track_id=t_high.track_id, initial_rating=4, text="Good"
+        )
+    )
+    review_repo.save(
+        ReviewComment(
+            user_id=u1.user_id, track_id=t_mid.track_id, initial_rating=2, text="Meh"
+        )
+    )
+    # Soft-deleted review should be ignored in aggregation
+    deleted_rev = review_repo.save(
+        ReviewComment(
+            user_id=u2.user_id,
+            track_id=t_mid.track_id,
+            initial_rating=5,
+            text="Deleted",
+        )
+    )
+    assert deleted_rev.review_id is not None
+    review_repo.delete(deleted_rev.review_id)
+
+    desc_tracks = track_repo.find_by_filters(sort_by="rating_desc")
+    assert [t.title for t in desc_tracks] == ["High", "Mid", "Unrated"]
+    assert desc_tracks[0].average_rating == 4.5
+    assert desc_tracks[0].review_count == 2
+    assert desc_tracks[1].average_rating == 2.0
+    assert desc_tracks[1].review_count == 1
+    assert desc_tracks[2].average_rating is None
+    assert desc_tracks[2].review_count == 0
+
+    asc_tracks = track_repo.find_by_filters(sort_by="rating_asc")
+    assert [t.title for t in asc_tracks] == ["Mid", "High", "Unrated"]
+
+    filtered = track_repo.find_by_filters(min_rating=4.0)
+    assert [t.title for t in filtered] == ["High"]
+
+
+def test_review_repository_sorting_days_none_and_deleted_track_exclusion(
+    conn: sqlite3.Connection,
+) -> None:
+    plan = SQLitePlanRepository(conn).save(
+        Plan(name="Free", initial_monthly_price=0.0, initial_max_profiles=1)
+    )
+    user_repo = SQLiteUserRepository(conn)
+    track_repo = SQLiteTrackRepository(conn)
+    review_repo = SQLiteReviewRepository(conn)
+
+    u1 = user_repo.save(
+        User(
+            email="rev1@test.com",
+            password_hash="h",
+            display_name="Rev1",
+            age=24,
+            plan_id=plan.plan_id,
+        )
+    )
+    u2 = user_repo.save(
+        User(
+            email="rev2@test.com",
+            password_hash="h",
+            display_name="Rev2",
+            age=25,
+            plan_id=plan.plan_id,
+        )
+    )
+    assert u1.user_id is not None
+    assert u2.user_id is not None
+
+    active_track = track_repo.save(
+        Track(title="Active", artist="A", duration_seconds=200, genre="Pop")
+    )
+    deleted_track = track_repo.save(
+        Track(
+            title="Gone",
+            artist="B",
+            duration_seconds=200,
+            genre="Pop",
+            is_deleted=True,
+        )
+    )
+    assert active_track.track_id is not None
+    assert deleted_track.track_id is not None
+
+    r_old_low = review_repo.save(
+        ReviewComment(
+            user_id=u1.user_id,
+            track_id=active_track.track_id,
+            initial_rating=2,
+            text="Old low",
+            initial_likes_count=10,
+            created_at=datetime(2020, 1, 1, tzinfo=UTC),
+        )
+    )
+    r_new_high = review_repo.save(
+        ReviewComment(
+            user_id=u2.user_id,
+            track_id=active_track.track_id,
+            initial_rating=5,
+            text="New high",
+            initial_likes_count=1,
+            created_at=datetime.now(UTC),
+        )
+    )
+    review_repo.save(
+        ReviewComment(
+            user_id=u1.user_id,
+            track_id=deleted_track.track_id,
+            initial_rating=5,
+            text="Should not leak",
+            created_at=datetime.now(UTC),
+        )
+    )
+
+    assert [
+        r.review_id
+        for r in review_repo.list_top_recent(days=None, limit=10, sort_by="rating_desc")
+    ] == [r_new_high.review_id, r_old_low.review_id]
+    assert [
+        r.review_id
+        for r in review_repo.list_top_recent(days=None, limit=10, sort_by="rating_asc")
+    ] == [r_old_low.review_id, r_new_high.review_id]
+    assert [
+        r.review_id
+        for r in review_repo.list_top_recent(days=7, limit=10, sort_by="likes")
+    ] == [r_new_high.review_id]
+
+    assert [
+        r.review_id
+        for r in review_repo.list_by_track(
+            active_track.track_id, limit=10, sort_by="rating_asc"
+        )
+    ] == [r_old_low.review_id, r_new_high.review_id]
+    assert review_repo.list_by_track(deleted_track.track_id, limit=10) == []
+    assert [r.track_id for r in review_repo.list_by_user(u1.user_id)] == [
+        active_track.track_id
+    ]
+
+
+def test_track_repository_admin_catalog_metrics_and_blocked_metrics(
+    conn: sqlite3.Connection,
+) -> None:
+    plan = SQLitePlanRepository(conn).save(
+        Plan(name="Free", initial_monthly_price=0.0, initial_max_profiles=1)
+    )
+    user_repo = SQLiteUserRepository(conn)
+    track_repo = SQLiteTrackRepository(conn)
+    interaction_repo = SQLiteInteractionRepository(conn)
+    review_repo = SQLiteReviewRepository(conn)
+
+    u1 = user_repo.save(
+        User(
+            email="adm1@test.com",
+            password_hash="h",
+            display_name="A1",
+            age=24,
+            plan_id=plan.plan_id,
+        )
+    )
+    u2 = user_repo.save(
+        User(
+            email="adm2@test.com",
+            password_hash="h",
+            display_name="A2",
+            age=25,
+            plan_id=plan.plan_id,
+        )
+    )
+    assert u1.user_id is not None
+    assert u2.user_id is not None
+
+    t1 = track_repo.save(
+        Track(title="Loved Track", artist="Alpha", duration_seconds=200, genre="Pop")
+    )
+    t2 = track_repo.save(
+        Track(title="Disliked Track", artist="Beta", duration_seconds=210, genre="Rock")
+    )
+    t3 = track_repo.save(
+        Track(
+            title="Blocked Track",
+            artist="Gamma",
+            duration_seconds=190,
+            genre="Metal",
+            is_deleted=True,
+        )
+    )
+    assert t1.track_id is not None
+    assert t2.track_id is not None
+    assert t3.track_id is not None
+
+    interaction_repo.save(
+        Interaction(
+            user_id=u1.user_id, track_id=t1.track_id, action=InteractionAction.SUPERLIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u2.user_id, track_id=t1.track_id, action=InteractionAction.LIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u1.user_id, track_id=t2.track_id, action=InteractionAction.DISLIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u2.user_id, track_id=t2.track_id, action=InteractionAction.DISLIKE
+        )
+    )
+    interaction_repo.save(
+        Interaction(
+            user_id=u1.user_id, track_id=t3.track_id, action=InteractionAction.DISLIKE
+        )
+    )
+    review_repo.save(
+        ReviewComment(
+            user_id=u1.user_id, track_id=t1.track_id, initial_rating=5, text="Great"
+        )
+    )
+
+    by_dislikes = track_repo.list_admin_catalog(sort_by="dislikes_desc")
+    assert [t.title for t in by_dislikes] == ["Disliked Track", "Loved Track"]
+    assert by_dislikes[0].dislikes_count == 2
+    assert by_dislikes[1].superlikes_count == 1
+    assert by_dislikes[1].likes_count == 1
+    assert by_dislikes[1].average_rating == 5.0
+    assert by_dislikes[1].review_count == 1
+
+    min_dislikes = track_repo.list_admin_catalog(min_dislikes=2)
+    assert [t.title for t in min_dislikes] == ["Disliked Track"]
+
+    with_deleted = track_repo.list_admin_catalog(include_deleted=True, query="Blocked")
+    assert [t.title for t in with_deleted] == ["Blocked Track"]
+
+    blocked = track_repo.list_blocked_with_metrics()
+    assert len(blocked) == 1
+    assert blocked[0].track_id == t3.track_id
+    assert blocked[0].dislikes_count == 1

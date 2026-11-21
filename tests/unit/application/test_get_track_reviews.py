@@ -45,7 +45,7 @@ def test_get_track_reviews_returns_active_reviews_for_valid_track() -> None:
 
     assert result == reviews
     track_repo.find_by_id.assert_called_once_with(100)
-    review_repo.list_by_track.assert_called_once_with(100, limit=20)
+    review_repo.list_by_track.assert_called_once_with(100, limit=20, sort_by="recent")
 
 
 def test_get_track_reviews_track_not_found_raises_entity_not_found() -> None:
