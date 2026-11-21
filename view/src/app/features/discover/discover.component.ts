@@ -166,7 +166,6 @@ export class DiscoverComponent {
 
   handleUndo(): void {
     this.state.undo();
-    this.player.setProgress(24);
   }
 
   togglePlay(): void {

@@ -129,11 +129,17 @@ export class RibbitStateService implements OnDestroy {
   readonly seenTrackIds = signal<ReadonlySet<number>>(new Set());
   readonly discoverySong = signal<Song | null>(null);
   readonly isDeckEmpty = signal<boolean>(false);
-  readonly lastSwiped = signal<{
-    readonly song: Song;
-    readonly kind: DecisionKind;
-    readonly index: number;
-  } | null>(null);
+  private readonly swipeUndoStack = signal<
+    readonly {
+      readonly song: Song;
+      readonly kind: DecisionKind;
+      readonly index: number;
+    }[]
+  >([]);
+  readonly lastSwiped = computed(() => {
+    const stack = this.swipeUndoStack();
+    return stack[stack.length - 1] ?? null;
+  });
 
   readonly history = signal<readonly Decision[]>([]);
   readonly likedSongs = signal<readonly Song[]>([]);
@@ -151,6 +157,13 @@ export class RibbitStateService implements OnDestroy {
   readonly primaryAccountId = signal<number | null>(this.initialUser?.primary_account_id ?? null);
   readonly userEmail = signal<string>(this.initialUser?.email ?? '');
   readonly userName = signal<string>(this.initialUser?.display_name ?? 'Visitante');
+  readonly userAge = signal<number | null>(this.initialUser?.age ?? null);
+  readonly guardianName = signal<string | null>(this.initialUser?.guardian_name ?? null);
+  readonly guardianEmail = signal<string | null>(this.initialUser?.guardian_email ?? null);
+  readonly isMinorUser = computed<boolean>(() => {
+    const age = this.userAge();
+    return age !== null && age < 18;
+  });
   readonly currentPlanId = signal<number>(this.initialUser?.plan_id ?? 1);
   readonly currentPlan = signal<string>('Free');
   readonly spotifyId = signal<string | null>(this.initialUser?.spotify_id ?? null);
@@ -572,6 +585,10 @@ export class RibbitStateService implements OnDestroy {
       this.notify(`Você já está no plano ${plan.displayName}.`);
       return;
     }
+    if (this.isMinorUser() && (plan.maxProfiles ?? 1) > 1) {
+      this.notify('Menores de 18 anos não podem assinar o Plano Família como titular.');
+      return;
+    }
     if (plan.name === 'Free') {
       this.cancelSubscription();
       return;
@@ -581,14 +598,21 @@ export class RibbitStateService implements OnDestroy {
   }
 
   /** Completes simulated payment and persists the new subscription tier on the backend. */
-  confirmMockPlanCheckout(paymentMethod: 'card' | 'pix'): void {
+  confirmMockPlanCheckout(
+    paymentMethod: 'card' | 'pix',
+    guardian?: {
+      readonly guardianName?: string;
+      readonly guardianEmail?: string;
+      readonly guardianConfirmedAdult?: boolean;
+    },
+  ): void {
     const targetPlan = this.pendingCheckoutPlan();
     if (!targetPlan) return;
 
     const resolvedPlanId =
       targetPlan.planId ?? this.planService.resolvePlanIdByName(targetPlan.name);
 
-    this.planService.changePlan(resolvedPlanId).subscribe({
+    this.planService.changePlan(resolvedPlanId, guardian).subscribe({
       next: (updatedUser) => {
         this.applyUserDto(updatedUser);
         this.currentPlan.set(targetPlan.name);
@@ -684,7 +708,7 @@ export class RibbitStateService implements OnDestroy {
       { index: idx, kind, ...(song.trackId !== undefined ? { trackId: song.trackId } : {}) },
     ];
     this.history.set(nextHistory);
-    this.lastSwiped.set({ song, kind, index: idx });
+    this.swipeUndoStack.update((stack) => [...stack, { song, kind, index: idx }]);
     this.applyLocalSwipeCollectionUpdate(song, kind);
     this.notifySwipeDecision(kind);
 
@@ -717,23 +741,28 @@ export class RibbitStateService implements OnDestroy {
 
   /** Restores the last swiped song back onto the Discovery card so the user can re-decide. */
   undo(): void {
-    const last = this.lastSwiped();
-    if (!last) {
-      this.notify('Você ainda não fez nenhum swipe.');
-      return;
-    }
+    const stack = this.swipeUndoStack();
+    const last = stack[stack.length - 1] ?? null;
 
     if (readAuthToken()) {
       this.songService.undoSwipe().subscribe({
-        next: () => {
-          this.currentIndex.set(last.index);
-          if (last.song.trackId !== undefined) {
-            this.discoverySong.set(last.song);
+        next: (res) => {
+          const popped = stack[stack.length - 1] ?? null;
+          if (popped) {
+            this.swipeUndoStack.update((items) => items.slice(0, -1));
+            this.currentIndex.set(popped.index);
+          }
+          const restoredSong = res.track
+            ? mapTrackDtoToSong(res.track)
+            : (popped?.song ?? this.songs().find((s) => s.trackId === res.track_id) ?? null);
+          if (restoredSong) {
+            this.discoverySong.set(restoredSong);
+            this.removeSongFromLocalCollections(restoredSong);
+            this.audioPlayer.loadTrack(restoredSong.previewUrl);
+            this.audioPlayer.setProgress(24);
           }
           this.isDeckEmpty.set(false);
-          this.lastSwiped.set(null);
           this.history.update((items) => items.slice(0, -1));
-          this.audioPlayer.loadTrack(last.song.previewUrl);
           this.refreshInteractedCollections();
           this.notify('Último swipe desfeito. Avalie a faixa novamente.');
         },
@@ -744,9 +773,19 @@ export class RibbitStateService implements OnDestroy {
             );
             return;
           }
-          this.notify(toApiError(err).message);
+          const apiErr = toApiError(err);
+          if (apiErr.status === 404) {
+            this.notify('Você ainda não fez nenhum swipe.');
+            return;
+          }
+          this.notify(apiErr.message);
         },
       });
+      return;
+    }
+
+    if (!last) {
+      this.notify('Você ainda não fez nenhum swipe.');
       return;
     }
 
@@ -754,10 +793,12 @@ export class RibbitStateService implements OnDestroy {
     if (last.song.trackId !== undefined) {
       this.discoverySong.set(last.song);
     }
+    this.removeSongFromLocalCollections(last.song);
     this.isDeckEmpty.set(false);
-    this.lastSwiped.set(null);
+    this.swipeUndoStack.update((items) => items.slice(0, -1));
     this.history.update((items) => items.slice(0, -1));
     this.audioPlayer.loadTrack(last.song.previewUrl);
+    this.audioPlayer.setProgress(24);
     this.notify('Último swipe desfeito. Avalie a faixa novamente.');
   }
 
@@ -1272,9 +1313,16 @@ export class RibbitStateService implements OnDestroy {
     this.primaryAccountId.set(user.primary_account_id ?? null);
     this.userEmail.set(user.email);
     this.userName.set(user.display_name);
+    this.userAge.set(user.age ?? null);
+    this.guardianName.set(user.guardian_name ?? null);
+    this.guardianEmail.set(user.guardian_email ?? null);
     this.currentPlanId.set(user.plan_id);
     this.spotifyId.set(user.spotify_id ?? null);
     this.spotifyPremium.set(Boolean(user.spotify_premium));
+    this.applyUserPreferencesFromDto(user);
+  }
+
+  private applyUserPreferencesFromDto(user: UserApiDto): void {
     this.blockedGenres.set(user.blocked_genres ? [...user.blocked_genres] : []);
     this.blockedArtists.set(user.blocked_artists ? [...user.blocked_artists] : []);
     if (user.preferred_theme === 'light' || user.preferred_theme === 'dark') {
@@ -1312,6 +1360,15 @@ export class RibbitStateService implements OnDestroy {
     this.likedSongs.set(likes);
     this.lovedSongs.set(loved);
     this.rejectedSongs.set(rejected);
+  }
+
+  private removeSongFromLocalCollections(song: Song): void {
+    const notSame = (item: Song): boolean =>
+      song.trackId !== undefined ? item.trackId !== song.trackId : item.title !== song.title;
+
+    this.likedSongs.update((list) => list.filter(notSame));
+    this.lovedSongs.update((list) => list.filter(notSame));
+    this.rejectedSongs.update((list) => list.filter(notSame));
   }
 
   private applyLocalSwipeCollectionUpdate(song: Song, kind: DecisionKind): void {
@@ -1498,12 +1555,15 @@ export class RibbitStateService implements OnDestroy {
     this.playlists.set([]);
     this.activeTrackReviews.set([]);
     this.discoverySong.set(null);
-    this.lastSwiped.set(null);
+    this.swipeUndoStack.set([]);
     this.isDeckEmpty.set(false);
     this.jamState.set(DEFAULT_JAM_STATE);
     this.userId.set(null);
     this.userEmail.set('');
     this.userName.set('Visitante');
+    this.userAge.set(null);
+    this.guardianName.set(null);
+    this.guardianEmail.set(null);
     this.currentPlan.set('Free');
     this.currentPlanId.set(1);
     this.spotifyId.set(null);

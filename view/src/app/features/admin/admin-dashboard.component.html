@@ -5,7 +5,6 @@
         <span class="kpi-icon green-bg">
           <app-icon name="sparkles" [size]="19" />
         </span>
-        <span class="endpoint-tag">GET /api/admin/dashboard</span>
       </div>
       <strong class="kpi-value" [class.negative-value]="isNetNegative()">
         {{ formattedNetRevenue() }}
@@ -35,7 +34,6 @@
         <span class="kpi-icon green-bg">
           <app-icon name="music" [size]="19" />
         </span>
-        <span class="endpoint-tag">GET /api/admin/audience</span>
       </div>
       <strong class="kpi-value">
         {{ adminState.audienceReport().active_tracks }} /
@@ -66,7 +64,6 @@
         <span class="kpi-icon blue-bg">
           <app-icon name="headphones" [size]="19" />
         </span>
-        <span class="endpoint-tag">GET /api/admin/audience</span>
       </div>
       <strong class="kpi-value">{{ totalAccesses() }}</strong>
       <span class="kpi-label">Total de Acessos</span>
@@ -77,7 +74,7 @@
   <section class="admin-card financial-card">
     <div class="card-head">
       <div>
-        <span class="eyebrow blue">DEMONSTRATIVO OPERACIONAL · PUT /API/ADMIN/COSTS</span>
+        <span class="eyebrow blue">DEMONSTRATIVO OPERACIONAL</span>
         <h2>Demonstrativo Financeiro &amp; Custos Operacionais</h2>
       </div>
       @if (!editingCosts()) {
@@ -222,7 +219,6 @@
           <span class="eyebrow blue">PREFERÊNCIAS DE AUDIÊNCIA</span>
           <h2>Gêneros Mais Bloqueados</h2>
         </div>
-        <span class="endpoint-tag">GET /api/admin/audience</span>
       </div>
 
       <p class="panel-copy">
@@ -252,7 +248,6 @@
           <span class="eyebrow blue">ENGAJAMENTO POR FAIXA</span>
           <h2>Acessos por Conteúdo</h2>
         </div>
-        <span class="endpoint-tag">GET /api/admin/audience</span>
       </div>
 
       <div class="genre-rank-list">
@@ -283,7 +278,6 @@
           <span class="eyebrow blue">DISTRIBUIÇÃO POR CATEGORIA</span>
           <h2>Acessos por Categoria (Gênero)</h2>
         </div>
-        <span class="endpoint-tag">GET /api/admin/audience</span>
       </div>
 
       <div class="genre-rank-list">
