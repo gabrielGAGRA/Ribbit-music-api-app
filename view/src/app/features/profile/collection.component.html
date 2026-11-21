@@ -38,6 +38,9 @@
           <strong>{{ item.title }}</strong>
           <span>{{ item.artist }}</span>
         </div>
+        @if (state.isTrackSeen(item.trackId)) {
+          <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+        }
         <div class="collection-actions">
           <span class="song-time">{{ item.time }}</span>
           <button

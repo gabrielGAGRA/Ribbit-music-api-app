@@ -11,7 +11,6 @@ import { Router } from '@angular/router';
 import type { Subscription } from 'rxjs';
 import type { CommunityReview, Song } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
-import { mapTrackDtoToSong } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { MOCK_REVIEWS } from '../../core/mocks/reviews.mock';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -56,12 +55,10 @@ export class ExploreComponent implements OnInit {
   private readonly router = inject(Router, { optional: true });
 
   readonly query = this.state.searchQuery;
-  readonly historyExpanded = signal<boolean>(false);
   readonly reviewSort = signal<string>('likes');
   readonly reviewLikes = signal<Record<number, boolean>>({});
   protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
   private readonly serverSearchResults = signal<readonly Song[] | null>(null);
-  private readonly recentHistoryApiSongs = signal<readonly Song[]>([]);
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSearchSub: Subscription | null = null;
 
@@ -142,32 +139,6 @@ export class ExploreComponent implements OnInit {
     }
     return endYear === undefined || trackYear <= endYear;
   }
-
-  readonly recentSongs = computed<readonly Song[]>(() => {
-    const accessEntries = this.state.accessHistory();
-    const seen = new Set<number>();
-    const fromAccess: Song[] = [];
-    for (const entry of accessEntries) {
-      if (seen.has(entry.track_id)) continue;
-      seen.add(entry.track_id);
-      fromAccess.push({
-        trackId: entry.track_id,
-        title: entry.track_title,
-        artist: entry.track_artist,
-        genre: entry.track_genre,
-        album: entry.track_album ?? entry.track_title,
-        durationSeconds: entry.track_duration_seconds,
-        time: `${Math.floor(entry.track_duration_seconds / 60)}:${String(entry.track_duration_seconds % 60).padStart(2, '0')}`,
-        image: entry.track_cover_url ?? '',
-        year: '',
-        match: 0,
-        ...(entry.track_preview_url ? { previewUrl: entry.track_preview_url } : {}),
-        explicit: entry.track_explicit,
-      });
-    }
-    const source = fromAccess.length > 0 ? fromAccess : this.recentHistoryApiSongs();
-    return this.historyExpanded() ? source : source.slice(0, 3);
-  });
 
   readonly sortedReviews = computed<readonly CommunityReview[]>(() => {
     const sort = this.reviewSort();
@@ -271,15 +242,6 @@ export class ExploreComponent implements OnInit {
   ngOnInit(): void {
     if (!readAuthToken()) return;
 
-    this.songService.getRecentInteractedTracks(30).subscribe({
-      next: (items) => {
-        this.recentHistoryApiSongs.set(items.map((entry) => mapTrackDtoToSong(entry.track)));
-      },
-      error: () => {
-        // Fallback to catalog order if endpoint fails
-      },
-    });
-
     if (this.songService.reviews().length === 0) {
       this.state.refreshCatalogAndFeed();
     }
@@ -310,10 +272,6 @@ export class ExploreComponent implements OnInit {
       | 'rating_desc'
       | 'rating_asc';
     this.state.searchSortBy.set(value);
-  }
-
-  toggleHistory(): void {
-    this.historyExpanded.update((v) => !v);
   }
 
   onSortChange(event: Event): void {

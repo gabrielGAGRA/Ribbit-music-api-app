@@ -26,10 +26,13 @@ describe('ProfileComponent', () => {
     component = TestBed.runInInjectionContext(() => new ProfileComponent());
   });
 
-  it('should switch between like, love, and reject tabs', () => {
+  it('should switch between like, love, reject, and history tabs', () => {
     expect(component.selectedTab()).toBe('like');
     component.selectTab('love');
     expect(component.selectedTab()).toBe('love');
+    component.selectTab('history');
+    expect(component.selectedTab()).toBe('history');
+    expect(component.activeTabLabel()).toBe('Histórico de acessos');
   });
 
   it('should calculate real counts from state collections', () => {
@@ -141,5 +144,38 @@ describe('ProfileComponent', () => {
 
     expect(refreshSpy).toHaveBeenCalledOnce();
     localStorage.clear();
+  });
+
+  it('derives deduplicated historySongs from state.accessHistory and toggles historyExpanded', () => {
+    state.accessHistory.set(
+      Array.from({ length: 8 }, (_, idx) => ({
+        access_id: idx + 1,
+        user_id: 1,
+        track_id: idx === 7 ? 1 : idx + 1,
+        track_title: `Faixa ${idx + 1}`,
+        track_artist: 'Artista Teste',
+        track_genre: 'Pop',
+        track_album: 'Álbum',
+        track_duration_seconds: 180,
+        track_cover_url: null,
+        track_preview_url: null,
+        track_explicit: false,
+        track_is_deleted: false,
+        source: 'play',
+        accessed_at: '2026-11-21T12:00:00Z',
+      })),
+    );
+
+    component.selectTab('history');
+    expect(component.historyCount()).toBe(7);
+    expect(component.activeTabItems().length).toBe(6);
+
+    component.toggleHistory();
+    expect(component.historyExpanded()).toBe(true);
+    expect(component.activeTabItems().length).toBe(7);
+
+    const template = readFileSync(resolve(__dirname, './profile.component.html'), 'utf8');
+    expect(template).toContain('Histórico');
+    expect(template).toContain('Ouvido');
   });
 });

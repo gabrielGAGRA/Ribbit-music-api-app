@@ -398,21 +398,6 @@ export class ModalsComponent {
 
   onCheckoutSubmit(event: Event): void {
     event.preventDefault();
-    if (this.state.isMinorUser()) {
-      const form = event.target as HTMLFormElement;
-      const guardianName = readNamedInputValue(form, 'guardianName');
-      const guardianEmail = readNamedInputValue(form, 'guardianEmail');
-      const guardianConfirmedEl = form.elements.namedItem(
-        'guardianConfirmed',
-      ) as HTMLInputElement | null;
-      const guardianConfirmedAdult = Boolean(guardianConfirmedEl?.checked);
-      this.state.confirmMockPlanCheckout(this.paymentMethod(), {
-        guardianName,
-        guardianEmail,
-        guardianConfirmedAdult,
-      });
-      return;
-    }
     this.state.confirmMockPlanCheckout(this.paymentMethod());
   }
 

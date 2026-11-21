@@ -24,7 +24,8 @@ export class ProfileComponent implements OnInit {
   private readonly songService = inject(SongService);
   private readonly router = inject(Router, { optional: true });
 
-  readonly selectedTab = signal<'like' | 'love' | 'reject'>('like');
+  readonly selectedTab = signal<'like' | 'love' | 'reject' | 'history'>('like');
+  readonly historyExpanded = signal<boolean>(false);
   readonly playingSongKey = signal<string | null>(null);
   protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
 
@@ -44,9 +45,43 @@ export class ProfileComponent implements OnInit {
   readonly loveCount = computed<number>(() => this.state.lovedSongs().length);
   readonly rejectCount = computed<number>(() => this.state.rejectedSongs().length);
 
+  readonly historySongs = computed<readonly Song[]>(() => {
+    const accessEntries = this.state.accessHistory();
+    const seen = new Set<number>();
+    const items: Song[] = [];
+    for (const entry of accessEntries) {
+      if (seen.has(entry.track_id)) continue;
+      seen.add(entry.track_id);
+      items.push({
+        trackId: entry.track_id,
+        title: entry.track_title,
+        artist: entry.track_artist,
+        genre: entry.track_genre,
+        album: entry.track_album ?? entry.track_title,
+        durationSeconds: entry.track_duration_seconds,
+        time: `${Math.floor(entry.track_duration_seconds / 60)}:${String(entry.track_duration_seconds % 60).padStart(2, '0')}`,
+        image: entry.track_cover_url ?? '',
+        year: '',
+        match: 0,
+        ...(entry.track_preview_url ? { previewUrl: entry.track_preview_url } : {}),
+        explicit: entry.track_explicit,
+      });
+    }
+    return items;
+  });
+
+  readonly historyCount = computed<number>(() => this.historySongs().length);
+
+  readonly displayedHistorySongs = computed<readonly Song[]>(() =>
+    this.historyExpanded() ? this.historySongs() : this.historySongs().slice(0, 6),
+  );
+
   readonly activeTabLabel = computed<string>(() => {
     const tab = this.selectedTab();
-    return tab === 'like' ? 'Curtidas' : tab === 'love' ? 'Amadas' : 'Rejeitadas';
+    if (tab === 'like') return 'Curtidas';
+    if (tab === 'love') return 'Amadas';
+    if (tab === 'reject') return 'Rejeitadas';
+    return 'Histórico de acessos';
   });
 
   readonly activeTabItems = computed<readonly Song[]>(() => {
@@ -56,6 +91,9 @@ export class ProfileComponent implements OnInit {
     }
     if (tab === 'love') {
       return this.state.lovedSongs().slice(0, 6);
+    }
+    if (tab === 'history') {
+      return this.displayedHistorySongs();
     }
     return this.state.rejectedSongs().slice(0, 6);
   });
@@ -80,6 +118,7 @@ export class ProfileComponent implements OnInit {
     if (this.songService.reviews().length === 0) {
       this.state.refreshCatalogAndFeed();
     }
+    this.state.refreshAccessHistory();
     this.songService
       .loadUserReviews({
         currentUserId: this.state.userId() ?? undefined,
@@ -88,8 +127,16 @@ export class ProfileComponent implements OnInit {
       .subscribe({ error: () => undefined });
   }
 
-  selectTab(tab: 'like' | 'love' | 'reject'): void {
+  selectTab(tab: 'like' | 'love' | 'reject' | 'history'): void {
     this.selectedTab.set(tab);
+  }
+
+  toggleHistory(): void {
+    this.historyExpanded.update((v) => !v);
+  }
+
+  openSongDetails(song: Song): void {
+    this.state.openTrackDetailsModal(song);
   }
 
   goToPlans(): void {
