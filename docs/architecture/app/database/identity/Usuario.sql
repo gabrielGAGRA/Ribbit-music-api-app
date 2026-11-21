@@ -7,8 +7,12 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     spotify_id TEXT UNIQUE,
+    spotify_premium INTEGER NOT NULL DEFAULT 0,
+    spotify_access_token TEXT,
+    spotify_refresh_token TEXT,
+    spotify_token_expires_at TEXT,
     display_name TEXT NOT NULL,
-    age INTEGER NOT NULL,
+    age INTEGER,
     plan_id INTEGER NOT NULL REFERENCES plans(plan_id),
     primary_account_id INTEGER REFERENCES users(user_id) ON DELETE SET NULL,
     blocked_genres TEXT,
@@ -17,7 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     birth_date TEXT,
-    CONSTRAINT ck_users_age CHECK (age >= 0),
+    CONSTRAINT ck_users_age CHECK (age IS NULL OR age >= 0),
     CONSTRAINT ck_users_distinct_primary CHECK (primary_account_id IS NULL OR primary_account_id != user_id)
 );
 

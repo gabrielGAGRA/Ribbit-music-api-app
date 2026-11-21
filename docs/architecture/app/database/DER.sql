@@ -10,8 +10,12 @@ Table users {
   email text [not null, unique]
   password_hash text [not null]
   spotify_id text [unique]
+  spotify_premium integer [not null, default: 0]
+  spotify_access_token text
+  spotify_refresh_token text
+  spotify_token_expires_at text
   display_name text [not null]
-  age integer [not null]
+  age integer
   plan_id integer [not null, ref: > plans.plan_id]
   primary_account_id integer [ref: > users.user_id]
   blocked_genres text
@@ -20,8 +24,6 @@ Table users {
   is_admin integer [not null, default: 0]
   created_at text [not null]
   birth_date text
-  guardian_name text
-  guardian_email text
 
   indexes {
     email [name: 'idx_users_email']
@@ -48,6 +50,8 @@ Table tracks {
     title [name: 'idx_tracks_title']
     artist [name: 'idx_tracks_artist']
     genre [name: 'idx_tracks_genre']
+    spotify_id [name: 'idx_tracks_spotify_id']
+    (title, artist) [name: 'idx_tracks_title_artist', note: 'Índice case-insensitive sobre (lower(title), lower(artist))']
   }
 }
 
@@ -110,8 +114,8 @@ Table jams {
   superlikes_used integer [not null, default: 0]
   skip_votes_threshold integer [not null, default: 3]
   accumulated_duration_seconds integer [not null, default: 0]
-  deck_source text [not null, default: 'livre']
-  source_playlist_id integer [ref: > playlists.playlist_id]
+  deck_source text [not null, default: 'free']
+  source_playlist_id integer [ref: > playlists.playlist_id, note: 'Referência lógica a playlists.playlist_id']
 }
 
 Table jam_queue_items {
@@ -195,7 +199,7 @@ Table track_accesses {
 }
 
 Table platform_cost_settings {
-  settings_id integer [pk]
+  settings_id integer [pk, note: 'Singleton: CHECK (settings_id = 1)']
   content_cost_per_track real [not null, default: 0.04]
   infrastructure_fixed_cost real [not null, default: 10.00]
   infrastructure_cost_per_user real [not null, default: 0.50]
