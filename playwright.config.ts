@@ -62,6 +62,7 @@ export default defineConfig({
       env: {
         ...process.env,
         DATABASE_PATH: 'e2e.db',
+        GCS_BUCKET_NAME: '',
         PYTHONUNBUFFERED: '1',
       },
     },

@@ -1,5 +1,7 @@
 services:
   gcs-emulator:
+    # fsouza/fake-gcs-server is scratch-based (no shell/curl/wget for a container healthcheck),
+    # so backend startup relies on bounded client-side retry in scripts.bootstrap_local_gcs.
     image: fsouza/fake-gcs-server:latest
     container_name: ribbit-gcs-emulator
     command: ["-scheme", "http", "-port", "4443"]
@@ -35,6 +37,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      target: dev
     container_name: ribbit-frontend
     restart: unless-stopped
     depends_on:

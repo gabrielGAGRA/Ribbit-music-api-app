@@ -6,7 +6,9 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/workspace \
     UV_LINK_MODE=copy \
-    UV_COMPILE_BYTECODE=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_PYTHON_INSTALL_DIR=/opt/python \
+    UV_PROJECT_ENVIRONMENT=/opt/venv
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -21,9 +23,8 @@ RUN uv python install 3.15
 WORKDIR /workspace
 
 # Cache das dependências Python
-COPY requirements.txt pyproject.toml ./
-RUN uv venv --python 3.15 /opt/venv \
-    && uv pip install --python /opt/venv/bin/python --no-cache -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
 
 ENV PATH="/opt/venv/bin:$PATH"
 
@@ -31,6 +32,16 @@ COPY app ./app
 COPY scripts ./scripts
 COPY database ./database
 
+RUN groupadd --system appuser \
+    && useradd --system --gid appuser --create-home appuser \
+    && mkdir -p /data \
+    && chown -R appuser:appuser /workspace /data
+
+USER appuser
+
 EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://127.0.0.1:8000/health || exit 1
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
