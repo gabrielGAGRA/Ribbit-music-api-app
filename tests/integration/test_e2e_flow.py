@@ -11,7 +11,7 @@ from app.application.ports.services.spotify import SpotifyUserProfile
 from app.composition import create_app
 from app.config import Settings
 from app.domain.models.track import Track
-from tests.e2e.test_client import TestClient
+from tests.integration.test_client import TestClient
 
 ADMIN_EMAIL = "admin@ribbit.example.com"
 ADMIN_PASSWORD = "RibbitLocal2026!"
@@ -518,8 +518,74 @@ def test_discovery_undo_removes_latest_swipe(client: TestClient) -> None:
     assert undo.json()["success"] is True
     assert undo.json()["track_id"] == track_id
     assert undo.json()["action"] == "like"
+    assert undo.json()["track"]["track_id"] == track_id
 
     assert client.post("/api/discovery/undo", headers=headers).status_code == 404
+
+
+def test_minor_can_register_and_use_individual_plan_with_guardian_and_minor_filters(
+    client: TestClient,
+) -> None:
+    plans = client.get("/api/plans").json()
+    indiv_id = next(plan["plan_id"] for plan in plans if plan["name"] == "Individual")
+    family_id = next(plan["plan_id"] for plan in plans if plan["name"] == "Família")
+
+    # Minor cannot register for Family plan as titular even with guardian
+    fam_minor = client.post(
+        "/api/auth/register",
+        json={
+            "email": "minor_fam_blocked@example.com",
+            "password": "Password123!",
+            "display_name": "Minor Fam",
+            "birth_date": "2012-05-15",
+            "plan_id": family_id,
+            "guardian_name": "Ana Responsavel",
+            "guardian_email": "ana@responsavel.com",
+            "guardian_confirmed_adult": True,
+        },
+    )
+    assert fam_minor.status_code == 400
+
+    # Minor CAN register for Individual plan with guardian authorization
+    reg = client.post(
+        "/api/auth/register",
+        json={
+            "email": "minor_individual@example.com",
+            "password": "Password123!",
+            "display_name": "Minor Individual",
+            "birth_date": "2012-05-15",
+            "plan_id": indiv_id,
+            "guardian_name": "Ana Responsavel",
+            "guardian_email": "ana@responsavel.com",
+            "guardian_confirmed_adult": True,
+        },
+    )
+    assert reg.status_code == 201, reg.text
+    user_data = reg.json()["user"]
+    assert user_data["plan_id"] == indiv_id
+    assert user_data["guardian_name"] == "Ana Responsavel"
+    assert user_data["guardian_email"] == "ana@responsavel.com"
+
+    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    # Minor content protections remain active on Individual plan ("Rap God" is explicit/Hip Hop)
+    for _ in range(5):
+        next_res = client.get("/api/discovery/next", headers=headers)
+        assert next_res.status_code == 200
+        if not next_res.json():
+            break
+        track = next_res.json()
+        assert track["explicit"] is False
+        assert track["title"] != "Rap God"
+        client.post(
+            "/api/discovery/interact",
+            headers=headers,
+            json={"track_id": track["track_id"], "action": "dislike"},
+        )
+
+    # Paid Individual undo works for the guardian-authorized minor
+    undo_res = client.post("/api/discovery/undo", headers=headers)
+    assert undo_res.status_code == 200
+    assert undo_res.json()["track"] is not None
 
 
 def test_discovery_undo_is_unavailable_for_free_plan(client: TestClient) -> None:
@@ -763,6 +829,10 @@ def test_flow_6_reviews_and_catalog_search(
     )
     assert review_res.status_code == 201, review_res.text
     review_id = review_res.json()["review_id"]
+
+    track_reviews = client.get(f"/api/reviews/track/{track_id}")
+    assert track_reviews.status_code == 200, track_reviews.text
+    assert any(r["review_id"] == review_id for r in track_reviews.json())
 
     # 3. Only 1 active review per user per track -> second review raises 400
     dup_review = client.post(

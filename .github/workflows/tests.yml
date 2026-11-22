@@ -2,25 +2,93 @@ name: Testes
 
 run-name: ${{ github.actor }} fez commit no projeto
 
-on: [push]
+on: [push, pull_request]
 
 jobs:
-  build:
+  backend-tests:
+    name: Backend Pytest & Coverage (>=85%)
     runs-on: ubuntu-latest
-
     steps:
-      # Versão do GitHub Actions
       - uses: actions/checkout@v4
 
       - name: Configurando o Python
-        # Versão do action para o Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.15'
           architecture: 'x64'
+          cache: 'pip'
 
-      - name: Instalando dependências
-        run: pip install -r requirements.txt
+      - name: Instalando dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Rodando os testes
-        run: python -m pytest
+      - name: Rodando testes e validando cobertura >= 85%
+        run: python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+
+  frontend-tests:
+    name: Frontend Unit Tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurando o Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalando dependências Node
+        run: npm ci
+
+      - name: Rodando testes unitários do frontend
+        run: npm test
+
+  e2e-browser-tests:
+    name: Browser E2E Tests & Video Recording (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurando o Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.15'
+          architecture: 'x64'
+          cache: 'pip'
+
+      - name: Configurando o Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalando dependências Python e Node
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          npm ci
+
+      - name: Instalando navegador Chromium do Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Rodando testes E2E no navegador e gravando 5 vídeos
+        env:
+          PYTHON_BIN: python
+        run: npm run record:e2e
+
+      - name: Publicando vídeos E2E como artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-videos
+          path: docs/testing/videos/*.webm
+          if-no-files-found: error
+
+      - name: Publicando traces/screenshots em caso de falha
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failure-artifacts
+          path: test-results/
+          if-no-files-found: ignore

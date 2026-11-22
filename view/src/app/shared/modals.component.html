@@ -354,6 +354,21 @@
             />
           </label>
         </div>
+        <label>
+          Nota mínima
+          <select
+            name="searchMinRating"
+            [value]="searchMinRatingDraft() ?? ''"
+            (change)="onSearchMinRatingChange($event)"
+          >
+            <option value="">Qualquer</option>
+            <option value="1">1★+</option>
+            <option value="2">2★+</option>
+            <option value="3">3★+</option>
+            <option value="4">4★+</option>
+            <option value="5">5★</option>
+          </select>
+        </label>
         <button class="primary-button full-width" (click)="applyFilters()">
           Aplicar filtros <app-icon name="check" [size]="16" />
         </button>
@@ -653,8 +668,8 @@
         </div>
         <p class="small-copy">Sua avaliação: {{ rating() }}/5 estrelas</p>
         <form class="comment-form" (submit)="onCommentSubmit($event)">
-          <input required name="commentText" placeholder="Compartilhe sua impressão..." />
-          <button class="primary-button" aria-label="Publicar comentário" type="submit">
+          <input name="commentText" placeholder="Compartilhe sua impressão (opcional)..." />
+          <button class="primary-button" aria-label="Publicar avaliação" type="submit">
             <app-icon name="send" [size]="17" />
           </button>
         </form>
@@ -663,6 +678,16 @@
             <h3>Reviews desta música</h3>
             <span>{{ trackReviews().length }} opiniões</span>
           </div>
+          <select
+            [value]="state.trackReviewsSort()"
+            (change)="onTrackReviewSortChange($event)"
+            aria-label="Ordenar reviews da faixa"
+          >
+            <option value="recent">Mais recentes</option>
+            <option value="rating_desc">Maiores notas</option>
+            <option value="rating_asc">Menores notas</option>
+            <option value="likes">Mais curtidas</option>
+          </select>
         </div>
         <div class="comment-list">
           @for (review of trackReviews(); track review.id) {
@@ -672,7 +697,25 @@
                 <strong>
                   {{ review.author }} <small>· {{ review.age }}</small>
                 </strong>
-                <p>{{ review.text }}</p>
+                @if (review.rating !== undefined) {
+                  <div
+                    class="review-stars"
+                    [attr.aria-label]="'Avaliação: ' + review.rating + ' de 5 estrelas'"
+                  >
+                    @for (star of starScale; track star) {
+                      <app-icon
+                        name="star"
+                        [size]="12"
+                        [class.filled]="star <= review.rating"
+                        [class.empty]="star > review.rating"
+                      />
+                    }
+                    <span>{{ review.rating }}/5</span>
+                  </div>
+                }
+                @if (review.text) {
+                  <p>{{ review.text }}</p>
+                }
                 @if (isOwnReview(review)) {
                   <button type="button" (click)="deleteReview(review.id)">Excluir</button>
                 }
@@ -744,6 +787,37 @@
               <code>00020126580014BR.GOV.BCB.PIX0114RIBBIT-PRO-DEMO52040000</code>
               <small>Clique abaixo para simular a confirmação imediata do PIX.</small>
             </div>
+          }
+
+          @if (state.isMinorUser()) {
+            <div class="info-note">
+              Conta de menor de 18 anos: para ativar o Plano Individual, informe e confirme a
+              autorização de um responsável maior de idade.
+            </div>
+            <label>
+              Nome do responsável (18+) *
+              <input
+                name="guardianName"
+                required
+                minlength="2"
+                placeholder="Nome completo do responsável"
+                [defaultValue]="state.guardianName() ?? ''"
+              />
+            </label>
+            <label>
+              E-mail do responsável *
+              <input
+                name="guardianEmail"
+                type="email"
+                required
+                placeholder="responsavel@email.com"
+                [defaultValue]="state.guardianEmail() ?? ''"
+              />
+            </label>
+            <label class="checkbox-label">
+              <input name="guardianConfirmed" type="checkbox" required />
+              Confirmo que o responsável é maior de 18 anos e autoriza a assinatura Individual.
+            </label>
           }
 
           <div class="info-note">

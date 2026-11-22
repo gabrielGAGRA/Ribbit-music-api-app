@@ -58,10 +58,14 @@ function flushInitialHydration(httpMock: HttpTestingController): void {
   httpMock.expectOne('/api/profile/favorite-genres').flush(['Indie']);
   httpMock.expectOne('/api/profile/theme').flush('dark');
   httpMock.expectOne('/api/tracks/search?limit=50').flush([SAMPLE_TRACK]);
-  httpMock.expectOne('/api/reviews/feed?days=1&limit=20').flush([]);
+  httpMock.expectOne('/api/reviews/feed?limit=20&sort_by=likes').flush([]);
   httpMock.expectOne('/api/playlists').flush([]);
   httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
   httpMock.expectOne('/api/profile/interactions').flush([]);
+  httpMock.expectOne('/api/profile/access-history?limit=100&offset=0').flush({
+    items: [],
+    seen_track_ids: [],
+  });
   httpMock.expectOne('/api/discovery/next').flush(SAMPLE_TRACK);
 }
 
@@ -137,6 +141,10 @@ describe('RibbitStateService', () => {
     ]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
     expect(service.isLoadingDiscovery()).toBe(false);
+    httpMock.expectOne('/api/profile/access-history?limit=100&offset=0').flush({
+      items: [],
+      seen_track_ids: [101],
+    });
     expect(service.isDeckEmpty()).toBe(true);
 
     service.undo();
@@ -173,6 +181,10 @@ describe('RibbitStateService', () => {
     httpMock.expectOne('/api/discovery/next').flush(null);
     httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
+    httpMock.expectOne('/api/profile/access-history?limit=100&offset=0').flush({
+      items: [],
+      seen_track_ids: [101],
+    });
 
     service.undo();
     const undoReq = httpMock.expectOne('/api/discovery/undo');
@@ -290,5 +302,117 @@ describe('RibbitStateService', () => {
 
     // Clean up lifecycle
     service.ngOnDestroy();
+  });
+
+  it('records track access optimistically, deduplicates within 5s, and exposes isTrackSeen()', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    const song = {
+      trackId: 101,
+      title: 'Luzes da Avenida',
+      artist: 'Terno Rei',
+      genre: 'Indie',
+      time: '3:35',
+      image: '',
+      album: 'Gêmeos',
+      year: '2022',
+      match: 95,
+    };
+
+    expect(service.isTrackSeen(101)).toBe(false);
+    service.recordTrackAccess(song, 'play');
+    expect(service.isTrackSeen(101)).toBe(true);
+
+    // Second call with same (trackId, source) within 5s should be deduplicated
+    service.recordTrackAccess(song, 'play');
+
+    const accessReq = httpMock.expectOne('/api/tracks/101/access');
+    expect(accessReq.request.method).toBe('POST');
+    expect(accessReq.request.body).toEqual({ source: 'play' });
+    accessReq.flush({ access_id: 1, user_id: 7, track_id: 101, source: 'play' });
+
+    httpMock.expectOne('/api/profile/access-history?limit=100&offset=0').flush({
+      items: [],
+      seen_track_ids: [101],
+    });
+  });
+
+  it('restores undone track from POST /api/discovery/undo even when local undo stack is empty', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    service.undo();
+
+    const undoReq = httpMock.expectOne('/api/discovery/undo');
+    expect(undoReq.request.method).toBe('POST');
+    undoReq.flush({
+      success: true,
+      interaction_id: 99,
+      track_id: 101,
+      action: 'like',
+      created_at: '2026-01-01T12:00:00Z',
+      track: {
+        track_id: 101,
+        title: 'Luzes da Avenida',
+        artist: 'Terno Rei',
+        album: 'Gêmeos',
+        duration_seconds: 215,
+        genre: 'Indie',
+        release_year: 2022,
+        explicit: false,
+      },
+    });
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/profile/interactions').flush([]);
+
+    expect(service.discoverySong()?.trackId).toBe(101);
+    expect(service.discoverySong()?.title).toBe('Luzes da Avenida');
+    expect(service.isDeckEmpty()).toBe(false);
+  });
+
+  it('triggers upgrade modal when Free user calls undo() before any local swipe', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    service.undo();
+
+    const undoReq = httpMock.expectOne('/api/discovery/undo');
+    undoReq.flush({ detail: 'Premium required' }, { status: 403, statusText: 'Forbidden' });
+
+    expect(service.activeModal()).toBe('upgrade');
+  });
+
+  it('blocks Family plan selection for minor users while allowing Individual', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+    service.applyUserDto({
+      ...SAMPLE_AUTH.user,
+      age: 15,
+    });
+    service.setModal(null);
+
+    service.initiatePlanSelection({
+      planId: 3,
+      name: 'Família',
+      displayName: 'Ribbit Família',
+      price: 'R$ 27,90',
+      maxProfiles: 6,
+      copy: '',
+      features: [],
+    });
+    expect(service.activeModal()).toBeNull();
+    expect(service.toast()).toContain('Menores de 18 anos');
+
+    service.initiatePlanSelection({
+      planId: 2,
+      name: 'Individual',
+      displayName: 'Ribbit Pro',
+      price: 'R$ 14,90',
+      maxProfiles: 1,
+      copy: '',
+      features: [],
+    });
+    expect(service.activeModal()).toBe('checkout');
   });
 });

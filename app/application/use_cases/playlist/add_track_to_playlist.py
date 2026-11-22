@@ -12,12 +12,16 @@ from app.domain.models.interaction import (
     InteractionAction,
     InteractionSource,
 )
+from app.domain.models.track_access import TrackAccess
 lazy from app.application.dtos.playlist_dtos import AddTrackToPlaylistCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
 lazy from app.application.ports.repositories.playlist_repository import (
     PlaylistRepositoryPort,
+)
+lazy from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -32,6 +36,13 @@ class AddTrackToPlaylistUseCase:
     track_repo: TrackRepositoryPort
     playlist_repo: PlaylistRepositoryPort
     interaction_repo: InteractionRepositoryPort | None = None
+    track_access_repo: TrackAccessRepositoryPort | None = None
+
+    def _record_access(self, user_id: int, track_id: int) -> None:
+        if self.track_access_repo is not None:
+            self.track_access_repo.record(
+                TrackAccess(user_id=user_id, track_id=track_id, source="playlist")
+            )
 
     def execute(self, command: AddTrackToPlaylistCommand) -> Playlist:
         user = self.user_repo.find_by_id(command.user_id)
@@ -95,4 +106,6 @@ class AddTrackToPlaylistUseCase:
             )
 
         playlist.add_track(track)
-        return self.playlist_repo.save(playlist)
+        saved_playlist = self.playlist_repo.save(playlist)
+        self._record_access(command.user_id, command.track_id)
+        return saved_playlist

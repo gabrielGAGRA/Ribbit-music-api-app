@@ -138,6 +138,9 @@ export class AuthComponent implements OnInit {
   readonly birthDateDraft = signal<string>('');
   readonly passwordDraft = signal<string>('');
   readonly confirmPasswordDraft = signal<string>('');
+  readonly guardianNameDraft = signal<string>('');
+  readonly guardianEmailDraft = signal<string>('');
+  readonly guardianConfirmedDraft = signal<boolean>(false);
   readonly selectedPlanId = signal<number>(1);
   readonly errorMessage = signal<string>('');
   readonly infoMessage = signal<string>('');
@@ -170,12 +173,36 @@ export class AuthComponent implements OnInit {
     return age < 18;
   });
 
+  readonly selectedPlanOption = computed<PlanOption>(
+    () =>
+      this.planOptions().find((item) => item.id === this.selectedPlanId()) ??
+      this.planOptions()[0]!,
+  );
+
+  readonly isFamilyPlanDisabledForMinor = computed<boolean>(
+    () => this.isUnderage() && this.isFamilyPlanOption(this.selectedPlanOption()),
+  );
+
+  readonly hasValidGuardian = computed<boolean>(() => {
+    const gName = this.guardianNameDraft().trim();
+    const gEmail = this.guardianEmailDraft().trim().toLowerCase();
+    const uEmail = this.emailDraft().trim().toLowerCase();
+    const emailDomain = gEmail.split('@')[1] ?? '';
+    return (
+      gName.length >= 2 &&
+      gEmail.includes('@') &&
+      emailDomain.includes('.') &&
+      gEmail !== uEmail &&
+      this.guardianConfirmedDraft()
+    );
+  });
+
   readonly underageWarning = computed<string>(() => {
     if (this.isFutureDate()) {
       return 'A data de nascimento não pode estar no futuro.';
     }
-    if (this.isUnderage()) {
-      return 'Cadastro direto permitido apenas para maiores de 18 anos.';
+    if (this.isUnderage() && !this.hasValidGuardian()) {
+      return 'Cadastro direto permitido apenas para maiores de 18 anos. Informe os dados de um responsável maior de idade (Plano Família indisponível para titular menor).';
     }
     return '';
   });
@@ -207,11 +234,20 @@ export class AuthComponent implements OnInit {
   readonly canSubmitRegister = computed<boolean>(() => {
     const nameValid = this.nameDraft().trim().length >= 2;
     const emailValid = this.emailDraft().trim().includes('@');
-    const birthValid = this.calculatedAge() !== null && !this.isUnderage() && !this.isFutureDate();
+    const age = this.calculatedAge();
+    const ageValid =
+      age !== null &&
+      !this.isFutureDate() &&
+      (!this.isUnderage() || (this.hasValidGuardian() && !this.isFamilyPlanDisabledForMinor()));
     const passwordValid = this.passwordDraft().length >= 6;
     const passwordsMatch = this.passwordDraft() === this.confirmPasswordDraft();
-    return Boolean(nameValid && emailValid && birthValid && passwordValid && passwordsMatch);
+    return Boolean(nameValid && emailValid && ageValid && passwordValid && passwordsMatch);
   });
+
+  isFamilyPlanOption(plan: PlanOption): boolean {
+    const normalized = plan.name.trim().toLowerCase();
+    return normalized.includes('fam');
+  }
 
   ngOnInit(): void {
     this.planService
@@ -596,6 +632,24 @@ export class AuthComponent implements OnInit {
 
   onBirthDateChange(event: Event): void {
     this.birthDateDraft.set((event.target as HTMLInputElement).value);
+    if (this.isUnderage() && this.isFamilyPlanOption(this.selectedPlanOption())) {
+      const fallback = this.planOptions().find((p) => !this.isFamilyPlanOption(p));
+      if (fallback) {
+        this.selectedPlanId.set(fallback.id);
+      }
+    }
+  }
+
+  onGuardianNameChange(event: Event): void {
+    this.guardianNameDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  onGuardianEmailChange(event: Event): void {
+    this.guardianEmailDraft.set((event.target as HTMLInputElement).value);
+  }
+
+  onGuardianConfirmedChange(event: Event): void {
+    this.guardianConfirmedDraft.set((event.target as HTMLInputElement).checked);
   }
 
   onPasswordChange(event: Event): void {
@@ -639,8 +693,16 @@ export class AuthComponent implements OnInit {
       return 'Data de nascimento não pode estar no futuro.';
     }
     const age = this.calculatedAge();
-    if (age === null || age < 18) {
-      return 'Cadastro direto permitido apenas para maiores de 18 anos.';
+    if (age === null) {
+      return 'Informe sua data de nascimento.';
+    }
+    if (age < 18) {
+      if (this.isFamilyPlanDisabledForMinor()) {
+        return 'Menores de 18 anos não podem assinar o Plano Família como titular.';
+      }
+      if (!this.hasValidGuardian()) {
+        return 'Cadastro direto permitido apenas para maiores de 18 anos. Informe e confirme um responsável maior de idade.';
+      }
     }
     if (this.passwordDraft().length < 6) {
       return 'A senha deve ter pelo menos 6 caracteres.';
@@ -661,6 +723,7 @@ export class AuthComponent implements OnInit {
     const options = this.planOptions();
     const selectedPlan = options.find((item) => item.id === this.selectedPlanId()) ?? options[0]!;
     const displayName = this.nameDraft().trim();
+    const underage = this.isUnderage();
 
     this.isSubmitting.set(true);
     this.authApi
@@ -670,6 +733,13 @@ export class AuthComponent implements OnInit {
         display_name: displayName,
         birth_date: this.birthDateDraft(),
         plan_id: selectedPlan.id,
+        ...(underage
+          ? {
+              guardian_name: this.guardianNameDraft().trim(),
+              guardian_email: this.guardianEmailDraft().trim(),
+              guardian_confirmed_adult: this.guardianConfirmedDraft(),
+            }
+          : {}),
       })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({

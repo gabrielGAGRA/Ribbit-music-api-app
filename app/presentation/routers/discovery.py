@@ -5,6 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 
 from app.application.dtos import RecordSwipeCommand
+from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.use_cases.discovery import (
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
@@ -66,15 +67,23 @@ def undo_latest_discovery_interaction(
         UndoLatestDiscoveryInteractionUseCase,
         Depends(provide(UndoLatestDiscoveryInteractionUseCase)),
     ],
+    track_repo: Annotated[TrackRepositoryPort, Depends(provide(TrackRepositoryPort))],
 ) -> UndoInteractionResponse:
     interaction = use_case.execute(user_id=user_id)
     if interaction.interaction_id is None:
         raise RuntimeError("Undone discovery interaction is missing its persisted ID.")
+    track = track_repo.find_by_id(interaction.track_id)
+    track_payload = (
+        TrackResponse.model_validate(track)
+        if track is not None and not track.is_deleted
+        else None
+    )
     return UndoInteractionResponse(
         interaction_id=interaction.interaction_id,
         track_id=interaction.track_id,
         action=interaction.action.value,
         created_at=interaction.created_at,
+        track=track_payload,
     )
 
 

@@ -25,7 +25,9 @@ def test_get_community_feed_uses_default_days_and_limit() -> None:
     result = use_case.execute()
 
     assert result == top_reviews
-    review_repo.list_top_recent.assert_called_once_with(days=5, limit=3)
+    review_repo.list_top_recent.assert_called_once_with(
+        days=None, limit=10, sort_by="likes"
+    )
 
 
 def test_get_community_feed_forwards_custom_days_and_limit() -> None:
@@ -33,7 +35,9 @@ def test_get_community_feed_forwards_custom_days_and_limit() -> None:
     review_repo.list_top_recent.return_value = []
 
     use_case = GetCommunityFeedUseCase(review_repo=review_repo)
-    result = use_case.execute(days=14, limit=10)
+    result = use_case.execute(days=14, limit=10, sort_by="rating_desc")
 
     assert result == []
-    review_repo.list_top_recent.assert_called_once_with(days=14, limit=10)
+    review_repo.list_top_recent.assert_called_once_with(
+        days=14, limit=10, sort_by="rating_desc"
+    )

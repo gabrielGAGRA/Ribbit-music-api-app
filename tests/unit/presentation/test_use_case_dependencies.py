@@ -13,16 +13,21 @@ from app.application.ports.services import (
 )
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
+    CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
+    GetPlatformCostsUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminAccessHistoryUseCase,
+    ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
     PromoteUserToAdminUseCase,
     RegisterAdministratorUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
 )
@@ -35,6 +40,7 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.discovery import (
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    RecordTrackAccessUseCase,
 )
 from app.application.use_cases.jam import (
     AdvanceJamPlaybackUseCase,
@@ -82,6 +88,7 @@ from app.application.use_cases.user import (
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
     ListPlansUseCase,
+    ListUserAccessHistoryUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
@@ -101,6 +108,7 @@ ALL_USE_CASES = [
     ConnectSpotifyAccountUseCase,
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    RecordTrackAccessUseCase,
     CreateDeckPlaylistUseCase,
     GetPlaylistDeckUseCase,
     AddTrackToPlaylistUseCase,
@@ -137,6 +145,7 @@ ALL_USE_CASES = [
     ListBlockedGenresUseCase,
     UpdateBlockedGenresUseCase,
     ListUserInteractionsUseCase,
+    ListUserAccessHistoryUseCase,
     ChangeTrackInteractionUseCase,
     GetAnnualListeningStatsUseCase,
     LinkSpotifyAccountUseCase,
@@ -144,15 +153,20 @@ ALL_USE_CASES = [
     ListUsersWithPlansUseCase,
     ListAdministratorsUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     BlockTrackUseCase,
+    CreateTrackUseCase,
+    ListAdminCatalogTracksUseCase,
     ListBlockedTracksUseCase,
     GetTopModerationReviewsUseCase,
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     PromoteUserToAdminUseCase,
     RegisterAdministratorUseCase,
+    ListAdminAccessHistoryUseCase,
+    GetPlatformCostsUseCase,
 ]
 
 

@@ -297,3 +297,116 @@ def test_register_user_underage_age_without_birth_date_raises_violation() -> Non
         match="Direct registration only permitted for users 18 years or older",
     ):
         use_case.execute(command)
+
+
+def test_register_minor_with_guardian_for_individual_plan_succeeds() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_email.return_value = None
+    user_repo.save.side_effect = lambda u: u
+
+    individual_plan = Plan(
+        plan_id=2,
+        name="Individual",
+        initial_monthly_price=14.90,
+        initial_max_profiles=1,
+    )
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = individual_plan
+
+    password_hasher = MagicMock(spec=PasswordHasherPort)
+    password_hasher.hash_password.return_value = "hashed_pw"
+
+    use_case = RegisterUserUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        password_hasher=password_hasher,
+    )
+    command = RegisterUserCommand(
+        email="minor.ind@ribbit.com",
+        password="password123",
+        display_name="Minor Individual",
+        age=15,
+        plan_id=2,
+        guardian_name="Maria Responsavel",
+        guardian_email="maria@responsavel.com",
+        guardian_confirmed_adult=True,
+    )
+
+    result = use_case.execute(command)
+
+    assert result.plan_id == 2
+    assert result.is_minor() is True
+    assert result.guardian_name == "Maria Responsavel"
+    assert result.guardian_email == "maria@responsavel.com"
+
+
+def test_register_minor_cannot_subscribe_to_family_plan_as_titular() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_email.return_value = None
+
+    family_plan = Plan(
+        plan_id=3,
+        name="Família",
+        initial_monthly_price=27.90,
+        initial_max_profiles=6,
+    )
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = family_plan
+    password_hasher = MagicMock(spec=PasswordHasherPort)
+
+    use_case = RegisterUserUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        password_hasher=password_hasher,
+    )
+    command = RegisterUserCommand(
+        email="minor.fam@ribbit.com",
+        password="password123",
+        display_name="Minor Family",
+        age=15,
+        plan_id=3,
+        guardian_name="Maria Responsavel",
+        guardian_email="maria@responsavel.com",
+        guardian_confirmed_adult=True,
+    )
+
+    with pytest.raises(
+        BusinessRuleViolationError,
+        match="primary holder of a Family plan",
+    ):
+        use_case.execute(command)
+
+
+def test_register_minor_with_same_guardian_email_raises_violation() -> None:
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_email.return_value = None
+
+    individual_plan = Plan(
+        plan_id=2,
+        name="Individual",
+        initial_monthly_price=14.90,
+        initial_max_profiles=1,
+    )
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = individual_plan
+    password_hasher = MagicMock(spec=PasswordHasherPort)
+    password_hasher.hash_password.return_value = "hashed_pw"
+
+    use_case = RegisterUserUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        password_hasher=password_hasher,
+    )
+    command = RegisterUserCommand(
+        email="minor@ribbit.com",
+        password="password123",
+        display_name="Minor Same Email",
+        age=15,
+        plan_id=2,
+        guardian_name="Maria Responsavel",
+        guardian_email="minor@ribbit.com",
+        guardian_confirmed_adult=True,
+    )
+
+    with pytest.raises(BusinessRuleViolationError, match="differ from the minor"):
+        use_case.execute(command)

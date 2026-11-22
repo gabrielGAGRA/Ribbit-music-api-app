@@ -57,6 +57,8 @@ export interface Song {
   readonly country?: string;
   readonly explicit?: boolean;
   readonly durationSeconds?: number;
+  readonly averageRating?: number | null;
+  readonly reviewCount?: number;
 }
 
 export interface CommunityReview {
@@ -171,6 +173,9 @@ export interface RegisterUserApiRequest {
   readonly birth_date?: string | null;
   readonly preferred_theme?: 'light' | 'dark';
   readonly favorite_genres?: readonly string[];
+  readonly guardian_name?: string | null;
+  readonly guardian_email?: string | null;
+  readonly guardian_confirmed_adult?: boolean;
 }
 
 export interface LoginApiRequest {
@@ -206,6 +211,8 @@ export interface UserApiDto {
   readonly favorite_genres?: readonly string[];
   readonly is_admin: boolean;
   readonly created_at?: string | null;
+  readonly guardian_name?: string | null;
+  readonly guardian_email?: string | null;
 }
 
 export interface AuthApiResponse {
@@ -244,6 +251,8 @@ export interface TrackApiDto {
   readonly itunes_preview_url?: string | null;
   readonly explicit: boolean;
   readonly is_deleted: boolean;
+  readonly average_rating?: number | null;
+  readonly review_count?: number;
 }
 
 export interface InteractionApiDto {
@@ -260,6 +269,7 @@ export interface UndoInteractionApiDto {
   readonly track_id: number;
   readonly action: string;
   readonly created_at: string;
+  readonly track?: TrackApiDto | null;
 }
 
 export interface UserProfileApiDto {
@@ -451,6 +461,27 @@ export interface ExecutiveDashboardApiDto {
   readonly estimated_net_revenue: number;
   readonly users_by_plan: Readonly<Record<string, number>>;
   readonly revenue_by_plan: Readonly<Record<string, number>>;
+  readonly gross_revenue?: number;
+  readonly content_cost?: number;
+  readonly infrastructure_cost?: number;
+  readonly total_costs?: number;
+  readonly active_tracks_count?: number;
+  readonly content_cost_per_track?: number;
+  readonly infrastructure_fixed_cost?: number;
+  readonly infrastructure_cost_per_user?: number;
+}
+
+export interface TrackAccessRankApiDto {
+  readonly track_id: number;
+  readonly title: string;
+  readonly artist: string;
+  readonly is_deleted: boolean;
+  readonly access_count: number;
+}
+
+export interface GenreAccessCountApiDto {
+  readonly genre: string;
+  readonly access_count: number;
 }
 
 export interface AudienceReportApiDto {
@@ -458,6 +489,22 @@ export interface AudienceReportApiDto {
   readonly total_tracks: number;
   readonly active_tracks: number;
   readonly blocked_genres: Readonly<Record<string, number>>;
+  readonly total_accesses?: number;
+  readonly accesses_by_track?: readonly TrackAccessRankApiDto[];
+  readonly accesses_by_genre?: readonly GenreAccessCountApiDto[];
+}
+
+export interface PlatformCostSettingsApiDto {
+  readonly content_cost_per_track: number;
+  readonly infrastructure_fixed_cost: number;
+  readonly infrastructure_cost_per_user: number;
+  readonly updated_at?: string | null;
+}
+
+export interface UpdatePlatformCostsPayload {
+  readonly content_cost_per_track: number;
+  readonly infrastructure_fixed_cost: number;
+  readonly infrastructure_cost_per_user: number;
 }
 
 export interface UpdateAdminPlanPayload {
@@ -512,4 +559,56 @@ export interface SyncCatalogVersionApiResponse {
   readonly synced: boolean;
   readonly version: number;
   readonly message: string;
+}
+
+export type TrackAccessSource =
+  | 'swipe'
+  | 'play'
+  | 'details'
+  | 'search'
+  | 'playlist'
+  | 'profile'
+  | 'jam';
+
+export interface TrackAccessHistoryItem {
+  readonly access_id: number;
+  readonly user_id: number;
+  readonly track_id: number;
+  readonly track_title: string;
+  readonly track_artist: string;
+  readonly track_genre: string;
+  readonly track_album?: string | null;
+  readonly track_duration_seconds: number;
+  readonly track_cover_url?: string | null;
+  readonly track_preview_url?: string | null;
+  readonly track_explicit: boolean;
+  readonly source: TrackAccessSource;
+  readonly accessed_at: string;
+}
+
+export interface UserAccessHistoryApiDto {
+  readonly items: readonly TrackAccessHistoryItem[];
+  readonly seen_track_ids: readonly number[];
+}
+
+export interface RecordTrackAccessApiDto {
+  readonly access_id?: number | null;
+  readonly user_id: number;
+  readonly track_id: number;
+  readonly source: TrackAccessSource;
+  readonly accessed_at?: string | null;
+}
+
+export interface AdminTrackAccessEntry {
+  readonly access_id: number;
+  readonly user_id: number;
+  readonly user_display_name: string;
+  readonly user_email: string;
+  readonly track_id: number;
+  readonly track_title: string;
+  readonly track_artist: string;
+  readonly track_genre: string;
+  readonly track_is_deleted: boolean;
+  readonly source: TrackAccessSource;
+  readonly accessed_at: string;
 }

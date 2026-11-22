@@ -9,22 +9,27 @@ import type {
   ActionSuccessApiDto,
   AdminModerationReview,
   AdminSession,
+  AdminTrackAccessEntry,
   AdminUserPlanSummary,
   AudienceReportApiDto,
   AuthApiResponse,
   BlockedGenreEntry,
   CompactCatalogApiResponse,
   ExecutiveDashboardApiDto,
+  GenreAccessCountApiDto,
   PlanApiDto,
   PlanBreakdownEntry,
+  PlatformCostSettingsApiDto,
   RegisterAdminApiRequest,
   ReviewApiDto,
   SyncCatalogVersionApiResponse,
+  TrackAccessRankApiDto,
   TrackApiDto,
   TrackBlockApiResponse,
   TrackExplicitApiResponse,
   TrackGenreApiResponse,
   UpdateAdminPlanPayload,
+  UpdatePlatformCostsPayload,
   UserApiDto,
 } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
@@ -35,6 +40,46 @@ import {
   readAdminAuthToken,
   writeAdminAuthToken,
 } from '../../core/auth-token.storage';
+
+export interface AdminTrackItem extends TrackApiDto {
+  readonly likes_count: number;
+  readonly dislikes_count: number;
+  readonly superlikes_count: number;
+  readonly average_rating?: number | null;
+  readonly review_count?: number;
+}
+
+export type AdminTrackSortOption =
+  | 'id_asc'
+  | 'dislikes_desc'
+  | 'likes_desc'
+  | 'superlikes_desc'
+  | 'recent';
+
+export interface CreateAdminTrackPayload {
+  readonly title: string;
+  readonly artist: string;
+  readonly genre: string;
+  readonly duration_seconds: number;
+  readonly album?: string;
+  readonly country?: string;
+  readonly release_year?: number | null;
+  readonly cover_url?: string;
+  readonly itunes_preview_url?: string;
+  readonly spotify_id?: string;
+  readonly explicit: boolean;
+}
+
+function normalizeAdminTrack(track: Partial<AdminTrackItem> & TrackApiDto): AdminTrackItem {
+  return {
+    ...track,
+    likes_count: track.likes_count ?? 0,
+    dislikes_count: track.dislikes_count ?? 0,
+    superlikes_count: track.superlikes_count ?? 0,
+    average_rating: track.average_rating ?? null,
+    review_count: track.review_count ?? 0,
+  };
+}
 
 const ADMIN_SESSION_STORAGE_KEY = 'ribbit-admin-session';
 const LEGACY_ADMIN_STORAGE_KEYS: readonly string[] = [
@@ -139,7 +184,11 @@ function buildBreakdownFromDashboard(
   plans: readonly PlanApiDto[],
 ): readonly PlanBreakdownEntry[] {
   const totalUsers = dashboard.total_users;
-  const totalRevenue = dashboard.estimated_net_revenue;
+  const planRevenueSum = Object.values(dashboard.revenue_by_plan).reduce(
+    (sum, value) => sum + value,
+    0,
+  );
+  const grossRevenue = dashboard.gross_revenue ?? planRevenueSum;
   return plans.map((plan) => {
     const count = dashboard.users_by_plan[plan.name] ?? 0;
     const rev = Math.round((dashboard.revenue_by_plan[plan.name] ?? 0) * 100) / 100;
@@ -148,7 +197,7 @@ function buildBreakdownFromDashboard(
       userCount: count,
       userPercent: toPercent(count, totalUsers),
       revenue: rev,
-      revenuePercent: toPercent(rev, totalRevenue),
+      revenuePercent: toPercent(rev, grossRevenue),
     };
   });
 }
@@ -262,8 +311,8 @@ export class AdminStateService implements OnDestroy {
   private readonly plansSignal = signal<readonly PlanApiDto[]>([]);
   private readonly usersSignal = signal<readonly AdminUserPlanSummary[]>([]);
   private readonly administratorsSignal = signal<readonly UserApiDto[]>([]);
-  private readonly activeTracksSignal = signal<readonly TrackApiDto[]>([]);
-  private readonly blockedTracksSignal = signal<readonly TrackApiDto[]>([]);
+  private readonly activeTracksSignal = signal<readonly AdminTrackItem[]>([]);
+  private readonly blockedTracksSignal = signal<readonly AdminTrackItem[]>([]);
   private readonly reviewsSignal = signal<readonly AdminModerationReview[]>([]);
   private readonly dashboardSignal = signal<ExecutiveDashboardApiDto>(EMPTY_DASHBOARD);
   private readonly audienceSignal = signal<AudienceReportApiDto>(EMPTY_AUDIENCE);
@@ -272,6 +321,7 @@ export class AdminStateService implements OnDestroy {
   private readonly toastSignal = signal<string>('');
   private readonly hasHydratedSignal = signal<boolean>(false);
   private readonly lastCatalogQuerySignal = signal<string>('');
+  private readonly accessHistorySignal = signal<readonly AdminTrackAccessEntry[]>([]);
 
   private readonly unsubscribeAdminUnauthorized: () => void;
   private hydrationSub: Subscription | null = null;
@@ -293,6 +343,7 @@ export class AdminStateService implements OnDestroy {
   readonly toastMessage = this.toastSignal.asReadonly();
   readonly hasHydrated = this.hasHydratedSignal.asReadonly();
   readonly lastCatalogQuery = this.lastCatalogQuerySignal.asReadonly();
+  readonly accessHistory = this.accessHistorySignal.asReadonly();
 
   readonly topModerationReviews = computed<readonly AdminModerationReview[]>(() =>
     [...this.reviewsSignal()]
@@ -308,6 +359,28 @@ export class AdminStateService implements OnDestroy {
   readonly blockedGenreRanking = computed<readonly BlockedGenreEntry[]>(() =>
     buildBlockedGenreEntries(this.audienceSignal().blocked_genres),
   );
+
+  readonly accessesByGenreRanking = computed<
+    readonly (GenreAccessCountApiDto & { readonly percent: number })[]
+  >(() => {
+    const list = this.audienceSignal().accesses_by_genre ?? [];
+    const maxCount = list[0]?.access_count ?? 0;
+    return list.map((item) => ({
+      ...item,
+      percent: maxCount > 0 ? Math.round((item.access_count / maxCount) * 100) : 0,
+    }));
+  });
+
+  readonly topAccessedTracks = computed<
+    readonly (TrackAccessRankApiDto & { readonly percent: number })[]
+  >(() => {
+    const list = this.audienceSignal().accesses_by_track ?? [];
+    const maxCount = list[0]?.access_count ?? 0;
+    return list.map((item) => ({
+      ...item,
+      percent: maxCount > 0 ? Math.round((item.access_count / maxCount) * 100) : 0,
+    }));
+  });
 
   constructor() {
     clearLegacyAdminMockStorage();
@@ -374,11 +447,14 @@ export class AdminStateService implements OnDestroy {
       audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
       users: this.http.get<readonly AdminUserPlanSummary[]>('/api/admin/users'),
       admins: this.http.get<readonly UserApiDto[]>('/api/admin/administrators'),
-      activeTracks: this.http.get<readonly TrackApiDto[]>('/api/tracks/search', {
-        params: new HttpParams().set('limit', '100'),
-        context: createAdminHttpContext(),
-      }),
-      blockedTracks: this.http.get<readonly TrackApiDto[]>('/api/admin/blocked-tracks'),
+      activeTracks: this.http
+        .get<readonly AdminTrackItem[]>('/api/admin/tracks', {
+          params: new HttpParams().set('limit', '100'),
+        })
+        .pipe(map((items) => items.map((item) => normalizeAdminTrack(item)))),
+      blockedTracks: this.http
+        .get<readonly AdminTrackItem[]>('/api/admin/blocked-tracks')
+        .pipe(map((items) => items.map((item) => normalizeAdminTrack(item)))),
       reviews: this.http.get<readonly ReviewApiDto[]>('/api/admin/reviews'),
     }).subscribe({
       next: (payload) => {
@@ -526,28 +602,55 @@ export class AdminStateService implements OnDestroy {
       );
   }
 
-  /** Queries GET /api/tracks/search on the backend and updates active catalog tracks. */
-  fetchCatalogTracksFromBackend(query: string): Observable<readonly TrackApiDto[]> {
-    let params = new HttpParams().set('limit', '100');
-    const trimmed = query.trim();
+  /** Queries GET /api/admin/tracks with optional search, sort, and dislike filter. */
+  loadAdminCatalog(
+    options: {
+      readonly query?: string;
+      readonly sortBy?: AdminTrackSortOption;
+      readonly minDislikes?: number | null;
+      readonly limit?: number;
+    } = {},
+  ): Observable<readonly AdminTrackItem[]> {
+    let params = new HttpParams().set('limit', String(options.limit ?? 100));
+    const trimmed = options.query?.trim() ?? '';
     if (trimmed) {
       params = params.set('query', trimmed);
     }
+    if (options.sortBy && options.sortBy !== 'id_asc') {
+      params = params.set('sort_by', options.sortBy);
+    }
+    if (options.minDislikes !== null && options.minDislikes !== undefined) {
+      params = params.set('min_dislikes', String(options.minDislikes));
+    }
 
     const expectedEpoch = this.sessionEpoch;
-    return this.http
-      .get<readonly TrackApiDto[]>('/api/tracks/search', {
-        params,
-        context: createAdminHttpContext(),
-      })
-      .pipe(
-        tap((remoteTracks) => {
-          if (this.sessionEpoch !== expectedEpoch) return;
-          this.activeTracksSignal.set(remoteTracks);
-          this.lastCatalogQuerySignal.set(trimmed);
-        }),
-        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
-      );
+    return this.http.get<readonly AdminTrackItem[]>('/api/admin/tracks', { params }).pipe(
+      map((items) => items.map((item) => normalizeAdminTrack(item))),
+      tap((remoteTracks) => {
+        if (this.sessionEpoch !== expectedEpoch) return;
+        this.activeTracksSignal.set(remoteTracks);
+        this.lastCatalogQuerySignal.set(trimmed);
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
+  }
+
+  /** Queries GET /api/admin/tracks on the backend and updates active catalog tracks. */
+  fetchCatalogTracksFromBackend(query: string): Observable<readonly AdminTrackItem[]> {
+    return this.loadAdminCatalog({ query });
+  }
+
+  /** Creates a new catalog track via POST /api/admin/tracks and refreshes metrics. */
+  createTrack(payload: CreateAdminTrackPayload): Observable<AdminTrackItem> {
+    return this.http.post<AdminTrackItem>('/api/admin/tracks', payload).pipe(
+      map((item) => normalizeAdminTrack(item)),
+      tap((created) => {
+        this.activeTracksSignal.update((tracks) => [created, ...tracks]);
+        this.refreshAudienceAndDashboard();
+        this.notify(`Faixa "${created.title}" cadastrada no catálogo.`);
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
   }
 
   /** Blocks or restores a catalog track via PUT /api/admin/tracks/{id}/block. */
@@ -559,7 +662,7 @@ export class AdminStateService implements OnDestroy {
       .pipe(
         tap((response) => {
           this.applyTrackBlockUpdate(trackId, response.blocked);
-          this.refreshAudienceReport();
+          this.refreshAudienceAndDashboard();
           const title = this.findTrackTitle(trackId);
           this.notify(
             response.blocked
@@ -697,6 +800,7 @@ export class AdminStateService implements OnDestroy {
     this.sessionSignal.set(null);
     this.plansSignal.set([]);
     this.usersSignal.set([]);
+    this.accessHistorySignal.set([]);
     this.administratorsSignal.set([]);
     this.activeTracksSignal.set([]);
     this.blockedTracksSignal.set([]);
@@ -738,6 +842,55 @@ export class AdminStateService implements OnDestroy {
     });
   }
 
+  loadAccessHistory(filters?: {
+    readonly userId?: number | null;
+    readonly onlyDeleted?: boolean;
+    readonly limit?: number;
+  }): void {
+    let params = new HttpParams().set('limit', String(filters?.limit ?? 100));
+    if (filters?.userId !== undefined && filters.userId !== null) {
+      params = params.set('user_id', String(filters.userId));
+    }
+    if (filters?.onlyDeleted) {
+      params = params.set('only_deleted', 'true');
+    }
+    this.runBackgroundRefresh(
+      this.http.get<readonly AdminTrackAccessEntry[]>('/api/admin/access-history', {
+        params,
+      }),
+      (entries) => {
+        this.accessHistorySignal.set(entries);
+      },
+    );
+  }
+
+  updatePlatformCosts(payload: UpdatePlatformCostsPayload): Observable<PlatformCostSettingsApiDto> {
+    if (
+      !Number.isFinite(payload.content_cost_per_track) ||
+      payload.content_cost_per_track < 0 ||
+      !Number.isFinite(payload.infrastructure_fixed_cost) ||
+      payload.infrastructure_fixed_cost < 0 ||
+      !Number.isFinite(payload.infrastructure_cost_per_user) ||
+      payload.infrastructure_cost_per_user < 0
+    ) {
+      return throwError(
+        () => new AdminDomainError('Os custos operacionais não podem ser negativos.', 'RULE'),
+      );
+    }
+    return this.http.put<PlatformCostSettingsApiDto>('/api/admin/costs', payload).pipe(
+      tap(() => {
+        this.notify('Custos operacionais atualizados com sucesso.');
+        this.runBackgroundRefresh(
+          this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
+          (dashboard) => {
+            this.dashboardSignal.set(dashboard);
+          },
+        );
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
+  }
+
   private refreshUsersAndMetrics(): void {
     this.runBackgroundRefresh(
       forkJoin({
@@ -766,11 +919,15 @@ export class AdminStateService implements OnDestroy {
     );
   }
 
-  private refreshAudienceReport(): void {
+  private refreshAudienceAndDashboard(): void {
     this.runBackgroundRefresh(
-      this.http.get<AudienceReportApiDto>('/api/admin/audience'),
-      (audience) => {
-        this.audienceSignal.set(audience);
+      forkJoin({
+        audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
+        dashboard: this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
+      }),
+      (payload) => {
+        this.audienceSignal.set(payload.audience);
+        this.dashboardSignal.set(payload.dashboard);
       },
     );
   }
@@ -778,11 +935,14 @@ export class AdminStateService implements OnDestroy {
   private refreshTracksAndAudience(): void {
     this.runBackgroundRefresh(
       forkJoin({
-        activeTracks: this.http.get<readonly TrackApiDto[]>('/api/tracks/search', {
-          params: new HttpParams().set('limit', '100'),
-          context: createAdminHttpContext(),
-        }),
-        blockedTracks: this.http.get<readonly TrackApiDto[]>('/api/admin/blocked-tracks'),
+        activeTracks: this.http
+          .get<readonly AdminTrackItem[]>('/api/admin/tracks', {
+            params: new HttpParams().set('limit', '100'),
+          })
+          .pipe(map((items) => items.map((item) => normalizeAdminTrack(item)))),
+        blockedTracks: this.http
+          .get<readonly AdminTrackItem[]>('/api/admin/blocked-tracks')
+          .pipe(map((items) => items.map((item) => normalizeAdminTrack(item)))),
         audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
       }),
       (payload) => {
@@ -821,7 +981,10 @@ export class AdminStateService implements OnDestroy {
     }
   }
 
-  private patchTrackInLists(trackId: number, updater: (track: TrackApiDto) => TrackApiDto): void {
+  private patchTrackInLists(
+    trackId: number,
+    updater: (track: AdminTrackItem) => AdminTrackItem,
+  ): void {
     this.activeTracksSignal.update((tracks) =>
       tracks.map((track) => (track.track_id === trackId ? updater(track) : track)),
     );
