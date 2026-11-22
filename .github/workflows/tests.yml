@@ -80,7 +80,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-videos
-          path: docs/testing/videos/*.webm
+          path: docs/videos/*.webm
           if-no-files-found: error
 
       - name: Publicando traces/screenshots em caso de falha

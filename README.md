@@ -4,7 +4,7 @@
 
 [![Testes](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/tests.yml/badge.svg)](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/tests.yml)
 [![Quality Gate](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/quality-gate.yml/badge.svg)](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/quality-gate.yml)
-![Testes Automatizados](https://img.shields.io/badge/tests-1159%20passed%20(953%20pytest%20%2B%20206%20vitest)-brightgreen)
+![Testes Automatizados](https://img.shields.io/badge/tests-1146%20passed%20(927%20pytest%20%2B%20219%20vitest)-brightgreen)
 ![Cobertura de Código](https://img.shields.io/badge/coverage-%E2%89%A585%25%20(pytest--cov)-blue)
 
 ### Time: Crazy Frogs
@@ -239,22 +239,21 @@ As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional 
 | :--- | :--- | :--- |
 | **SQLite 3** | `3.45+` (nativo no Python 3.15 / pacote `sqlite3` Ubuntu 26.04) | SGBD relacional local (`local.db`) para usuários, faixas, playlists, jams, interações, avaliações, planos e logs de auditoria |
 | **fake-gcs-server (Emulador GCS)** | `fsouza/fake-gcs-server:latest` | Emulação local de bucket Google Cloud Storage para catálogo `.parquet` |
-| **Google Cloud Firestore** | Opcional (`FIRESTORE_ENABLED=true`) | Sincronização de documentos em nuvem quando habilitado |
 
 #### Infraestrutura, Qualidade, Linting, Tipagem e Testes
 | Ferramenta | Versão Exata | Finalidade |
 | :--- | :--- | :--- |
 | **Docker Engine & Docker Compose** | `docker.io` `24.x+` / `docker-compose-v2` (`v2.x+`) | Orquestração local dos containers (`backend`, `frontend` e `gcs-emulator`) |
-| **Pytest** | `9.1.1` | Suíte de testes unitários e integração da API do backend (953 testes) |
+| **Pytest** | `9.1.1` | Suíte de testes unitários e integração da API do backend (927 testes) |
 | **Playwright** | *(configurado em `tests/e2e/`)* | Testes funcionais ponta a ponta no navegador e gravação de vídeos de execução |
-| **Vitest** + **JSDOM** | `^5.1.0` (`package.json`, `v3.2.7` resolvido) / `^26.0.0` | Suíte de testes unitários do frontend Angular (206 testes) |
+| **Vitest** + **JSDOM** | `^5.1.0` (`package.json`, `v3.2.7` resolvido) / `^26.0.0` | Suíte de testes unitários do frontend Angular (219 testes) |
 | **Ruff** | `0.17.2` | Linter e formatador Python |
 | **Pyrefly** | `1.4.0` | Verificador estático de tipos Python (`preset = "strict"`) |
 | **Oxlint** + **oxlint-tsgolint** + **Oxfmt** | `^1.88.0` / `^7.0.2004` / `^0.73.0` | Linting *type-aware* e formatação TypeScript/HTML/CSS |
 | **ESLint** + **angular-eslint** | `^10.13.0` / `^22.6.0` | Regras de lint específicas para templates e componentes Angular |
 | **uv** | `0.13.1` | Gerenciador de pacotes e ambientes Python |
 
-> **Nota sobre a evolução da especificação:** Os diagramas iniciais do documento de especificação (*Tecnologia-Arquitetura*) previam Redis/DynamoDB e Deezer em nível conceitual. Na implementação final entregue neste repositório, a arquitetura foi consolidada com **SQLite 3** (relacional local), **GCS/Parquet** (catálogo), **Firestore** (opcional), **Spotify + iTunes** (APIs externas) e **Angular 22 + FastAPI**, documentados nos diagramas atualizados abaixo.
+> **Nota sobre a evolução da especificação:** Os diagramas iniciais do documento de especificação (*Tecnologia-Arquitetura*) previam Redis/DynamoDB e Deezer em nível conceitual. Na implementação final entregue neste repositório, a arquitetura foi consolidada com **SQLite 3** (relacional local), **GCS/Parquet** (catálogo), **Spotify + iTunes** (APIs externas) e **Angular 22 + FastAPI**, documentados nos diagramas atualizados abaixo.
 
 ---
 
@@ -265,8 +264,8 @@ O projeto combina **MVC (Model-View-Controller)** na divisão macro entre fronte
 | Camada MVC | Diretórios no Repositório | Responsabilidade e Coerência com o Código |
 | :--- | :--- | :--- |
 | **View** | `view/src/app/features/`<br>`view/src/app/shared/` | Interface SPA em Angular (componentes standalone, templates `.html`, estilos `.css`). Inclui as telas de autenticação/ouvinte (`auth`, `discover`, `playlists`, `jams`, `explore`, `profile` + `collection`, `family`, `plans`, `settings`, `dashboard`, `not-found`), os componentes compartilhados (`shared/`) e o painel administrativo (`admin/*`: `admin-login`, `admin-shell`, `admin-dashboard`, `admin-users`, `admin-plans`, `admin-moderation`). |
-| **Controller** | `app/presentation/routers/`<br>`app/presentation/schemas/`<br>`app/presentation/dependencies/`<br>`app/application/use_cases/`<br>`app/application/dtos/`<br>`view/src/app/core/`<br>`view/src/app/features/*/*.service.ts` | **Backend:** Routers FastAPI (`auth.py`, `discovery.py`, `playlists.py`, `jams.py`, `tracks_reviews.py`, `profile.py`, `spotify.py`, `admin.py`) recebem requisições HTTP/REST, validam schemas Pydantic (`schemas/`) e delegam aos *Use Cases* (`use_cases/`).<br>**Frontend:** Serviços Angular com Signals, interceptors e guards (`RibbitStateService`, `SongService`, `PlaylistService`, `DashboardService`, `PlanService`, `AudioPlayerService`, `AuthSessionNotifier`, `authInterceptor` em `core/`, além de `AdminStateService`, `adminAuthGuard`, `JamService`, `AuthApiService`, `ProfileApiService` em `features/`). |
-| **Model** | `app/domain/models/`<br>`app/domain/services/`<br>`app/application/ports/`<br>`app/infrastructure/` | **Domínio Puro:** Entidades/modelos (`Plan`, `User`, `Track`, `Playlist`, `Jam`, `JamQueueItem`, `Interaction`, `ReviewComment`, `TrackAccess`, `PlatformCostSettings`) e serviços/funções de domínio (`FamilyPlanService`, `SubscriptionAnalyticsService`, funções de recomendação em `recommendation.py`).<br>**Persistência & Adapters:** Repositórios SQLite (`SQLite*Repository`), adapters externos (`SpotifyAdapter`, `SpotifyUserProfileAdapter`, `ITunesAdapter`, `GoogleIdpVerifierAdapter`, `GoogleOAuthAdapter`, `GCSTrackCatalogAdapter`, `FirestoreSyncService` / `FirestoreRestClient`) e segurança (`PBKDF2PasswordHasher`, `HMACTokenService`) implementam os *ports*. |
+| **Controller** | `app/presentation/routers/`<br>`app/presentation/schemas/`<br>`app/presentation/dependencies/`<br>`app/application/use_cases/`<br>`app/application/dtos/`<br>`view/src/app/core/`<br>`view/src/app/features/*/*.service.ts` | **Backend:** Routers FastAPI (`auth.py`, `discovery.py`, `playlists.py`, `jams.py`, `tracks_reviews.py`, `profile.py`, `spotify.py`, `admin.py`) recebem requisições HTTP/REST, validam schemas Pydantic (`schemas/`) e delegam aos *Use Cases* (`use_cases/`).<br>**Frontend:** Serviços Angular com Signals, interceptors e guards (`RibbitStateService`, `SongService`, `PlaylistService`, `PlanService`, `AudioPlayerService`, `AuthSessionNotifier`, `authInterceptor` em `core/`, além de `AdminStateService`, `adminAuthGuard`, `DashboardService`, `JamService`, `AuthApiService`, `ProfileApiService` em `features/`). |
+| **Model** | `app/domain/models/`<br>`app/domain/services/`<br>`app/application/ports/`<br>`app/infrastructure/` | **Domínio Puro:** Entidades/modelos (`Plan`, `User`, `Track`, `Playlist`, `Jam`, `JamQueueItem`, `Interaction`, `ReviewComment`, `TrackAccess`, `PlatformCostSettings`) e serviços/funções de domínio (`FamilyPlanService`, `SubscriptionAnalyticsService`, funções de recomendação em `recommendation.py`).<br>**Persistência & Adapters:** Repositórios SQLite (`SQLite*Repository`), adapters externos (`SpotifyAdapter`, `SpotifyUserProfileAdapter`, `ITunesAdapter`, `GoogleIdpVerifierAdapter`, `GoogleOAuthAdapter`, `GCSTrackCatalogAdapter`) e segurança (`PBKDF2PasswordHasher`, `HMACTokenService`) implementam os *ports*. |
 
 ---
 
@@ -297,7 +296,7 @@ flowchart TB
     subgraph Model["MODEL — Domain & Infrastructure (app/)"]
         Domain["Domain Models & Services<br/>(Plan, User, Track, Playlist, Jam,<br/>JamQueueItem, Interaction, ReviewComment,<br/>TrackAccess, PlatformCostSettings,<br/>FamilyPlanService, SubscriptionAnalyticsService,<br/>recommendation)"]
         SQLiteRepo["SQLite Repositories<br/>(app/infrastructure/repositories/)"]
-        ExtAdapters["External & Security Adapters<br/>(SpotifyAdapter, SpotifyUserProfileAdapter,<br/>ITunesAdapter, GoogleIdpVerifierAdapter,<br/>GoogleOAuthAdapter, GCSTrackCatalogAdapter,<br/>FirestoreSyncService, PBKDF2PasswordHasher,<br/>HMACTokenService)"]
+        ExtAdapters["External & Security Adapters<br/>(SpotifyAdapter, SpotifyUserProfileAdapter,<br/>ITunesAdapter, GoogleIdpVerifierAdapter,<br/>GoogleOAuthAdapter, GCSTrackCatalogAdapter,<br/>PBKDF2PasswordHasher, HMACTokenService)"]
         UseCases --> Domain
         Ports -.->|implements| SQLiteRepo
         Ports -.->|implements| ExtAdapters
@@ -305,7 +304,7 @@ flowchart TB
 
     SQLiteRepo --> DB[(SQLite 3<br/>local.db)]
     ExtAdapters --> GCS[(GCS / fake-gcs-server<br/>Parquet)]
-    ExtAdapters --> ExtAPIs([Spotify / iTunes / Google OAuth / Firestore])
+    ExtAdapters --> ExtAPIs([Spotify / iTunes / Google OAuth])
 ```
 
 ---
@@ -524,7 +523,7 @@ classDiagram
 
 ### Diagrama Entidade-Relacionamento (DER)
 
-O esquema relacional completo do SQLite está implementado em [`app/infrastructure/repositories/schema.sql`](app/infrastructure/repositories/schema.sql), documentado em DBML em [`docs/architecture/app/database/DER.sql`](docs/architecture/app/database/DER.sql) e nos módulos SQL em [`docs/architecture/app/database/`](docs/architecture/app/database/), sendo representado de forma atualizada pelo diagrama Mermaid abaixo (a imagem estática [`DER.png`](docs/architecture/app/database/DER.png) refere-se a uma versão anterior):
+O esquema relacional completo do SQLite está implementado em [`app/infrastructure/repositories/schema.sql`](app/infrastructure/repositories/schema.sql), documentado em DBML em [`docs/database/DER.sql`](docs/database/DER.sql) e nos módulos SQL em [`docs/database/`](docs/database/), sendo representado tanto pelo diagrama estático [`DER.png`](docs/database/DER.png) quanto pelo diagrama Mermaid abaixo:
 
 ```mermaid
 erDiagram
@@ -722,13 +721,13 @@ erDiagram
 ## Protótipos da Interface
 
 Os protótipos de alta e baixa fidelidade das telas do aplicativo e do fluxo de swipe estão disponíveis no repositório:
-- **Protótipo de Telas (PDF completo):** [`docs/architecture/view/proto/Protótipo de Telas Ribbit.pdf`](docs/architecture/view/proto/Protótipo%20de%20Telas%20Ribbit.pdf)
+- **Protótipo de Telas (PDF completo):** [`docs/view/prototype/Protótipo de Telas Ribbit.pdf`](docs/view/prototype/Protótipo%20de%20Telas%20Ribbit.pdf)
 - **Ideação Crazy 8 (rascunhos iniciais da equipe):**
-  - [`Crazy8.jpeg`](docs/architecture/view/proto/Crazy8.jpeg) — Consolidação
-  - [`Crazy8-Carol.jpeg`](docs/architecture/view/proto/Crazy8-Carol.jpeg) — Carolina Britto Haddad
-  - [`Crazy8-Fernando.jpeg`](docs/architecture/view/proto/Crazy8-Fernando.jpeg) — Fernando Mendes Seraco
-  - [`Crazy8-Gabriel.jpeg`](docs/architecture/view/proto/Crazy8-Gabriel.jpeg) — Gabriel Agra de Castro Motta
-  - [`Crazy8-Mateus.jpeg`](docs/architecture/view/proto/Crazy8-Mateus.jpeg) — Mateus Silva de Araújo
+  - [`Crazy8.jpeg`](docs/view/prototype/Crazy8.jpeg) — Consolidação
+  - [`Crazy8-Carol.jpeg`](docs/view/prototype/Crazy8-Carol.jpeg) — Carolina Britto Haddad
+  - [`Crazy8-Fernando.jpeg`](docs/view/prototype/Crazy8-Fernando.jpeg) — Fernando Mendes Seraco
+  - [`Crazy8-Gabriel.jpeg`](docs/view/prototype/Crazy8-Gabriel.jpeg) — Gabriel Agra de Castro Motta
+  - [`Crazy8-Mateus.jpeg`](docs/view/prototype/Crazy8-Mateus.jpeg) — Mateus Silva de Araújo
 
 ---
 
@@ -783,7 +782,7 @@ chmod +x scripts/start_local.sh
 python scripts/init_db.py
 ```
 
-> **Nota sobre execução offline e variáveis de ambiente (opcional):** Na Opção 2 (manual sem Docker), o backend opera 100% localmente usando apenas o banco SQLite inicializado por `database/dump.sql`, sem subir o container `fake-gcs-server`. Caso queira habilitar sincronização com GCS/Firestore ou integração com Spotify, copie `.env.example` para `.env` e preencha suas credenciais.
+> **Nota sobre execução offline e variáveis de ambiente (opcional):** Na Opção 2 (manual sem Docker), o backend opera 100% localmente usando apenas o banco SQLite inicializado por `database/dump.sql`, sem subir o container `fake-gcs-server`. Caso queira habilitar sincronização com Google Cloud Storage (GCS) ou integração com Spotify e Google OAuth, copie `.env.example` para `.env` e preencha suas credenciais.
 
 #### 3. Iniciar Backend e Frontend Conectados
 Para subir o backend (`http://127.0.0.1:8000`) e o frontend (`http://localhost:4200`, já conectado via proxy à API) com um único comando:
@@ -896,21 +895,21 @@ A suíte de testes é organizada em quatro frentes independentes:
   ```bash
   npm run test:e2e
   ```
-- **Executar os testes E2E e exportar os 5 vídeos gravados para `docs/testing/videos/`:**
+- **Executar os testes E2E e exportar os 5 vídeos gravados para `docs/videos/`:**
   ```bash
   npm run record:e2e
   ```
 
 | Fluxo E2E | Teste Playwright | Vídeo Gravado |
 | :--- | :--- | :--- |
-| **1. Onboarding, Filtros de Gênero, Swipe e Coleções** | [`01-onboarding-discovery-swipe.e2e.ts`](tests/e2e/01-onboarding-discovery-swipe.e2e.ts) | [`01-onboarding-discovery-swipe.webm`](docs/testing/videos/01-onboarding-discovery-swipe.webm) |
-| **2. Playlists Contextuais e Fila de Reprodução** | [`02-contextual-playlists-and-queue.e2e.ts`](tests/e2e/02-contextual-playlists-and-queue.e2e.ts) | [`02-contextual-playlists-and-queue.webm`](docs/testing/videos/02-contextual-playlists-and-queue.webm) |
-| **3. Jam Colaborativa (Pond), Votação e Skip** | [`03-collaborative-jam-pond.e2e.ts`](tests/e2e/03-collaborative-jam-pond.e2e.ts) | [`03-collaborative-jam-pond.webm`](docs/testing/videos/03-collaborative-jam-pond.webm) |
-| **4. Busca no Catálogo, Reviews e Comunidade** | [`04-explore-search-and-community-reviews.e2e.ts`](tests/e2e/04-explore-search-and-community-reviews.e2e.ts) | [`04-explore-search-and-community-reviews.webm`](docs/testing/videos/04-explore-search-and-community-reviews.webm) |
-| **5. Painel Administrativo, Planos e Moderação** | [`05-admin-console-governance-and-moderation.e2e.ts`](tests/e2e/05-admin-console-governance-and-moderation.e2e.ts) | [`05-admin-console-governance-and-moderation.webm`](docs/testing/videos/05-admin-console-governance-and-moderation.webm) |
+| **1. Onboarding, Filtros de Gênero, Swipe e Coleções** | [`01-onboarding-discovery-swipe.e2e.ts`](tests/e2e/01-onboarding-discovery-swipe.e2e.ts) | [`01-onboarding-discovery-swipe.webm`](docs/videos/01-onboarding-discovery-swipe.webm) |
+| **2. Playlists Contextuais e Fila de Reprodução** | [`02-contextual-playlists-and-queue.e2e.ts`](tests/e2e/02-contextual-playlists-and-queue.e2e.ts) | [`02-contextual-playlists-and-queue.webm`](docs/videos/02-contextual-playlists-and-queue.webm) |
+| **3. Jam Colaborativa (Pond), Votação e Skip** | [`03-collaborative-jam-pond.e2e.ts`](tests/e2e/03-collaborative-jam-pond.e2e.ts) | [`03-collaborative-jam-pond.webm`](docs/videos/03-collaborative-jam-pond.webm) |
+| **4. Busca no Catálogo, Reviews e Comunidade** | [`04-explore-search-and-community-reviews.e2e.ts`](tests/e2e/04-explore-search-and-community-reviews.e2e.ts) | [`04-explore-search-and-community-reviews.webm`](docs/videos/04-explore-search-and-community-reviews.webm) |
+| **5. Painel Administrativo, Planos e Moderação** | [`05-admin-console-governance-and-moderation.e2e.ts`](tests/e2e/05-admin-console-governance-and-moderation.e2e.ts) | [`05-admin-console-governance-and-moderation.webm`](docs/videos/05-admin-console-governance-and-moderation.webm) |
 
 ### Frontend (TypeScript / Angular)
-- **Executar testes unitários (206 testes em 24 arquivos com Vitest):**
+- **Executar testes unitários (219 testes em 38 arquivos com Vitest):**
   ```bash
   npm test
   ```
