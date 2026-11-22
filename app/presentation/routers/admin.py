@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.application.dtos import (
     AuthenticateAdminCommand,
@@ -34,10 +34,11 @@ from app.application.use_cases.admin import (
 )
 from app.application.use_cases.auth import AuthenticateAdminUseCase
 from app.application.use_cases.review import DeleteReviewUseCase
+from app.application.use_cases.user import ListPlansUseCase
 from app.domain.exceptions import BusinessRuleViolationError, ExternalServiceError
 from app.presentation.dependencies import (
-    get_container,
     provide,
+    provide_optional,
     require_admin,
 )
 from app.presentation.schemas.admin import (
@@ -71,22 +72,29 @@ from app.presentation.schemas.tracks_reviews import (
 router = APIRouter(prefix="/api/admin", tags=["Admin Console"])
 
 
-def _get_compact_catalog_use_case(
-    request: Request,
-) -> CompactCatalogUseCase:
-    container = get_container(request)
-    if container.compact_catalog_use_case is None:
+def _require_catalog_use_case[T](
+    use_case: T | None,
+) -> T:
+    if use_case is None:
         raise ExternalServiceError("Catalog file storage is not configured.")
-    return container.compact_catalog_use_case
+    return use_case
+
+
+def _get_compact_catalog_use_case(
+    use_case: Annotated[
+        CompactCatalogUseCase | None, Depends(provide_optional(CompactCatalogUseCase))
+    ],
+) -> CompactCatalogUseCase:
+    return _require_catalog_use_case(use_case)
 
 
 def _get_sync_catalog_version_use_case(
-    request: Request,
+    use_case: Annotated[
+        SyncCatalogVersionUseCase | None,
+        Depends(provide_optional(SyncCatalogVersionUseCase)),
+    ],
 ) -> SyncCatalogVersionUseCase:
-    container = get_container(request)
-    if container.sync_catalog_version_use_case is None:
-        raise ExternalServiceError("Catalog file storage is not configured.")
-    return container.sync_catalog_version_use_case
+    return _require_catalog_use_case(use_case)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -348,10 +356,10 @@ def update_track_genre(
     response_model=list[PlanResponse],
 )
 def list_plans(
-    request: Request,
+    use_case: Annotated[ListPlansUseCase, Depends(provide(ListPlansUseCase))],
     admin_id: Annotated[int, Depends(require_admin)] = 0,
 ) -> list[PlanResponse]:
-    plans = get_container(request).plan_repo.list_all()
+    plans = use_case.execute()
     return [PlanResponse.model_validate(p) for p in plans]
 
 

@@ -154,7 +154,6 @@ def test_http_get_google_client_id_uses_only_injected_settings_without_reloading
 
     monkeypatch.setenv("ENVIRONMENT", "production")
     monkeypatch.delenv("RIBBIT_SECRET_KEY", raising=False)
-    monkeypatch.delenv("SECRET_KEY", raising=False)
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "env-client.apps.googleusercontent.com")
 
     conn = sqlite3.connect(":memory:", check_same_thread=False)

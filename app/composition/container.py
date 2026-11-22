@@ -1,15 +1,10 @@
-"""Composition root: inlines infrastructure, use case construction, and router mounting."""
+"""Dependency injection container and builder wiring application adapters and use cases."""
 
-import logging
-import threading
-from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any
 lazy import sqlite3
-lazy from collections.abc import AsyncGenerator
 
 import niquests
-from fastapi import FastAPI
 
 from app.application.ports.repositories import (
     AuditLogRepositoryPort,
@@ -135,11 +130,7 @@ from app.application.use_cases.user import (
     UpdatePreferredThemeUseCase,
     UpdateProfileUseCase,
 )
-from app.config import Settings, load_settings
-from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters import (
-    FirestoreRestClient,
-    FirestoreSyncService,
     GCSTrackCatalogAdapter,
     ITunesAdapter,
     SpotifyAdapter,
@@ -165,24 +156,8 @@ from app.infrastructure.repositories import (
     SQLiteUserStatsRepository,
     create_connection,
 )
-from app.infrastructure.repositories.seed import seed_database
 from app.infrastructure.security import HMACTokenService, PBKDF2PasswordHasher
-from app.infrastructure.telemetry import (
-    CorrelationIdMiddleware,
-    configure_logging,
-    log_operational_event,
-)
-from app.presentation.exception_handlers import register_exception_handlers
-from app.presentation.routers.admin import router as admin_router
-from app.presentation.routers.auth import router as auth_router
-from app.presentation.routers.discovery import router as discovery_router
-from app.presentation.routers.jams import router as jams_router
-from app.presentation.routers.playlists import router as playlists_router
-from app.presentation.routers.profile import router as profile_router
-from app.presentation.routers.spotify import router as spotify_router
-from app.presentation.routers.tracks_reviews import (
-    router as tracks_reviews_router,
-)
+lazy from app.config import Settings
 
 
 @dataclass(slots=True, kw_only=True)
@@ -191,6 +166,7 @@ class Container:
 
     settings: Settings
     connection: sqlite3.Connection
+    http_session: niquests.Session
     password_hasher: PBKDF2PasswordHasher
     token_service: HMACTokenService
     preview_service: ITunesAdapter
@@ -272,8 +248,8 @@ class Container:
     get_annual_listening_stats_use_case: GetAnnualListeningStatsUseCase
     link_spotify_account_use_case: LinkSpotifyAccountUseCase
     # Spotify
-    get_spotify_authorize_url_use_case: GetSpotifyAuthorizeUrlUseCase
-    connect_spotify_account_use_case: ConnectSpotifyAccountUseCase
+    get_spotify_authorize_url_use_case: GetSpotifyAuthorizeUrlUseCase | None = None
+    connect_spotify_account_use_case: ConnectSpotifyAccountUseCase | None = None
     disconnect_spotify_account_use_case: DisconnectSpotifyAccountUseCase
     sync_tracks_from_spotify_use_case: SyncTracksFromSpotifyUseCase
     sync_playlist_from_spotify_use_case: SyncPlaylistFromSpotifyUseCase
@@ -301,7 +277,6 @@ class Container:
     ingest_tracks_from_catalog_use_case: IngestTracksFromCatalogUseCase | None = None
     compact_catalog_use_case: CompactCatalogUseCase | None = None
     sync_catalog_version_use_case: SyncCatalogVersionUseCase | None = None
-    firestore_sync_service: FirestoreSyncService | None = None
     _type_registry: dict[type, Any] = field(
         default_factory=dict, init=False, repr=False
     )
@@ -312,7 +287,8 @@ class Container:
             if field_name.startswith("_"):
                 continue
             val = getattr(self, field_name)
-            registry[type(val)] = val
+            if val is not None:
+                registry[type(val)] = val
 
         # Register interface protocols explicitly
         registry[TokenServicePort] = self.token_service
@@ -338,6 +314,14 @@ class Container:
             (GoogleOAuthPort, self.google_oauth),
             (GetGoogleAuthorizeUrlUseCase, self.get_google_authorize_url_use_case),
             (CompleteGoogleOAuthUseCase, self.complete_google_oauth_use_case),
+            (
+                GetSpotifyAuthorizeUrlUseCase,
+                self.get_spotify_authorize_url_use_case,
+            ),
+            (
+                ConnectSpotifyAccountUseCase,
+                self.connect_spotify_account_use_case,
+            ),
             (TrackCatalogFilePort, self.catalog_file_port),
             (
                 IngestTracksFromCatalogUseCase,
@@ -345,7 +329,6 @@ class Container:
             ),
             (CompactCatalogUseCase, self.compact_catalog_use_case),
             (SyncCatalogVersionUseCase, self.sync_catalog_version_use_case),
-            (FirestoreSyncService, self.firestore_sync_service),
         )
         registry.update(
             {
@@ -377,15 +360,6 @@ class Container:
         except KeyError:
             return None
 
-    def __getattr__(self, name: str) -> Any:
-        use_case_name = f"{name}_use_case"
-        try:
-            return object.__getattribute__(self, use_case_name)
-        except AttributeError:
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            ) from None
-
 
 def build_container(
     settings: Settings,
@@ -397,12 +371,13 @@ def build_container(
         if connection is not None
         else create_connection(settings.database_path)
     )
+    http_session = niquests.Session()
     password_hasher = PBKDF2PasswordHasher(iterations=settings.password_hash_iterations)
     token_service = HMACTokenService(
         secret_key=settings.secret_key,
         expiration_seconds=settings.token_expiration_seconds,
     )
-    preview_service = ITunesAdapter()
+    preview_service = ITunesAdapter(session=http_session)
     spotify_credentials = (
         SpotifyCredentials(
             client_id=settings.spotify_client_id,
@@ -411,30 +386,15 @@ def build_container(
         if settings.spotify_client_id and settings.spotify_client_secret
         else None
     )
-    music_service = SpotifyAdapter(spotify_credentials)
+    music_service = SpotifyAdapter(spotify_credentials, session=http_session)
 
-    firestore_sync = (
-        FirestoreSyncService(
-            conn=conn,
-            client=FirestoreRestClient(
-                project_id=settings.gcp_project_id,
-                database_id=settings.firestore_database,
-            ),
-        )
-        if settings.firestore_enabled
-        and settings.gcp_project_id
-        and connection is None
-        and settings.database_path != ":memory:"
-        else None
-    )
-
-    user_repo = SQLiteUserRepository(conn, sync_service=firestore_sync)
+    user_repo = SQLiteUserRepository(conn)
     plan_repo = SQLitePlanRepository(conn)
     track_repo = SQLiteTrackRepository(conn)
-    playlist_repo = SQLitePlaylistRepository(conn, sync_service=firestore_sync)
-    interaction_repo = SQLiteInteractionRepository(conn, sync_service=firestore_sync)
+    playlist_repo = SQLitePlaylistRepository(conn)
+    interaction_repo = SQLiteInteractionRepository(conn)
     jam_repo = SQLiteJamRepository(conn)
-    review_repo = SQLiteReviewRepository(conn, sync_service=firestore_sync)
+    review_repo = SQLiteReviewRepository(conn)
     audit_log_repo = SQLiteAuditLogRepository(conn)
     track_access_repo = SQLiteTrackAccessRepository(conn)
     platform_cost_repo = SQLitePlatformCostRepository(conn)
@@ -476,6 +436,7 @@ def build_container(
 
     google_verifier = GoogleIdpVerifierAdapter(
         expected_client_id=settings.google_client_id,
+        session=http_session,
     )
     google_oauth = (
         GoogleOAuthAdapter(
@@ -484,6 +445,7 @@ def build_container(
             redirect_uri=settings.google_redirect_uri,
             auth_uri=settings.google_auth_uri,
             token_uri=settings.google_token_uri,
+            session=http_session,
         )
         if (
             settings.google_client_id
@@ -510,21 +472,39 @@ def build_container(
         if google_oauth is not None
         else None
     )
-    spotify_user_profile = SpotifyUserProfileAdapter()
-    user_spotify_credentials = SpotifyCredentials(
-        client_id=settings.spotify_client_id or "dev_spotify_client",
-        client_secret=settings.spotify_client_secret or "dev_spotify_secret",
-        redirect_uri=settings.spotify_redirect_uri or "http://127.0.0.1:8888/callback",
+    spotify_user_profile = SpotifyUserProfileAdapter(session=http_session)
+    user_spotify_auth = (
+        SpotifyAuth(
+            SpotifyCredentials(
+                client_id=settings.spotify_client_id,
+                client_secret=settings.spotify_client_secret,
+                redirect_uri=settings.spotify_redirect_uri,
+            ),
+            session=http_session,
+        )
+        if settings.spotify_client_id and settings.spotify_redirect_uri
+        else None
     )
-    user_spotify_auth = SpotifyAuth(
-        user_spotify_credentials,
-        session=niquests.Session(),
+    get_spotify_authorize_url_use_case = (
+        GetSpotifyAuthorizeUrlUseCase(spotify_auth=user_spotify_auth)
+        if user_spotify_auth is not None
+        else None
+    )
+    connect_spotify_account_use_case = (
+        ConnectSpotifyAccountUseCase(
+            user_repo=user_repo,
+            spotify_auth=user_spotify_auth,
+            spotify_profile=spotify_user_profile,
+        )
+        if user_spotify_auth is not None
+        else None
     )
     user_stats_repo = SQLiteUserStatsRepository(conn)
 
     return Container(
         settings=settings,
         connection=conn,
+        http_session=http_session,
         password_hasher=password_hasher,
         token_service=token_service,
         preview_service=preview_service,
@@ -545,14 +525,8 @@ def build_container(
         authenticate_with_google_use_case=authenticate_with_google_use_case,
         get_google_authorize_url_use_case=get_google_authorize_url_use_case,
         complete_google_oauth_use_case=complete_google_oauth_use_case,
-        get_spotify_authorize_url_use_case=GetSpotifyAuthorizeUrlUseCase(
-            spotify_auth=user_spotify_auth,
-        ),
-        connect_spotify_account_use_case=ConnectSpotifyAccountUseCase(
-            user_repo=user_repo,
-            spotify_auth=user_spotify_auth,
-            spotify_profile=spotify_user_profile,
-        ),
+        get_spotify_authorize_url_use_case=get_spotify_authorize_url_use_case,
+        connect_spotify_account_use_case=connect_spotify_account_use_case,
         disconnect_spotify_account_use_case=DisconnectSpotifyAccountUseCase(
             user_repo=user_repo,
         ),
@@ -773,212 +747,7 @@ def build_container(
         ingest_tracks_from_catalog_use_case=ingest_tracks_use_case,
         compact_catalog_use_case=compact_catalog_use_case,
         sync_catalog_version_use_case=sync_catalog_version_use_case,
-        firestore_sync_service=firestore_sync,
     )
 
 
-def _mount_presentation_routers(app: FastAPI) -> None:
-    """Mounts all presentation-layer routers individually."""
-    for router in [
-        auth_router,
-        discovery_router,
-        playlists_router,
-        profile_router,
-        jams_router,
-        tracks_reviews_router,
-        admin_router,
-        spotify_router,
-    ]:
-        app.include_router(router)
-
-
-def _sync_catalog_on_first_startup(
-    container: Container, logger: logging.Logger
-) -> None:
-    """Ingests GCS catalog once on initial startup if no catalog sync has succeeded yet."""
-    if container.sync_catalog_version_use_case is None:
-        return
-    already_synced = (
-        container.connection.execute(
-            "SELECT 1 FROM audit_logs WHERE status = 'success' "
-            "AND event LIKE 'catalog.synced.v%' LIMIT 1"
-        ).fetchone()
-        is not None
-    )
-    if already_synced:
-        return
-    try:
-        result = container.sync_catalog_version_use_case.execute()
-    except ExternalServiceError as exc:
-        log_operational_event(
-            logger,
-            event="catalog.startup_sync.skipped",
-            status="warning",
-            message=f"Initial catalog sync skipped: {exc}",
-        )
-        return
-    log_operational_event(
-        logger,
-        event="catalog.startup_sync.completed",
-        status="success",
-        message=result.message,
-        synced=result.synced,
-        version=result.version,
-    )
-
-
-def _start_background_catalog_sync(
-    settings: Settings, container: Container, logger: logging.Logger
-) -> None:
-    """Runs initial catalog sync in a background daemon thread so startup stays instant."""
-    if container.sync_catalog_version_use_case is None:
-        return
-    already_synced = (
-        container.connection.execute(
-            "SELECT 1 FROM audit_logs WHERE status = 'success' "
-            "AND event LIKE 'catalog.synced.v%' LIMIT 1"
-        ).fetchone()
-        is not None
-    )
-    if already_synced:
-        return
-
-    catalog_adapter = container.catalog_file_port
-    if catalog_adapter is None:
-        return
-
-    def _worker() -> None:
-        conn = create_connection(settings.database_path)
-        try:
-            sync_uc = SyncCatalogVersionUseCase(
-                catalog_file_port=catalog_adapter,
-                ingest_use_case=IngestTracksFromCatalogUseCase(
-                    track_repo=SQLiteTrackRepository(conn),
-                    catalog_file_port=catalog_adapter,
-                ),
-                audit_log_repo=SQLiteAuditLogRepository(conn),
-            )
-            bg_container = Container.__new__(Container)
-            object.__setattr__(bg_container, "connection", conn)
-            object.__setattr__(bg_container, "sync_catalog_version_use_case", sync_uc)
-            _sync_catalog_on_first_startup(bg_container, logger)
-        finally:
-            conn.close()
-
-    threading.Thread(
-        target=_worker, name="gcs-initial-catalog-sync", daemon=True
-    ).start()
-
-
-def _start_background_firestore_sync(
-    container: Container, logger: logging.Logger
-) -> threading.Thread | None:
-    """Runs initial Firestore bidirectional sync in a background daemon thread."""
-    sync_service = container.firestore_sync_service
-    if sync_service is None:
-        return None
-
-    def _worker() -> None:
-        try:
-            sync_service.sync_all()
-            log_operational_event(
-                logger,
-                event="firestore.startup_sync.completed",
-                status="success",
-                message="Initial Firestore bidirectional sync completed.",
-            )
-        except Exception as exc:  # noqa: BLE001
-            log_operational_event(
-                logger,
-                event="firestore.startup_sync.skipped",
-                status="warning",
-                message=f"Initial Firestore sync failed: {exc}",
-            )
-
-    thread = threading.Thread(
-        target=_worker, name="firestore-initial-sync", daemon=True
-    )
-    thread.start()
-    return thread
-
-
-def create_app(
-    settings: Settings | None = None,
-    connection: sqlite3.Connection | None = None,
-) -> FastAPI:
-    """Application factory building FastAPI app with Hexagonal composition root."""
-    resolved_settings = settings or load_settings()
-    configure_logging(level=resolved_settings.log_level)
-    owns_connection = connection is None
-    container = build_container(resolved_settings, connection=connection)
-    seed_database(
-        container.connection,
-        settings=resolved_settings,
-        password_hasher=container.password_hasher,
-    )
-    firestore_sync_thread: threading.Thread | None = None
-
-    @asynccontextmanager
-    async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
-        nonlocal firestore_sync_thread
-        logger = logging.getLogger("app")
-        log_operational_event(
-            logger,
-            event="service.startup",
-            status="success",
-            message=(
-                f"Starting service: {resolved_settings.app_title} "
-                f"v{resolved_settings.app_version}"
-            ),
-            app_title=resolved_settings.app_title,
-            app_version=resolved_settings.app_version,
-            environment=resolved_settings.environment,
-        )
-        if owns_connection:
-            _start_background_catalog_sync(resolved_settings, container, logger)
-            firestore_sync_thread = _start_background_firestore_sync(container, logger)
-        try:
-            yield
-        finally:
-            log_operational_event(
-                logger,
-                event="service.shutdown",
-                status="success",
-                message=f"Shutting down service: {resolved_settings.app_title}",
-            )
-            if owns_connection:
-                if (
-                    firestore_sync_thread is not None
-                    and firestore_sync_thread.is_alive()
-                ):
-                    firestore_sync_thread.join(timeout=5.0)
-                container.connection.close()
-
-    app = FastAPI(
-        title=resolved_settings.app_title,
-        description=resolved_settings.app_description,
-        version=resolved_settings.app_version,
-        lifespan=lifespan,
-    )
-
-    app.add_middleware(CorrelationIdMiddleware)
-
-    app.state.settings = resolved_settings
-    app.state.container = container
-    app.state.connection = container.connection
-
-    register_exception_handlers(app)
-    _mount_presentation_routers(app)
-
-    @app.get("/", tags=["Status"])
-    def root() -> dict[str, str]:
-        return {"status": "online", "app": resolved_settings.app_title}
-
-    @app.get("/health", tags=["Status"])
-    def health() -> dict[str, str]:
-        return {"status": "healthy"}
-
-    return app
-
-
-__all__ = ["Container", "build_container", "create_app"]
+__all__ = ["Container", "build_container"]
