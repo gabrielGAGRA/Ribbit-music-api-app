@@ -40,6 +40,16 @@ class SQLiteAuditLogRepository(AuditLogRepositoryPort):
             for row in rows
         ]
 
+    def has_successful_catalog_sync(self) -> bool:
+        cursor = self.conn.execute(
+            """
+            SELECT 1 FROM audit_logs
+            WHERE status = 'success' AND event LIKE 'catalog.synced.v%'
+            LIMIT 1
+            """
+        )
+        return cursor.fetchone() is not None
+
 
 AuditLogRepository = SQLiteAuditLogRepository
 

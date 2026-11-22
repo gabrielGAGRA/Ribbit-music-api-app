@@ -65,17 +65,12 @@ def test_load_settings_defaults_and_env_overrides(
     for key in (
         "PASSWORD_HASH_ITERATIONS",
         "DATABASE_PATH",
-        "DATABASE_URL",
         "SPOTIFY_CLIENT_ID",
         "APP_TITLE",
         "APP_VERSION",
         "ENVIRONMENT",
         "LOG_LEVEL",
         "GOOGLE_APPLICATION_CREDENTIALS",
-        "GCP_PROJECT_ID",
-        "GOOGLE_CLOUD_PROJECT",
-        "FIRESTORE_ENABLED",
-        "FIRESTORE_DATABASE",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -85,16 +80,13 @@ def test_load_settings_defaults_and_env_overrides(
     assert default_settings.spotify_client_id is None
     assert default_settings.app_title == "Ribbit Platform API"
     assert default_settings.environment == "development"
-    assert default_settings.gcp_project_id is None
-    assert default_settings.firestore_enabled is False
 
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///custom_test.db")
+    monkeypatch.setenv("DATABASE_PATH", "custom_test.db")
     monkeypatch.setenv("PASSWORD_HASH_ITERATIONS", "15000")
     monkeypatch.setenv("SPOTIFY_CLIENT_ID", "sp_client")
     monkeypatch.setenv("APP_TITLE", "Custom Ribbit")
     monkeypatch.setenv("ENVIRONMENT", "staging")
     monkeypatch.setenv("LOG_LEVEL", "DEBUG")
-    monkeypatch.setenv("GCP_PROJECT_ID", "ribbit-proj-123")
 
     custom_settings = load_settings()
     assert custom_settings.database_path == "custom_test.db"
@@ -103,8 +95,6 @@ def test_load_settings_defaults_and_env_overrides(
     assert custom_settings.app_title == "Custom Ribbit"
     assert custom_settings.environment == "staging"
     assert custom_settings.log_level == "DEBUG"
-    assert custom_settings.gcp_project_id == "ribbit-proj-123"
-    assert custom_settings.firestore_enabled is True
 
 
 def test_load_settings_invalid_iterations_falls_back_to_default(
@@ -115,20 +105,24 @@ def test_load_settings_invalid_iterations_falls_back_to_default(
     assert settings.password_hash_iterations == 600_000
 
 
-def test_build_container_wires_all_use_cases_and_supports_getattr_shorthand() -> None:
+def test_build_container_wires_all_use_cases() -> None:
     conn = create_connection(":memory:")
     try:
         settings = Settings(database_path=":memory:", password_hash_iterations=1_000)
         container = build_container(settings=settings, connection=conn)
 
         assert container.connection is conn
-        assert container.register_user is container.register_user_use_case
-        assert container.authenticate_user is container.authenticate_user_use_case
-        assert container.get_jam_state is container.get_jam_state_use_case
+        assert container.http_session is not None
+        assert container.register_user_use_case is not None
+        assert container.authenticate_user_use_case is not None
+        assert container.get_jam_state_use_case is not None
 
         with pytest.raises(AttributeError):
-            _ = container.non_existent_component
+            _ = container.register_user  # type: ignore[attr-defined]
+        with pytest.raises(AttributeError):
+            _ = container.non_existent_component  # type: ignore[attr-defined]
     finally:
+        container.http_session.close()
         conn.close()
 
 
@@ -140,6 +134,7 @@ def test_build_container_creates_connection_when_not_provided() -> None:
         fk_status = container.connection.execute("PRAGMA foreign_keys;").fetchone()[0]
         assert fk_status == 1
     finally:
+        container.http_session.close()
         container.connection.close()
 
 
@@ -161,7 +156,9 @@ async def test_create_app_with_external_connection_does_not_close_it_on_shutdown
         app = create_app(settings=settings, connection=conn)
 
         async with app.router.lifespan_context(app):
-            assert app.state.connection is conn
+            assert app.state.container.connection is conn
+            assert not hasattr(app.state, "connection")
+            assert not hasattr(app.state, "settings")
 
         # Connection must still be usable after lifespan exits when passed externally
         cursor = conn.execute("SELECT 1")
@@ -179,34 +176,32 @@ def test_sync_catalog_on_first_startup_runs_only_before_first_sync() -> None:
     from app.application.use_cases.admin.sync_catalog_version import (
         SyncCatalogVersionResult,
     )
-    from app.composition import _sync_catalog_on_first_startup
+    from app.composition.app_factory import sync_catalog_on_first_startup
+    from app.infrastructure.repositories import SQLiteAuditLogRepository
     from app.infrastructure.repositories.seed import seed_database
 
     conn = create_connection(":memory:")
     try:
         seed_database(conn)
+        audit_log_repo = SQLiteAuditLogRepository(conn)
         sync_uc = MagicMock()
         sync_uc.execute.return_value = SyncCatalogVersionResult(
             synced=True, version=1, message="Local catalog updated to version 1."
         )
-        container = MagicMock(
-            connection=conn,
-            sync_catalog_version_use_case=sync_uc,
-        )
         logger = logging.getLogger("test_startup_sync")
 
-        _sync_catalog_on_first_startup(container, logger)
+        sync_catalog_on_first_startup(audit_log_repo, sync_uc, logger)
         sync_uc.execute.assert_called_once_with()
+        assert audit_log_repo.has_successful_catalog_sync() is False
 
-        from app.infrastructure.repositories import SQLiteAuditLogRepository
-
-        SQLiteAuditLogRepository(conn).log_event(
+        audit_log_repo.log_event(
             event="catalog.synced.v1",
             status="success",
         )
+        assert audit_log_repo.has_successful_catalog_sync() is True
 
         sync_uc.reset_mock()
-        _sync_catalog_on_first_startup(container, logger)
+        sync_catalog_on_first_startup(audit_log_repo, sync_uc, logger)
         sync_uc.execute.assert_not_called()
     finally:
         conn.close()
@@ -215,24 +210,22 @@ def test_sync_catalog_on_first_startup_runs_only_before_first_sync() -> None:
 def test_sync_catalog_on_first_startup_skips_gracefully_on_external_error() -> None:
     from unittest.mock import MagicMock
 
-    from app.composition import _sync_catalog_on_first_startup
+    from app.composition.app_factory import sync_catalog_on_first_startup
     from app.domain.exceptions import ExternalServiceError
+    from app.infrastructure.repositories import SQLiteAuditLogRepository
     from app.infrastructure.repositories.seed import seed_database
 
     conn = create_connection(":memory:")
     try:
         seed_database(conn)
+        audit_log_repo = SQLiteAuditLogRepository(conn)
         sync_uc = MagicMock()
         sync_uc.execute.side_effect = ExternalServiceError(
             "No GCS credentials", service_name="GCP_GCS"
         )
-        container = MagicMock(
-            connection=conn,
-            sync_catalog_version_use_case=sync_uc,
-        )
         logger = logging.getLogger("test_startup_sync")
 
-        _sync_catalog_on_first_startup(container, logger)
+        sync_catalog_on_first_startup(audit_log_repo, sync_uc, logger)
         sync_uc.execute.assert_called_once_with()
     finally:
         conn.close()
@@ -295,7 +288,6 @@ def test_load_settings_resolves_google_oauth_from_client_file(
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
     monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
     monkeypatch.delenv("GOOGLE_REDIRECT_URI", raising=False)
-    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
     monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
 
     oauth_file = Path(str(tmp_path)) / "client_secret.json"
@@ -324,7 +316,6 @@ def test_load_settings_resolves_google_oauth_from_client_file(
         settings.google_auth_uri == "https://accounts.google.com/o/oauth2/custom-auth"
     )
     assert settings.google_token_uri == "https://oauth2.googleapis.com/custom-token"
-    assert settings.gcp_project_id == "test-project-123"
 
     monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://localhost:4200/override/callback")
     override_settings = load_settings()
@@ -334,69 +325,22 @@ def test_load_settings_resolves_google_oauth_from_client_file(
     )
 
 
-def test_load_settings_does_not_enable_firestore_from_oauth_client_json(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory
-) -> None:
-    import json
-    from pathlib import Path
-
-    from app.config import load_settings
-
-    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
-    monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
-    monkeypatch.delenv("GOOGLE_CLIENT_SECRET", raising=False)
-    monkeypatch.delenv("GOOGLE_REDIRECT_URI", raising=False)
-    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
-    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
-    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
-    monkeypatch.delenv("FIRESTORE_ENABLED", raising=False)
-
-    oauth_file = Path(str(tmp_path)) / "client_secret.json"
-    oauth_file.write_text(
-        json.dumps(
-            {
-                "web": {
-                    "client_id": "oauth-client-id.apps.googleusercontent.com",
-                    "project_id": "oauth-only-project-id",
-                    "client_secret": "oauth-secret",
-                }
-            }
-        ),
-        encoding="utf-8",
-    )
-    monkeypatch.setenv("GOOGLE_OAUTH_CLIENT_FILE", str(oauth_file))
-
-    settings = load_settings()
-    assert settings.google_client_id == "oauth-client-id.apps.googleusercontent.com"
-    assert settings.gcp_project_id == "oauth-only-project-id"
-    assert settings.firestore_enabled is False
-
-
-def test_configure_system_ca_bundle_handles_corrupt_file_and_env_override(
+def test_load_settings_clears_localhost_emulator_when_service_account_exists(
     monkeypatch: pytest.MonkeyPatch, tmp_path: object
 ) -> None:
+    import os
     from pathlib import Path
 
-    from app.config import _configure_system_ca_bundle
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *args, **kwargs: None)
+    creds_file = Path(str(tmp_path)) / "gcp_credentials.json"
+    creds_file.write_text('{"type": "service_account"}', encoding="utf-8")
 
-    monkeypatch.setenv("REQUESTS_CA_BUNDLE", "/custom/ca.pem")
-    _configure_system_ca_bundle()
+    monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", str(creds_file))
+    monkeypatch.setenv("STORAGE_EMULATOR_HOST", "http://localhost:4443")
 
-    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
-    monkeypatch.delenv("SSL_CERT_FILE", raising=False)
-    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    load_settings()
+    assert os.getenv("STORAGE_EMULATOR_HOST") is None
 
-    bundle_dir = Path(str(tmp_path)) / "ribbit"
-    bundle_dir.mkdir(parents=True, exist_ok=True)
-    bundle_path = bundle_dir / "ribbit_combined_ca.pem"
-    bundle_path.write_bytes(b"\xff\xfe\x00\x80")
-
-    _configure_system_ca_bundle()
-    assert bundle_path.exists()
-    content_1 = bundle_path.read_text(encoding="utf-8")
-    assert "BEGIN CERTIFICATE" in content_1
-
-    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
-    _configure_system_ca_bundle()
-    content_2 = bundle_path.read_text(encoding="utf-8")
-    assert content_1 == content_2
+    monkeypatch.setenv("STORAGE_EMULATOR_HOST", "http://gcs-emulator:4443")
+    load_settings()
+    assert os.getenv("STORAGE_EMULATOR_HOST") == "http://gcs-emulator:4443"
