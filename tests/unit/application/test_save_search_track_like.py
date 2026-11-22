@@ -18,7 +18,7 @@ from app.application.use_cases.review.save_search_track_like import (
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
-    ForbiddenError,
+    PermissionDeniedError,
 )
 from app.domain.models import Interaction, Playlist, Track, User
 
@@ -149,7 +149,7 @@ def test_save_search_track_like_rejects_non_owned_playlist() -> None:
         playlist_repo=playlist_repo,
     )
 
-    with pytest.raises(ForbiddenError, match="does not belong to this user"):
+    with pytest.raises(PermissionDeniedError, match="does not belong to this user"):
         use_case.execute(user_id_or_cmd=1, track_id=10, playlist_id=99)
 
 

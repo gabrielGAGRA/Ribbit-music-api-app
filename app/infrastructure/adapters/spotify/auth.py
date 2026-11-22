@@ -14,7 +14,7 @@ lazy from collections.abc import Callable, Mapping, Sequence
 import niquests
 
 from app.application.ports.services.spotify import SpotifyAuthPort
-from app.domain.exceptions import SpotifyAuthError, SpotifyError, SpotifyForbiddenError
+from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters.spotify.mappers import map_tokens
 lazy from app.application.dtos.spotify_dtos import SpotifyTokens
 lazy from app.infrastructure.adapters.spotify.credentials import SpotifyCredentials
@@ -91,8 +91,10 @@ class SpotifyAuth(SpotifyAuthPort):
             }
             if self.mode is SpotifyAuthMode.PKCE:
                 if self._code_verifier is None:
-                    raise SpotifyAuthError(
-                        "code_verifier missing: call get_authorize_url first"
+                    raise ExternalServiceError(
+                        "code_verifier missing: call get_authorize_url first",
+                        service_name="Spotify",
+                        details={"error_kind": "auth"},
                     )
                 data["client_id"] = self._credentials.client_id
                 data["code_verifier"] = self._code_verifier
@@ -101,8 +103,10 @@ class SpotifyAuth(SpotifyAuthPort):
     def refresh_access_token(self) -> SpotifyTokens:
         with self._lock:
             if self._refresh_token is None:
-                raise SpotifyAuthError(
-                    "User authorization required: no refresh_token available"
+                raise ExternalServiceError(
+                    "User authorization required: no refresh_token available",
+                    service_name="Spotify",
+                    details={"error_kind": "auth"},
                 )
             data = {"grant_type": "refresh_token", "refresh_token": self._refresh_token}
             if self.mode is SpotifyAuthMode.PKCE:
@@ -123,8 +127,10 @@ class SpotifyAuth(SpotifyAuthPort):
             if self.mode is SpotifyAuthMode.CLIENT_CREDENTIALS:
                 return self.get_client_credentials_token().access_token
             if self._refresh_token is None:
-                raise SpotifyAuthError(
-                    "User authorization required: call exchange_code first"
+                raise ExternalServiceError(
+                    "User authorization required: call exchange_code first",
+                    service_name="Spotify",
+                    details={"error_kind": "auth"},
                 )
             return self.refresh_access_token().access_token
 
@@ -134,14 +140,16 @@ class SpotifyAuth(SpotifyAuthPort):
             if not scopes:
                 return
             if self.mode is SpotifyAuthMode.CLIENT_CREDENTIALS:
-                raise SpotifyForbiddenError(
+                raise ExternalServiceError(
                     "Endpoint needs a user token; client credentials carry no scopes",
-                    details={"scopes": sorted(scopes)},
+                    service_name="Spotify",
+                    details={"scopes": sorted(scopes), "error_kind": "forbidden"},
                 )
             if self._granted_scopes is not None and not scopes & self._granted_scopes:
-                raise SpotifyForbiddenError(
+                raise ExternalServiceError(
                     "None of the required scopes was granted",
-                    details={"scopes": sorted(scopes)},
+                    service_name="Spotify",
+                    details={"scopes": sorted(scopes), "error_kind": "forbidden"},
                 )
 
     def invalidate_access_token(self) -> None:
@@ -164,6 +172,32 @@ class SpotifyAuth(SpotifyAuthPort):
             if refresh_token is not None:
                 self._refresh_token = refresh_token
 
+    @property
+    def session(self) -> niquests.Session:
+        """Returns the underlying HTTP session."""
+        return self._session
+
+    def for_user_tokens(
+        self,
+        access_token: str | None = None,
+        refresh_token: str | None = None,
+    ) -> SpotifyAuth:
+        """Creates a user-scoped SpotifyAuth inheriting client credentials and session."""
+        user_creds = SpotifyCredentials(
+            client_id=self._credentials.client_id,
+            client_secret=self._credentials.client_secret,
+            redirect_uri=self._credentials.redirect_uri,
+            refresh_token=refresh_token or self._credentials.refresh_token,
+        )
+        user_auth = SpotifyAuth(user_creds, self._session, clock=self._clock)
+        if access_token:
+            user_auth.seed_tokens(
+                access_token,
+                expires_in_seconds=3600.0,
+                refresh_token=refresh_token,
+            )
+        return user_auth
+
     def clear_tokens(self) -> None:
         with self._lock:
             self._access_token = None
@@ -173,8 +207,10 @@ class SpotifyAuth(SpotifyAuthPort):
 
     def _require_redirect_uri(self) -> str:
         if self._credentials.redirect_uri is None:
-            raise SpotifyAuthError(
-                "redirect_uri is required for the authorization flow"
+            raise ExternalServiceError(
+                "redirect_uri is required for the authorization flow",
+                service_name="Spotify",
+                details={"error_kind": "auth"},
             )
         return self._credentials.redirect_uri
 
@@ -194,16 +230,18 @@ class SpotifyAuth(SpotifyAuthPort):
                 timeout=HTTP_TIMEOUT_SECONDS,
             )
         except niquests.RequestException as exc:
-            raise SpotifyError(
-                f"Failed to reach Spotify token endpoint: {exc}"
+            raise ExternalServiceError(
+                f"Failed to reach Spotify token endpoint: {exc}",
+                service_name="Spotify",
             ) from exc
         if response.status_code != HTTPStatus.OK:
             self._raise_token_error(response)
         try:
             payload = response.json()
         except ValueError as exc:
-            raise SpotifyError(
-                "Spotify token endpoint returned an unexpected payload"
+            raise ExternalServiceError(
+                "Spotify token endpoint returned an unexpected payload",
+                service_name="Spotify",
             ) from exc
         tokens = map_tokens(payload)
         self._store(tokens)
@@ -216,11 +254,14 @@ class SpotifyAuth(SpotifyAuthPort):
             error = None
         if response.status_code == HTTPStatus.BAD_REQUEST and error == "invalid_grant":
             self.clear_tokens()
-            raise SpotifyAuthError(
-                "invalid_grant: refresh_token expired or revoked; re-authorize the user"
+            raise ExternalServiceError(
+                "invalid_grant: refresh_token expired or revoked; re-authorize the user",
+                service_name="Spotify",
+                details={"error_kind": "auth"},
             )
-        raise SpotifyError(
+        raise ExternalServiceError(
             f"Spotify token endpoint returned status {response.status_code}",
+            service_name="Spotify",
             details={"status_code": response.status_code, "error": error},
         )
 

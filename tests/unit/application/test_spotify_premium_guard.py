@@ -9,12 +9,7 @@ from app.application.use_cases.spotify.premium_guard import (
     execute_with_spotify_premium,
     require_spotify_premium,
 )
-from app.domain.exceptions import (
-    SpotifyAuthError,
-    SpotifyConnectionRequiredError,
-    SpotifyForbiddenError,
-    SpotifyPremiumRequiredError,
-)
+from app.domain.exceptions import ExternalServiceError, PermissionDeniedError
 from app.domain.models.user import User
 from app.presentation.exception_handlers import resolve_status_code
 
@@ -35,13 +30,14 @@ def _user(*, spotify_id: str | None = "spot_7", spotify_premium: bool) -> User:
 def test_require_spotify_premium_allows_premium_and_blocks_free() -> None:
     require_spotify_premium(_user(spotify_premium=True))
 
-    with pytest.raises(SpotifyPremiumRequiredError) as exc_info:
+    with pytest.raises(PermissionDeniedError) as exc_info:
         require_spotify_premium(_user(spotify_premium=False))
     assert resolve_status_code(exc_info.value) == 403
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
 
 
 def test_require_spotify_premium_raises_connection_required_when_unlinked() -> None:
-    with pytest.raises(SpotifyConnectionRequiredError) as exc_info:
+    with pytest.raises(PermissionDeniedError) as exc_info:
         require_spotify_premium(_user(spotify_id=None, spotify_premium=False))
     assert resolve_status_code(exc_info.value) == 403
     assert exc_info.value.details.get("rule_name") == "spotify_connection_required"
@@ -53,9 +49,12 @@ def test_execute_with_spotify_premium_downgrades_on_premium_required_error() -> 
     user_repo.save.side_effect = lambda u: u
 
     def _failing_op() -> None:
-        raise SpotifyPremiumRequiredError("Player command failed: Premium required")
+        raise PermissionDeniedError(
+            "Player command failed: Premium required",
+            details={"rule_name": "spotify_premium_required"},
+        )
 
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError):
         execute_with_spotify_premium(user_repo, user, _failing_op)
 
     assert user.spotify_premium is False
@@ -67,16 +66,30 @@ def test_execute_with_spotify_premium_does_not_downgrade_on_other_errors() -> No
     user_repo = MagicMock(spec=UserRepositoryPort)
 
     def _scope_error() -> None:
-        raise SpotifyForbiddenError("Missing scope")
+        raise ExternalServiceError(
+            "Missing scope",
+            service_name="Spotify",
+            details={"error_kind": "forbidden"},
+        )
 
-    with pytest.raises(SpotifyForbiddenError):
+    with pytest.raises(ExternalServiceError):
         execute_with_spotify_premium(user_repo, user, _scope_error)
 
     def _auth_error() -> None:
-        raise SpotifyAuthError("Expired token")
+        raise ExternalServiceError(
+            "Expired token",
+            service_name="Spotify",
+            details={"error_kind": "auth"},
+        )
 
-    with pytest.raises(SpotifyAuthError):
+    with pytest.raises(ExternalServiceError):
         execute_with_spotify_premium(user_repo, user, _auth_error)
+
+    def _other_permission_error() -> None:
+        raise PermissionDeniedError("Other denial", details={"rule_name": "other"})
+
+    with pytest.raises(PermissionDeniedError):
+        execute_with_spotify_premium(user_repo, user, _other_permission_error)
 
     assert user.spotify_premium is True
     user_repo.save.assert_not_called()

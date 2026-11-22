@@ -6,6 +6,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI, Request, status
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.domain.exceptions import (
     AuthenticationRequiredError,
@@ -16,12 +17,10 @@ from app.domain.exceptions import (
     EntityNotFoundError,
     ExternalServiceError,
     PermissionDeniedError,
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
 )
 from app.presentation.exception_handlers import (
-    ERROR_STATUS_MAP,
     domain_error_handler,
+    http_exception_handler,
     register_exception_handlers,
     resolve_status_code,
 )
@@ -43,11 +42,15 @@ from app.presentation.exception_handlers import (
             status.HTTP_403_FORBIDDEN,
         ),
         (
-            SpotifyConnectionRequiredError("Link required"),
+            PermissionDeniedError(
+                "Link required", details={"rule_name": "spotify_connection_required"}
+            ),
             status.HTTP_403_FORBIDDEN,
         ),
         (
-            SpotifyPremiumRequiredError("Premium required"),
+            PermissionDeniedError(
+                "Premium required", details={"rule_name": "spotify_premium_required"}
+            ),
             status.HTTP_403_FORBIDDEN,
         ),
         (
@@ -144,7 +147,8 @@ def test_domain_error_handler_maps_custom_error_subclasses(
     assert response.status_code == expected_status
     assert payload["error"] == expected_error_name
     assert payload["message"] == exc.message
-    assert payload["details"] == exc.details
+    expected_details = {} if isinstance(exc, ExternalServiceError) else exc.details
+    assert payload["details"] == expected_details
 
 
 def test_domain_error_handler_fallback_for_non_custom_exception() -> None:
@@ -157,18 +161,38 @@ def test_domain_error_handler_fallback_for_non_custom_exception() -> None:
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert payload == {
         "error": "InternalServerError",
-        "message": "Unexpected crash",
+        "message": "An unexpected error occurred.",
+        "details": {},
     }
 
 
-def test_register_exception_handlers_registers_custom_error_and_all_mapped_types() -> (
+def test_http_exception_handler_formats_envelope() -> None:
+    request = MagicMock(spec=Request)
+    exc = StarletteHTTPException(
+        status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+        detail="Playlist images must be 5 MB or smaller.",
+    )
+
+    response = asyncio.run(http_exception_handler(request, exc))
+    payload = json.loads(bytes(response.body).decode("utf-8"))
+
+    assert response.status_code == status.HTTP_413_CONTENT_TOO_LARGE
+    assert payload == {
+        "error": "HTTPException",
+        "message": "Playlist images must be 5 MB or smaller.",
+        "details": {},
+    }
+
+
+def test_register_exception_handlers_registers_custom_error_and_http_exception() -> (
     None
 ):
     app = MagicMock(spec=FastAPI)
 
     register_exception_handlers(app)
 
-    expected_classes = [CustomError, *ERROR_STATUS_MAP.keys()]
-    assert app.add_exception_handler.call_count == len(expected_classes)
-    for exc_cls in expected_classes:
-        app.add_exception_handler.assert_any_call(exc_cls, domain_error_handler)
+    assert app.add_exception_handler.call_count == 2
+    app.add_exception_handler.assert_any_call(CustomError, domain_error_handler)
+    app.add_exception_handler.assert_any_call(
+        StarletteHTTPException, http_exception_handler
+    )
