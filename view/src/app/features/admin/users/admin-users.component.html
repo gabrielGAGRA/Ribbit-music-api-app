@@ -86,9 +86,9 @@
             (change)="updateAccessUserFilter($event)"
           >
             <option value="all">Todos os usuários</option>
-            @for (user of adminState.usersWithPlans(); track user.user_id) {
-              @if (user.user_id !== null) {
-                <option [value]="user.user_id">{{ user.display_name }} ({{ user.email }})</option>
+            @for (user of adminState.usersWithPlans(); track user.userId) {
+              @if (user.userId !== null) {
+                <option [value]="user.userId">{{ user.displayName }} ({{ user.email }})</option>
               }
             }
           </select>
@@ -138,12 +138,12 @@
             </tr>
           </thead>
           <tbody>
-            @for (user of filteredUsers(); track user.user_id) {
+            @for (user of filteredUsers(); track user.userId) {
               <tr>
                 <th scope="row">
                   <div class="user-cell">
-                    <strong>{{ user.display_name }}</strong>
-                    <small>#{{ user.user_id }}</small>
+                    <strong>{{ user.displayName }}</strong>
+                    <small>#{{ user.userId }}</small>
                   </div>
                 </th>
                 <td>{{ user.email }}</td>
@@ -155,26 +155,26 @@
                   }
                 </td>
                 <td>
-                  <span class="plan-chip" [class.paid]="user.plan_name !== 'Free'">
-                    {{ user.plan_name }}
+                  <span class="plan-chip" [class.paid]="user.planName !== 'Free'">
+                    {{ user.planName }}
                   </span>
                 </td>
                 <td>
-                  @if (user.is_admin) {
+                  @if (user.isAdmin) {
                     <span class="role-badge admin-role">Administrador</span>
                   } @else {
                     <span class="role-badge listener-role">Ouvinte</span>
                   }
                 </td>
                 <td>
-                  @if (!user.is_admin) {
+                  @if (!user.isAdmin) {
                     <button
                       type="button"
                       class="outline-button small-btn"
-                      [disabled]="updatingUserId() === user.user_id"
-                      (click)="promoteUser(user.user_id)"
+                      [disabled]="updatingUserId() === user.userId"
+                      (click)="promoteUser(user.userId)"
                     >
-                      {{ updatingUserId() === user.user_id ? 'Promovendo...' : 'Promover a Admin' }}
+                      {{ updatingUserId() === user.userId ? 'Promovendo...' : 'Promover a Admin' }}
                     </button>
                   } @else {
                     <span class="muted">Acesso ativo</span>
@@ -314,12 +314,12 @@
             </tr>
           </thead>
           <tbody>
-            @for (admin of filteredAdministrators(); track admin.user_id) {
+            @for (admin of filteredAdministrators(); track admin.userId) {
               <tr>
                 <th scope="row">
                   <div class="user-cell">
-                    <strong>{{ admin.display_name }}</strong>
-                    <small>#{{ admin.user_id }}</small>
+                    <strong>{{ admin.displayName }}</strong>
+                    <small>#{{ admin.userId }}</small>
                   </div>
                 </th>
                 <td>{{ admin.email }}</td>
@@ -331,7 +331,7 @@
                   }
                 </td>
                 <td>
-                  @if (isCurrentSessionUser(admin.user_id)) {
+                  @if (isCurrentSessionUser(admin.userId)) {
                     <span class="role-badge self-badge">Você (sessão atual)</span>
                   } @else {
                     <span class="role-badge admin-role">Credencial ativa</span>
@@ -341,10 +341,10 @@
                   <button
                     type="button"
                     class="revoke-btn"
-                    [disabled]="updatingUserId() === admin.user_id"
-                    (click)="revokeAdmin(admin.user_id)"
+                    [disabled]="updatingUserId() === admin.userId"
+                    (click)="revokeAdmin(admin.userId)"
                   >
-                    {{ updatingUserId() === admin.user_id ? 'Revogando...' : 'Revogar acesso' }}
+                    {{ updatingUserId() === admin.userId ? 'Revogando...' : 'Revogar acesso' }}
                   </button>
                 </td>
               </tr>
@@ -385,26 +385,26 @@
             </tr>
           </thead>
           <tbody>
-            @for (entry of filteredAccessHistory(); track entry.access_id) {
+            @for (entry of filteredAccessHistory(); track entry.accessId) {
               <tr>
-                <td>{{ formatAccessTimestamp(entry.accessed_at) }}</td>
+                <td>{{ formatAccessTimestamp(entry.accessedAt) }}</td>
                 <td>
                   <div class="user-cell">
-                    <strong>{{ entry.user_display_name }}</strong>
-                    <small>{{ entry.user_email }}</small>
+                    <strong>{{ entry.userDisplayName }}</strong>
+                    <small>{{ entry.userEmail }}</small>
                   </div>
                 </td>
                 <td>
                   <div class="user-cell">
-                    <strong>{{ entry.track_title }}</strong>
-                    <small>{{ entry.track_artist }} · {{ entry.track_genre }}</small>
+                    <strong>{{ entry.trackTitle }}</strong>
+                    <small>{{ entry.trackArtist }} · {{ entry.trackGenre }}</small>
                   </div>
                 </td>
                 <td>
                   <span class="plan-chip">{{ entry.source }}</span>
                 </td>
                 <td>
-                  @if (entry.track_is_deleted) {
+                  @if (entry.trackIsDeleted) {
                     <span class="status-badge deleted-track">Removida (Soft Delete)</span>
                   } @else {
                     <span class="status-badge active-track">Ativa</span>

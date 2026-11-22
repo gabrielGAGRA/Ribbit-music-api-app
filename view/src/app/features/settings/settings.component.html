@@ -32,7 +32,7 @@
               type="text"
               class="settings-input"
               [value]="nameDraft()"
-              (input)="onNameInput($event)"
+              (input)="updateNameDraft($event)"
               placeholder="Seu nome"
               (keyup.enter)="saveName()"
               (keyup.escape)="cancelEditingName()"
@@ -90,7 +90,7 @@
           type="password"
           class="settings-input"
           [value]="currentPassword()"
-          (input)="onCurrentPasswordInput($event)"
+          (input)="updateCurrentPasswordDraft($event)"
           placeholder="Digite sua senha atual"
           autocomplete="current-password"
         />
@@ -103,7 +103,7 @@
           type="password"
           class="settings-input"
           [value]="newPassword()"
-          (input)="onNewPasswordInput($event)"
+          (input)="updateNewPasswordDraft($event)"
           placeholder="Nova senha (mínimo 6 caracteres)"
           autocomplete="new-password"
         />

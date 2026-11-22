@@ -1,11 +1,11 @@
 <div class="secondary-page explore-page">
-  <form class="explore-search" (submit)="onSearchSubmit($event)">
+  <form class="explore-search" (submit)="submitSearch($event)">
     <label class="search-field">
       <app-icon name="search" />
       <input
         placeholder="Faixa, artista, álbum ou gênero..."
         [value]="query()"
-        (input)="onQueryInput($event)"
+        (input)="updateSearchQuery($event)"
       />
       @if (hasActiveSearch()) {
         <button type="button" aria-label="Limpar busca" (click)="clearQuery()">
@@ -41,7 +41,7 @@
         }
         <select
           [value]="state.searchSortBy()"
-          (change)="onSearchSortChange($event)"
+          (change)="updateSearchSort($event)"
           aria-label="Ordenar resultados da busca"
         >
           <option value="default">Relevância</option>
@@ -51,7 +51,7 @@
       </div>
     </div>
     <div class="panel search-results">
-      @for (item of filteredSongs(); track item.title) {
+      @for (item of filteredSongs(); track item.trackId ?? item.title) {
         <div class="song-row">
           <button
             class="song-cover"
@@ -64,13 +64,9 @@
             <strong>{{ item.title }}</strong>
             <span>
               {{ item.artist }}
-              @if (
-                (item.reviewCount ?? 0) > 0 &&
-                item.averageRating !== null &&
-                item.averageRating !== undefined
-              ) {
+              @if (hasTrackRating(item)) {
                 <span class="track-rating-badge">
-                  ★ {{ item.averageRating.toFixed(1) }} ({{ item.reviewCount }})
+                  ★ {{ item.averageRating!.toFixed(1) }} ({{ item.reviewCount }})
                 </span>
               }
             </span>
@@ -104,7 +100,11 @@
         <h2>Reviews da comunidade</h2>
         <span>Sobre as músicas do catálogo</span>
       </div>
-      <select [value]="reviewSort()" (change)="onSortChange($event)" aria-label="Ordenar reviews">
+      <select
+        [value]="reviewSort()"
+        (change)="updateReviewSort($event)"
+        aria-label="Ordenar reviews"
+      >
         <option value="recent">Mais recentes</option>
         <option value="likes">Mais curtidas</option>
         <option value="rating_desc">Maiores notas</option>
@@ -118,10 +118,10 @@
         @let fallback = fallbackReviewSong(idx);
         <article class="review-card">
           <div class="review-song">
-            <img [src]="review.songImage ?? fallback.image" alt="" />
+            <img [src]="review.songImage ?? fallback?.image ?? ''" alt="" />
             <span>
-              <strong>{{ review.songTitle ?? fallback.title }}</strong>
-              <small>{{ review.songArtist ?? fallback.artist }}</small>
+              <strong>{{ review.songTitle ?? fallback?.title ?? '' }}</strong>
+              <small>{{ review.songArtist ?? fallback?.artist ?? '' }}</small>
             </span>
           </div>
           <div class="review-author">

@@ -7,7 +7,7 @@
       <strong>{{ totalCount() }}</strong>
       <span>{{ subtitle() }}</span>
     </div>
-    <button class="outline-button" (click)="onSummaryAction()">
+    <button class="outline-button" (click)="runSummaryAction()">
       <app-icon [name]="kind() === 'reject' ? 'repeat' : 'play'" [size]="16" />
       {{ kind() === 'reject' ? 'Revisar escolhas' : 'Ouvir coleção' }}
     </button>
@@ -20,16 +20,20 @@
     </div>
     <label class="mini-search">
       <app-icon name="search" [size]="16" />
-      <input [value]="query()" (input)="onSearchInput($event)" placeholder="Buscar nesta lista" />
+      <input
+        [value]="query()"
+        (input)="updateSearchQuery($event)"
+        placeholder="Buscar nesta lista"
+      />
     </label>
   </div>
 
   <div class="panel collection-list">
-    @for (item of filteredItems(); track item.title) {
+    @for (item of filteredItems(); track item.trackId ?? item.title) {
       <div class="song-row">
         <button
           class="song-cover"
-          (click)="onSongClick(item)"
+          (click)="openSongInDiscovery(item)"
           [attr.aria-label]="'Descobrir ' + item.title"
         >
           <img [src]="item.image" [alt]="'Capa de ' + item.title" />
@@ -48,7 +52,7 @@
             [attr.aria-label]="
               kind() === 'reject' ? 'Dar uma segunda chance' : 'Remover da coleção'
             "
-            (click)="onItemAction(item)"
+            (click)="runItemAction(item)"
           >
             <app-icon [name]="kind() === 'reject' ? 'undo' : 'close'" [size]="16" />
           </button>

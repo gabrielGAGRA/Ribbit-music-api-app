@@ -2,6 +2,7 @@ import type {
   AnnualStatsApiDto,
   CommunityReview,
   DecisionKind,
+  FamilyMember,
   JamQueueTrack,
   JamState,
   JamStateApiDto,
@@ -16,6 +17,7 @@ import type {
   SubscriptionPlan,
   SwipeApiAction,
   TrackApiDto,
+  UserApiDto,
 } from '@ribbit/shared-types';
 
 const FALLBACK_COVERS: readonly string[] = [
@@ -53,7 +55,7 @@ export function resolveCoverUrl(rawUrl: string | null | undefined, seed: number)
     return rawUrl;
   }
   const idx = Math.abs(seed) % FALLBACK_COVERS.length;
-  return FALLBACK_COVERS[idx] ?? FALLBACK_COVERS[0]!;
+  return FALLBACK_COVERS[idx] ?? FALLBACK_COVERS[0] ?? '';
 }
 
 /** Resolves an audio preview URL, omitting unplayable seed placeholders. */
@@ -231,15 +233,32 @@ function formatRelativeAge(isoDate: string | null | undefined): {
   return { age: `há ${diffDays} d`, timestamp: parsed };
 }
 
-function computeInitials(name: string): string {
+/** Maps a backend UserApiDto into a camelCase FamilyMember domain model. */
+export function mapFamilyMemberDto(dto: UserApiDto): FamilyMember {
+  return {
+    userId: dto.user_id,
+    email: dto.email,
+    displayName: dto.display_name,
+    age: dto.age ?? null,
+    planId: dto.plan_id,
+    birthDate: dto.birth_date ?? null,
+    primaryAccountId: dto.primary_account_id ?? null,
+    blockedGenres: dto.blocked_genres ?? [],
+    blockedArtists: dto.blocked_artists ?? [],
+    isAdmin: dto.is_admin,
+  };
+}
+
+/** Derives uppercase 2-character initials from a display name. */
+export function computeInitials(name: string, fallback = 'RB'): string {
   const parts = name
     .trim()
     .split(/\s+/)
     .filter((part) => part.length > 0);
   if (parts.length >= 2) {
-    return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
+    return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase();
   }
-  return name.slice(0, 2).toUpperCase() || 'RB';
+  return name.slice(0, 2).toUpperCase() || fallback;
 }
 
 function resolveReviewAuthor(dto: ReviewApiDto, isOwn: boolean, currentUserName?: string): string {
@@ -340,7 +359,8 @@ export function mapJamStateDto(options: {
     accumulatedMinutes: Math.round(jam.accumulated_duration_seconds / 60),
     superlikesCount: jam.superlikes_used,
     superlikesLimit: jam.max_superlikes,
-    deckSource: (jam.deck_source as 'livre' | 'curtidas' | 'playlist') || 'livre',
+    deckSource:
+      jam.deck_source === 'curtidas' || jam.deck_source === 'playlist' ? jam.deck_source : 'livre',
     ...(jam.source_playlist_id != null ? { sourcePlaylistId: jam.source_playlist_id } : {}),
     ...(currentTrack ? { currentTrack } : {}),
     queueItems,

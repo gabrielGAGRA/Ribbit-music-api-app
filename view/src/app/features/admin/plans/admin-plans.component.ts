@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
-import type { PlanApiDto } from '@ribbit/shared-types';
-import { IconComponent } from '../../shared/icon.component';
-import { AdminStateService } from './admin-state.service';
+import { readInputValue } from '@shared/dom-event-values';
+import { IconComponent } from '@shared/icon.component';
+import type { AdminPlanItem } from '../admin-mappers';
+import { AdminStateService } from '../admin-state.service';
 
 const BRL_FORMATTER = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -32,15 +33,15 @@ export class AdminPlansComponent {
   }
 
   protected subscriberCount(planName: string): number {
-    return this.adminState.executiveDashboard().users_by_plan[planName] ?? 0;
+    return this.adminState.executiveDashboard().usersByPlan[planName] ?? 0;
   }
 
-  protected startEditing(plan: PlanApiDto): void {
+  protected startEditing(plan: AdminPlanItem): void {
     this.formError.set('');
-    this.editingPlanId.set(plan.plan_id);
+    this.editingPlanId.set(plan.planId);
     this.nameDraft.set(plan.name);
-    this.priceDraft.set(String(plan.monthly_price));
-    this.maxProfilesDraft.set(String(plan.max_profiles));
+    this.priceDraft.set(String(plan.monthlyPrice));
+    this.maxProfilesDraft.set(String(plan.maxProfiles));
   }
 
   protected cancelEditing(): void {
@@ -49,18 +50,15 @@ export class AdminPlansComponent {
   }
 
   protected updateNameDraft(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.nameDraft.set(target.value);
+    this.nameDraft.set(readInputValue(event));
   }
 
   protected updatePriceDraft(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.priceDraft.set(target.value);
+    this.priceDraft.set(readInputValue(event));
   }
 
   protected updateMaxProfilesDraft(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.maxProfilesDraft.set(target.value);
+    this.maxProfilesDraft.set(readInputValue(event));
   }
 
   protected savePlan(event: Event, planId: number): void {
@@ -83,11 +81,9 @@ export class AdminPlansComponent {
           this.isSaving.set(false);
           this.editingPlanId.set(null);
         },
-        error: (error: unknown) => {
+        error: (error: Error) => {
           this.isSaving.set(false);
-          this.formError.set(
-            error instanceof Error ? error.message : 'Erro ao atualizar plano de assinatura.',
-          );
+          this.formError.set(error.message);
         },
       });
   }

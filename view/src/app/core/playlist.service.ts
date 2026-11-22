@@ -9,7 +9,7 @@ import type {
   Playlist,
   PlaylistApiDto,
 } from '@ribbit/shared-types';
-import { mapPlaylistDtoToPlaylist } from '../api-mappers';
+import { mapPlaylistDtoToPlaylist } from './api-mappers';
 
 /** Manages user playlists, contextual deck generation, and Spotify export via /api/playlists. */
 @Injectable({ providedIn: 'root' })

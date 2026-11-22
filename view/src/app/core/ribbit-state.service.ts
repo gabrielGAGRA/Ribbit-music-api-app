@@ -36,17 +36,26 @@ import {
   writeAuthToken,
   writeStoredUser,
 } from './auth-token.storage';
-import { MOCK_REVIEWS } from './mocks/reviews.mock';
-import { MOCK_SONGS } from './mocks/songs.mock';
-import { PlanService } from './services/plan.service';
-import { PlaylistService } from './services/playlist.service';
-import { SongService } from './services/song.service';
-import type { ReviewSortOption } from './services/song.service';
+import { PlanService } from './plan.service';
+import { PlaylistService } from './playlist.service';
+import { SongService } from './song.service';
+import type { ReviewSortOption } from './song.service';
 import { JamService } from '../features/jams/jam.service';
 import { ProfileApiService } from '../features/profile/profile-api.service';
 
-export const INITIAL_SONGS: readonly Song[] = MOCK_SONGS;
-export const INITIAL_REVIEWS: readonly CommunityReview[] = MOCK_REVIEWS;
+export const INITIAL_SONGS: readonly Song[] = [];
+export const INITIAL_REVIEWS: readonly CommunityReview[] = [];
+
+const EMPTY_SONG: Song = {
+  title: '',
+  artist: '',
+  genre: '',
+  time: '0:00',
+  image: '',
+  album: '',
+  year: '',
+  match: 0,
+};
 
 function getStoredGenres(key: string, fallback: readonly string[]): readonly string[] {
   try {
@@ -231,7 +240,7 @@ export class RibbitStateService implements OnDestroy {
     }
     const list = this.songs();
     const idx = this.currentIndex();
-    return list[idx % list.length] ?? INITIAL_SONGS[0]!;
+    return list.length > 0 ? (list[idx % list.length] ?? EMPTY_SONG) : EMPTY_SONG;
   });
 
   readonly detailsTargetSong = computed<Song>(
@@ -420,11 +429,11 @@ export class RibbitStateService implements OnDestroy {
     forkJoin({
       blocked: this.profileApi
         .listBlockedGenres()
-        .pipe(catchError(() => of(null as readonly string[] | null))),
+        .pipe(catchError(() => of<readonly string[] | null>(null))),
       favorites: this.profileApi
         .getFavoriteGenres()
-        .pipe(catchError(() => of(null as readonly string[] | null))),
-      theme: this.profileApi.getTheme().pipe(catchError(() => of(null as string | null))),
+        .pipe(catchError(() => of<readonly string[] | null>(null))),
+      theme: this.profileApi.getTheme().pipe(catchError(() => of<string | null>(null))),
     }).subscribe(({ blocked, favorites, theme }) => {
       if (blocked !== null) {
         this.blockedGenres.set([...blocked]);
@@ -481,7 +490,7 @@ export class RibbitStateService implements OnDestroy {
     forkJoin({
       recent: this.songService
         .getRecentInteractedTracks(100)
-        .pipe(catchError(() => of([] as readonly RecentInteractedTrackApiDto[]))),
+        .pipe(catchError(() => of<readonly RecentInteractedTrackApiDto[]>([]))),
       allHistory: this.profileApi.listHistory().pipe(catchError(() => of([]))),
     }).subscribe(({ recent, allHistory }) => {
       this.applyInteractedHistory(recent, allHistory.length);
@@ -912,10 +921,11 @@ export class RibbitStateService implements OnDestroy {
       );
     }
 
-    if (playlist.playlistId && song.trackId !== undefined && readAuthToken()) {
-      this.playlistService.addTrackToPlaylist(playlist.playlistId, song.trackId).subscribe({
+    const playlistId = playlist.playlistId;
+    if (playlistId && song.trackId !== undefined && readAuthToken()) {
+      this.playlistService.addTrackToPlaylist(playlistId, song.trackId).subscribe({
         next: () => {
-          this.refreshSinglePlaylist(playlist.playlistId!);
+          this.refreshSinglePlaylist(playlistId);
           this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
         },
         error: (err: unknown) => {
@@ -1063,13 +1073,14 @@ export class RibbitStateService implements OnDestroy {
   /** Registers a skip vote on the active Jam track via POST /api/jams/{id}/skip-vote. */
   voteSkipJam(): void {
     const jam = this.jamState();
-    if (!jam.jamId) {
+    const jamId = jam.jamId;
+    if (!jamId) {
       this.jamState.set({ ...jam, votes: jam.votes + 1 });
       this.notify('Seu voto para pular foi registrado.');
       return;
     }
     const activeTrackId = jam.currentTrack?.trackId;
-    this.jamService.voteSkip(jam.jamId, activeTrackId).subscribe({
+    this.jamService.voteSkip(jamId, activeTrackId).subscribe({
       next: (res) => {
         this.jamState.update((cur) => ({
           ...cur,
@@ -1077,7 +1088,7 @@ export class RibbitStateService implements OnDestroy {
           voteThreshold: res.threshold,
           active: res.is_active,
         }));
-        this.syncJamState(jam.jamId!);
+        this.syncJamState(jamId);
         this.notify(
           res.advanced
             ? 'Votação atingida! Pulando para a próxima faixa da Jam.'
@@ -1355,9 +1366,9 @@ export class RibbitStateService implements OnDestroy {
     const notSame = (item: Song): boolean =>
       song.trackId !== undefined ? item.trackId !== song.trackId : item.title !== song.title;
 
-    this.likedSongs.update((list) => list.filter(notSame));
-    this.lovedSongs.update((list) => list.filter(notSame));
-    this.rejectedSongs.update((list) => list.filter(notSame));
+    this.likedSongs.update((list) => list.filter((item) => notSame(item)));
+    this.lovedSongs.update((list) => list.filter((item) => notSame(item)));
+    this.rejectedSongs.update((list) => list.filter((item) => notSame(item)));
   }
 
   private applyLocalSwipeCollectionUpdate(song: Song, kind: DecisionKind): void {
@@ -1365,13 +1376,19 @@ export class RibbitStateService implements OnDestroy {
       song.trackId !== undefined ? item.trackId !== song.trackId : item.title !== song.title;
 
     this.likedSongs.update((list) =>
-      kind === 'reject' ? list.filter(notSame) : [song, ...list.filter(notSame)],
+      kind === 'reject'
+        ? list.filter((item) => notSame(item))
+        : [song, ...list.filter((item) => notSame(item))],
     );
     this.lovedSongs.update((list) =>
-      kind === 'love' ? [song, ...list.filter(notSame)] : list.filter(notSame),
+      kind === 'love'
+        ? [song, ...list.filter((item) => notSame(item))]
+        : list.filter((item) => notSame(item)),
     );
     this.rejectedSongs.update((list) =>
-      kind === 'reject' ? [song, ...list.filter(notSame)] : list.filter(notSame),
+      kind === 'reject'
+        ? [song, ...list.filter((item) => notSame(item))]
+        : list.filter((item) => notSame(item)),
     );
   }
 
@@ -1449,7 +1466,10 @@ export class RibbitStateService implements OnDestroy {
       accumulatedMinutes: Math.round(jamDto.accumulated_duration_seconds / 60),
       superlikesCount: jamDto.superlikes_used,
       superlikesLimit: jamDto.max_superlikes,
-      deckSource: (jamDto.deck_source as 'livre' | 'curtidas' | 'playlist') || 'livre',
+      deckSource:
+        jamDto.deck_source === 'curtidas' || jamDto.deck_source === 'playlist'
+          ? jamDto.deck_source
+          : 'livre',
       ...(jamDto.source_playlist_id != null ? { sourcePlaylistId: jamDto.source_playlist_id } : {}),
       queueItems: [],
     });

@@ -61,7 +61,7 @@
             class="admin-select"
             aria-label="Ordenar faixas do catálogo"
             [value]="catalogSort()"
-            (change)="onCatalogSortChange($event)"
+            (change)="updateCatalogSort($event)"
           >
             <option value="id_asc">Padrão</option>
             <option value="dislikes_desc">Mais dislikes</option>
@@ -240,29 +240,29 @@
               </tr>
             </thead>
             <tbody>
-              @for (track of searchedActiveTracks(); track track.track_id) {
+              @for (track of searchedActiveTracks(); track track.trackId) {
                 <tr>
                   <th scope="row">
                     <div class="track-title-cell">
                       <strong>{{ track.title }}</strong>
-                      <small>#{{ track.track_id }}</small>
+                      <small>#{{ track.trackId }}</small>
                     </div>
                   </th>
                   <td>
                     <div class="track-sub-cell">
                       <span>{{ track.artist }}</span>
-                      <small>{{ track.album ?? 'Single' }} · {{ track.release_year ?? '—' }}</small>
+                      <small>{{ track.album ?? 'Single' }} · {{ track.releaseYear ?? '—' }}</small>
                     </div>
                   </td>
                   <td>
-                    @if (editingTrackId() === track.track_id) {
+                    @if (editingTrackId() === track.trackId) {
                       <div class="edit-genre-inline">
                         <input
                           type="text"
                           class="edit-genre-input"
                           [value]="editGenreDraft()"
                           (input)="updateGenreDraft($event)"
-                          (keyup.enter)="saveGenre(track.track_id)"
+                          (keyup.enter)="saveGenre(track.trackId)"
                           (keyup.escape)="cancelEditingGenre()"
                           placeholder="Novo gênero"
                           maxlength="30"
@@ -271,7 +271,7 @@
                           type="button"
                           class="save-genre-btn"
                           title="Salvar gênero"
-                          (click)="saveGenre(track.track_id)"
+                          (click)="saveGenre(track.trackId)"
                         >
                           Salvar
                         </button>
@@ -299,17 +299,15 @@
                       </div>
                     }
                   </td>
-                  <td>{{ formatDuration(track.duration_seconds) }}</td>
+                  <td>{{ formatDuration(track.durationSeconds) }}</td>
                   <td>
                     <div class="track-metrics-badges">
-                      <span class="metric-badge like" title="Likes"
-                        >👍 {{ track.likes_count }}</span
-                      >
+                      <span class="metric-badge like" title="Likes">👍 {{ track.likesCount }}</span>
                       <span class="metric-badge superlike" title="Superlikes"
-                        >⭐ {{ track.superlikes_count }}</span
+                        >⭐ {{ track.superlikesCount }}</span
                       >
                       <span class="metric-badge dislike" title="Dislikes"
-                        >👎 {{ track.dislikes_count }}</span
+                        >👎 {{ track.dislikesCount }}</span
                       >
                     </div>
                   </td>
@@ -328,7 +326,7 @@
                     <button
                       type="button"
                       class="danger-outline-btn"
-                      (click)="blockTrack(track.track_id)"
+                      (click)="blockTrack(track.trackId)"
                     >
                       Bloquear faixa
                     </button>
@@ -375,12 +373,12 @@
               </tr>
             </thead>
             <tbody>
-              @for (track of blockedTracks(); track track.track_id) {
+              @for (track of blockedTracks(); track track.trackId) {
                 <tr>
                   <th scope="row">
                     <div class="track-title-cell">
                       <strong>{{ track.title }}</strong>
-                      <small>#{{ track.track_id }}</small>
+                      <small>#{{ track.trackId }}</small>
                     </div>
                   </th>
                   <td>
@@ -392,17 +390,15 @@
                   <td>
                     <span class="genre-pill">{{ track.genre }}</span>
                   </td>
-                  <td>{{ formatDuration(track.duration_seconds) }}</td>
+                  <td>{{ formatDuration(track.durationSeconds) }}</td>
                   <td>
                     <div class="track-metrics-badges">
-                      <span class="metric-badge like" title="Likes"
-                        >👍 {{ track.likes_count }}</span
-                      >
+                      <span class="metric-badge like" title="Likes">👍 {{ track.likesCount }}</span>
                       <span class="metric-badge superlike" title="Superlikes"
-                        >⭐ {{ track.superlikes_count }}</span
+                        >⭐ {{ track.superlikesCount }}</span
                       >
                       <span class="metric-badge dislike" title="Dislikes"
-                        >👎 {{ track.dislikes_count }}</span
+                        >👎 {{ track.dislikesCount }}</span
                       >
                     </div>
                   </td>
@@ -418,11 +414,7 @@
                     </button>
                   </td>
                   <td>
-                    <button
-                      type="button"
-                      class="restore-btn"
-                      (click)="restoreTrack(track.track_id)"
-                    >
+                    <button type="button" class="restore-btn" (click)="restoreTrack(track.trackId)">
                       Restaurar ao catálogo
                     </button>
                   </td>
@@ -447,14 +439,14 @@
         </div>
 
         <div class="reviews-list">
-          @for (review of topReviews(); track review.review_id) {
+          @for (review of topReviews(); track review.reviewId) {
             <article class="review-mod-card">
               <div class="review-mod-header">
                 <div class="review-author-meta">
-                  <strong>{{ review.author_name }}</strong>
+                  <strong>{{ review.authorName }}</strong>
                   <span class="muted">em</span>
                   <span class="review-track-tag">
-                    {{ review.track_title }} — {{ review.track_artist }}
+                    {{ review.trackTitle }} — {{ review.trackArtist }}
                   </span>
                 </div>
 
@@ -466,7 +458,7 @@
                   </span>
                   <span class="likes-pill">
                     <app-icon name="heart" [size]="13" />
-                    {{ review.likes_count }} curtidas
+                    {{ review.likesCount }} curtidas
                   </span>
                 </div>
               </div>
@@ -475,12 +467,12 @@
 
               <div class="review-mod-footer">
                 <small class="muted"
-                  >Review #{{ review.review_id }} · Usuário #{{ review.user_id }}</small
+                  >Review #{{ review.reviewId }} · Usuário #{{ review.userId }}</small
                 >
                 <button
                   type="button"
                   class="danger-outline-btn"
-                  (click)="removeReview(review.review_id)"
+                  (click)="removeReview(review.reviewId)"
                 >
                   <app-icon name="close" [size]="13" />
                   Excluir avaliação

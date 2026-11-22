@@ -6,25 +6,22 @@
   </div>
 
   <div class="plans-cards-grid">
-    @for (plan of adminState.plans(); track plan.plan_id) {
-      <article
-        class="admin-card plan-admin-card"
-        [class.editing]="editingPlanId() === plan.plan_id"
-      >
+    @for (plan of adminState.plans(); track plan.planId) {
+      <article class="admin-card plan-admin-card" [class.editing]="editingPlanId() === plan.planId">
         <div class="plan-card-top">
           <div>
-            <span class="plan-id-pill">ID #{{ plan.plan_id }}</span>
+            <span class="plan-id-pill">ID #{{ plan.planId }}</span>
             <h2>{{ plan.name }}</h2>
           </div>
           <strong class="plan-price-tag">
-            {{ formatPrice(plan.monthly_price) }}<small>/mês</small>
+            {{ formatPrice(plan.monthlyPrice) }}<small>/mês</small>
           </strong>
         </div>
 
         <dl class="plan-stats-list">
           <div>
             <dt>Cota máxima de perfis</dt>
-            <dd>{{ plan.max_profiles }} {{ plan.max_profiles === 1 ? 'perfil' : 'perfis' }}</dd>
+            <dd>{{ plan.maxProfiles }} {{ plan.maxProfiles === 1 ? 'perfil' : 'perfis' }}</dd>
           </div>
           <div>
             <dt>Assinantes vinculados</dt>
@@ -32,7 +29,7 @@
           </div>
         </dl>
 
-        @if (editingPlanId() === plan.plan_id) {
+        @if (editingPlanId() === plan.planId) {
           @if (formError()) {
             <div class="plan-error-banner" role="alert">
               <app-icon name="close" [size]="14" />
@@ -40,12 +37,12 @@
             </div>
           }
 
-          <form class="plan-edit-form" (submit)="savePlan($event, plan.plan_id)">
+          <form class="plan-edit-form" (submit)="savePlan($event, plan.planId)">
             <div class="plan-field">
-              <label [attr.for]="'plan-name-' + plan.plan_id">Nome comercial *</label>
+              <label [attr.for]="'plan-name-' + plan.planId">Nome comercial *</label>
               <span class="field-hint">Deve ser único entre todos os planos</span>
               <input
-                [attr.id]="'plan-name-' + plan.plan_id"
+                [attr.id]="'plan-name-' + plan.planId"
                 type="text"
                 required
                 minlength="2"
@@ -56,10 +53,10 @@
 
             <div class="plan-field-row">
               <div class="plan-field">
-                <label [attr.for]="'plan-price-' + plan.plan_id">Mensalidade (R$) *</label>
+                <label [attr.for]="'plan-price-' + plan.planId">Mensalidade (R$) *</label>
                 <span class="field-hint">Valor &ge; 0,00</span>
                 <input
-                  [attr.id]="'plan-price-' + plan.plan_id"
+                  [attr.id]="'plan-price-' + plan.planId"
                   type="number"
                   step="0.01"
                   min="0"
@@ -70,10 +67,10 @@
               </div>
 
               <div class="plan-field">
-                <label [attr.for]="'plan-profiles-' + plan.plan_id">Máx. perfis *</label>
+                <label [attr.for]="'plan-profiles-' + plan.planId">Máx. perfis *</label>
                 <span class="field-hint">Mínimo: 1 perfil (validado pelo servidor)</span>
                 <input
-                  [attr.id]="'plan-profiles-' + plan.plan_id"
+                  [attr.id]="'plan-profiles-' + plan.planId"
                   type="number"
                   step="1"
                   min="1"
