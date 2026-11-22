@@ -1,8 +1,9 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { FrogComponent } from '../../shared/frog.component';
-import { IconComponent } from '../../shared/icon.component';
-import { AdminStateService } from './admin-state.service';
+import { readInputValue } from '@shared/dom-event-values';
+import { FrogComponent } from '@shared/frog.component';
+import { IconComponent } from '@shared/icon.component';
+import { AdminStateService } from '../admin-state.service';
 
 /** Dedicated administrative sign-in screen backing POST /api/admin/login. */
 @Component({
@@ -14,15 +15,15 @@ import { AdminStateService } from './admin-state.service';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AdminLoginComponent {
-  protected readonly adminState = inject(AdminStateService);
+  private readonly adminState = inject(AdminStateService);
   private readonly router = inject(Router, { optional: true });
 
   protected readonly emailDraft = signal<string>('');
   protected readonly passwordDraft = signal<string>('');
   protected readonly errorMessage = signal<string>('');
   protected readonly isSubmitting = signal<boolean>(false);
-  protected readonly emailBlurred = signal<boolean>(false);
-  protected readonly passwordBlurred = signal<boolean>(false);
+  private readonly emailBlurred = signal<boolean>(false);
+  private readonly passwordBlurred = signal<boolean>(false);
 
   protected readonly isEmailFallbackInvalid = computed<boolean>(() => {
     if (!this.emailBlurred()) return false;
@@ -37,13 +38,11 @@ export class AdminLoginComponent {
   });
 
   protected updateEmail(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.emailDraft.set(target.value);
+    this.emailDraft.set(readInputValue(event));
   }
 
   protected updatePassword(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.passwordDraft.set(target.value);
+    this.passwordDraft.set(readInputValue(event));
   }
 
   protected markEmailBlurred(): void {
@@ -77,11 +76,9 @@ export class AdminLoginComponent {
           this.router.navigate(['/admin/dashboard']).catch(() => {});
         }
       },
-      error: (error: unknown) => {
+      error: (error: Error) => {
         this.isSubmitting.set(false);
-        const message =
-          error instanceof Error ? error.message : 'Não foi possível autenticar no console.';
-        this.errorMessage.set(message);
+        this.errorMessage.set(error.message);
       },
     });
   }

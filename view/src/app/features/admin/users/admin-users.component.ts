@@ -1,7 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
-import type { AdminTrackAccessEntry, AdminUserPlanSummary, UserApiDto } from '@ribbit/shared-types';
-import { IconComponent } from '../../shared/icon.component';
-import { AdminStateService } from './admin-state.service';
+import { readInputChecked, readInputValue, readSelectValue } from '@shared/dom-event-values';
+import { IconComponent } from '@shared/icon.component';
+import type {
+  AdminAdministrator,
+  AdminTrackAccessEntry,
+  AdminUserPlanSummary,
+} from '../admin-mappers';
+import { AdminStateService } from '../admin-state.service';
 
 type UsersTab = 'all' | 'admins' | 'access-history';
 
@@ -43,24 +48,24 @@ export class AdminUsersComponent {
     const planFilter = this.selectedPlanFilter();
 
     return this.adminState.usersWithPlans().filter((user) => {
-      const matchesPlan = planFilter === 'all' || user.plan_name === planFilter;
+      const matchesPlan = planFilter === 'all' || user.planName === planFilter;
       if (!matchesPlan) return false;
       if (!query) return true;
       return (
-        user.display_name.toLowerCase().includes(query) ||
+        user.displayName.toLowerCase().includes(query) ||
         user.email.toLowerCase().includes(query) ||
-        user.plan_name.toLowerCase().includes(query)
+        user.planName.toLowerCase().includes(query)
       );
     });
   });
 
-  protected readonly filteredAdministrators = computed<readonly UserApiDto[]>(() => {
+  protected readonly filteredAdministrators = computed<readonly AdminAdministrator[]>(() => {
     const query = this.searchQuery().trim().toLowerCase();
     const admins = this.adminState.administrators();
     if (!query) return admins;
     return admins.filter(
       (admin) =>
-        admin.display_name.toLowerCase().includes(query) ||
+        admin.displayName.toLowerCase().includes(query) ||
         admin.email.toLowerCase().includes(query),
     );
   });
@@ -71,11 +76,11 @@ export class AdminUsersComponent {
     if (!query) return entries;
     return entries.filter(
       (entry) =>
-        entry.user_display_name.toLowerCase().includes(query) ||
-        entry.user_email.toLowerCase().includes(query) ||
-        entry.track_title.toLowerCase().includes(query) ||
-        entry.track_artist.toLowerCase().includes(query) ||
-        entry.track_genre.toLowerCase().includes(query) ||
+        entry.userDisplayName.toLowerCase().includes(query) ||
+        entry.userEmail.toLowerCase().includes(query) ||
+        entry.trackTitle.toLowerCase().includes(query) ||
+        entry.trackArtist.toLowerCase().includes(query) ||
+        entry.trackGenre.toLowerCase().includes(query) ||
         entry.source.toLowerCase().includes(query),
     );
   });
@@ -90,7 +95,7 @@ export class AdminUsersComponent {
   }
 
   protected updateAccessUserFilter(event: Event): void {
-    const raw = (event.target as HTMLSelectElement).value;
+    const raw = readSelectValue(event);
     if (!raw || raw === 'all') {
       this.accessUserFilter.set(null);
     } else {
@@ -101,7 +106,7 @@ export class AdminUsersComponent {
   }
 
   protected toggleAccessOnlyDeleted(event: Event): void {
-    this.accessOnlyDeleted.set((event.target as HTMLInputElement).checked);
+    this.accessOnlyDeleted.set(readInputChecked(event));
     this.reloadAccessHistory();
   }
 
@@ -120,13 +125,11 @@ export class AdminUsersComponent {
   }
 
   protected updateSearch(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.searchQuery.set(target.value);
+    this.searchQuery.set(readInputValue(event));
   }
 
   protected updatePlanFilter(event: Event): void {
-    const target = event.target as HTMLSelectElement;
-    this.selectedPlanFilter.set(target.value);
+    this.selectedPlanFilter.set(readSelectValue(event));
   }
 
   protected toggleRegisterForm(): void {
@@ -139,28 +142,23 @@ export class AdminUsersComponent {
   }
 
   protected updateNewAdminName(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.newAdminName.set(target.value);
+    this.newAdminName.set(readInputValue(event));
   }
 
   protected updateNewAdminEmail(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.newAdminEmail.set(target.value);
+    this.newAdminEmail.set(readInputValue(event));
   }
 
   protected updateNewAdminPassword(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.newAdminPassword.set(target.value);
+    this.newAdminPassword.set(readInputValue(event));
   }
 
   protected updateNewAdminAge(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.newAdminAge.set(target.value);
+    this.newAdminAge.set(readInputValue(event));
   }
 
   protected updateNewAdminBirthDate(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    this.newAdminBirthDate.set(target.value);
+    this.newAdminBirthDate.set(readInputValue(event));
   }
 
   protected submitRegisterAdmin(event: Event): void {
@@ -185,11 +183,9 @@ export class AdminUsersComponent {
           this.showRegisterForm.set(false);
           this.resetRegisterDrafts();
         },
-        error: (error: unknown) => {
+        error: (error: Error) => {
           this.isRegistering.set(false);
-          this.registerError.set(
-            error instanceof Error ? error.message : 'Falha ao cadastrar administrador.',
-          );
+          this.registerError.set(error.message);
         },
       });
   }
@@ -202,9 +198,9 @@ export class AdminUsersComponent {
       next: () => {
         this.updatingUserId.set(null);
       },
-      error: (error: unknown) => {
+      error: (error: Error) => {
         this.updatingUserId.set(null);
-        this.actionError.set(error instanceof Error ? error.message : 'Falha ao promover usuário.');
+        this.actionError.set(error.message);
       },
     });
   }
@@ -217,17 +213,15 @@ export class AdminUsersComponent {
       next: () => {
         this.updatingUserId.set(null);
       },
-      error: (error: unknown) => {
+      error: (error: Error) => {
         this.updatingUserId.set(null);
-        this.actionError.set(
-          error instanceof Error ? error.message : 'Falha ao atualizar permissão.',
-        );
+        this.actionError.set(error.message);
       },
     });
   }
 
   protected isCurrentSessionUser(userId: number): boolean {
-    return this.adminState.currentAdmin()?.user_id === userId;
+    return this.adminState.currentAdmin()?.userId === userId;
   }
 
   private resetRegisterDrafts(): void {

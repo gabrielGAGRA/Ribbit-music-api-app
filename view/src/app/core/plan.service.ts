@@ -3,7 +3,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import type { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import type { PlanApiDto, SubscriptionPlan, UserApiDto } from '@ribbit/shared-types';
-import { mapPlanDtoToSubscriptionPlan } from '../api-mappers';
+import { mapPlanDtoToSubscriptionPlan } from './api-mappers';
 
 const DEFAULT_PLAN_DTOS: readonly PlanApiDto[] = [
   { plan_id: 1, name: 'Free', monthly_price: 0, max_profiles: 1 },

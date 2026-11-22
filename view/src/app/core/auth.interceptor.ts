@@ -29,8 +29,14 @@ function hasUnexpiredJwtExp(token: string): boolean {
   try {
     const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
     const padded = normalized + '='.repeat((4 - (normalized.length % 4)) % 4);
-    const decoded = JSON.parse(atob(padded)) as { exp?: unknown };
-    return typeof decoded.exp === 'number' && decoded.exp * 1000 > Date.now();
+    const decoded: unknown = JSON.parse(atob(padded));
+    return (
+      typeof decoded === 'object' &&
+      decoded !== null &&
+      'exp' in decoded &&
+      typeof decoded.exp === 'number' &&
+      decoded.exp * 1000 > Date.now()
+    );
   } catch {
     return false;
   }

@@ -1,7 +1,15 @@
-import type { OnDestroy, OnInit } from '@angular/core';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import type { OnInit } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
-import type { Subscription } from 'rxjs';
+import { EMPTY } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import type { NavigationItem } from '@ribbit/shared-types';
 import { FrogComponent } from '../../shared/frog.component';
@@ -55,10 +63,17 @@ const ADMIN_SECTIONS: Readonly<Record<string, AdminSectionMeta>> = {
   styleUrl: './admin-shell.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AdminShellComponent implements OnInit, OnDestroy {
+export class AdminShellComponent implements OnInit {
   protected readonly adminState = inject(AdminStateService);
   private readonly router = inject(Router, { optional: true });
-  private readonly routeSubscription: Subscription | null;
+  private readonly navigationEnd = toSignal(
+    this.router
+      ? this.router.events.pipe(
+          filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        )
+      : EMPTY,
+    { initialValue: null },
+  );
 
   protected readonly navItems: readonly NavigationItem[] = [
     { id: 'dashboard', label: 'Visão Executiva', sub: 'Receita & Audiência', icon: 'chart' },
@@ -89,7 +104,7 @@ export class AdminShellComponent implements OnInit, OnDestroy {
   protected readonly hasSyncError = computed<boolean>(() => Boolean(this.adminState.syncError()));
 
   protected readonly adminInitials = computed<string>(() => {
-    const name = this.adminState.currentAdmin()?.display_name ?? 'Admin';
+    const name = this.adminState.currentAdmin()?.displayName ?? 'Admin';
     const parts = name
       .trim()
       .split(/\s+/)
@@ -105,14 +120,13 @@ export class AdminShellComponent implements OnInit, OnDestroy {
   constructor() {
     if (this.router) {
       this.syncSectionFromUrl(this.router.url);
-      this.routeSubscription = this.router.events
-        .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
-        .subscribe((event) => {
-          this.syncSectionFromUrl(event.urlAfterRedirects);
-        });
-    } else {
-      this.routeSubscription = null;
     }
+    effect(() => {
+      const event = this.navigationEnd();
+      if (event) {
+        this.syncSectionFromUrl(event.urlAfterRedirects);
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -123,10 +137,6 @@ export class AdminShellComponent implements OnInit, OnDestroy {
     ) {
       this.adminState.hydrateFromBackend();
     }
-  }
-
-  ngOnDestroy(): void {
-    this.routeSubscription?.unsubscribe();
   }
 
   protected navigateSection(sectionId: string): void {

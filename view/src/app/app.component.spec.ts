@@ -29,55 +29,49 @@ describe('AppComponent', () => {
   });
 
   it('should navigate to different pages including profile and settings', () => {
-    component.changePage('playlists');
+    component['changePage']('playlists');
     expect(state.activePage()).toBe('playlists');
 
-    component.changePage('profile');
+    component['changePage']('profile');
     expect(state.activePage()).toBe('profile');
-    expect(component.breadcrumbLabel()).toBe('Meu perfil');
-    expect(component.isNavItemActive('profile')).toBe(true);
+    expect(component['breadcrumbLabel']()).toBe('Meu perfil');
+    expect(component['isNavItemActive']('profile')).toBe(true);
 
-    component.changePage('settings');
+    component['changePage']('settings');
     expect(state.activePage()).toBe('settings');
-    expect(component.breadcrumbLabel()).toBe('Configurações');
+    expect(component['breadcrumbLabel']()).toBe('Configurações');
   });
 
   it('should use The Pond for Jams and Comunidade for Explore while keeping Descoberta distinct', () => {
-    component.changePage('discover');
-    expect(component.breadcrumbLabel()).toBe('Descoberta');
-    expect(component.currentHeading().eyebrow).not.toBe('THE POND');
+    component['changePage']('discover');
+    expect(component['breadcrumbLabel']()).toBe('Descoberta');
+    expect(component['currentHeading']().eyebrow).not.toBe('THE POND');
 
-    component.changePage('jams');
-    expect(component.breadcrumbLabel()).toBe('Jams');
-    expect(component.currentHeading().eyebrow).toBe('THE POND');
+    component['changePage']('jams');
+    expect(component['breadcrumbLabel']()).toBe('Jams');
+    expect(component['currentHeading']().eyebrow).toBe('THE POND');
 
-    component.changePage('explore');
-    expect(component.breadcrumbLabel()).toBe('Comunidade');
-    expect(component.currentHeading().eyebrow).toBe('COMUNIDADE');
+    component['changePage']('explore');
+    expect(component['breadcrumbLabel']()).toBe('Comunidade');
+    expect(component['currentHeading']().eyebrow).toBe('COMUNIDADE');
   });
 
   it('should signal playlists view reset when clicking playlists in the sidebar', () => {
     const before = state.playlistsViewReset();
-    component.changePage('playlists');
+    component['changePage']('playlists');
     expect(state.playlistsViewReset()).toBe(before + 1);
   });
 
   it('should compute user initials and real library counts accurately', () => {
     state.setUserName('João Lucas');
-    expect(component.userInitials()).toBe('JL');
-    expect(component.likedCount()).toBe(0);
-    expect(component.lovedCount()).toBe(0);
-    expect(component.rejectedCount()).toBe(0);
+    expect(component['userInitials']()).toBe('JL');
+    expect(component['likedCount']()).toBe(0);
+    expect(component['lovedCount']()).toBe(0);
+    expect(component['rejectedCount']()).toBe(0);
 
     state.decide('love');
-    expect(component.likedCount()).toBe(1);
-    expect(component.lovedCount()).toBe(1);
-  });
-
-  it('should compute recent discoveries based on liked songs', () => {
-    expect(component.recentDiscoveries().length).toBeGreaterThan(0);
-    state.decide('like');
-    expect(component.recentDiscoveries().length).toBeGreaterThan(0);
+    expect(component['likedCount']()).toBe(1);
+    expect(component['lovedCount']()).toBe(1);
   });
 
   it('should reflect jam active and roomId state for sidebar promotion', () => {
@@ -101,10 +95,10 @@ describe('AppComponent', () => {
   });
 
   it('should map /callback and /settings query URLs to the settings active page', () => {
-    expect(component.resolveActivePageFromUrl('/callback?code=abc&state=xyz')).toBe('settings');
-    expect(component.resolveActivePageFromUrl('/settings?code=abc&state=xyz')).toBe('settings');
-    expect(component.resolveActivePageFromUrl('/playlists#section')).toBe('playlists');
-    expect(component.resolveActivePageFromUrl('/')).toBe('discover');
+    expect(component['resolveActivePageFromUrl']('/callback?code=abc&state=xyz')).toBe('settings');
+    expect(component['resolveActivePageFromUrl']('/settings?code=abc&state=xyz')).toBe('settings');
+    expect(component['resolveActivePageFromUrl']('/playlists#section')).toBe('playlists');
+    expect(component['resolveActivePageFromUrl']('/')).toBe('discover');
   });
 
   it('should pause playing audio when transitioning between screens', () => {
@@ -112,7 +106,7 @@ describe('AppComponent', () => {
     player.play();
     expect(player.isPlaying()).toBe(true);
 
-    component.changePage('explore');
+    component['changePage']('explore');
     TestBed.flushEffects();
 
     expect(player.isPlaying()).toBe(false);

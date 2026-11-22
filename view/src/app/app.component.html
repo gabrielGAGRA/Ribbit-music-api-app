@@ -65,7 +65,7 @@
           </span>
           Plano Família
         </button>
-        @for (p of state.playlists().slice(0, 2); track p.playlistId ?? $index) {
+        @for (p of sidebarPlaylists(); track p.playlistId ?? p.id) {
           <button (click)="changePage('playlists')">
             <span class="library-icon">
               <app-icon name="music" [size]="15" />

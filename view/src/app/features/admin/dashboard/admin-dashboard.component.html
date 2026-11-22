@@ -24,7 +24,7 @@
           Ver contas <app-icon name="arrow" [size]="13" />
         </button>
       </div>
-      <strong class="kpi-value">{{ adminState.executiveDashboard().total_users }}</strong>
+      <strong class="kpi-value">{{ adminState.executiveDashboard().totalUsers }}</strong>
       <span class="kpi-label">Usuários registrados</span>
       <small class="kpi-detail">{{ adminCount() }} administradores com acesso ao console</small>
     </article>
@@ -36,8 +36,8 @@
         </span>
       </div>
       <strong class="kpi-value">
-        {{ adminState.audienceReport().active_tracks }} /
-        {{ adminState.audienceReport().total_tracks }}
+        {{ adminState.audienceReport().activeTracks }} /
+        {{ adminState.audienceReport().totalTracks }}
       </strong>
       <span class="kpi-label">Faixas ativas no catálogo</span>
       <small class="kpi-detail"
@@ -251,16 +251,16 @@
       </div>
 
       <div class="genre-rank-list">
-        @for (item of adminState.topAccessedTracks(); track item.track_id) {
+        @for (item of adminState.topAccessedTracks(); track item.trackId) {
           <div class="genre-rank-item">
             <div class="genre-rank-meta">
               <strong>
                 {{ item.title }}
-                @if (item.is_deleted) {
+                @if (item.isDeleted) {
                   <small class="deleted-tag">(Removida)</small>
                 }
               </strong>
-              <span>{{ item.access_count }} acessos</span>
+              <span>{{ item.accessCount }} acessos</span>
             </div>
             <div class="bar-track">
               <i class="bar-fill blue-fill" [appWidthPercent]="item.percent"></i>
@@ -285,7 +285,7 @@
           <div class="genre-rank-item">
             <div class="genre-rank-meta">
               <strong>{{ entry.genre }}</strong>
-              <span>{{ entry.access_count }} acessos</span>
+              <span>{{ entry.accessCount }} acessos</span>
             </div>
             <div class="bar-track">
               <i class="bar-fill blue-fill" [appWidthPercent]="entry.percent"></i>

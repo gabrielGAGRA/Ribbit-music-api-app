@@ -19,8 +19,7 @@ import {
   mapDecisionToApiAction,
   mapReviewDtoToCommunityReview,
   mapTrackDtoToSong,
-} from '../api-mappers';
-import { MOCK_SONGS } from '../mocks/songs.mock';
+} from './api-mappers';
 
 export type ReviewSortOption = 'recent' | 'oldest' | 'likes' | 'rating_desc' | 'rating_asc';
 
@@ -66,7 +65,7 @@ function buildSearchHttpParams(params: SearchTracksParams): HttpParams {
 @Injectable({ providedIn: 'root' })
 export class SongService {
   private readonly http = inject(HttpClient);
-  private readonly songsSignal = signal<readonly Song[]>(MOCK_SONGS);
+  private readonly songsSignal = signal<readonly Song[]>([]);
   private readonly reviewsSignal = signal<readonly CommunityReview[]>([]);
   private readonly userReviewsSignal = signal<readonly CommunityReview[]>([]);
 

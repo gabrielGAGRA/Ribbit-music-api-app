@@ -12,11 +12,10 @@ import { mapPlaylistDtoToPlaylist, mapTrackDtoToSong } from '../../core/api-mapp
 import { AudioPlayerService } from '../../core/audio-player.service';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { PlaylistService } from '../../core/services/playlist.service';
-import {
-  TransformStyleDirective,
-  WaveBarStyleDirective,
-} from '../../shared/dynamic-style.directive';
+import { PlaylistService } from '../../core/playlist.service';
+import { readFirstSelectedFile } from '../../shared/dom-event-values';
+import { TransformStyleDirective } from '../../shared/transform-style.directive';
+import { WaveBarStyleDirective } from '../../shared/wave-bar-style.directive';
 import { IconComponent } from '../../shared/icon.component';
 
 /** Manages user playlists, swipe deck generation for playlists, and Spotify playlist export. */
@@ -33,23 +32,23 @@ export class PlaylistsComponent {
   protected readonly player = inject(AudioPlayerService);
   private readonly playlistService = inject(PlaylistService);
 
-  protected readonly oceanImg =
+  private readonly oceanImg =
     'https://images.unsplash.com/photo-1505142468610-359e7d316be0?auto=format&fit=crop&w=1000&q=85';
-  protected readonly palmImg =
+  private readonly palmImg =
     'https://images.unsplash.com/photo-1535392432937-a27c36ec07b5?auto=format&fit=crop&w=700&q=85';
 
-  readonly selectedPlaylist = signal<Playlist | null>(null);
-  readonly isExportingSpotify = signal<boolean>(false);
-  readonly isUploadingCover = signal<boolean>(false);
-  readonly isSwipeMode = signal<boolean>(false);
+  protected readonly selectedPlaylist = signal<Playlist | null>(null);
+  protected readonly isExportingSpotify = signal<boolean>(false);
+  protected readonly isUploadingCover = signal<boolean>(false);
+  protected readonly isSwipeMode = signal<boolean>(false);
 
   protected readonly waveformBars = Array.from({ length: 65 });
 
-  readonly deckCandidates = signal<readonly Song[]>([]);
-  readonly deckCursor = signal<number>(0);
-  readonly deckLoadedFromBackend = signal<boolean>(false);
-  protected readonly fallbackCursor = signal<number>(0);
-  protected readonly deckDrag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
+  private readonly deckCandidates = signal<readonly Song[]>([]);
+  private readonly deckCursor = signal<number>(0);
+  private readonly deckLoadedFromBackend = signal<boolean>(false);
+  private readonly fallbackCursor = signal<number>(0);
+  private readonly deckDrag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
   private deckPointerStart: { readonly x: number; readonly y: number } | null = null;
 
   constructor() {
@@ -76,7 +75,7 @@ export class PlaylistsComponent {
     });
   }
 
-  getPlaylistCoverSrc(playlist: Playlist, fallbackIndex = 0): string {
+  protected getPlaylistCoverSrc(playlist: Playlist, fallbackIndex = 0): string {
     const pId = playlist.playlistId;
     if (pId !== undefined) {
       const cached = this.playlistService.coverBlobUrls()[pId];
@@ -107,13 +106,13 @@ export class PlaylistsComponent {
     );
   }
 
-  readonly currentDeckTrack = computed<Song | null>(() => {
+  private readonly currentDeckTrack = computed<Song | null>(() => {
     const list = this.deckCandidates();
     const cursor = this.deckCursor();
     return list[cursor] ?? null;
   });
 
-  readonly activeTrack = computed<Song | null>(() => {
+  protected readonly activeTrack = computed<Song | null>(() => {
     const fromDeck = this.currentDeckTrack();
     if (fromDeck) return fromDeck;
     if (this.deckLoadedFromBackend()) return null;
@@ -134,31 +133,31 @@ export class PlaylistsComponent {
     return null;
   });
 
-  readonly activeDeckDragAction = computed<'like' | 'dislike' | null>(() => {
+  protected readonly activeDeckDragAction = computed<'like' | 'dislike' | null>(() => {
     const { x } = this.deckDrag();
     if (x > 40) return 'like';
     if (x < -40) return 'dislike';
     return null;
   });
 
-  readonly deckCardTransform = computed<string>(() => {
+  protected readonly deckCardTransform = computed<string>(() => {
     const d = this.deckDrag();
     if (d.x === 0 && d.y === 0) return '';
     return `translate(${d.x}px, ${d.y}px) rotate(${d.x / 30}deg)`;
   });
 
-  readonly formattedPreviewTime = computed<string>(() => {
+  protected readonly formattedPreviewTime = computed<string>(() => {
     const sec = Math.round(this.player.progress() * 0.3);
     return String(sec).padStart(2, '0');
   });
 
-  readonly selectedPlaylistTracks = computed<readonly Song[]>(() => {
+  protected readonly selectedPlaylistTracks = computed<readonly Song[]>(() => {
     const p = this.selectedPlaylist();
     if (!p) return [];
     return p.songs ?? [];
   });
 
-  toggleSwipeMode(): void {
+  protected toggleSwipeMode(): void {
     this.player.pause();
     if (this.selectedPlaylistTracks().length === 0) {
       this.isSwipeMode.set(true);
@@ -174,13 +173,7 @@ export class PlaylistsComponent {
     }
   }
 
-  openPlaylistSwipeDeck(playlist: Playlist): void {
-    this.openPlaylistView(playlist);
-    this.isSwipeMode.set(true);
-    this.loadPlaylistDeck();
-  }
-
-  loadPlaylistDeck(): void {
+  private loadPlaylistDeck(): void {
     const p = this.selectedPlaylist();
     if (!p?.playlistId) {
       this.deckLoadedFromBackend.set(false);
@@ -203,7 +196,7 @@ export class PlaylistsComponent {
     });
   }
 
-  loadMoreRecommendations(): void {
+  protected loadMoreRecommendations(): void {
     const p = this.selectedPlaylist();
     if (p?.playlistId && readAuthToken()) {
       this.loadPlaylistDeck();
@@ -225,9 +218,8 @@ export class PlaylistsComponent {
     }
   }
 
-  onCoverFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
+  protected uploadPlaylistCover(event: Event): void {
+    const file = readFirstSelectedFile(event);
     const p = this.selectedPlaylist();
     if (!p || !p.playlistId || !file) return;
 
@@ -249,7 +241,7 @@ export class PlaylistsComponent {
     });
   }
 
-  swipeDeckTrack(action: 'like' | 'dislike'): void {
+  protected swipeDeckTrack(action: 'like' | 'dislike'): void {
     const p = this.selectedPlaylist();
     const track = this.activeTrack();
     this.deckDrag.set({ x: 0, y: 0 });
@@ -292,14 +284,15 @@ export class PlaylistsComponent {
     this.player.resetProgress();
   }
 
-  onDeckPointerDown(event: PointerEvent): void {
-    const target = event.target as HTMLElement | null;
-    if (target?.closest('button')) return;
+  protected startDeckCardDrag(event: PointerEvent): void {
+    if (event.target instanceof HTMLElement && event.target.closest('button')) return;
     this.deckPointerStart = { x: event.clientX, y: event.clientY };
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
   }
 
-  onDeckPointerMove(event: PointerEvent): void {
+  protected moveDeckCardDrag(event: PointerEvent): void {
     if (this.deckPointerStart) {
       this.deckDrag.set({
         x: event.clientX - this.deckPointerStart.x,
@@ -308,12 +301,12 @@ export class PlaylistsComponent {
     }
   }
 
-  onDeckPointerCancel(): void {
+  protected cancelDeckCardDrag(): void {
     this.deckPointerStart = null;
     this.deckDrag.set({ x: 0, y: 0 });
   }
 
-  onDeckPointerUp(): void {
+  protected finishDeckCardDrag(): void {
     if (!this.deckPointerStart) return;
     this.deckPointerStart = null;
     const { x } = this.deckDrag();
@@ -326,7 +319,7 @@ export class PlaylistsComponent {
     }
   }
 
-  toggleDeckPlay(song: Song): void {
+  protected toggleDeckPlay(song: Song): void {
     if (this.player.isPlaying()) {
       this.player.pause();
       return;
@@ -336,41 +329,16 @@ export class PlaylistsComponent {
     this.player.play();
   }
 
-  openTrackDetails(song: Song): void {
+  protected openTrackDetails(song: Song): void {
     this.state.selectedDetailsSong.set(song);
     this.state.setModal('details');
   }
 
-  playPlaylist(): void {
-    if (this.player.isPlaying()) {
-      this.player.pause();
-      return;
-    }
-    const first = this.selectedPlaylistTracks()[0];
-    if (first) {
-      this.state.recordTrackAccess(first, 'playlist');
-      this.player.loadTrack(first.previewUrl);
-      this.player.play();
-      this.state.notify(`Reproduzindo "${first.title}".`);
-    }
-  }
-
-  playQueue(): void {
-    this.playPlaylist();
-  }
-
-  playTrack(song: Song): void {
-    this.state.recordTrackAccess(song, 'playlist');
-    this.player.loadTrack(song.previewUrl);
-    this.player.play();
-    this.state.notify(`Tocando "${song.title}" de ${song.artist}.`);
-  }
-
-  openCreateModal(): void {
+  protected openCreateModal(): void {
     this.state.setModal('playlist');
   }
 
-  openPlaylistView(playlistOrName: Playlist | string): void {
+  protected openPlaylistView(playlistOrName: Playlist | string): void {
     const resolved: Playlist =
       typeof playlistOrName === 'string'
         ? (this.state.playlists().find((p) => p.name === playlistOrName) ?? {
@@ -406,14 +374,14 @@ export class PlaylistsComponent {
     }
   }
 
-  closePlaylistView(): void {
+  protected closePlaylistView(): void {
     this.player.pause();
     this.deckLoadedFromBackend.set(false);
     this.selectedPlaylist.set(null);
     this.isSwipeMode.set(false);
   }
 
-  exportPlaylist(playlistId: number, name = 'Playlist', event?: Event): void {
+  private exportPlaylist(playlistId: number, name = 'Playlist', event?: Event): void {
     event?.stopPropagation();
     if (!this.state.isSpotifyLinked()) {
       this.state.promptSpotifyConnection(
@@ -449,7 +417,7 @@ export class PlaylistsComponent {
     });
   }
 
-  exportCurrentToSpotify(): void {
+  protected exportCurrentToSpotify(): void {
     const p = this.selectedPlaylist();
     if (!p) return;
 
@@ -469,7 +437,7 @@ export class PlaylistsComponent {
     this.exportPlaylist(p.playlistId, p.name);
   }
 
-  removeTrackFromCurrent(index: number): void {
+  protected removeTrackFromCurrent(index: number): void {
     const p = this.selectedPlaylist();
     const track = this.selectedPlaylistTracks()[index];
     if (!p || !track) return;
@@ -494,7 +462,7 @@ export class PlaylistsComponent {
     }
   }
 
-  deleteCurrentPlaylist(): void {
+  protected deleteCurrentPlaylist(): void {
     const p = this.selectedPlaylist();
     if (!p) return;
     this.state.deletePlaylist(p);

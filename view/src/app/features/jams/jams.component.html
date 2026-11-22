@@ -70,10 +70,10 @@
           <div
             class="jam-swipe-card"
             [appTransform]="jamCardTransform()"
-            (pointerdown)="onJamPointerDown($event)"
-            (pointermove)="onJamPointerMove($event)"
-            (pointerup)="onJamPointerUp()"
-            (pointercancel)="onJamPointerCancel()"
+            (pointerdown)="startJamCardDrag($event)"
+            (pointermove)="moveJamCardDrag($event)"
+            (pointerup)="finishJamCardDrag()"
+            (pointercancel)="cancelJamCardDrag()"
           >
             <img
               [src]="currentJamDeckSong().image"
@@ -207,7 +207,7 @@
           <h3>Próximas na fila</h3>
           <span>Ordenadas por pontuação de swipe</span>
         </div>
-        @for (entry of upcomingQueueItems(); track entry.song.title) {
+        @for (entry of upcomingQueueItems(); track entry.song.trackId ?? entry.song.title) {
           <div class="song-row">
             <div class="song-cover">
               <img [src]="entry.song.image" alt="" />
@@ -251,7 +251,7 @@
       <app-icon name="headphones" [size]="32" />
       <h2>Já tem uma Jam rolando?</h2>
       <p>Entre usando o código compartilhado por um amigo para começar a deslizar músicas.</p>
-      <form (submit)="onJoinSubmit($event)">
+      <form (submit)="submitJoinRoom($event)">
         <input
           required
           name="jamCode"
