@@ -104,8 +104,6 @@ ALL_USE_CASES = [
     AuthenticateUserUseCase,
     AuthenticateAdminUseCase,
     AuthenticateWithGoogleUseCase,
-    GetSpotifyAuthorizeUrlUseCase,
-    ConnectSpotifyAccountUseCase,
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
     RecordTrackAccessUseCase,
@@ -229,3 +227,35 @@ def test_container_resolves_service_ports(container: Container) -> None:
 
     spotify_profile = container.resolve(SpotifyUserProfilePort)
     assert isinstance(spotify_profile, SpotifyUserProfilePort)
+
+
+def test_container_optional_spotify_oauth_use_cases(container: Container) -> None:
+    assert container.resolve_optional(GetSpotifyAuthorizeUrlUseCase) is None
+    assert container.resolve_optional(ConnectSpotifyAccountUseCase) is None
+    with pytest.raises(KeyError):
+        container.resolve(GetSpotifyAuthorizeUrlUseCase)
+    with pytest.raises(KeyError):
+        container.resolve(ConnectSpotifyAccountUseCase)
+
+    conn = create_connection(":memory:")
+    try:
+        configured = build_container(
+            settings=Settings(
+                database_path=":memory:",
+                password_hash_iterations=1_000,
+                spotify_client_id="sp_client_id",
+                spotify_redirect_uri="http://127.0.0.1:8888/callback",
+            ),
+            connection=conn,
+        )
+        assert isinstance(
+            configured.resolve(GetSpotifyAuthorizeUrlUseCase),
+            GetSpotifyAuthorizeUrlUseCase,
+        )
+        assert isinstance(
+            configured.resolve(ConnectSpotifyAccountUseCase),
+            ConnectSpotifyAccountUseCase,
+        )
+        configured.http_session.close()
+    finally:
+        conn.close()

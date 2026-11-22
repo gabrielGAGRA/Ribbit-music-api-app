@@ -1377,7 +1377,8 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
         json={"room_name": "Blocked Jam", "duration_minutes": 30},
     )
     assert blocked.status_code == 403, blocked.text
-    assert blocked.json()["error"] == "SpotifyConnectionRequiredError"
+    assert blocked.json()["error"] == "PermissionDeniedError"
+    assert blocked.json()["details"]["rule_name"] == "spotify_connection_required"
 
     class _StubSpotifyAuth:
         def exchange_code(self, code: str) -> SimpleNamespace:
@@ -1395,10 +1396,15 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
                 product=self.product,
             )
 
+    from app.application.use_cases.spotify import ConnectSpotifyAccountUseCase
+
     profile_stub = _StubSpotifyProfile("premium")
-    connect_uc = app.state.container.connect_spotify_account_use_case
-    object.__setattr__(connect_uc, "spotify_auth", _StubSpotifyAuth())
-    object.__setattr__(connect_uc, "spotify_profile", profile_stub)
+    connect_uc = ConnectSpotifyAccountUseCase(
+        user_repo=app.state.container.user_repo,
+        spotify_auth=_StubSpotifyAuth(),  # type: ignore[arg-type]
+        spotify_profile=profile_stub,
+    )
+    app.state.container._type_registry[ConnectSpotifyAccountUseCase] = connect_uc
     state = headers["Authorization"].removeprefix("Bearer ")
 
     callback_prem = client.post(
@@ -1431,13 +1437,14 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
         json={"room_name": "Downgraded Jam", "duration_minutes": 30},
     )
     assert blocked_again.status_code == 403, blocked_again.text
-    assert blocked_again.json()["error"] == "SpotifyPremiumRequiredError"
+    assert blocked_again.json()["error"] == "PermissionDeniedError"
+    assert blocked_again.json()["details"]["rule_name"] == "spotify_premium_required"
 
 
 def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
     client: TestClient, app
 ) -> None:
-    from app.domain.exceptions import SpotifyPremiumRequiredError
+    from app.domain.exceptions import PermissionDeniedError
 
     plans = client.get("/api/plans").json()
     free_id = next(p["plan_id"] for p in plans if p["name"] == "Free")
@@ -1473,7 +1480,10 @@ def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
     class _StubHostQueue:
         def enqueue_track(self, user: Any, track_uri: str) -> None:
             if should_fail:
-                raise SpotifyPremiumRequiredError()
+                raise PermissionDeniedError(
+                    "Premium required",
+                    details={"rule_name": "spotify_premium_required"},
+                )
             enqueued.append((user.user_id, track_uri))
 
         def skip_to_next(self, user: Any) -> None:
@@ -1519,7 +1529,8 @@ def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
         json={"track_id": track_two.track_id, "action": "like"},
     )
     assert vote_fail.status_code == 403, vote_fail.text
-    assert vote_fail.json()["error"] == "SpotifyPremiumRequiredError"
+    assert vote_fail.json()["error"] == "PermissionDeniedError"
+    assert vote_fail.json()["details"]["rule_name"] == "spotify_premium_required"
 
     reloaded_owner = container.user_repo.find_by_id(owner.user_id)
     assert reloaded_owner is not None

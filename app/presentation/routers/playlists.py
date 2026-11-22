@@ -12,6 +12,9 @@ from app.application.dtos.playlist_dtos import (
     GetPlaylistDeckCommand,
     RemoveTrackFromPlaylistCommand,
 )
+from app.application.ports.repositories.playlist_repository import (
+    PlaylistRepositoryPort,
+)
 from app.application.use_cases.playlist import (
     AddTrackToPlaylistUseCase,
     CreateDeckPlaylistUseCase,
@@ -25,7 +28,7 @@ from app.application.use_cases.playlist import (
 )
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.presentation.dependencies.auth import require_user
-from app.presentation.dependencies.container import get_container, provide
+from app.presentation.dependencies.container import provide
 from app.presentation.schemas.common import ActionSuccessResponse
 from app.presentation.schemas.playlists import (
     DeckPlaylistRequest,
@@ -52,93 +55,6 @@ def _is_valid_image(content_type: str, image_data: bytes) -> bool:
     if content_type == "image/webp":
         return image_data[:4] == b"RIFF" and image_data[offset : offset + 4] == expected
     return image_data.startswith(expected)
-
-
-def get_create_deck_playlist_use_case(request: Request) -> CreateDeckPlaylistUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(CreateDeckPlaylistUseCase)
-    except KeyError:
-        return CreateDeckPlaylistUseCase(
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            playlist_repo=container.playlist_repo,
-        )
-
-
-def get_get_playlist_deck_use_case(request: Request) -> GetPlaylistDeckUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(GetPlaylistDeckUseCase)
-    except KeyError:
-        return GetPlaylistDeckUseCase(
-            user_repo=container.user_repo,
-            playlist_repo=container.playlist_repo,
-            track_repo=container.track_repo,
-            interaction_repo=container.interaction_repo,
-        )
-
-
-def get_add_track_to_playlist_use_case(request: Request) -> AddTrackToPlaylistUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(AddTrackToPlaylistUseCase)
-    except KeyError:
-        return AddTrackToPlaylistUseCase(
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            playlist_repo=container.playlist_repo,
-            interaction_repo=container.interaction_repo,
-        )
-
-
-def get_remove_track_from_playlist_use_case(
-    request: Request,
-) -> RemoveTrackFromPlaylistUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(RemoveTrackFromPlaylistUseCase)
-    except KeyError:
-        return RemoveTrackFromPlaylistUseCase(
-            user_repo=container.user_repo,
-            playlist_repo=container.playlist_repo,
-        )
-
-
-def get_delete_playlist_use_case(request: Request) -> DeletePlaylistUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(DeletePlaylistUseCase)
-    except KeyError:
-        return DeletePlaylistUseCase(
-            user_repo=container.user_repo,
-            playlist_repo=container.playlist_repo,
-        )
-
-
-def get_list_user_playlists_use_case(request: Request) -> ListUserPlaylistsUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(ListUserPlaylistsUseCase)
-    except KeyError:
-        return ListUserPlaylistsUseCase(
-            playlist_repo=container.playlist_repo,
-            user_repo=container.user_repo,
-        )
-
-
-def get_export_playlist_to_spotify_use_case(
-    request: Request,
-) -> ExportPlaylistToSpotifyUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(ExportPlaylistToSpotifyUseCase)
-    except KeyError:
-        return ExportPlaylistToSpotifyUseCase(
-            playlist_repo=container.playlist_repo,
-            user_repo=container.user_repo,
-            export_port=container.music_service,
-        )
 
 
 def _build_playlist_response(playlist: object) -> PlaylistResponse:
@@ -235,7 +151,7 @@ def create_deck_playlist(
     req: DeckPlaylistRequest,
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
-        CreateDeckPlaylistUseCase, Depends(get_create_deck_playlist_use_case)
+        CreateDeckPlaylistUseCase, Depends(provide(CreateDeckPlaylistUseCase))
     ],
 ) -> PlaylistResponse:
     playlist = use_case.execute(
@@ -260,7 +176,7 @@ def get_playlist_deck(
     playlist_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
-        GetPlaylistDeckUseCase, Depends(get_get_playlist_deck_use_case)
+        GetPlaylistDeckUseCase, Depends(provide(GetPlaylistDeckUseCase))
     ],
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     cursor_id: Annotated[int | None, Query(gt=0)] = None,
@@ -288,7 +204,7 @@ def swipe_add_track(
     req: SwipeAddTrackRequest,
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
-        AddTrackToPlaylistUseCase, Depends(get_add_track_to_playlist_use_case)
+        AddTrackToPlaylistUseCase, Depends(provide(AddTrackToPlaylistUseCase))
     ],
 ) -> ActionSuccessResponse:
     use_case.execute(
@@ -305,11 +221,12 @@ def swipe_add_track(
 @router.get("/{playlist_id}", response_model=PlaylistResponse)
 def get_playlist(
     playlist_id: int,
-    request: Request,
+    playlist_repo: Annotated[
+        PlaylistRepositoryPort, Depends(provide(PlaylistRepositoryPort))
+    ],
     current_user_id: Annotated[int, Depends(require_user)],
 ) -> PlaylistResponse:
-    container = get_container(request)
-    playlist = container.playlist_repo.find_by_id(playlist_id)
+    playlist = playlist_repo.find_by_id(playlist_id)
     if not playlist:
         raise EntityNotFoundError(f"Playlist with ID {playlist_id} not found.")
     if not playlist.is_owned_by(current_user_id):
@@ -326,7 +243,7 @@ def remove_track(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         RemoveTrackFromPlaylistUseCase,
-        Depends(get_remove_track_from_playlist_use_case),
+        Depends(provide(RemoveTrackFromPlaylistUseCase)),
     ],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
@@ -343,7 +260,7 @@ def remove_track(
 def delete_playlist(
     playlist_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[DeletePlaylistUseCase, Depends(get_delete_playlist_use_case)],
+    use_case: Annotated[DeletePlaylistUseCase, Depends(provide(DeletePlaylistUseCase))],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
         DeletePlaylistCommand(
@@ -358,7 +275,7 @@ def delete_playlist(
 def list_playlists(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
-        ListUserPlaylistsUseCase, Depends(get_list_user_playlists_use_case)
+        ListUserPlaylistsUseCase, Depends(provide(ListUserPlaylistsUseCase))
     ],
 ) -> list[PlaylistResponse]:
     playlists = use_case.execute(user_id=current_user_id)
@@ -374,7 +291,7 @@ def export_playlist_to_spotify(
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         ExportPlaylistToSpotifyUseCase,
-        Depends(get_export_playlist_to_spotify_use_case),
+        Depends(provide(ExportPlaylistToSpotifyUseCase)),
     ],
 ) -> PlaylistResponse:
     playlist = use_case.execute(
