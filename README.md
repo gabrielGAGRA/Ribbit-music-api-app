@@ -866,7 +866,7 @@ A suíte de testes é organizada em quatro frentes independentes:
 
 - **`tests/unit/`**: testes unitários do backend (domínio, casos de uso, adaptadores e routers isolados).
 - **`tests/integration/`**: testes de integração da API FastAPI + SQLite em memória (`test_e2e_flow.py` e `test_client.py`).
-- **`tests/e2e/`**: testes funcionais ponta a ponta no navegador com Playwright (`*.e2e.ts`), exercitando `view/` + `app/` + banco SQLite juntos nos 5 fluxos (incluindo o painel administrativo `/admin/*`), com gravação de vídeo `.webm`.
+- **`tests/e2e/`**: testes funcionais ponta a ponta no navegador com Playwright (`*.e2e.ts`), exercitando `view/` + `app/` + banco SQLite juntos nos 5 fluxos (incluindo o painel administrativo `/admin/*`), com gravação de vídeo `.mp4` (H.264, 1080p).
 - **`view/src/app/**/*.spec.ts`**: testes unitários do frontend Angular co-localizados com componentes e serviços (Vitest).
 
 ### Backend (Python)
@@ -902,11 +902,11 @@ A suíte de testes é organizada em quatro frentes independentes:
 
 | Fluxo E2E | Teste Playwright | Vídeo Gravado |
 | :--- | :--- | :--- |
-| **1. Onboarding, Filtros de Gênero, Swipe e Coleções** | [`01-onboarding-discovery-swipe.e2e.ts`](tests/e2e/01-onboarding-discovery-swipe.e2e.ts) | [`01-onboarding-discovery-swipe.webm`](docs/videos/01-onboarding-discovery-swipe.webm) |
-| **2. Playlists Contextuais e Fila de Reprodução** | [`02-contextual-playlists-and-queue.e2e.ts`](tests/e2e/02-contextual-playlists-and-queue.e2e.ts) | [`02-contextual-playlists-and-queue.webm`](docs/videos/02-contextual-playlists-and-queue.webm) |
-| **3. Jam Colaborativa (Pond), Votação e Skip** | [`03-collaborative-jam-pond.e2e.ts`](tests/e2e/03-collaborative-jam-pond.e2e.ts) | [`03-collaborative-jam-pond.webm`](docs/videos/03-collaborative-jam-pond.webm) |
-| **4. Busca no Catálogo, Reviews e Comunidade** | [`04-explore-search-and-community-reviews.e2e.ts`](tests/e2e/04-explore-search-and-community-reviews.e2e.ts) | [`04-explore-search-and-community-reviews.webm`](docs/videos/04-explore-search-and-community-reviews.webm) |
-| **5. Painel Administrativo, Planos e Moderação** | [`05-admin-console-governance-and-moderation.e2e.ts`](tests/e2e/05-admin-console-governance-and-moderation.e2e.ts) | [`05-admin-console-governance-and-moderation.webm`](docs/videos/05-admin-console-governance-and-moderation.webm) |
+| **1. Onboarding, Filtros de Gênero, Swipe e Coleções** | [`01-onboarding-discovery-swipe.e2e.ts`](tests/e2e/01-onboarding-discovery-swipe.e2e.ts) | [`01-onboarding-discovery-swipe.mp4`](docs/videos/01-onboarding-discovery-swipe.mp4) |
+| **2. Playlists Contextuais e Fila de Reprodução** | [`02-contextual-playlists-and-queue.e2e.ts`](tests/e2e/02-contextual-playlists-and-queue.e2e.ts) | [`02-contextual-playlists-and-queue.mp4`](docs/videos/02-contextual-playlists-and-queue.mp4) |
+| **3. Jam Colaborativa (Pond), Votação e Skip** | [`03-collaborative-jam-pond.e2e.ts`](tests/e2e/03-collaborative-jam-pond.e2e.ts) | [`03-collaborative-jam-pond.mp4`](docs/videos/03-collaborative-jam-pond.mp4) |
+| **4. Busca no Catálogo, Reviews e Comunidade** | [`04-explore-search-and-community-reviews.e2e.ts`](tests/e2e/04-explore-search-and-community-reviews.e2e.ts) | [`04-explore-search-and-community-reviews.mp4`](docs/videos/04-explore-search-and-community-reviews.mp4) |
+| **5. Painel Administrativo, Planos e Moderação** | [`05-admin-console-governance-and-moderation.e2e.ts`](tests/e2e/05-admin-console-governance-and-moderation.e2e.ts) | [`05-admin-console-governance-and-moderation.mp4`](docs/videos/05-admin-console-governance-and-moderation.mp4) |
 
 ### Frontend (TypeScript / Angular)
 - **Executar testes unitários (219 testes em 38 arquivos com Vitest):**

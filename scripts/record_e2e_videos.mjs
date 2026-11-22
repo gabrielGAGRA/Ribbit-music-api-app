@@ -42,6 +42,10 @@ const playwrightCli = path.join(rootDir, 'node_modules', '@playwright', 'test', 
 const runResult = spawnSync(process.execPath, [playwrightCli, 'test', ...extraArgs], {
   cwd: rootDir,
   stdio: 'inherit',
+  env: {
+    ...process.env,
+    E2E_RECORD: '1',
+  },
 });
 
 if (runResult.status !== 0) {
@@ -65,8 +69,36 @@ for (const flowName of EXPECTED_FLOWS) {
     continue;
   }
 
-  const videoDest = path.join(outputVideosDir, `${flowName}.webm`);
-  fs.copyFileSync(videoSrc, videoDest);
+  const videoDest = path.join(outputVideosDir, `${flowName}.mp4`);
+  const legacyWebm = path.join(outputVideosDir, `${flowName}.webm`);
+  fs.rmSync(legacyWebm, { force: true });
+
+  const encodeResult = spawnSync(
+    'ffmpeg',
+    [
+      '-y',
+      '-i',
+      videoSrc,
+      '-c:v',
+      'libx264',
+      '-crf',
+      '22',
+      '-preset',
+      'slow',
+      '-pix_fmt',
+      'yuv420p',
+      '-movflags',
+      '+faststart',
+      '-an',
+      videoDest,
+    ],
+    { cwd: rootDir, stdio: 'inherit' },
+  );
+  if (encodeResult.status !== 0) {
+    missing.push(flowName);
+    continue;
+  }
+
   const stats = fs.statSync(videoDest);
   if (stats.size === 0) {
     missing.push(flowName);
