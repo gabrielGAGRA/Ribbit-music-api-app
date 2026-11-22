@@ -74,7 +74,14 @@ class CreateTrackUseCase:
             )
         except ExternalServiceError as exc:
             logging.getLogger(__name__).warning(
-                "Failed to write track delta for track %s: %s", saved.track_id, exc
+                "Failed to write track delta for track %s: %s",
+                saved.track_id,
+                exc,
+                extra={
+                    "event": "catalog.delta_write.failed",
+                    "status": "warning",
+                    "track_id": saved.track_id,
+                },
             )
 
     def execute(self, command: CreateTrackCommand) -> AdminCatalogTrackResult:
