@@ -19,7 +19,7 @@ from app.application.use_cases.jam.vote_jam_track import VoteJamTrackUseCase
 from app.application.use_cases.jam.vote_skip_jam_track import (
     VoteSkipJamTrackUseCase,
 )
-from app.domain.exceptions import SpotifyError, SpotifyPremiumRequiredError
+from app.domain.exceptions import ExternalServiceError, PermissionDeniedError
 from app.domain.models.jam import Jam, JamQueueItem
 from app.domain.models.track import Track
 from app.domain.models.user import User
@@ -112,7 +112,9 @@ def test_vote_jam_track_falls_back_gracefully_on_non_premium_spotify_error() -> 
     track_repo.find_by_id.return_value = track
 
     spotify_queue = MagicMock(spec=SpotifyHostQueuePort)
-    spotify_queue.enqueue_track.side_effect = SpotifyError("No active device")
+    spotify_queue.enqueue_track.side_effect = ExternalServiceError(
+        "No active device", service_name="Spotify"
+    )
 
     use_case = VoteJamTrackUseCase(
         jam_repo=jam_repo,
@@ -148,7 +150,9 @@ def test_vote_jam_track_downgrades_host_on_spotify_premium_required() -> None:
     track_repo.find_by_id.return_value = track
 
     spotify_queue = MagicMock(spec=SpotifyHostQueuePort)
-    spotify_queue.enqueue_track.side_effect = SpotifyPremiumRequiredError()
+    spotify_queue.enqueue_track.side_effect = PermissionDeniedError(
+        "Premium required", details={"rule_name": "spotify_premium_required"}
+    )
 
     use_case = VoteJamTrackUseCase(
         jam_repo=jam_repo,
@@ -157,7 +161,7 @@ def test_vote_jam_track_downgrades_host_on_spotify_premium_required() -> None:
         spotify_queue=spotify_queue,
     )
 
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError):
         use_case.execute(
             VoteJamTrackCommand(jam_id=10, user_id=1, track_id=50, action="like")
         )

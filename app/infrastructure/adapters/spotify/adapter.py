@@ -13,14 +13,14 @@ from app.application.ports.services.music_service import (
     ProviderPlaylist,
     TrackCatalogPort,
 )
-from app.domain.exceptions import SpotifyAuthError, SpotifyForbiddenError
+from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters.spotify.auth import SpotifyAuth, SpotifyAuthMode
 from app.infrastructure.adapters.spotify.catalog import SpotifyCatalog
+from app.infrastructure.adapters.spotify.credentials import SpotifyCredentials
 from app.infrastructure.adapters.spotify.http import SpotifyHttpClient
 from app.infrastructure.adapters.spotify.player import SpotifyPlayer
 from app.infrastructure.adapters.spotify.playlists import SpotifyPlaylists
 lazy from app.domain.models.track import ExternalTrackId
-lazy from app.infrastructure.adapters.spotify.credentials import SpotifyCredentials
 
 _ADD_ITEMS_BATCH_SIZE = 100
 _SPOTIFY_ID_PATTERN = re.compile(r"[0-9A-Za-z]{22}")
@@ -120,37 +120,37 @@ class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
 
     def _require_catalog(self) -> SpotifyCatalog:
         if self.catalog is None:
-            raise SpotifyAuthError("Spotify credentials are not configured")
+            raise ExternalServiceError(
+                "Spotify credentials are not configured",
+                service_name="Spotify",
+                details={"error_kind": "auth"},
+            )
         return self.catalog
 
     def _playlists_for_tokens(
         self, access_token: str | None, refresh_token: str | None
     ) -> SpotifyPlaylists:
         if (access_token or refresh_token) and self.auth is not None:
-            from app.infrastructure.adapters.spotify.credentials import (  # noqa: PLC0415
-                SpotifyCredentials,
+            user_auth = self.auth.for_user_tokens(
+                access_token=access_token,
+                refresh_token=refresh_token,
             )
-
-            creds = self.auth._credentials
-            user_creds = SpotifyCredentials(
-                client_id=creds.client_id,
-                client_secret=creds.client_secret,
-                redirect_uri=creds.redirect_uri,
-                refresh_token=refresh_token or creds.refresh_token,
-            )
-            user_auth = SpotifyAuth(user_creds, self.auth._session)
-            if access_token:
-                user_auth._access_token = access_token
-            return SpotifyPlaylists(SpotifyHttpClient(user_auth, self.auth._session))
+            return SpotifyPlaylists(SpotifyHttpClient(user_auth, user_auth.session))
         return self._require_playlists()
 
     def _require_playlists(self) -> SpotifyPlaylists:
         if self.playlists is None:
             if self.auth is None:
-                raise SpotifyAuthError("Spotify credentials are not configured")
-            raise SpotifyForbiddenError(
+                raise ExternalServiceError(
+                    "Spotify credentials are not configured",
+                    service_name="Spotify",
+                    details={"error_kind": "auth"},
+                )
+            raise ExternalServiceError(
                 "Playlist export needs a user token; configure redirect_uri or "
-                "refresh_token"
+                "refresh_token",
+                service_name="Spotify",
+                details={"error_kind": "forbidden"},
             )
         return self.playlists
 

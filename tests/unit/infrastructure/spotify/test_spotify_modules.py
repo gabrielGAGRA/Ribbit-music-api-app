@@ -2,7 +2,7 @@
 
 import pytest
 
-from app.domain.exceptions import SpotifyError
+from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters.spotify.catalog import SpotifyCatalog
 from app.infrastructure.adapters.spotify.player import SpotifyPlayer
 from app.infrastructure.adapters.spotify.playlists import SpotifyPlaylists
@@ -66,7 +66,7 @@ class TestCatalog:
     @pytest.mark.parametrize("payload", [{"id": "x"}, {"id": "x", "artists": 1}])
     def test_malformed_payload_is_mapped(self, make_http, payload) -> None:
         http, _ = make_http(FakeResponse(200, {"tracks": {"items": [payload]}}))
-        with pytest.raises(SpotifyError, match="unexpected"):
+        with pytest.raises(ExternalServiceError, match="unexpected"):
             SpotifyCatalog(http).search_tracks("x")
 
 
@@ -100,7 +100,7 @@ class TestPlaylists:
 
     def test_malformed_playlist_is_mapped(self, make_http) -> None:
         http, _ = make_http(FakeResponse(200, {"id": "p1"}))
-        with pytest.raises(SpotifyError, match="playlist payload"):
+        with pytest.raises(ExternalServiceError, match="playlist payload"):
             SpotifyPlaylists(http).get_playlist("p1")
 
     def test_create_playlist_posts_body(self, make_http) -> None:
@@ -157,7 +157,7 @@ class TestPlaylists:
 
     def test_response_without_snapshot_is_mapped(self, make_http) -> None:
         http, _ = make_http(FakeResponse(201, {}))
-        with pytest.raises(SpotifyError, match="snapshot_id"):
+        with pytest.raises(ExternalServiceError, match="snapshot_id"):
             SpotifyPlaylists(http).add_playlist_items("p1", ["spotify:track:a"])
 
     def test_remove_items_body_shape(self, make_http) -> None:
@@ -320,5 +320,5 @@ class TestPlayer:
 
     def test_playback_state_without_is_playing_is_mapped(self, make_http) -> None:
         http, _ = make_http(FakeResponse(200, {"progress_ms": 1}))
-        with pytest.raises(SpotifyError, match="playback payload"):
+        with pytest.raises(ExternalServiceError, match="playback payload"):
             SpotifyPlayer(http).get_playback_state()

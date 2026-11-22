@@ -10,8 +10,8 @@ from app.application.use_cases.spotify import (
     DisconnectSpotifyAccountUseCase,
     GetSpotifyAuthorizeUrlUseCase,
 )
-from app.domain.exceptions import AuthenticationRequiredError
-from app.presentation.dependencies import provide, require_user
+from app.domain.exceptions import AuthenticationRequiredError, ExternalServiceError
+from app.presentation.dependencies import provide, provide_optional, require_user
 from app.presentation.schemas.auth import UserResponse
 from app.presentation.schemas.spotify import (
     SpotifyAuthorizeUrlResponse,
@@ -24,11 +24,18 @@ router = APIRouter(prefix="/api/spotify", tags=["Spotify Connection"])
 @router.get("/authorize", response_model=SpotifyAuthorizeUrlResponse)
 def get_spotify_authorize_url(
     user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[
-        GetSpotifyAuthorizeUrlUseCase, Depends(provide(GetSpotifyAuthorizeUrlUseCase))
-    ],
     token_service: Annotated[TokenServicePort, Depends(provide(TokenServicePort))],
+    use_case: Annotated[
+        GetSpotifyAuthorizeUrlUseCase | None,
+        Depends(provide_optional(GetSpotifyAuthorizeUrlUseCase)),
+    ] = None,
 ) -> SpotifyAuthorizeUrlResponse:
+    if use_case is None:
+        raise ExternalServiceError(
+            "Spotify OAuth is not configured.",
+            service_name="Spotify",
+            details={"error_kind": "auth"},
+        )
     state = token_service.create_access_token(user_id=user_id, expires_in_seconds=600)
     url = use_case.execute(state=state)
     return SpotifyAuthorizeUrlResponse(authorization_url=url)
@@ -38,11 +45,18 @@ def get_spotify_authorize_url(
 def connect_spotify_callback(
     req: SpotifyConnectCallbackRequest,
     user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[
-        ConnectSpotifyAccountUseCase, Depends(provide(ConnectSpotifyAccountUseCase))
-    ],
     token_service: Annotated[TokenServicePort, Depends(provide(TokenServicePort))],
+    use_case: Annotated[
+        ConnectSpotifyAccountUseCase | None,
+        Depends(provide_optional(ConnectSpotifyAccountUseCase)),
+    ] = None,
 ) -> UserResponse:
+    if use_case is None:
+        raise ExternalServiceError(
+            "Spotify OAuth is not configured.",
+            service_name="Spotify",
+            details={"error_kind": "auth"},
+        )
     claims = token_service.decode_access_token(req.state)
     if claims.get("sub") != str(user_id):
         raise AuthenticationRequiredError(

@@ -10,7 +10,7 @@ from app.application.ports.services.music_service import CatalogTrack, TrackCata
 from app.application.use_cases.spotify.sync_tracks_from_spotify import (
     SyncTracksFromSpotifyUseCase,
 )
-from app.domain.exceptions import BusinessRuleViolationError, SpotifyAuthError
+from app.domain.exceptions import BusinessRuleViolationError, ExternalServiceError
 from app.domain.models.track import Track
 
 
@@ -111,9 +111,14 @@ class TestSyncTracks:
 
     def test_unconfigured_catalog_raises_spotify_auth_error(self) -> None:
         catalog = MagicMock(spec=TrackCatalogPort)
-        catalog.search_tracks.side_effect = SpotifyAuthError("not configured")
+        catalog.search_tracks.side_effect = ExternalServiceError(
+            "not configured",
+            service_name="Spotify",
+            details={"error_kind": "auth"},
+        )
         track_repo = MagicMock(spec=TrackRepositoryPort)
         use_case = SyncTracksFromSpotifyUseCase(catalog, track_repo)
 
-        with pytest.raises(SpotifyAuthError, match="not configured"):
+        with pytest.raises(ExternalServiceError, match="not configured") as exc_info:
             use_case.execute(SyncTracksFromSpotifyCommand(query="x"))
+        assert exc_info.value.details.get("error_kind") == "auth"

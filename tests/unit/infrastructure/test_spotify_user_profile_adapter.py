@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 import niquests
 import pytest
 
-from app.domain.exceptions import SpotifyAuthError
+from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters.spotify.user_profile import SpotifyUserProfileAdapter
 
 
@@ -51,8 +51,9 @@ def test_get_current_user_profile_free_or_missing_product_is_not_premium() -> No
 
 def test_get_current_user_profile_blank_token_raises_error() -> None:
     adapter = SpotifyUserProfileAdapter()
-    with pytest.raises(SpotifyAuthError, match="cannot be blank"):
+    with pytest.raises(ExternalServiceError, match="cannot be blank") as exc_info:
         adapter.get_current_user_profile("  ")
+    assert exc_info.value.details.get("error_kind") == "auth"
 
 
 def test_get_current_user_profile_error_status_raises_error() -> None:
@@ -62,5 +63,6 @@ def test_get_current_user_profile_error_status_raises_error() -> None:
     mock_session.get.return_value = mock_response
 
     adapter = SpotifyUserProfileAdapter(session=mock_session)
-    with pytest.raises(SpotifyAuthError, match="status 401"):
+    with pytest.raises(ExternalServiceError, match="status 401") as exc_info:
         adapter.get_current_user_profile("expired_token")
+    assert exc_info.value.details.get("error_kind") == "auth"

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
-    ForbiddenError,
+    PermissionDeniedError,
 )
 from app.domain.models.interaction import (
     Interaction,
@@ -61,7 +61,7 @@ class SaveSearchTrackLikeUseCase:
         if not playlist:
             raise EntityNotFoundError("Playlist not found.")
         if not playlist.is_owned_by(user_id):
-            raise ForbiddenError("Playlist does not belong to this user.")
+            raise PermissionDeniedError("Playlist does not belong to this user.")
         if track.track_id is None or all(
             existing.track_id != track.track_id for existing in playlist.tracks
         ):

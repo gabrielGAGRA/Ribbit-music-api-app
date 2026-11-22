@@ -13,8 +13,6 @@ from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
     PermissionDeniedError,
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
 )
 from app.domain.models import Jam, JamQueueItem, User
 
@@ -106,8 +104,9 @@ def test_advance_playback_requires_spotify_premium_when_user_repo_provided() -> 
     jam_repo = MagicMock(spec=JamRepositoryPort)
     use_case = AdvanceJamPlaybackUseCase(jam_repo=jam_repo, user_repo=user_repo)
 
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(jam_id=1, requester_user_id=10)
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
     jam_repo.find_by_id.assert_not_called()
 
 
@@ -126,6 +125,7 @@ def test_advance_playback_requires_spotify_connection_when_unlinked() -> None:
     jam_repo = MagicMock(spec=JamRepositoryPort)
     use_case = AdvanceJamPlaybackUseCase(jam_repo=jam_repo, user_repo=user_repo)
 
-    with pytest.raises(SpotifyConnectionRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(jam_id=1, requester_user_id=10)
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"
     jam_repo.find_by_id.assert_not_called()

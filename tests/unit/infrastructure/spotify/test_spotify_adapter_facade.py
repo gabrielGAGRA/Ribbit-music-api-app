@@ -12,9 +12,8 @@ from app.application.ports.services.spotify import (
     SpotifyPlaylistsPort,
     SpotifyQueuePort,
 )
-from app.domain.exceptions import SpotifyAuthError, SpotifyForbiddenError
-from app.infrastructure.adapters.spotify import SpotifyCredentials
-from app.infrastructure.adapters.spotify_adapter import SpotifyAdapter
+from app.domain.exceptions import ExternalServiceError
+from app.infrastructure.adapters.spotify import SpotifyAdapter, SpotifyCredentials
 from tests.utils.fakes import FakeResponse, FakeSession
 from tests.utils.payloads import ALL_SCOPES, track_payload
 
@@ -87,16 +86,18 @@ class TestDisabled:
         ],
     )
     def test_operations_require_credentials(self, call) -> None:
-        with pytest.raises(SpotifyAuthError, match="not configured"):
+        with pytest.raises(ExternalServiceError, match="not configured") as exc_info:
             call(SpotifyAdapter())
+        assert exc_info.value.details.get("error_kind") == "auth"
 
     def test_export_requires_a_user_token(self) -> None:
         adapter = SpotifyAdapter(
             SpotifyCredentials(client_id="id", client_secret="s"),
             FakeSession(),
         )
-        with pytest.raises(SpotifyForbiddenError, match="user token"):
+        with pytest.raises(ExternalServiceError, match="user token") as exc_info:
             adapter.export_playlist("acc", "Mix", [SPOTIFY_ID_A])
+        assert exc_info.value.details.get("error_kind") == "forbidden"
 
 
 @pytest.mark.unit

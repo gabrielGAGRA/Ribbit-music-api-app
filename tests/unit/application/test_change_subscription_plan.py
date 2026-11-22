@@ -206,7 +206,10 @@ def test_change_subscription_plan_blocks_minor_from_paid_individual_or_family() 
         plan_id=1,
     )
     individual_plan = Plan(
-        plan_id=2, name="Individual", initial_monthly_price=14.90, initial_max_profiles=1
+        plan_id=2,
+        name="Individual",
+        initial_monthly_price=14.90,
+        initial_max_profiles=1,
     )
     family_plan = Plan(
         plan_id=3, name="Família", initial_monthly_price=27.90, initial_max_profiles=4
