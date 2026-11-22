@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AdminStateService } from './admin-state.service';
+import { AdminStateService } from '../admin-state.service';
 import { AdminUsersComponent } from './admin-users.component';
 
 describe('AdminUsersComponent', () => {
@@ -115,7 +115,7 @@ describe('AdminUsersComponent', () => {
       plan_id: 2,
       is_admin: true,
     });
-    expect(state.administrators().some((admin) => admin.user_id === 2)).toBe(true);
+    expect(state.administrators().some((admin) => admin.userId === 2)).toBe(true);
 
     component['selectTab']('admins');
     component['searchQuery'].set('');
@@ -137,7 +137,7 @@ describe('AdminUsersComponent', () => {
       is_admin: false,
     });
     expect(component['actionError']()).toBe('');
-    expect(state.administrators().some((admin) => admin.user_id === 2)).toBe(false);
+    expect(state.administrators().some((admin) => admin.userId === 2)).toBe(false);
 
     component['toggleRegisterForm']();
     component['newAdminName'].set('Fernando Seraco');
@@ -178,7 +178,7 @@ describe('AdminUsersComponent', () => {
     });
 
     expect(component['showRegisterForm']()).toBe(false);
-    expect(state.administrators().some((admin) => admin.user_id === 4)).toBe(true);
+    expect(state.administrators().some((admin) => admin.userId === 4)).toBe(true);
   });
 
   it('loads and filters global access history on the 3rd tab including soft-deleted tracks', () => {
@@ -204,7 +204,7 @@ describe('AdminUsersComponent', () => {
     ]);
 
     expect(component['filteredAccessHistory']().length).toBe(1);
-    expect(component['filteredAccessHistory']()[0]?.track_is_deleted).toBe(true);
+    expect(component['filteredAccessHistory']()[0]?.trackIsDeleted).toBe(true);
 
     component['toggleAccessOnlyDeleted']({
       target: { checked: true },

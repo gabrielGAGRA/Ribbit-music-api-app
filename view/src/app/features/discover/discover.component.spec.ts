@@ -4,10 +4,23 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Song } from '@ribbit/shared-types';
 import { DiscoverComponent } from './discover.component';
 import { AudioPlayerService } from '../../core/audio-player.service';
 import { authInterceptor } from '../../core/auth.interceptor';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+
+const TEST_SONG: Song = {
+  trackId: 1,
+  title: 'Bloom',
+  artist: 'Odesza',
+  genre: 'Electronic',
+  time: '3:15',
+  image: 'https://example.com/bloom.jpg',
+  album: 'In Return',
+  year: '2014',
+  match: 95,
+};
 
 describe('DiscoverComponent', () => {
   let component: DiscoverComponent;
@@ -24,6 +37,7 @@ describe('DiscoverComponent', () => {
       ],
     });
     state = TestBed.inject(RibbitStateService);
+    state.songs.set([TEST_SONG]);
     player = TestBed.inject(AudioPlayerService);
     component = TestBed.runInInjectionContext(() => new DiscoverComponent());
   });
@@ -33,12 +47,12 @@ describe('DiscoverComponent', () => {
   });
 
   it('should initialize and display current song', () => {
-    expect(component.currentSong()).toBeDefined();
-    expect(component.currentSong().title).toBe('Bloom');
+    expect(component['currentSong']()).toBeDefined();
+    expect(component['currentSong']().title).toBe('Bloom');
   });
 
   it('should trigger like, love, and reject decisions after animation', () => {
-    component.handleDecision('like');
+    component['submitDecision']('like');
     vi.advanceTimersByTime(300);
 
     expect(state.history().length).toBe(1);
@@ -47,32 +61,27 @@ describe('DiscoverComponent', () => {
 
   it('should toggle audio playback', () => {
     expect(player.isPlaying()).toBe(false);
-    component.togglePlay();
+    component['togglePlay']();
     expect(player.isPlaying()).toBe(true);
-    component.togglePlay();
+    component['togglePlay']();
     expect(player.isPlaying()).toBe(false);
   });
 
-  it('should handle mode selection', () => {
-    component.selectMode('Por Referência');
-    expect(state.mode()).toBe('Por Referência');
-  });
-
   it('should guarantee strictly mutually exclusive activeDragAction', () => {
-    component.drag.set({ x: 10, y: -15 });
-    expect(component.activeDragAction()).toBeNull();
+    component['drag'].set({ x: 10, y: -15 });
+    expect(component['activeDragAction']()).toBeNull();
 
-    component.drag.set({ x: 90, y: -70 });
-    expect(component.activeDragAction()).toBe('like');
+    component['drag'].set({ x: 90, y: -70 });
+    expect(component['activeDragAction']()).toBe('like');
 
-    component.drag.set({ x: 60, y: -90 });
-    expect(component.activeDragAction()).toBe('love');
+    component['drag'].set({ x: 60, y: -90 });
+    expect(component['activeDragAction']()).toBe('love');
 
-    component.drag.set({ x: -85, y: -60 });
-    expect(component.activeDragAction()).toBe('reject');
+    component['drag'].set({ x: -85, y: -60 });
+    expect(component['activeDragAction']()).toBe('reject');
 
-    component.drag.set({ x: 0, y: 70 });
-    expect(component.activeDragAction()).toBeNull();
+    component['drag'].set({ x: 0, y: 70 });
+    expect(component['activeDragAction']()).toBeNull();
   });
 
   it('should define responsive mobile rules for discovery toolbar, deck card, and swipe controls', () => {

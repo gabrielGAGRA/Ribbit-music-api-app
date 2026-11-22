@@ -93,7 +93,7 @@ describe('RibbitStateService', () => {
 
   it('starts on login view when no token is stored in localStorage', () => {
     expect(service.authView()).toBe('login');
-    expect(service.songs().length).toBeGreaterThan(0);
+    expect(service.songs()).toEqual([]);
     expect(service.currentPlan()).toBe('Free');
   });
 

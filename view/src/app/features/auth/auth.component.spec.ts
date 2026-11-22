@@ -36,75 +36,75 @@ describe('AuthComponent', () => {
 
   it('should toggle between login and register views', () => {
     state.setAuthView('login');
-    expect(component.isRegister()).toBe(false);
+    expect(component['isRegister']()).toBe(false);
 
-    component.toggleView();
-    expect(component.isRegister()).toBe(true);
+    component['toggleView']();
+    expect(component['isRegister']()).toBe(true);
 
-    component.toggleView();
-    expect(component.isRegister()).toBe(false);
+    component['toggleView']();
+    expect(component['isRegister']()).toBe(false);
   });
 
   it('should calculate age correctly from birth date', () => {
-    component.birthDateDraft.set('2000-01-15');
-    const age = component.calculatedAge();
+    component['birthDateDraft'].set('2000-01-15');
+    const age = component['calculatedAge']();
     expect(age).toBeGreaterThanOrEqual(24);
-    expect(component.isUnderage()).toBe(false);
-    expect(component.isFutureDate()).toBe(false);
+    expect(component['isUnderage']()).toBe(false);
+    expect(component['isFutureDate']()).toBe(false);
   });
 
   it('should block registration for underage birth dates (< 18 years old)', () => {
     const today = new Date();
     const underageYear = today.getFullYear() - 14;
     const formatted = `${underageYear}-05-20`;
-    component.birthDateDraft.set(formatted);
+    component['birthDateDraft'].set(formatted);
 
-    expect(component.isUnderage()).toBe(true);
-    expect(component.underageWarning()).toContain(
+    expect(component['isUnderage']()).toBe(true);
+    expect(component['underageWarning']()).toContain(
       'Cadastro direto permitido apenas para maiores de 18 anos',
     );
-    expect(component.canSubmitRegister()).toBe(false);
+    expect(component['canSubmitRegister']()).toBe(false);
   });
 
   it('should block registration for future birth dates', () => {
     const nextYear = new Date().getFullYear() + 2;
-    component.birthDateDraft.set(`${nextYear}-01-01`);
+    component['birthDateDraft'].set(`${nextYear}-01-01`);
 
-    expect(component.isFutureDate()).toBe(true);
-    expect(component.underageWarning()).toContain('futuro');
-    expect(component.canSubmitRegister()).toBe(false);
+    expect(component['isFutureDate']()).toBe(true);
+    expect(component['underageWarning']()).toContain('futuro');
+    expect(component['canSubmitRegister']()).toBe(false);
   });
 
   it('should detect password mismatches and enforce minimum length', () => {
-    component.passwordDraft.set('12345');
-    component.confirmPasswordDraft.set('12345');
-    expect(component.passwordTooShort()).toBe(true);
-    expect(component.passwordRequirementHint()).toContain('6 caracteres (5/6)');
-    expect(component.canSubmitRegister()).toBe(false);
+    component['passwordDraft'].set('12345');
+    component['confirmPasswordDraft'].set('12345');
+    expect(component['passwordTooShort']()).toBe(true);
+    expect(component['passwordRequirementHint']()).toContain('6 caracteres (5/6)');
+    expect(component['canSubmitRegister']()).toBe(false);
 
-    component.passwordDraft.set('senhaForte123');
-    component.confirmPasswordDraft.set('outraSenha');
-    expect(component.passwordTooShort()).toBe(false);
-    expect(component.passwordRequirementHint()).toContain('6+ caracteres');
-    expect(component.passwordMismatch()).toBe(true);
-    expect(component.canSubmitRegister()).toBe(false);
+    component['passwordDraft'].set('senhaForte123');
+    component['confirmPasswordDraft'].set('outraSenha');
+    expect(component['passwordTooShort']()).toBe(false);
+    expect(component['passwordRequirementHint']()).toContain('6+ caracteres');
+    expect(component['passwordMismatch']()).toBe(true);
+    expect(component['canSubmitRegister']()).toBe(false);
 
-    component.confirmPasswordDraft.set('senhaForte123');
-    expect(component.passwordMismatch()).toBe(false);
+    component['confirmPasswordDraft'].set('senhaForte123');
+    expect(component['passwordMismatch']()).toBe(false);
   });
 
   it('should register via POST /api/auth/register and set authenticated state', () => {
     state.setAuthView('register');
-    component.nameDraft.set('Carolina Santos');
-    component.emailDraft.set('carolina@email.com');
-    component.birthDateDraft.set('1998-03-25');
-    component.passwordDraft.set('senhaSegura123');
-    component.confirmPasswordDraft.set('senhaSegura123');
-    component.selectedPlanId.set(2);
+    component['nameDraft'].set('Carolina Santos');
+    component['emailDraft'].set('carolina@email.com');
+    component['birthDateDraft'].set('1998-03-25');
+    component['passwordDraft'].set('senhaSegura123');
+    component['confirmPasswordDraft'].set('senhaSegura123');
+    component['selectedPlanId'].set(2);
 
-    expect(component.canSubmitRegister()).toBe(true);
+    expect(component['canSubmitRegister']()).toBe(true);
 
-    component.onSubmit(new Event('submit'));
+    component['submitAuthForm'](new Event('submit'));
     const req = httpMock.expectOne('/api/auth/register');
     expect(req.request.method).toBe('POST');
     expect(req.request.body).toEqual({
@@ -129,26 +129,26 @@ describe('AuthComponent', () => {
 
     expect(state.userName()).toBe('Carolina Santos');
     expect(state.currentPlan()).toBe('Individual');
-    expect(state.authView()).toBe('app');
+    expect(state['authView']()).toBe('app');
     expect(state.toast()).toContain('Carolina Santos');
   });
 
   it('should perform login via POST /api/auth/login and surface backend errors on 401', () => {
     state.setAuthView('login');
-    component.emailDraft.set('user@ribbit.app');
-    component.passwordDraft.set('wrongpass');
+    component['emailDraft'].set('user@ribbit.app');
+    component['passwordDraft'].set('wrongpass');
 
-    component.onSubmit(new Event('submit'));
+    component['submitAuthForm'](new Event('submit'));
     const failedReq = httpMock.expectOne('/api/auth/login');
     failedReq.flush(
       { detail: 'Invalid email or password.' },
       { status: 401, statusText: 'Unauthorized' },
     );
-    expect(component.errorMessage()).toContain('Invalid email or password.');
-    expect(state.authView()).toBe('login');
+    expect(component['errorMessage']()).toContain('Invalid email or password.');
+    expect(state['authView']()).toBe('login');
 
-    component.passwordDraft.set('correctpass');
-    component.onSubmit(new Event('submit'));
+    component['passwordDraft'].set('correctpass');
+    component['submitAuthForm'](new Event('submit'));
     const okReq = httpMock.expectOne('/api/auth/login');
     okReq.flush({
       access_token: 'jwt-valid',
@@ -163,51 +163,51 @@ describe('AuthComponent', () => {
       },
     });
 
-    expect(state.authView()).toBe('app');
+    expect(state['authView']()).toBe('app');
     expect(state.toast()).toContain('Login realizado com sucesso');
   });
 
   it('should transition to forgot-password view on onForgot and return to login on backToLogin', () => {
     state.setAuthView('login');
-    expect(component.authView()).toBe('login');
-    expect(component.isForgot()).toBe(false);
+    expect(component['authView']()).toBe('login');
+    expect(component['isForgot']()).toBe(false);
 
-    component.onForgot();
-    expect(component.authView()).toBe('forgot-password');
-    expect(component.isForgot()).toBe(true);
-    expect(state.authView()).toBe('forgot-password');
+    component['openForgotPassword']();
+    expect(component['authView']()).toBe('forgot-password');
+    expect(component['isForgot']()).toBe(true);
+    expect(state['authView']()).toBe('forgot-password');
 
-    component.backToLogin();
-    expect(component.authView()).toBe('login');
-    expect(component.isForgot()).toBe(false);
-    expect(state.authView()).toBe('login');
+    component['backToLogin']();
+    expect(component['authView']()).toBe('login');
+    expect(component['isForgot']()).toBe(false);
+    expect(state['authView']()).toBe('login');
   });
 
   it('should validate email in requestPasswordReset and show error for invalid inputs', () => {
-    component.onForgot();
-    component.emailDraft.set('invalid-email');
+    component['openForgotPassword']();
+    component['emailDraft'].set('invalid-email');
 
-    component.requestPasswordReset();
-    expect(component.errorMessage()).toBe('Informe um e-mail válido para recuperação.');
-    expect(component.forgotSubmitted()).toBe(false);
+    component['requestPasswordReset']();
+    expect(component['errorMessage']()).toBe('Informe um e-mail válido para recuperação.');
+    expect(component['forgotSubmitted']()).toBe(false);
 
-    component.requestPasswordReset('another-invalid');
-    expect(component.errorMessage()).toBe('Informe um e-mail válido para recuperação.');
+    component['requestPasswordReset']('another-invalid');
+    expect(component['errorMessage']()).toBe('Informe um e-mail válido para recuperação.');
   });
 
   it('should request password reset with valid email, set forgotSubmitted, and show success message', () => {
     vi.useFakeTimers();
     try {
-      component.onForgot();
-      component.requestPasswordReset('usuario@ribbit.app');
+      component['openForgotPassword']();
+      component['requestPasswordReset']('usuario@ribbit.app');
 
-      expect(component.isSubmitting()).toBe(true);
-      expect(component.errorMessage()).toBe('');
+      expect(component['isSubmitting']()).toBe(true);
+      expect(component['errorMessage']()).toBe('');
 
       vi.advanceTimersByTime(450);
 
-      expect(component.isSubmitting()).toBe(false);
-      expect(component.forgotSubmitted()).toBe(true);
+      expect(component['isSubmitting']()).toBe(false);
+      expect(component['forgotSubmitted']()).toBe(true);
       expect(state.toast()).toContain(
         'Se este e-mail estiver cadastrado, enviamos as instruções de recuperação.',
       );
@@ -251,10 +251,10 @@ describe('AuthComponent', () => {
     expect(clientIdReq.request.method).toBe('GET');
     clientIdReq.flush({ client_id: '  prefetched-client-id.apps.googleusercontent.com  ' });
 
-    expect(component.googleClientId()).toBe('prefetched-client-id.apps.googleusercontent.com');
+    expect(component['googleClientId']()).toBe('prefetched-client-id.apps.googleusercontent.com');
 
-    component.triggerGoogleIdentityServicesPrompt();
-    component.triggerGoogleIdentityServicesPrompt();
+    component['triggerGoogleIdentityServicesPrompt']();
+    component['triggerGoogleIdentityServicesPrompt']();
     httpMock.expectNone('/api/auth/google/client-id');
     expect(initialize).toHaveBeenCalledTimes(1);
     expect(initialize).toHaveBeenCalledWith(
@@ -279,16 +279,16 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.triggerGoogleIdentityServicesPrompt();
-    expect(component.isLoadingGoogleConfig()).toBe(true);
-    component.triggerGoogleIdentityServicesPrompt();
+    component['triggerGoogleIdentityServicesPrompt']();
+    expect(component['isLoadingGoogleConfig']()).toBe(true);
+    component['triggerGoogleIdentityServicesPrompt']();
 
     const clientIdReq = httpMock.expectOne('/api/auth/google/client-id');
     expect(clientIdReq.request.method).toBe('GET');
     clientIdReq.flush({ client_id: '12345.apps.googleusercontent.com' });
 
-    expect(component.isLoadingGoogleConfig()).toBe(false);
-    expect(component.googleClientId()).toBe('12345.apps.googleusercontent.com');
+    expect(component['isLoadingGoogleConfig']()).toBe(false);
+    expect(component['googleClientId']()).toBe('12345.apps.googleusercontent.com');
     expect(initialize).toHaveBeenCalledWith(
       expect.objectContaining({
         client_id: '12345.apps.googleusercontent.com',
@@ -323,9 +323,9 @@ describe('AuthComponent', () => {
       },
     });
 
-    expect(component.isSubmitting()).toBe(false);
-    expect(component.errorMessage()).toBe('');
-    expect(state.authView()).toBe('app');
+    expect(component['isSubmitting']()).toBe(false);
+    expect(component['errorMessage']()).toBe('');
+    expect(state['authView']()).toBe('app');
     expect(state.userName()).toBe('Ana Clara');
     expect(state.toast()).toContain('Conectado com Google como Ana Clara.');
   });
@@ -337,16 +337,16 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.triggerGoogleIdentityServicesPrompt();
+    component['triggerGoogleIdentityServicesPrompt']();
     const clientIdReq = httpMock.expectOne('/api/auth/google/client-id');
 
-    component.emailDraft.set('user@ribbit.app');
-    component.passwordDraft.set('secret123');
-    component.onSubmit(new Event('submit'));
-    expect(component.isSubmitting()).toBe(true);
+    component['emailDraft'].set('user@ribbit.app');
+    component['passwordDraft'].set('secret123');
+    component['submitAuthForm'](new Event('submit'));
+    expect(component['isSubmitting']()).toBe(true);
 
     clientIdReq.flush({ client_id: 'late-client-id.apps.googleusercontent.com' });
-    expect(component.isLoadingGoogleConfig()).toBe(false);
+    expect(component['isLoadingGoogleConfig']()).toBe(false);
     expect(initialize).not.toHaveBeenCalled();
     expect(prompt).not.toHaveBeenCalled();
 
@@ -373,60 +373,60 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.triggerGoogleIdentityServicesPrompt();
+    component['triggerGoogleIdentityServicesPrompt']();
     const successReq = httpMock.expectOne('/api/auth/google/client-id');
-    component.onForgot();
-    expect(component.authView()).toBe('forgot-password');
+    component['openForgotPassword']();
+    expect(component['authView']()).toBe('forgot-password');
 
     successReq.flush({ client_id: 'late-forgot-client-id.apps.googleusercontent.com' });
-    expect(component.isLoadingGoogleConfig()).toBe(false);
+    expect(component['isLoadingGoogleConfig']()).toBe(false);
     expect(initialize).not.toHaveBeenCalled();
     expect(prompt).not.toHaveBeenCalled();
-    expect(component.errorMessage()).toBe('');
+    expect(component['errorMessage']()).toBe('');
 
-    component.backToLogin();
-    component.googleClientId.set(null);
-    component.triggerGoogleIdentityServicesPrompt();
+    component['backToLogin']();
+    component['googleClientId'].set(null);
+    component['triggerGoogleIdentityServicesPrompt']();
     const failReq = httpMock.expectOne('/api/auth/google/client-id');
-    component.onForgot();
+    component['openForgotPassword']();
 
     failReq.flush(
       { detail: 'Google config unreachable.' },
       { status: 500, statusText: 'Internal Server Error' },
     );
-    expect(component.isLoadingGoogleConfig()).toBe(false);
-    expect(component.errorMessage()).toBe('');
+    expect(component['isLoadingGoogleConfig']()).toBe(false);
+    expect(component['errorMessage']()).toBe('');
   });
 
   it('should show clear errors when Google client_id is missing or fetch fails', () => {
-    component.triggerGoogleIdentityServicesPrompt();
+    component['triggerGoogleIdentityServicesPrompt']();
     const emptyReq = httpMock.expectOne('/api/auth/google/client-id');
     emptyReq.flush({ client_id: null });
-    expect(component.errorMessage()).toBe(
+    expect(component['errorMessage']()).toBe(
       'Login com Google indisponível: GOOGLE_CLIENT_ID não configurado no servidor.',
     );
 
-    component.triggerGoogleIdentityServicesPrompt();
+    component['triggerGoogleIdentityServicesPrompt']();
     const whitespaceReq = httpMock.expectOne('/api/auth/google/client-id');
     whitespaceReq.flush({ client_id: '   ' });
-    expect(component.errorMessage()).toBe(
+    expect(component['errorMessage']()).toBe(
       'Login com Google indisponível: GOOGLE_CLIENT_ID não configurado no servidor.',
     );
 
-    component.triggerGoogleIdentityServicesPrompt();
+    component['triggerGoogleIdentityServicesPrompt']();
     const errorReq = httpMock.expectOne('/api/auth/google/client-id');
     errorReq.flush(
       { detail: 'Failed to read Google config.' },
       { status: 500, statusText: 'Internal Server Error' },
     );
-    expect(component.errorMessage()).toContain('Failed to read Google config.');
+    expect(component['errorMessage']()).toContain('Failed to read Google config.');
   });
 
   it('should show clear error when GIS script is unavailable or prompt is suppressed', () => {
-    component.googleClientId.set('12345.apps.googleusercontent.com');
+    component['googleClientId'].set('12345.apps.googleusercontent.com');
 
-    component.triggerGoogleIdentityServicesPrompt();
-    expect(component.errorMessage()).toBe(
+    component['triggerGoogleIdentityServicesPrompt']();
+    expect(component['errorMessage']()).toBe(
       'Serviço de autenticação do Google indisponível no navegador.',
     );
 
@@ -445,8 +445,8 @@ describe('AuthComponent', () => {
       accounts: { id: { initialize, prompt } },
     };
 
-    component.triggerGoogleIdentityServicesPrompt();
-    expect(component.errorMessage()).toBe(
+    component['triggerGoogleIdentityServicesPrompt']();
+    expect(component['errorMessage']()).toBe(
       'Não foi possível exibir o modal do Google. Verifique as permissões do navegador.',
     );
 
@@ -460,18 +460,18 @@ describe('AuthComponent', () => {
         listener?.({ isSkippedMoment: () => true });
       },
     );
-    component.triggerGoogleIdentityServicesPrompt();
-    expect(component.errorMessage()).toBe(
+    component['triggerGoogleIdentityServicesPrompt']();
+    expect(component['errorMessage']()).toBe(
       'Não foi possível exibir o modal do Google. Verifique as permissões do navegador.',
     );
   });
 
   it('should validate empty token and surface 401/500 errors from POST /api/auth/google without fallback', () => {
-    component.authenticateWithGoogleIdToken('   ');
-    expect(component.errorMessage()).toBe('Token do Google inválido.');
+    component['authenticateWithGoogleIdToken']('   ');
+    expect(component['errorMessage']()).toBe('Token do Google inválido.');
     httpMock.expectNone('/api/auth/google');
 
-    component.authenticateWithGoogleIdToken('expired-google-jwt');
+    component['authenticateWithGoogleIdToken']('expired-google-jwt');
     const unauthorizedReq = httpMock.expectOne('/api/auth/google');
     expect(unauthorizedReq.request.method).toBe('POST');
     unauthorizedReq.flush(
@@ -480,10 +480,10 @@ describe('AuthComponent', () => {
     );
     httpMock.expectNone('/api/auth/login');
     httpMock.expectNone('/api/auth/register');
-    expect(component.isSubmitting()).toBe(false);
-    expect(component.errorMessage()).toContain('Invalid or expired Google ID token.');
+    expect(component['isSubmitting']()).toBe(false);
+    expect(component['errorMessage']()).toContain('Invalid or expired Google ID token.');
 
-    component.authenticateWithGoogleIdToken('server-error-jwt');
+    component['authenticateWithGoogleIdToken']('server-error-jwt');
     const serverErrorReq = httpMock.expectOne('/api/auth/google');
     serverErrorReq.flush(
       { detail: 'Google token service error.' },
@@ -491,26 +491,31 @@ describe('AuthComponent', () => {
     );
     httpMock.expectNone('/api/auth/login');
     httpMock.expectNone('/api/auth/register');
-    expect(component.isSubmitting()).toBe(false);
-    expect(component.errorMessage()).toContain('Google token service error.');
+    expect(component['isSubmitting']()).toBe(false);
+    expect(component['errorMessage']()).toContain('Google token service error.');
   });
 
   it('should reset selectedPlanId to Free when toggling auth view', () => {
     state.setAuthView('register');
-    component.selectedPlanId.set(2);
-    expect(component.selectedPlanId()).toBe(2);
+    component['selectedPlanId'].set(2);
+    expect(component['selectedPlanId']()).toBe(2);
 
-    component.toggleView();
+    component['toggleView']();
 
-    expect(component.authView()).toBe('login');
-    expect(component.selectedPlanId()).toBe(1);
+    expect(component['authView']()).toBe('login');
+    expect(component['selectedPlanId']()).toBe(1);
   });
 
   it('should request /api/auth/google/authorize on onGoogleLogin and navigate to external authorization URL', () => {
-    const navSpy = vi.spyOn(component, 'navigateToExternalUrl').mockImplementation(() => {});
+    const navSpy = vi
+      .spyOn(
+        component as unknown as { navigateToExternalUrl: (url: string) => void },
+        'navigateToExternalUrl',
+      )
+      .mockImplementation(() => {});
 
-    component.onGoogleLogin();
-    expect(component.isLoadingGoogleConfig()).toBe(true);
+    component['loginWithGoogle']();
+    expect(component['isLoadingGoogleConfig']()).toBe(true);
 
     const authReq = httpMock.expectOne('/api/auth/google/authorize');
     expect(authReq.request.method).toBe('GET');
@@ -518,28 +523,33 @@ describe('AuthComponent', () => {
       authorization_url: 'https://accounts.google.com/o/oauth2/auth?client_id=cid&state=xyz',
     });
 
-    expect(component.isLoadingGoogleConfig()).toBe(false);
+    expect(component['isLoadingGoogleConfig']()).toBe(false);
     expect(navSpy).toHaveBeenCalledWith(
       'https://accounts.google.com/o/oauth2/auth?client_id=cid&state=xyz',
     );
   });
 
   it('should not navigate to external authorization URL if user navigated to forgot password or started submitting while in flight', () => {
-    const navSpy = vi.spyOn(component, 'navigateToExternalUrl').mockImplementation(() => {});
+    const navSpy = vi
+      .spyOn(
+        component as unknown as { navigateToExternalUrl: (url: string) => void },
+        'navigateToExternalUrl',
+      )
+      .mockImplementation(() => {});
 
-    component.onGoogleLogin();
-    expect(component.isLoadingGoogleConfig()).toBe(true);
+    component['loginWithGoogle']();
+    expect(component['isLoadingGoogleConfig']()).toBe(true);
 
     // User switches to forgot view while request is in flight
-    component.onForgot();
-    expect(component.isForgot()).toBe(true);
+    component['openForgotPassword']();
+    expect(component['isForgot']()).toBe(true);
 
     const authReq = httpMock.expectOne('/api/auth/google/authorize');
     authReq.flush({
       authorization_url: 'https://accounts.google.com/o/oauth2/auth?client_id=cid&state=xyz',
     });
 
-    expect(component.isLoadingGoogleConfig()).toBe(false);
+    expect(component['isLoadingGoogleConfig']()).toBe(false);
     expect(navSpy).not.toHaveBeenCalled();
   });
 
@@ -553,7 +563,7 @@ describe('AuthComponent', () => {
       httpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
 
       expect(historySpy).toHaveBeenCalledWith({}, '', '/discover');
-      expect(component.isSubmitting()).toBe(true);
+      expect(component['isSubmitting']()).toBe(true);
 
       const sessionReq = httpMock.expectOne('/api/auth/google/session');
       expect(sessionReq.request.method).toBe('POST');
@@ -569,8 +579,8 @@ describe('AuthComponent', () => {
         },
       });
 
-      expect(component.isSubmitting()).toBe(false);
-      expect(state.authView()).toBe('app');
+      expect(component['isSubmitting']()).toBe(false);
+      expect(state['authView']()).toBe('app');
       expect(state.userName()).toBe('OAuth User');
       expect(state.toast()).toContain('Conectado com Google como OAuth User.');
     } finally {
@@ -588,7 +598,7 @@ describe('AuthComponent', () => {
       httpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
 
       expect(historySpy).toHaveBeenCalledWith({}, '', '/discover');
-      expect(component.errorMessage()).toContain('cancelada');
+      expect(component['errorMessage']()).toContain('cancelada');
     } finally {
       window.history.pushState({}, '', '/');
     }
@@ -604,7 +614,7 @@ describe('AuthComponent', () => {
       httpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
 
       expect(historySpy).toHaveBeenCalledWith({}, '', '/discover');
-      expect(component.isSubmitting()).toBe(true);
+      expect(component['isSubmitting']()).toBe(true);
 
       const sessionReq = httpMock.expectOne('/api/auth/google/session');
       expect(sessionReq.request.method).toBe('POST');
@@ -622,20 +632,20 @@ describe('AuthComponent', () => {
         { status: 404, statusText: 'Not Found' },
       );
 
-      expect(component.isSubmitting()).toBe(false);
-      expect(component.authView()).toBe('register');
-      expect(state.authView()).toBe('register');
-      expect(component.emailDraft()).toBe('new.oauth@gmail.com');
-      expect(component.nameDraft()).toBe('New OAuth User');
-      expect(component.errorMessage()).toBe('');
-      expect(component.infoMessage()).toContain('Complete seu cadastro');
+      expect(component['isSubmitting']()).toBe(false);
+      expect(component['authView']()).toBe('register');
+      expect(state['authView']()).toBe('register');
+      expect(component['emailDraft']()).toBe('new.oauth@gmail.com');
+      expect(component['nameDraft']()).toBe('New OAuth User');
+      expect(component['errorMessage']()).toBe('');
+      expect(component['infoMessage']()).toContain('Complete seu cadastro');
     } finally {
       window.history.pushState({}, '', '/');
     }
   });
 
   it('should forward to pre-filled register view when POST /api/auth/google returns 404 registration_required', () => {
-    component.authenticateWithGoogleIdToken('valid-unregistered-google-jwt');
+    component['authenticateWithGoogleIdToken']('valid-unregistered-google-jwt');
     const req = httpMock.expectOne('/api/auth/google');
     expect(req.request.method).toBe('POST');
     req.flush(
@@ -652,12 +662,12 @@ describe('AuthComponent', () => {
       { status: 404, statusText: 'Not Found' },
     );
 
-    expect(component.isSubmitting()).toBe(false);
-    expect(component.authView()).toBe('register');
-    expect(component.emailDraft()).toBe('gis.new@gmail.com');
-    expect(component.nameDraft()).toBe('GIS New User');
-    expect(component.errorMessage()).toBe('');
-    expect(component.infoMessage()).toContain('Complete seu cadastro');
+    expect(component['isSubmitting']()).toBe(false);
+    expect(component['authView']()).toBe('register');
+    expect(component['emailDraft']()).toBe('gis.new@gmail.com');
+    expect(component['nameDraft']()).toBe('GIS New User');
+    expect(component['errorMessage']()).toBe('');
+    expect(component['infoMessage']()).toContain('Complete seu cadastro');
   });
 });
 
@@ -755,7 +765,7 @@ describe('AuthComponent DOM', () => {
     );
     expect(prompt).toHaveBeenCalledTimes(1);
     expect(renderButton).toHaveBeenCalledTimes(1);
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(true);
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(true);
     expect(fixture.nativeElement.querySelector('.google-login-btn.hidden')).not.toBeNull();
     expect(document.activeElement).toBe(
       fixture.nativeElement.querySelector('.google-gsi-fallback'),
@@ -764,13 +774,13 @@ describe('AuthComponent DOM', () => {
       fixture.nativeElement.querySelector('.google-gsi-fallback.visible .mock-gsi-button'),
     ).not.toBeNull();
 
-    fixture.componentInstance.onForgot();
+    fixture.componentInstance['openForgotPassword']();
     fixture.detectChanges();
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(false);
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(false);
 
-    fixture.componentInstance.backToLogin();
+    fixture.componentInstance['backToLogin']();
     fixture.detectChanges();
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(false);
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(false);
 
     const remountedGoogleButton = fixture.nativeElement.querySelector(
       '.google-login-btn',
@@ -802,16 +812,16 @@ describe('AuthComponent DOM', () => {
 
     expect(initialize).toHaveBeenCalledTimes(1);
     expect(renderButton).toHaveBeenCalledTimes(2);
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(true);
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(true);
     expect(fixture.nativeElement.querySelector('.google-login-btn.hidden')).not.toBeNull();
-    expect(fixture.componentInstance.errorMessage()).toBe('');
+    expect(fixture.componentInstance['errorMessage']()).toBe('');
     expect(
       fixture.nativeElement.querySelector('.google-gsi-fallback.visible .mock-gsi-button'),
     ).not.toBeNull();
 
-    fixture.componentInstance.toggleView();
+    fixture.componentInstance['toggleView']();
     fixture.detectChanges();
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(false);
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(false);
     expect(fixture.nativeElement.querySelector('.google-login-btn.hidden')).toBeNull();
     expect(fixture.nativeElement.querySelector('.google-gsi-fallback.visible')).toBeNull();
 
@@ -831,13 +841,13 @@ describe('AuthComponent DOM', () => {
       .flush({ detail: 'unavailable' }, { status: 503, statusText: 'Service Unavailable' });
     fixture.detectChanges();
     expect(renderButton).toHaveBeenCalledTimes(2);
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(true);
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(true);
     expect(fixture.nativeElement.querySelector('.google-login-btn.hidden')).not.toBeNull();
-    expect(fixture.componentInstance.errorMessage()).toBe('');
+    expect(fixture.componentInstance['errorMessage']()).toBe('');
 
     capturedCallback?.({ credential: 'dom-google-jwt' });
     fixture.detectChanges();
-    expect(fixture.componentInstance.isSubmitting()).toBe(true);
+    expect(fixture.componentInstance['isSubmitting']()).toBe(true);
     expect(remountedGoogleButton?.disabled).toBe(true);
 
     const googleReq = httpMock.expectOne('/api/auth/google');
@@ -847,7 +857,7 @@ describe('AuthComponent DOM', () => {
     );
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.isSubmitting()).toBe(false);
+    expect(fixture.componentInstance['isSubmitting']()).toBe(false);
     expect(remountedGoogleButton?.disabled).toBe(false);
     const alertEl = fixture.nativeElement.querySelector('.auth-alert.error') as HTMLElement | null;
     expect(alertEl?.textContent).toContain('Service unavailable.');
@@ -919,7 +929,7 @@ describe('AuthComponent DOM', () => {
     fixture.detectChanges();
     expect(capturedMomentListener).toBeDefined();
 
-    fixture.componentInstance.onForgot();
+    fixture.componentInstance['openForgotPassword']();
     fixture.detectChanges();
 
     capturedMomentListener?.({ isSkippedMoment: () => true });
@@ -929,13 +939,13 @@ describe('AuthComponent DOM', () => {
     });
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.errorMessage()).toBe('');
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(false);
+    expect(fixture.componentInstance['errorMessage']()).toBe('');
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(false);
     expect(fixture.nativeElement.querySelector('.auth-alert.error')).toBeNull();
 
-    fixture.componentInstance.backToLogin();
+    fixture.componentInstance['backToLogin']();
     fixture.detectChanges();
-    fixture.componentInstance.isSubmitting.set(true);
+    fixture.componentInstance['isSubmitting'].set(true);
 
     capturedMomentListener?.({ isSkippedMoment: () => true });
     capturedMomentListener?.({
@@ -944,8 +954,8 @@ describe('AuthComponent DOM', () => {
     });
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.errorMessage()).toBe('');
-    expect(fixture.componentInstance.showGoogleFallbackButton()).toBe(false);
+    expect(fixture.componentInstance['errorMessage']()).toBe('');
+    expect(fixture.componentInstance['showGoogleFallbackButton']()).toBe(false);
 
     fixture.destroy();
   });

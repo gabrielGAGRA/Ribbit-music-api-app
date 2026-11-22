@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AdminModerationComponent } from './admin-moderation.component';
-import { AdminStateService } from './admin-state.service';
+import { AdminStateService } from '../admin-state.service';
 
 describe('AdminModerationComponent', () => {
   let httpMock: HttpTestingController;
@@ -106,7 +106,7 @@ describe('AdminModerationComponent', () => {
     expect(explicitReq.request.method).toBe('PUT');
     expect(explicitReq.request.body).toEqual({ explicit: true });
     explicitReq.flush({ track_id: 107, explicit: true });
-    expect(state.activeTracks().find((item) => item.track_id === 107)?.explicit).toBe(true);
+    expect(state.activeTracks().find((item) => item.trackId === 107)?.explicit).toBe(true);
 
     component['blockTrack'](107);
     const blockReq = httpMock.expectOne('/api/admin/tracks/107/block');
@@ -125,7 +125,7 @@ describe('AdminModerationComponent', () => {
       users_by_plan: {},
       revenue_by_plan: {},
     });
-    expect(component['blockedTracks']().some((item) => item.track_id === 107)).toBe(true);
+    expect(component['blockedTracks']().some((item) => item.trackId === 107)).toBe(true);
 
     component['selectTab']('blocked');
     component['restoreTrack'](107);
@@ -145,7 +145,7 @@ describe('AdminModerationComponent', () => {
       users_by_plan: {},
       revenue_by_plan: {},
     });
-    expect(component['blockedTracks']().some((item) => item.track_id === 107)).toBe(false);
+    expect(component['blockedTracks']().some((item) => item.trackId === 107)).toBe(false);
 
     component['selectTab']('reviews');
     const reviewCount = component['topReviews']().length;
@@ -163,19 +163,19 @@ describe('AdminModerationComponent', () => {
 
     const track = state.activeTracks()[0]!;
     component['startEditingGenre'](track);
-    expect(component['editingTrackId']()).toBe(track.track_id);
+    expect(component['editingTrackId']()).toBe(track.trackId);
     expect(component['editGenreDraft']()).toBe(track.genre);
 
     component['editGenreDraft'].set('Rock Clássico');
-    component['saveGenre'](track.track_id);
+    component['saveGenre'](track.trackId);
 
-    const genreReq = httpMock.expectOne(`/api/admin/tracks/${track.track_id}/genre`);
+    const genreReq = httpMock.expectOne(`/api/admin/tracks/${track.trackId}/genre`);
     expect(genreReq.request.method).toBe('PUT');
     expect(genreReq.request.body).toEqual({ genre: 'Rock Clássico' });
-    genreReq.flush({ track_id: track.track_id, genre: 'Rock Clássico' });
+    genreReq.flush({ track_id: track.trackId, genre: 'Rock Clássico' });
 
     expect(component['editingTrackId']()).toBeNull();
-    expect(state.activeTracks().find((t) => t.track_id === track.track_id)?.genre).toBe(
+    expect(state.activeTracks().find((t) => t.trackId === track.trackId)?.genre).toBe(
       'Rock Clássico',
     );
 
@@ -305,9 +305,9 @@ describe('AdminModerationComponent', () => {
 
     expect(component['showCreateTrackForm']()).toBe(false);
     const adminState = TestBed.inject(AdminStateService);
-    expect(adminState.activeTracks().some((t) => t.track_id === 999)).toBe(true);
+    expect(adminState.activeTracks().some((t) => t.trackId === 999)).toBe(true);
 
-    component['onCatalogSortChange']({
+    component['updateCatalogSort']({
       target: { value: 'dislikes_desc' },
     } as unknown as Event);
     const sortReq = httpMock.expectOne('/api/admin/tracks?limit=100&sort_by=dislikes_desc');

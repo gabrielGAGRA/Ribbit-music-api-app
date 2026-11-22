@@ -191,7 +191,7 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/jams');
     req.flush(
       {
-        error: 'SpotifyConnectionRequiredError',
+        error: 'PermissionDeniedError',
         message: 'Conecte sua conta do Spotify para utilizar o Pond.',
         details: { rule_name: 'spotify_connection_required' },
       },
@@ -214,7 +214,7 @@ describe('authInterceptor', () => {
     const req = httpMock.expectOne('/api/jams');
     req.flush(
       {
-        error: 'SpotifyPremiumRequiredError',
+        error: 'PermissionDeniedError',
         message: 'Uma conta Spotify Premium é necessária para esta funcionalidade.',
         details: { rule_name: 'spotify_premium_required' },
       },
@@ -226,28 +226,27 @@ describe('authInterceptor', () => {
     expect(isPremiumRequiredError(capturedError)).toBe(false);
   });
 
-  it('classifies SpotifyAuthError and SpotifyForbiddenError as connection required rather than Ribbit premium', () => {
-    for (const errorCode of ['SpotifyAuthError', 'SpotifyForbiddenError']) {
-      let capturedError: unknown;
-      http.post('/api/playlists/1/export-spotify', {}).subscribe({
-        error: (err: unknown) => {
-          capturedError = err;
-        },
-      });
+  it('does not classify ExternalServiceError (502) as Spotify connection/premium required or Ribbit premium', () => {
+    let capturedError: unknown;
+    http.post('/api/playlists/1/export-spotify', {}).subscribe({
+      error: (err: unknown) => {
+        capturedError = err;
+      },
+    });
 
-      const req = httpMock.expectOne('/api/playlists/1/export-spotify');
-      req.flush(
-        {
-          error: errorCode,
-          message: 'Autenticação do Spotify expirada ou insuficiente.',
-        },
-        { status: 403, statusText: 'Forbidden' },
-      );
+    const req = httpMock.expectOne('/api/playlists/1/export-spotify');
+    req.flush(
+      {
+        error: 'ExternalServiceError',
+        message: 'Spotify request failed.',
+        details: {},
+      },
+      { status: 502, statusText: 'Bad Gateway' },
+    );
 
-      expect(isSpotifyConnectionRequiredError(capturedError)).toBe(true);
-      expect(isSpotifyPremiumRequiredError(capturedError)).toBe(false);
-      expect(isPremiumRequiredError(capturedError)).toBe(false);
-    }
+    expect(isSpotifyConnectionRequiredError(capturedError)).toBe(false);
+    expect(isSpotifyPremiumRequiredError(capturedError)).toBe(false);
+    expect(isPremiumRequiredError(capturedError)).toBe(false);
   });
 
   it('preserves active Ribbit session when POST /api/spotify/callback returns 401 for Spotify OAuth state with unexpired Bearer JWT', () => {

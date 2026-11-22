@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AdminPlansComponent } from './admin-plans.component';
-import { AdminStateService } from './admin-state.service';
+import { AdminStateService } from '../admin-state.service';
 
 describe('AdminPlansComponent', () => {
   let httpMock: HttpTestingController;
@@ -47,7 +47,7 @@ describe('AdminPlansComponent', () => {
     httpMock.expectOne('/api/admin/reviews').flush([]);
 
     const component = TestBed.runInInjectionContext(() => new AdminPlansComponent());
-    const familyPlan = state.plans().find((plan) => plan.plan_id === 3)!;
+    const familyPlan = state.plans().find((plan) => plan.planId === 3)!;
 
     component['startEditing'](familyPlan);
     expect(component['editingPlanId']()).toBe(3);
@@ -89,6 +89,6 @@ describe('AdminPlansComponent', () => {
 
     expect(component['formError']()).toBe('');
     expect(component['editingPlanId']()).toBeNull();
-    expect(state.plans().find((plan) => plan.plan_id === 3)?.name).toBe('Família Plus');
+    expect(state.plans().find((plan) => plan.planId === 3)?.name).toBe('Família Plus');
   });
 });

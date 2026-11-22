@@ -39,15 +39,15 @@ describe('PlansComponent & Mock Checkout Flow', () => {
       { plan_id: 3, name: 'Família', monthly_price: 27.9, max_profiles: 6 },
     ]);
 
-    const familyPlan = plansComponent.computedPlans().find((item) => item.name === 'Família')!;
+    const familyPlan = plansComponent['computedPlans']().find((item) => item.name === 'Família')!;
     expect(familyPlan).toBeDefined();
 
-    plansComponent.selectPlan(familyPlan);
+    plansComponent['selectPlan'](familyPlan);
     expect(state.activeModal()).toBe('checkout');
-    expect(modalsComponent.checkoutPlan()?.name).toBe('Família');
+    expect(modalsComponent['checkoutPlan']()?.name).toBe('Família');
 
-    modalsComponent.selectPaymentMethod('card');
-    modalsComponent.onCheckoutSubmit(new Event('submit'));
+    modalsComponent['selectPaymentMethod']('card');
+    modalsComponent['submitCheckout'](new Event('submit'));
 
     const putReq = httpMock.expectOne('/api/profile/plan');
     expect(putReq.request.method).toBe('PUT');
