@@ -44,7 +44,7 @@ jobs:
         run: npm test
 
   e2e-browser-tests:
-    name: Browser E2E Tests & Video Recording (Playwright)
+    name: Browser E2E Tests (Playwright)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,18 +70,10 @@ jobs:
       - name: Instalando navegador Chromium do Playwright
         run: npx playwright install --with-deps chromium
 
-      - name: Rodando testes E2E no navegador e gravando 5 vídeos
+      - name: Rodando testes E2E no navegador
         env:
           PYTHON_BIN: .venv/bin/python
-        run: npm run record:e2e
-
-      - name: Publicando vídeos E2E como artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-videos
-          path: docs/videos/*.webm
-          if-no-files-found: error
+        run: npm run test:e2e
 
       - name: Publicando traces/screenshots em caso de falha
         if: failure()

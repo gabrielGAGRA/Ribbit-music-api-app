@@ -21,12 +21,13 @@ function resolvePythonBin(): string {
 
 const pythonBin = resolvePythonBin();
 const backendCommand = `"${pythonBin}" scripts/prepare_e2e_db.py && "${pythonBin}" -m uvicorn app.main:app --host 127.0.0.1 --port 8000`;
+const recordVideos = process.env['E2E_RECORD'] === '1';
 
 export default defineConfig({
   testDir: './tests/e2e',
   testMatch: '**/*.e2e.ts',
   fullyParallel: true,
-  workers: process.env['CI'] ? 2 : 5,
+  workers: recordVideos ? 2 : process.env['CI'] ? 4 : 5,
   timeout: 180_000,
   expect: {
     timeout: 12_000,
@@ -41,14 +42,9 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4200',
     headless: true,
-    launchOptions: {
-      slowMo: 220,
-    },
-    viewport: { width: 1280, height: 720 },
-    video: {
-      mode: 'on',
-      size: { width: 1280, height: 720 },
-    },
+    launchOptions: recordVideos ? { slowMo: 220 } : {},
+    viewport: recordVideos ? { width: 1920, height: 1080 } : { width: 1280, height: 720 },
+    video: recordVideos ? { mode: 'on', size: { width: 1920, height: 1080 } } : 'retain-on-failure',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     actionTimeout: 15_000,
