@@ -1,14 +1,18 @@
 <div class="admin-dashboard-grid">
   <section class="kpi-strip" aria-label="Indicadores executivos principais">
-    <article class="admin-card kpi-card featured-kpi">
+    <article class="admin-card kpi-card featured-kpi" [class.negative-kpi]="isNetNegative()">
       <div class="kpi-header">
         <span class="kpi-icon green-bg">
           <app-icon name="sparkles" [size]="19" />
         </span>
       </div>
-      <strong class="kpi-value">{{ formattedNetRevenue() }}</strong>
+      <strong class="kpi-value" [class.negative-value]="isNetNegative()">
+        {{ formattedNetRevenue() }}
+      </strong>
       <span class="kpi-label">Receita líquida mensal estimada</span>
-      <small class="kpi-detail">Titulares ativos (exclui dependentes familiares)</small>
+      <small class="kpi-detail">
+        Bruta {{ formatCurrency(grossRevenue()) }} − Custos {{ formatCurrency(totalCosts()) }}
+      </small>
     </article>
 
     <article class="admin-card kpi-card">
@@ -54,6 +58,104 @@
       <span class="kpi-label">Faixas bloqueadas</span>
       <small class="kpi-detail">Soft-delete ativo fora das recomendações</small>
     </article>
+
+    <article class="admin-card kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-icon blue-bg">
+          <app-icon name="headphones" [size]="19" />
+        </span>
+      </div>
+      <strong class="kpi-value">{{ totalAccesses() }}</strong>
+      <span class="kpi-label">Total de Acessos</span>
+      <small class="kpi-detail">Reproduções, detalhes, buscas, playlists e jams</small>
+    </article>
+  </section>
+
+  <section class="admin-card financial-card">
+    <div class="card-head">
+      <div>
+        <span class="eyebrow blue">DEMONSTRATIVO OPERACIONAL</span>
+        <h2>Demonstrativo Financeiro &amp; Custos Operacionais</h2>
+      </div>
+      @if (!editingCosts()) {
+        <button type="button" class="outline-button small-btn" (click)="openCostEditor()">
+          Editar Custos
+        </button>
+      }
+    </div>
+
+    <div class="financial-metrics-grid">
+      <div class="fin-metric">
+        <span>Receita Bruta</span>
+        <strong>{{ formatCurrency(grossRevenue()) }}</strong>
+      </div>
+      <div class="fin-metric">
+        <span>Custo de Conteúdos</span>
+        <strong>{{ formatCurrency(contentCost()) }}</strong>
+      </div>
+      <div class="fin-metric">
+        <span>Custo de Infraestrutura</span>
+        <strong>{{ formatCurrency(infrastructureCost()) }}</strong>
+      </div>
+      <div class="fin-metric">
+        <span>Total de Custos</span>
+        <strong>{{ formatCurrency(totalCosts()) }}</strong>
+      </div>
+      <div class="fin-metric">
+        <span>Receita Líquida</span>
+        <strong [class.negative-value]="isNetNegative()">{{ formattedNetRevenue() }}</strong>
+      </div>
+    </div>
+
+    @if (editingCosts()) {
+      <form class="cost-editor-form" (submit)="savePlatformCosts($event)">
+        <div class="cost-inputs-row">
+          <label class="cost-field">
+            <span>Custo por faixa ativa (R$)</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              [value]="costPerTrackInput()"
+              (input)="updateCostPerTrack($event)"
+            />
+          </label>
+          <label class="cost-field">
+            <span>Infraestrutura fixa (R$)</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              [value]="infraFixedInput()"
+              (input)="updateInfraFixed($event)"
+            />
+          </label>
+          <label class="cost-field">
+            <span>Infraestrutura por usuário (R$)</span>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              [value]="infraPerUserInput()"
+              (input)="updateInfraPerUser($event)"
+            />
+          </label>
+        </div>
+
+        @if (costFormError()) {
+          <p class="cost-error" role="alert">{{ costFormError() }}</p>
+        }
+
+        <div class="cost-actions">
+          <button type="submit" class="primary-button small-btn" [disabled]="isSavingCosts()">
+            {{ isSavingCosts() ? 'Salvando...' : 'Salvar custos' }}
+          </button>
+          <button type="button" class="outline-button small-btn" (click)="cancelCostEditor()">
+            Cancelar
+          </button>
+        </div>
+      </form>
+    }
   </section>
 
   <div class="dashboard-panels">
@@ -136,6 +238,61 @@
           </div>
         } @empty {
           <p class="empty-cell">Nenhum gênero bloqueado pelos usuários até o momento.</p>
+        }
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="card-head">
+        <div>
+          <span class="eyebrow blue">ENGAJAMENTO POR FAIXA</span>
+          <h2>Acessos por Conteúdo</h2>
+        </div>
+      </div>
+
+      <div class="genre-rank-list">
+        @for (item of adminState.topAccessedTracks(); track item.track_id) {
+          <div class="genre-rank-item">
+            <div class="genre-rank-meta">
+              <strong>
+                {{ item.title }}
+                @if (item.is_deleted) {
+                  <small class="deleted-tag">(Removida)</small>
+                }
+              </strong>
+              <span>{{ item.access_count }} acessos</span>
+            </div>
+            <div class="bar-track">
+              <i class="bar-fill blue-fill" [appWidthPercent]="item.percent"></i>
+            </div>
+          </div>
+        } @empty {
+          <p class="empty-cell">Nenhum acesso registrado até o momento.</p>
+        }
+      </div>
+    </section>
+
+    <section class="admin-card">
+      <div class="card-head">
+        <div>
+          <span class="eyebrow blue">DISTRIBUIÇÃO POR CATEGORIA</span>
+          <h2>Acessos por Categoria (Gênero)</h2>
+        </div>
+      </div>
+
+      <div class="genre-rank-list">
+        @for (entry of adminState.accessesByGenreRanking(); track entry.genre) {
+          <div class="genre-rank-item">
+            <div class="genre-rank-meta">
+              <strong>{{ entry.genre }}</strong>
+              <span>{{ entry.access_count }} acessos</span>
+            </div>
+            <div class="bar-track">
+              <i class="bar-fill blue-fill" [appWidthPercent]="entry.percent"></i>
+            </div>
+          </div>
+        } @empty {
+          <p class="empty-cell">Nenhum acesso por gênero registrado até o momento.</p>
         }
       </div>
     </section>

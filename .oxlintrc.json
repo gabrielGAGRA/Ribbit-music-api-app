@@ -163,10 +163,15 @@
     }
   ],
   "ignorePatterns": [
+    ".venv/**",
     "app/**",
     "tests/**",
+    "scripts/**",
+    "playwright.config.ts",
     "docs/**",
     "local/**",
-    "node_modules/**"
+    "node_modules/**",
+    "test-results/**",
+    "playwright-report/**"
   ]
 }

@@ -5,16 +5,20 @@ from unittest.mock import MagicMock
 from fastapi import Request
 
 from app.application.dtos import (
+    AdminCatalogTrackResult,
     AuthenticateAdminCommand,
+    CreateTrackCommand,
     RegisterAdministratorCommand,
     UpdateSubscriptionPlanCommand,
 )
 from app.application.dtos.auth_dtos import AuthResult
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
+    CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetExecutiveDashboardUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
@@ -28,10 +32,12 @@ from app.application.use_cases.review import DeleteReviewUseCase
 from app.domain.models import Plan, ReviewComment, Track, User
 from app.presentation.routers.admin import (
     block_track,
+    create_admin_track,
     delete_review,
     get_audience_report,
     get_executive_dashboard,
     get_top_moderation_reviews,
+    list_admin_tracks,
     list_administrators,
     list_blocked_tracks,
     list_plans,
@@ -44,6 +50,7 @@ from app.presentation.routers.admin import (
 )
 from app.presentation.schemas.admin import (
     BlockTrackRequest,
+    CreateTrackAdminRequest,
     RegisterAdminRequest,
     UpdateAdminRoleRequest,
     UpdatePlanAdminRequest,
@@ -352,3 +359,78 @@ def test_get_top_moderation_reviews_returns_mapped_reviews() -> None:
     assert res[0].review_id == 9
     assert res[0].likes_count == 42
     mock_use_case.execute.assert_called_once_with()
+
+
+def test_list_admin_tracks_router_forwards_filters_and_returns_metrics() -> None:
+    mock_use_case = MagicMock(spec=ListAdminCatalogTracksUseCase)
+    mock_use_case.execute.return_value = [
+        AdminCatalogTrackResult(
+            track_id=10,
+            title="Track X",
+            artist="Artist Y",
+            duration_seconds=200,
+            genre="Rock",
+            likes_count=4,
+            dislikes_count=3,
+            superlikes_count=1,
+            average_rating=4.5,
+            review_count=2,
+        )
+    ]
+
+    res = list_admin_tracks(
+        use_case=mock_use_case,
+        query="Track",
+        include_deleted=True,
+        min_dislikes=2,
+        sort_by="dislikes_desc",
+        limit=50,
+        offset=0,
+    )
+
+    assert len(res) == 1
+    assert res[0].dislikes_count == 3
+    assert res[0].superlikes_count == 1
+    assert res[0].average_rating == 4.5
+    mock_use_case.execute.assert_called_once_with(
+        query="Track",
+        include_deleted=True,
+        min_dislikes=2,
+        sort_by="dislikes_desc",
+        limit=50,
+        offset=0,
+    )
+
+
+def test_create_admin_track_router_forwards_command() -> None:
+    mock_use_case = MagicMock(spec=CreateTrackUseCase)
+    mock_use_case.execute.return_value = AdminCatalogTrackResult(
+        track_id=55,
+        title="Created Song",
+        artist="Admin Artist",
+        duration_seconds=195,
+        genre="Pop",
+        explicit=True,
+    )
+
+    req = CreateTrackAdminRequest(
+        title="Created Song",
+        artist="Admin Artist",
+        genre="Pop",
+        duration_seconds=195,
+        explicit=True,
+    )
+    res = create_admin_track(req=req, use_case=mock_use_case)
+
+    assert res.track_id == 55
+    assert res.title == "Created Song"
+    assert res.explicit is True
+    mock_use_case.execute.assert_called_once_with(
+        CreateTrackCommand(
+            title="Created Song",
+            artist="Admin Artist",
+            genre="Pop",
+            duration_seconds=195,
+            explicit=True,
+        )
+    )

@@ -18,11 +18,17 @@ from app.infrastructure.repositories.jam_repository import (
 from app.infrastructure.repositories.plan_repository import (
     SQLitePlanRepository,
 )
+from app.infrastructure.repositories.platform_cost_repository import (
+    SQLitePlatformCostRepository,
+)
 from app.infrastructure.repositories.playlist_repository import (
     SQLitePlaylistRepository,
 )
 from app.infrastructure.repositories.review_repository import (
     SQLiteReviewRepository,
+)
+from app.infrastructure.repositories.track_access_repository import (
+    SQLiteTrackAccessRepository,
 )
 from app.infrastructure.repositories.track_repository import (
     SQLiteTrackRepository,
@@ -38,8 +44,10 @@ AuditLogRepository = SQLiteAuditLogRepository
 InteractionRepository = SQLiteInteractionRepository
 JamRepository = SQLiteJamRepository
 PlanRepository = SQLitePlanRepository
+PlatformCostRepository = SQLitePlatformCostRepository
 PlaylistRepository = SQLitePlaylistRepository
 ReviewRepository = SQLiteReviewRepository
+TrackAccessRepository = SQLiteTrackAccessRepository
 TrackRepository = SQLiteTrackRepository
 UserRepository = SQLiteUserRepository
 UserStatsRepository = SQLiteUserStatsRepository
@@ -50,6 +58,7 @@ __all__ = [
     "InteractionRepository",
     "JamRepository",
     "PlanRepository",
+    "PlatformCostRepository",
     "PlaylistRepository",
     "ReviewRepository",
     "SCHEMA_PATH",
@@ -57,11 +66,14 @@ __all__ = [
     "SQLiteInteractionRepository",
     "SQLiteJamRepository",
     "SQLitePlanRepository",
+    "SQLitePlatformCostRepository",
     "SQLitePlaylistRepository",
     "SQLiteReviewRepository",
+    "SQLiteTrackAccessRepository",
     "SQLiteTrackRepository",
     "SQLiteUserRepository",
     "SQLiteUserStatsRepository",
+    "TrackAccessRepository",
     "TrackRepository",
     "UserRepository",
     "UserStatsRepository",

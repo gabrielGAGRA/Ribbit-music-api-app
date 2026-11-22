@@ -8,11 +8,17 @@ from app.application.ports.repositories.interaction_repository import (
 )
 from app.application.ports.repositories.jam_repository import JamRepositoryPort
 from app.application.ports.repositories.plan_repository import PlanRepositoryPort
+from app.application.ports.repositories.platform_cost_repository import (
+    PlatformCostRepositoryPort,
+)
 from app.application.ports.repositories.playlist_repository import (
     PlaylistRepositoryPort,
 )
 from app.application.ports.repositories.review_repository import (
     ReviewRepositoryPort,
+)
+from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
 )
 from app.application.ports.repositories.track_repository import (
     TrackRepositoryPort,
@@ -27,8 +33,10 @@ __all__ = [
     "InteractionRepositoryPort",
     "JamRepositoryPort",
     "PlanRepositoryPort",
+    "PlatformCostRepositoryPort",
     "PlaylistRepositoryPort",
     "ReviewRepositoryPort",
+    "TrackAccessRepositoryPort",
     "TrackRepositoryPort",
     "UserRepositoryPort",
     "UserStatsRepositoryPort",

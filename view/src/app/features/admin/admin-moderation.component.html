@@ -44,22 +44,137 @@
         <span id="moderation-search-hint" class="field-hint">
           Busque por título, artista ou álbum para bloquear, editar gênero ou aplicar selo +18
         </span>
-        <div class="search-box">
-          <app-icon name="search" [size]="16" />
-          <input
-            id="moderation-track-search"
-            type="search"
-            placeholder="Ex.: Bohemian Rhapsody, Queen..."
-            aria-describedby="moderation-search-hint"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false"
-            [value]="trackQuery()"
-            (input)="updateTrackQuery($event)"
-            (search)="searchTracks()"
-          />
+        <div class="catalog-filter-bar">
+          <div class="search-box">
+            <app-icon name="search" [size]="16" />
+            <input
+              id="moderation-track-search"
+              type="search"
+              placeholder="Ex.: Bohemian Rhapsody, Queen..."
+              aria-describedby="moderation-search-hint"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
+              [value]="trackQuery()"
+              (input)="updateTrackQuery($event)"
+              (search)="searchTracks()"
+            />
+          </div>
+          <select
+            class="admin-select"
+            aria-label="Ordenar faixas do catálogo"
+            [value]="catalogSort()"
+            (change)="onCatalogSortChange($event)"
+          >
+            <option value="id_asc">Padrão</option>
+            <option value="dislikes_desc">Mais dislikes</option>
+            <option value="likes_desc">Mais likes</option>
+            <option value="superlikes_desc">Mais superlikes</option>
+            <option value="recent">Mais recentes</option>
+          </select>
+          <button
+            type="button"
+            class="tab-pill dislike-filter-toggle"
+            [class.active]="onlyDisliked()"
+            [attr.aria-pressed]="onlyDisliked()"
+            (click)="toggleOnlyDisliked()"
+          >
+            Somente com dislikes
+          </button>
+          <button
+            type="button"
+            class="catalog-action-btn"
+            [attr.aria-expanded]="showCreateTrackForm()"
+            (click)="toggleCreateTrackForm()"
+          >
+            <app-icon name="plus" [size]="14" />
+            {{ showCreateTrackForm() ? 'Fechar formulário' : 'Cadastrar Nova Faixa' }}
+          </button>
         </div>
       </div>
+
+      @if (showCreateTrackForm()) {
+        <form class="create-track-form" (submit)="submitCreateTrack($event)">
+          <h3>Cadastrar Nova Faixa</h3>
+          <div class="create-track-grid">
+            <label>
+              Título *
+              <input
+                name="newTrackTitle"
+                required
+                placeholder="Ex.: Midnight Rain"
+                [value]="newTrackTitle()"
+                (input)="updateTextSignal(newTrackTitle, $event)"
+              />
+            </label>
+            <label>
+              Artista *
+              <input
+                name="newTrackArtist"
+                required
+                placeholder="Ex.: Synth Collective"
+                [value]="newTrackArtist()"
+                (input)="updateTextSignal(newTrackArtist, $event)"
+              />
+            </label>
+            <label>
+              Gênero *
+              <input
+                name="newTrackGenre"
+                required
+                placeholder="Ex.: Indie Pop"
+                [value]="newTrackGenre()"
+                (input)="updateTextSignal(newTrackGenre, $event)"
+              />
+            </label>
+            <label>
+              Duração (segundos) *
+              <input
+                name="newTrackDuration"
+                type="number"
+                min="1"
+                required
+                [value]="newTrackDuration()"
+                (input)="updateTextSignal(newTrackDuration, $event)"
+              />
+            </label>
+            <label>
+              Álbum
+              <input
+                name="newTrackAlbum"
+                placeholder="Opcional"
+                [value]="newTrackAlbum()"
+                (input)="updateTextSignal(newTrackAlbum, $event)"
+              />
+            </label>
+            <label>
+              Ano de lançamento
+              <input
+                name="newTrackYear"
+                type="number"
+                min="1900"
+                placeholder="Ex.: 2024"
+                [value]="newTrackYear()"
+                (input)="updateTextSignal(newTrackYear, $event)"
+              />
+            </label>
+          </div>
+          <div class="create-track-actions">
+            <label class="explicit-checkbox">
+              <input
+                type="checkbox"
+                [checked]="newTrackExplicit()"
+                (change)="toggleNewTrackExplicit()"
+              />
+              Conteúdo explícito (+18)
+            </label>
+            <button type="submit" class="catalog-action-btn" [disabled]="isCreatingTrack()">
+              <app-icon name="check" [size]="14" />
+              {{ isCreatingTrack() ? 'Cadastrando...' : 'Salvar Faixa' }}
+            </button>
+          </div>
+        </form>
+      }
     }
 
     @if (moderationError()) {
@@ -123,6 +238,7 @@
                 <th scope="col">Artista / Álbum</th>
                 <th scope="col">Gênero</th>
                 <th scope="col">Duração</th>
+                <th scope="col">Métricas</th>
                 <th scope="col">Classificação +18</th>
                 <th scope="col">Ação</th>
               </tr>
@@ -189,6 +305,19 @@
                   </td>
                   <td>{{ formatDuration(track.duration_seconds) }}</td>
                   <td>
+                    <div class="track-metrics-badges">
+                      <span class="metric-badge like" title="Likes"
+                        >👍 {{ track.likes_count }}</span
+                      >
+                      <span class="metric-badge superlike" title="Superlikes"
+                        >⭐ {{ track.superlikes_count }}</span
+                      >
+                      <span class="metric-badge dislike" title="Dislikes"
+                        >👎 {{ track.dislikes_count }}</span
+                      >
+                    </div>
+                  </td>
+                  <td>
                     <button
                       type="button"
                       class="explicit-toggle"
@@ -211,7 +340,7 @@
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="6" class="empty-cell">
+                  <td colspan="7" class="empty-cell">
                     Nenhuma faixa ativa corresponde ao termo pesquisado.
                   </td>
                 </tr>
@@ -245,6 +374,7 @@
                 <th scope="col">Artista / Álbum</th>
                 <th scope="col">Gênero</th>
                 <th scope="col">Duração</th>
+                <th scope="col">Métricas</th>
                 <th scope="col">Classificação +18</th>
                 <th scope="col">Restauração</th>
               </tr>
@@ -269,6 +399,19 @@
                   </td>
                   <td>{{ formatDuration(track.duration_seconds) }}</td>
                   <td>
+                    <div class="track-metrics-badges">
+                      <span class="metric-badge like" title="Likes"
+                        >👍 {{ track.likes_count }}</span
+                      >
+                      <span class="metric-badge superlike" title="Superlikes"
+                        >⭐ {{ track.superlikes_count }}</span
+                      >
+                      <span class="metric-badge dislike" title="Dislikes"
+                        >👎 {{ track.dislikes_count }}</span
+                      >
+                    </div>
+                  </td>
+                  <td>
                     <button
                       type="button"
                       class="explicit-toggle"
@@ -291,7 +434,7 @@
                 </tr>
               } @empty {
                 <tr>
-                  <td colspan="6" class="empty-cell">
+                  <td colspan="7" class="empty-cell">
                     Nenhuma faixa bloqueada no momento. Todo o catálogo está ativo.
                   </td>
                 </tr>

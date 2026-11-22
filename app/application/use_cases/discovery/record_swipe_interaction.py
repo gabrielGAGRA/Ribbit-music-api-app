@@ -11,9 +11,13 @@ from app.domain.models.interaction import (
     InteractionAction,
     InteractionSource,
 )
+from app.domain.models.track_access import TrackAccess
 lazy from app.application.dtos.discovery_dtos import RecordSwipeCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
+)
+lazy from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -26,6 +30,7 @@ class RecordSwipeInteractionUseCase:
     user_repo: UserRepositoryPort
     track_repo: TrackRepositoryPort
     interaction_repo: InteractionRepositoryPort
+    track_access_repo: TrackAccessRepositoryPort | None = None
 
     def execute(self, command: RecordSwipeCommand) -> Interaction:
         user = self.user_repo.find_by_id(command.user_id)
@@ -58,4 +63,13 @@ class RecordSwipeInteractionUseCase:
             action=action_enum,
             source=InteractionSource.DISCOVERY,
         )
-        return self.interaction_repo.save(interaction)
+        saved = self.interaction_repo.save(interaction)
+        if self.track_access_repo is not None:
+            self.track_access_repo.record(
+                TrackAccess(
+                    user_id=command.user_id,
+                    track_id=command.track_id,
+                    source="swipe",
+                )
+            )
+        return saved

@@ -155,6 +155,8 @@ class SearchTracksUseCase:
             genre=command.genre,
             year=year_filter,
             query=command.query,
+            min_rating=command.min_rating,
+            sort_by=command.sort_by,
             limit=command.limit,
             offset=command.offset,
         )
@@ -162,12 +164,18 @@ class SearchTracksUseCase:
         artist_filter = (command.artist or "").strip().lower()
         title_filter = (command.query or "").strip().lower()
         query_term = self._build_fallback_query(command)
-        needs_fallback = not tracks or (
-            bool(title_filter)
-            and not any(
-                title_filter in t.title.lower()
-                or (not artist_filter and title_filter in t.artist.lower())
-                for t in tracks
+        has_rating_controls = (
+            command.min_rating is not None or command.sort_by is not None
+        )
+        needs_fallback = not has_rating_controls and (
+            not tracks
+            or (
+                bool(title_filter)
+                and not any(
+                    title_filter in t.title.lower()
+                    or (not artist_filter and title_filter in t.artist.lower())
+                    for t in tracks
+                )
             )
         )
         if (
@@ -199,7 +207,7 @@ class SearchTracksUseCase:
             if not user.is_track_restricted_for_minor(track)
             and self._matches_search_filters(track, artist_filter, title_filter)
         ]
-        if title_filter:
+        if title_filter and command.sort_by is None:
             results.sort(
                 key=lambda t: (
                     0

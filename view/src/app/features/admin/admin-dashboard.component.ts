@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { WidthPercentDirective } from '../../shared/dynamic-style.directive';
 import { IconComponent } from '../../shared/icon.component';
-import { AdminStateService } from './admin-state.service';
+import { AdminDomainError, AdminStateService } from './admin-state.service';
 
 const BRL_FORMATTER = new Intl.NumberFormat('pt-BR', {
   style: 'currency',
@@ -25,6 +25,37 @@ export class AdminDashboardComponent {
   protected readonly formattedNetRevenue = computed<string>(() =>
     BRL_FORMATTER.format(this.adminState.executiveDashboard().estimated_net_revenue),
   );
+
+  protected readonly isNetNegative = computed<boolean>(
+    () => this.adminState.executiveDashboard().estimated_net_revenue < 0,
+  );
+
+  protected readonly grossRevenue = computed<number>(
+    () => this.adminState.executiveDashboard().gross_revenue ?? 0,
+  );
+
+  protected readonly contentCost = computed<number>(
+    () => this.adminState.executiveDashboard().content_cost ?? 0,
+  );
+
+  protected readonly infrastructureCost = computed<number>(
+    () => this.adminState.executiveDashboard().infrastructure_cost ?? 0,
+  );
+
+  protected readonly totalCosts = computed<number>(
+    () => this.adminState.executiveDashboard().total_costs ?? 0,
+  );
+
+  protected readonly totalAccesses = computed<number>(
+    () => this.adminState.audienceReport().total_accesses ?? 0,
+  );
+
+  protected readonly editingCosts = signal<boolean>(false);
+  protected readonly costPerTrackInput = signal<string>('');
+  protected readonly infraFixedInput = signal<string>('');
+  protected readonly infraPerUserInput = signal<string>('');
+  protected readonly costFormError = signal<string>('');
+  protected readonly isSavingCosts = signal<boolean>(false);
 
   protected readonly adminCount = computed<number>(() => this.adminState.administrators().length);
 
@@ -58,5 +89,75 @@ export class AdminDashboardComponent {
     if (this.router) {
       this.router.navigate(['/admin/users']).catch(() => {});
     }
+  }
+
+  protected openCostEditor(): void {
+    const dash = this.adminState.executiveDashboard();
+    this.costPerTrackInput.set(String(dash.content_cost_per_track ?? 0.04));
+    this.infraFixedInput.set(String(dash.infrastructure_fixed_cost ?? 10));
+    this.infraPerUserInput.set(String(dash.infrastructure_cost_per_user ?? 0.5));
+    this.costFormError.set('');
+    this.editingCosts.set(true);
+  }
+
+  protected cancelCostEditor(): void {
+    this.editingCosts.set(false);
+    this.costFormError.set('');
+  }
+
+  protected updateCostPerTrack(event: Event): void {
+    this.costPerTrackInput.set((event.target as HTMLInputElement).value);
+  }
+
+  protected updateInfraFixed(event: Event): void {
+    this.infraFixedInput.set((event.target as HTMLInputElement).value);
+  }
+
+  protected updateInfraPerUser(event: Event): void {
+    this.infraPerUserInput.set((event.target as HTMLInputElement).value);
+  }
+
+  protected savePlatformCosts(event: Event): void {
+    event.preventDefault();
+    if (this.isSavingCosts()) return;
+
+    const perTrack = Number(this.costPerTrackInput());
+    const infraFixed = Number(this.infraFixedInput());
+    const infraUser = Number(this.infraPerUserInput());
+
+    if (
+      !Number.isFinite(perTrack) ||
+      perTrack < 0 ||
+      !Number.isFinite(infraFixed) ||
+      infraFixed < 0 ||
+      !Number.isFinite(infraUser) ||
+      infraUser < 0
+    ) {
+      this.costFormError.set('Informe valores numéricos maiores ou iguais a zero.');
+      return;
+    }
+
+    this.costFormError.set('');
+    this.isSavingCosts.set(true);
+    this.adminState
+      .updatePlatformCosts({
+        content_cost_per_track: perTrack,
+        infrastructure_fixed_cost: infraFixed,
+        infrastructure_cost_per_user: infraUser,
+      })
+      .subscribe({
+        next: () => {
+          this.isSavingCosts.set(false);
+          this.editingCosts.set(false);
+        },
+        error: (err: unknown) => {
+          this.isSavingCosts.set(false);
+          this.costFormError.set(
+            err instanceof AdminDomainError
+              ? err.message
+              : 'Não foi possível atualizar os custos operacionais.',
+          );
+        },
+      });
   }
 }

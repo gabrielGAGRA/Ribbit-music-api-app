@@ -973,3 +973,42 @@
 .checkout-cancel {
   margin-top: 8px;
 }
+
+.modal-reviews-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.modal-reviews-heading select {
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.review-stars {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin: 4px 0;
+}
+
+.review-stars app-icon.filled {
+  color: #f59e0b;
+}
+
+.review-stars app-icon.empty {
+  color: var(--muted);
+  opacity: 0.35;
+}
+
+.review-stars span {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}

@@ -17,9 +17,11 @@ class GetTrackReviewsUseCase:
     track_repo: TrackRepositoryPort
     review_repo: ReviewRepositoryPort
 
-    def execute(self, track_id: int, limit: int = 50) -> list[ReviewComment]:
+    def execute(
+        self, track_id: int, limit: int = 50, sort_by: str = "recent"
+    ) -> list[ReviewComment]:
         track = self.track_repo.find_by_id(track_id)
         if not track or track.is_deleted:
             raise EntityNotFoundError("Track not found or inactive.")
 
-        return self.review_repo.list_by_track(track_id, limit=limit)
+        return self.review_repo.list_by_track(track_id, limit=limit, sort_by=sort_by)

@@ -19,6 +19,7 @@ from app.application.use_cases.user import (
     ListFamilyMembersUseCase,
     ListFavoriteGenresUseCase,
     ListPlansUseCase,
+    ListUserAccessHistoryUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
@@ -41,6 +42,7 @@ from app.presentation.schemas import (
     PlanResponse,
     ThemePreferenceRequest,
     UpdateProfileRequest,
+    UserAccessHistoryResponse,
     UserProfileResponse,
     UserResponse,
 )
@@ -106,10 +108,23 @@ def change_plan(
         Depends(provide(ChangeSubscriptionPlanUseCase)),
     ],
 ) -> UserResponse:
-    user = use_case.execute(
-        user_id=user_id,
-        new_plan_id=req.new_plan_id,
-    )
+    if (
+        req.guardian_name is not None
+        or req.guardian_email is not None
+        or req.guardian_confirmed_adult
+    ):
+        user = use_case.execute(
+            user_id=user_id,
+            new_plan_id=req.new_plan_id,
+            guardian_name=req.guardian_name,
+            guardian_email=req.guardian_email,
+            guardian_confirmed_adult=req.guardian_confirmed_adult,
+        )
+    else:
+        user = use_case.execute(
+            user_id=user_id,
+            new_plan_id=req.new_plan_id,
+        )
     return UserResponse.model_validate(user)
 
 
@@ -344,6 +359,19 @@ def remove_family_member(
         member_user_id=member_id,
     )
     return UserResponse.model_validate(unlinked)
+
+
+@router.get("/api/profile/access-history", response_model=UserAccessHistoryResponse)
+def get_user_access_history(
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        ListUserAccessHistoryUseCase, Depends(provide(ListUserAccessHistoryUseCase))
+    ],
+    limit: Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> UserAccessHistoryResponse:
+    result = use_case.execute(user_id=user_id, limit=limit, offset=offset)
+    return UserAccessHistoryResponse.model_validate(result)
 
 
 __all__ = ["router"]

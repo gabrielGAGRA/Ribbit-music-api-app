@@ -88,7 +88,7 @@ describe('AdminUsersComponent', () => {
         is_admin: true,
       },
     ]);
-    httpMock.expectOne('/api/tracks/search?limit=100').flush([]);
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([]);
     httpMock.expectOne('/api/admin/blocked-tracks').flush([]);
     httpMock.expectOne('/api/admin/reviews').flush([]);
 
@@ -179,5 +179,38 @@ describe('AdminUsersComponent', () => {
 
     expect(component['showRegisterForm']()).toBe(false);
     expect(state.administrators().some((admin) => admin.user_id === 4)).toBe(true);
+  });
+
+  it('loads and filters global access history on the 3rd tab including soft-deleted tracks', () => {
+    const state = TestBed.inject(AdminStateService);
+    const component = TestBed.runInInjectionContext(() => new AdminUsersComponent());
+
+    component['selectTab']('access-history');
+    const req = httpMock.expectOne('/api/admin/access-history?limit=100');
+    req.flush([
+      {
+        access_id: 1,
+        user_id: 2,
+        user_display_name: 'Gabriel Agra',
+        user_email: 'gabriel.agra@usp.br',
+        track_id: 593,
+        track_title: 'Faixa Removida',
+        track_artist: 'Ribbit Archive',
+        track_genre: 'Pop',
+        track_is_deleted: true,
+        source: 'play',
+        accessed_at: '2026-02-01T10:12:00+00:00',
+      },
+    ]);
+
+    expect(component['filteredAccessHistory']().length).toBe(1);
+    expect(component['filteredAccessHistory']()[0]?.track_is_deleted).toBe(true);
+
+    component['toggleAccessOnlyDeleted']({
+      target: { checked: true },
+    } as unknown as Event);
+    const filteredReq = httpMock.expectOne('/api/admin/access-history?limit=100&only_deleted=true');
+    filteredReq.flush([]);
+    expect(state.accessHistory().length).toBe(0);
   });
 });

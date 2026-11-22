@@ -18,6 +18,8 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "spotify_access_token": "TEXT",
         "spotify_refresh_token": "TEXT",
         "spotify_token_expires_at": "TEXT",
+        "guardian_name": "TEXT",
+        "guardian_email": "TEXT",
     },
     "playlists": {
         "max_duration_seconds": "INTEGER",
@@ -177,6 +179,22 @@ def _seed_eligible_admins(
             conn.commit()
 
 
+def _seed_platform_costs(conn: sqlite3.Connection, now_str: str) -> None:
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO platform_cost_settings (
+            settings_id,
+            content_cost_per_track,
+            infrastructure_fixed_cost,
+            infrastructure_cost_per_user,
+            updated_at
+        ) VALUES (1, 0.04, 10.00, 0.50, ?)
+        """,
+        (now_str,),
+    )
+    conn.commit()
+
+
 def seed_database(
     conn: sqlite3.Connection,
     settings: Settings | None = None,
@@ -186,6 +204,7 @@ def seed_database(
     migrate_additive_columns(conn)
 
     free_plan_id = _seed_plans(conn)
+    _seed_platform_costs(conn, _SEED_EPOCH_ISO)
 
     resolved_settings = settings or load_settings()
     admin_email = resolved_settings.admin_email.lower().strip()
