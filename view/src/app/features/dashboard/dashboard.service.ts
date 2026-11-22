@@ -9,7 +9,7 @@ import type {
   RankedGenre,
   Song,
 } from '@ribbit/shared-types';
-import { mapAnnualStatsToDashboard } from '../api-mappers';
+import { mapAnnualStatsToDashboard } from '../../core/api-mappers';
 
 export interface DashboardViewData {
   readonly hoursLabel: string;
