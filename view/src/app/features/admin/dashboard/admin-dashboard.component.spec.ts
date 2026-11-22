@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AdminDashboardComponent } from './admin-dashboard.component';
-import { AdminStateService } from './admin-state.service';
+import { AdminStateService } from '../admin-state.service';
 
 describe('AdminDashboardComponent', () => {
   let httpMock: HttpTestingController;
@@ -116,6 +116,6 @@ describe('AdminDashboardComponent', () => {
 
     expect(component['editingCosts']()).toBe(false);
     expect(component['isNetNegative']()).toBe(true);
-    expect(state.executiveDashboard().total_costs).toBe(103);
+    expect(state.executiveDashboard().totalCosts).toBe(103);
   });
 });

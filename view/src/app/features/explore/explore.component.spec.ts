@@ -4,10 +4,26 @@ import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { Song } from '@ribbit/shared-types';
 import { ExploreComponent } from './explore.component';
 import { authInterceptor } from '../../core/auth.interceptor';
 import { writeAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+import { SongService } from '../../core/song.service';
+
+const TEST_SONGS: readonly Song[] = [
+  {
+    trackId: 1,
+    title: 'Bloom',
+    artist: 'Odesza',
+    genre: 'Electronic',
+    time: '3:15',
+    image: 'https://example.com/bloom.jpg',
+    album: 'In Return',
+    year: '2014',
+    match: 95,
+  },
+];
 
 describe('ExploreComponent', () => {
   let component: ExploreComponent;
@@ -20,16 +36,17 @@ describe('ExploreComponent', () => {
         provideHttpClientTesting(),
       ],
     });
+    TestBed.inject(RibbitStateService).songs.set(TEST_SONGS);
     component = TestBed.runInInjectionContext(() => new ExploreComponent());
   });
 
   it('should filter songs based on search query', () => {
-    component.query.set('Bloom');
-    expect(component.filteredSongs().length).toBe(1);
-    expect(component.filteredSongs()[0]?.title).toBe('Bloom');
+    component['query'].set('Bloom');
+    expect(component['filteredSongs']().length).toBe(1);
+    expect(component['filteredSongs']()[0]?.title).toBe('Bloom');
 
-    component.query.set('Inexistente123');
-    expect(component.filteredSongs().length).toBe(0);
+    component['query'].set('Inexistente123');
+    expect(component['filteredSongs']().length).toBe(0);
   });
 
   it('should filter songs by artist filter and clear it via clearQuery', () => {
@@ -37,12 +54,12 @@ describe('ExploreComponent', () => {
     const firstSong = state.songs()[0]!;
 
     state.searchFilterArtist.set(firstSong.artist);
-    expect(component.hasActiveSearch()).toBe(true);
-    expect(component.filteredSongs().some((s) => s.artist === firstSong.artist)).toBe(true);
+    expect(component['hasActiveSearch']()).toBe(true);
+    expect(component['filteredSongs']().some((s) => s.artist === firstSong.artist)).toBe(true);
 
-    component.clearQuery();
+    component['clearQuery']();
     expect(state.searchFilterArtist()).toBe('');
-    expect(component.hasActiveSearch()).toBe(false);
+    expect(component['hasActiveSearch']()).toBe(false);
   });
 
   it('should filter songs by start and end dates and clear them via clearQuery', () => {
@@ -52,30 +69,60 @@ describe('ExploreComponent', () => {
 
     state.searchFilterStartDate.set(`${songYear}-01-01`);
     state.searchFilterEndDate.set(`${songYear}-12-31`);
-    expect(component.hasActiveSearch()).toBe(true);
-    expect(component.filteredSongs().every((s) => Number(s.year) === songYear)).toBe(true);
+    expect(component['hasActiveSearch']()).toBe(true);
+    expect(component['filteredSongs']().every((s) => Number(s.year) === songYear)).toBe(true);
 
-    component.clearQuery();
+    component['clearQuery']();
     expect(state.searchFilterStartDate()).toBe('');
     expect(state.searchFilterEndDate()).toBe('');
-    expect(component.hasActiveSearch()).toBe(false);
+    expect(component['hasActiveSearch']()).toBe(false);
   });
 
   it('should toggle review likes and sort reviews', () => {
-    const reviewId = 1;
-    expect(component.reviewLikes()[reviewId]).toBeFalsy();
-    component.toggleReviewLike(reviewId);
-    expect(component.reviewLikes()[reviewId]).toBe(true);
+    const httpMock = TestBed.inject(HttpTestingController);
+    const songService = TestBed.inject(SongService);
+    songService.loadCommunityFeed({ sortBy: 'recent' }).subscribe();
+    httpMock
+      .expectOne((r) => r.url === '/api/reviews/feed')
+      .flush([
+        {
+          review_id: 1,
+          user_id: 1,
+          track_id: 1,
+          rating: 5,
+          text: 'Great track',
+          likes_count: 10,
+          is_deleted: false,
+          created_at: '2026-01-01T00:00:00Z',
+          author_name: 'Ana',
+        },
+        {
+          review_id: 2,
+          user_id: 2,
+          track_id: 1,
+          rating: 4,
+          text: 'Nice beat',
+          likes_count: 2,
+          is_deleted: false,
+          created_at: '2026-01-02T00:00:00Z',
+          author_name: 'Leo',
+        },
+      ]);
 
-    component.reviewSort.set('likes');
-    const sorted = component.sortedReviews();
+    const reviewId = 1;
+    expect(component['reviewLikes']()[reviewId]).toBeFalsy();
+    component['toggleReviewLike'](reviewId);
+    expect(component['reviewLikes']()[reviewId]).toBe(true);
+
+    component['reviewSort'].set('likes');
+    const sorted = component['sortedReviews']();
     expect(sorted[0]?.id).toBe(reviewId);
   });
 
   it('should open track details modal via RibbitStateService', () => {
     const state = TestBed.inject(RibbitStateService);
     const firstSong = state.songs()[0]!;
-    component.openSongDetails(firstSong);
+    component['openSongDetails'](firstSong);
     expect(state.activeModal()).toBe('details');
     expect(state.detailsTargetSong().title).toBe(firstSong.title);
   });
@@ -106,7 +153,7 @@ describe('ExploreComponent', () => {
       match: 95,
     };
 
-    component.likeAndSaveTrack(song);
+    component['likeAndSaveTrack'](song);
     const req = httpMock.expectOne('/api/reviews/42/like-and-save');
     expect(req.request.method).toBe('POST');
     req.flush({ success: true });
@@ -117,9 +164,9 @@ describe('ExploreComponent', () => {
   it('should immediately execute server search on form submit / search button click', () => {
     writeAuthToken('jwt-search-token');
     const httpMock = TestBed.inject(HttpTestingController);
-    component.query.set('Bloom');
+    component['query'].set('Bloom');
 
-    component.onSearchSubmit(new Event('submit'));
+    component['submitSearch'](new Event('submit'));
 
     const req = httpMock.expectOne(
       (r) => r.url === '/api/tracks/search' && r.params.get('query') === 'Bloom',
@@ -135,8 +182,8 @@ describe('ExploreComponent', () => {
       },
     ]);
 
-    expect(component.filteredSongs().length).toBe(1);
-    expect(component.filteredSongs()[0]?.title).toBe('Bloom');
+    expect(component['filteredSongs']().length).toBe(1);
+    expect(component['filteredSongs']()[0]?.title).toBe('Bloom');
   });
 
   it('should render star ratings on community review cards', () => {
@@ -144,7 +191,7 @@ describe('ExploreComponent', () => {
 
     expect(template).toContain('class="review-stars"');
     expect(template).toContain('review.rating');
-    expect(component.displayedReviews().every((r) => typeof r.rating === 'number')).toBe(true);
+    expect(component['displayedReviews']().every((r) => typeof r.rating === 'number')).toBe(true);
   });
 
   it('should send minRating and sortBy on server search and support rating sort in community feed', () => {
@@ -154,7 +201,7 @@ describe('ExploreComponent', () => {
     state.searchFilterMinRating.set(4);
     state.searchSortBy.set('rating_desc');
 
-    component.triggerSearch();
+    component['triggerSearch']();
 
     const req = httpMock.expectOne(
       (r) =>
@@ -176,10 +223,10 @@ describe('ExploreComponent', () => {
       },
     ]);
 
-    expect(component.filteredSongs()[0]?.averageRating).toBe(4.8);
-    expect(component.filteredSongs()[0]?.reviewCount).toBe(5);
+    expect(component['filteredSongs']()[0]?.averageRating).toBe(4.8);
+    expect(component['filteredSongs']()[0]?.reviewCount).toBe(5);
 
-    component.onSortChange({ target: { value: 'rating_asc' } } as unknown as Event);
+    component['updateReviewSort']({ target: { value: 'rating_asc' } } as unknown as Event);
     const feedReq = httpMock.expectOne(
       (r) => r.url === '/api/reviews/feed' && r.params.get('sort_by') === 'rating_asc',
     );
@@ -192,7 +239,7 @@ describe('ExploreComponent', () => {
     const song = state.songs()[0];
     expect(song).toBeDefined();
     if (song && song.trackId !== undefined) {
-      component.selectSong(song);
+      component['selectSong'](song);
       expect(state.isTrackSeen(song.trackId)).toBe(true);
     }
 
