@@ -32,7 +32,7 @@ function collectVideosFromSuites(suites, outMap) {
 const rootDir = process.cwd();
 const testResultsDir = path.join(rootDir, 'test-results');
 const resultsJsonPath = path.join(testResultsDir, 'results.json');
-const outputVideosDir = path.join(rootDir, 'docs', 'testing', 'videos');
+const outputVideosDir = path.join(rootDir, 'docs', 'videos');
 
 fs.rmSync(testResultsDir, { recursive: true, force: true });
 fs.mkdirSync(outputVideosDir, { recursive: true });
