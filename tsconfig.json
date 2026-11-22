@@ -24,7 +24,7 @@
     "useUnknownInCatchVariables": true,
     "types": ["node"],
     "paths": {
-      "@ribbit/shared-types": ["./view/src/types/index.ts"],
+      "@ribbit/shared-types": ["./view/src/app/core/models/index.ts"],
       "@core/*": ["./view/src/app/core/*"],
       "@shared/*": ["./view/src/app/shared/*"],
       "@features/*": ["./view/src/app/features/*"]
