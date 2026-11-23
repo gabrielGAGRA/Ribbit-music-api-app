@@ -486,7 +486,9 @@ export class RibbitStateService implements OnDestroy {
           this.preloadCoverImage(song.image);
         }
         if (this.discoveryQueue.length < this.discoveryQueueTarget) {
-          setTimeout(() => this.refillDiscoveryQueue(), 0);
+          setTimeout(() => {
+            this.refillDiscoveryQueue();
+          }, 0);
         }
       },
       error: () => {
@@ -501,12 +503,14 @@ export class RibbitStateService implements OnDestroy {
     if (resetQueue) {
       this.discoveryQueue.length = 0;
     }
-    if (this.discoveryQueue.length > 0) {
-      const nextSong = this.discoveryQueue.shift()!;
+    const nextSong = this.discoveryQueue.shift();
+    if (nextSong) {
       this.discoverySong.set(nextSong);
       this.isDeckEmpty.set(false);
       this.audioPlayer.loadTrack(nextSong.previewUrl);
-      setTimeout(() => this.refillDiscoveryQueue(), 0);
+      setTimeout(() => {
+        this.refillDiscoveryQueue();
+      }, 0);
       return;
     }
     this.songService.getNextDiscoverySong().subscribe({
@@ -516,10 +520,12 @@ export class RibbitStateService implements OnDestroy {
           this.isDeckEmpty.set(false);
           this.preloadCoverImage(song.image);
           this.audioPlayer.loadTrack(song.previewUrl);
-          setTimeout(() => this.refillDiscoveryQueue(), 0);
+          setTimeout(() => {
+            this.refillDiscoveryQueue();
+          }, 0);
         } else {
           this.discoveryQueue.length = 0;
-    this.discoverySong.set(null);
+          this.discoverySong.set(null);
           this.isDeckEmpty.set(true);
         }
       },
