@@ -181,16 +181,6 @@ def get_my_reviews(
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 
-@router.get("/api/reviews/me", response_model=list[ReviewResponse])
-def get_my_reviews(
-    user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[GetUserReviewsUseCase, Depends(provide(GetUserReviewsUseCase))],
-    limit: Annotated[int, Query(ge=1, le=100)] = 50,
-) -> list[ReviewResponse]:
-    reviews = use_case.execute(user_id=user_id, limit=limit)
-    return [ReviewResponse.model_validate(r) for r in reviews]
-
-
 @router.get("/api/reviews/track/{track_id}", response_model=list[ReviewResponse])
 def get_track_reviews(
     track_id: int,

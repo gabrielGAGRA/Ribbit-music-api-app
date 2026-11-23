@@ -361,7 +361,7 @@ describe('RibbitStateService', () => {
         explicit: false,
       },
     });
-    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=1000').flush([]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
 
     expect(service.discoverySong()?.trackId).toBe(101);
