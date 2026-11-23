@@ -800,6 +800,11 @@ h1 span {
   cursor: grabbing;
 }
 
+.discovery-card.is-dragging {
+  transition: none !important;
+  will-change: transform;
+}
+
 .discovery-card.like {
   transform: translateX(160px) rotate(15deg) !important;
   opacity: 0;

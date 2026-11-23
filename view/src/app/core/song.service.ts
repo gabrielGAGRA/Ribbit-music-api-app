@@ -141,8 +141,9 @@ export class SongService {
     } = {},
   ): Observable<readonly CommunityReview[]> {
     let params = new HttpParams().set('limit', String(options.limit ?? 20));
-    if (options.days != null && Number.isFinite(options.days)) {
-      params = params.set('days', String(options.days));
+    const effectiveDays = options.days === undefined ? 1 : options.days;
+    if (effectiveDays != null && Number.isFinite(effectiveDays)) {
+      params = params.set('days', String(effectiveDays));
     }
     if (options.sortBy) {
       params = params.set('sort_by', options.sortBy);

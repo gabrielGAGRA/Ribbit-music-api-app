@@ -225,6 +225,15 @@ def test_flow_2_discovery_and_preview_fallback(
     def mock_find_preview(term: str) -> TrackPreview:
         nonlocal fallback_called
         fallback_called = True
+        for candidate in container.track_repo.list_active(limit=100):
+            if candidate.title.lower() in term.lower():
+                return TrackPreview(
+                    external_id=f"itunes-{candidate.track_id}",
+                    title=candidate.title,
+                    artist=candidate.artist,
+                    preview_url="https://audio-ssl.itunes.apple.com/preview/acoustic_sunrise.mp3",
+                    cover_url="https://itunes.apple.com/cover.jpg",
+                )
         return TrackPreview(
             external_id="itunes-9999",
             title="Acoustic Sunrise",

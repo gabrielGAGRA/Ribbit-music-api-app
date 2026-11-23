@@ -1,4 +1,4 @@
-import type {
+  import type {
   AnnualStatsApiDto,
   CommunityReview,
   DecisionKind,
@@ -74,7 +74,7 @@ export function mapTrackDtoToSong(dto: TrackApiDto): Song {
     trackId: dto.track_id,
     title: dto.title,
     artist: dto.artist,
-    genre: dto.genre || 'Indie',
+    genre: dto.genre || 'Desconhecido',
     time: formatDurationSeconds(dto.duration_seconds),
     image: resolveCoverUrl(dto.cover_url, dto.track_id),
     album: dto.album ?? 'Single',

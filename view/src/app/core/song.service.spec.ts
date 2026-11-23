@@ -57,7 +57,7 @@ describe('SongService', () => {
     httpMock.verify();
   });
 
-  it('loads community feed without hardcoded days=1 and forwards sortBy', () => {
+  it('loads community feed with default days=1 and forwards sortBy', () => {
     service.loadCommunityFeed({ sortBy: 'rating_asc', limit: 15 }).subscribe((reviews) => {
       expect(reviews.length).toBe(0);
     });
@@ -66,8 +66,8 @@ describe('SongService', () => {
       (r) =>
         r.url === '/api/reviews/feed' &&
         r.params.get('limit') === '15' &&
-        r.params.get('sort_by') === 'rating_asc' &&
-        !r.params.has('days'),
+        r.params.get('days') === '1' &&
+        r.params.get('sort_by') === 'rating_asc',
     );
     expect(req.request.method).toBe('GET');
     req.flush([]);

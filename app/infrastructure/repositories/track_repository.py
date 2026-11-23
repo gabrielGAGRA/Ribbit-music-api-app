@@ -1,5 +1,6 @@
 """SQLite implementation of the track persistence port."""
 
+import random
 import re
 from datetime import UTC, datetime
 lazy import sqlite3
@@ -9,6 +10,7 @@ from app.application.dtos.admin_dtos import AdminCatalogTrackResult
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.track import Track, TrackId
+from app.domain.services.genre_names import expand_genre_aliases
 from app.infrastructure.repositories.connection import transaction
 
 
@@ -120,6 +122,34 @@ def _append_like_clause(
     conditions.append(f"({' OR '.join(clauses)})")
 
 
+def _append_country_clause(
+    conditions: list[str],
+    params: list[object],
+    values: list[str],
+) -> None:
+    if not values:
+        return
+    from app.domain.services.country_names import expand_country_terms  # noqa: PLC0415
+
+    exact_codes, name_terms = expand_country_terms(values)
+    clauses: list[str] = []
+    if exact_codes:
+        placeholders = ",".join("?" for _ in exact_codes)
+        clauses.append(f"lower(t.country) IN ({placeholders})")
+        params.extend(exact_codes)
+    for v in name_terms:
+        exact = f"%{v.lower()}%"
+        flex = f"%{_to_flexible_like(v)}%"
+        if exact == flex:
+            clauses.append("lower(t.country) LIKE ?")
+            params.append(exact)
+        else:
+            clauses.append("(lower(t.country) LIKE ? OR t.country LIKE ?)")
+            params.extend([exact, flex])
+    if clauses:
+        conditions.append(f"({' OR '.join(clauses)})")
+
+
 def _append_in_clause(
     conditions: list[str],
     params: list[object],
@@ -168,12 +198,15 @@ def _build_filter_conditions(
     _append_like_clause(
         conditions, params, "t.album", _normalize_string_sequence(album)
     )
-    _append_like_clause(
-        conditions, params, "t.genre", _normalize_string_sequence(genre)
+    expanded_genres = list(
+        dict.fromkeys(
+            alias
+            for g in _normalize_string_sequence(genre)
+            for alias in expand_genre_aliases(g)
+        )
     )
-    _append_like_clause(
-        conditions, params, "t.country", _normalize_string_sequence(country)
-    )
+    _append_like_clause(conditions, params, "t.genre", expanded_genres)
+    _append_country_clause(conditions, params, _normalize_string_sequence(country))
     _append_in_clause(
         conditions, params, "t.release_year", _normalize_year_sequence(year)
     )
@@ -389,12 +422,67 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             return self.find_by_id(target_id) or track
         return track
 
+    @staticmethod
+    def _append_unique_rows(
+        rows: Sequence[sqlite3.Row],
+        collected: list[sqlite3.Row],
+        seen_ids: set[int],
+        target: int,
+    ) -> None:
+        for row in rows:
+            tid = int(row["track_id"])
+            if tid not in seen_ids:
+                seen_ids.add(tid)
+                collected.append(row)
+                if len(collected) >= target:
+                    break
+
+    def _fetch_random_probes(
+        self,
+        where_clause: str,
+        base_params: list[object],
+        *,
+        min_id: int,
+        max_id: int,
+        target: int,
+        seen_ids: set[int],
+    ) -> list[sqlite3.Row]:
+        if target <= 0:
+            return []
+        collected: list[sqlite3.Row] = []
+        probes = min(2, max(1, target))
+        per_probe = max(1, (target + probes - 1) // probes)
+        for _ in range(probes):
+            if len(collected) >= target:
+                break
+            start_id = random.randint(min_id, max_id)  # noqa: S311
+            query = (
+                f"SELECT * FROM tracks WHERE track_id >= ? AND {where_clause} "  # noqa: S608
+                "ORDER BY track_id ASC LIMIT ?"
+            )
+            rows = self.conn.execute(
+                query, (start_id, *base_params, per_probe)
+            ).fetchall()
+            self._append_unique_rows(rows, collected, seen_ids, target)
+        if len(collected) < target:
+            remaining = target - len(collected)
+            fallback_q = (
+                f"SELECT * FROM tracks WHERE {where_clause} "  # noqa: S608
+                "ORDER BY track_id ASC LIMIT ?"
+            )
+            rows = self.conn.execute(
+                fallback_q, (*base_params, remaining + len(seen_ids))
+            ).fetchall()
+            self._append_unique_rows(rows, collected, seen_ids, target)
+        return collected
+
     def list_active(
         self,
         *,
         limit: int,
         excluded_genres: Sequence[str] = (),
         excluded_genre_terms: Sequence[str] = (),
+        preferred_genres: Sequence[str] = (),
         block_explicit: bool = False,
         excluded_ids: Sequence[int] = (),
     ) -> list[Track]:
@@ -409,29 +497,80 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             conditions.append(f"track_id NOT IN ({placeholders})")
             params.extend(excluded_ids)
 
-        clean_genres = [g.lower().strip() for g in excluded_genres if g.strip()]
-        if clean_genres:
-            placeholders = ",".join("?" for _ in clean_genres)
-            conditions.append(f"lower(genre) NOT IN ({placeholders})")
-            params.extend(clean_genres)
-
         normalized_genre = (
             "' ' || lower(TRANSLATE(genre, '-/&,.;:()[]!', '            ')) || ' '"
         )
-        if excluded_genre_terms:
-            for term in excluded_genre_terms:
-                conditions.append(f"instr({normalized_genre}, ?) = 0")
-                params.append(f" {term.casefold().strip()} ")
+        blocked_terms = list(
+            dict.fromkeys(
+                [
+                    *(
+                        alias
+                        for g in excluded_genres
+                        if g.strip()
+                        for alias in expand_genre_aliases(g)
+                    ),
+                    *(t.casefold().strip() for t in excluded_genre_terms if t.strip()),
+                ]
+            )
+        )
+        for term in blocked_terms:
+            conditions.append(f"instr({normalized_genre}, ?) = 0")
+            params.append(f" {term} ")
 
         where_clause = " AND ".join(conditions)
-        query = (
-            f"SELECT * FROM tracks WHERE {where_clause} ORDER BY track_id ASC LIMIT ?"  # noqa: S608
-        )
-        params.append(limit)
+        min_row = self.conn.execute("SELECT MIN(track_id) FROM tracks").fetchone()
+        max_row = self.conn.execute("SELECT MAX(track_id) FROM tracks").fetchone()
+        if (
+            min_row is None
+            or max_row is None
+            or min_row[0] is None
+            or max_row[0] is None
+        ):
+            return []
+        min_id, max_id = int(min_row[0]), int(max_row[0])
 
-        cursor = self.conn.execute(query, tuple(params))
-        rows = cursor.fetchall()
-        return [_row_to_track(r) for r in rows]
+        if (max_id - min_id) <= limit * 2:
+            query = f"SELECT * FROM tracks WHERE {where_clause} ORDER BY track_id ASC LIMIT ?"  # noqa: S608
+            rows = self.conn.execute(query, (*params, limit)).fetchall()
+            return [_row_to_track(r) for r in rows]
+
+        seen_ids: set[int] = set()
+        sampled_rows: list[sqlite3.Row] = []
+
+        pref_aliases = list(
+            dict.fromkeys(
+                alias
+                for g in preferred_genres
+                if g.strip()
+                for alias in expand_genre_aliases(g)
+            )
+        )
+        if pref_aliases:
+            pref_clauses = ["lower(genre) LIKE ?" for _ in pref_aliases]
+            pref_where = f"{where_clause} AND ({' OR '.join(pref_clauses)})"
+            pref_params: list[object] = [*params, *(f"%{a}%" for a in pref_aliases)]
+            sampled_rows.extend(
+                self._fetch_random_probes(
+                    pref_where,
+                    pref_params,
+                    min_id=min_id,
+                    max_id=max_id,
+                    target=max(1, limit // 2),
+                    seen_ids=seen_ids,
+                )
+            )
+
+        sampled_rows.extend(
+            self._fetch_random_probes(
+                where_clause,
+                params,
+                min_id=min_id,
+                max_id=max_id,
+                target=limit - len(sampled_rows),
+                seen_ids=seen_ids,
+            )
+        )
+        return [_row_to_track(r) for r in sampled_rows]
 
     def find_by_filters(
         self,

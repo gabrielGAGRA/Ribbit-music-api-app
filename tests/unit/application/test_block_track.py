@@ -5,8 +5,9 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
+from app.application.ports.services.catalog_source import TrackCatalogFilePort
 from app.application.use_cases.admin.block_track import BlockTrackUseCase
-from app.domain.exceptions import EntityNotFoundError
+from app.domain.exceptions import EntityNotFoundError, ExternalServiceError
 from app.domain.models.track import Track
 
 
@@ -68,3 +69,40 @@ def test_unblock_track_restores_and_saves() -> None:
     assert track.is_deleted is False
     track_repo.find_by_id.assert_called_once_with(100)
     track_repo.save.assert_called_once_with(track)
+
+
+def test_block_and_unblock_track_writes_delta_and_tolerates_gcs_error() -> None:
+    track = Track(
+        track_id=101,
+        title="Offensive Song",
+        artist="Artist",
+        duration_seconds=200,
+        genre="Rock",
+        spotify_id="sp-off-1",
+        is_deleted=False,
+    )
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = track
+    track_repo.save.side_effect = _identity_track
+    catalog_port = MagicMock(spec=TrackCatalogFilePort)
+
+    use_case = BlockTrackUseCase(track_repo=track_repo, catalog_file_port=catalog_port)
+    assert use_case.execute(track_id=101, blocked=True) is True
+    catalog_port.write_track_delta.assert_called_once_with(
+        title="Offensive Song",
+        artist="Artist",
+        spotify_id="sp-off-1",
+        is_deleted=True,
+    )
+
+    catalog_port.write_track_delta.reset_mock()
+    catalog_port.write_track_delta.side_effect = ExternalServiceError(
+        "GCS unavailable", service_name="GCP_GCS"
+    )
+    assert use_case.execute(track_id=101, blocked=False) is False
+    catalog_port.write_track_delta.assert_called_once_with(
+        title="Offensive Song",
+        artist="Artist",
+        spotify_id="sp-off-1",
+        is_deleted=False,
+    )

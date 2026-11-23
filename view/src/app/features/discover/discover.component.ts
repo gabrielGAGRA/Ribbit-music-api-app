@@ -70,6 +70,7 @@ export class DiscoverComponent {
 
   protected readonly animation = signal<string>('');
   private readonly drag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
+  protected readonly isDragging = signal<boolean>(false);
 
   private pointerStart: { readonly x: number; readonly y: number } | null = null;
 
@@ -109,6 +110,7 @@ export class DiscoverComponent {
 
   protected submitDecision(kind: DecisionKind): void {
     if (this.animation()) return;
+    this.player.pause();
     this.animation.set(kind);
     const target = this.targetPlaylist();
     const song = this.currentSong();
@@ -127,7 +129,6 @@ export class DiscoverComponent {
       }
 
       this.state.decide(kind);
-      this.player.resetProgress();
       this.animation.set('');
       this.drag.set({ x: 0, y: 0 });
     }, 260);
@@ -162,6 +163,7 @@ export class DiscoverComponent {
   protected startCardDrag(event: PointerEvent): void {
     if (event.target instanceof HTMLElement && event.target.closest('button')) return;
     this.pointerStart = { x: event.clientX, y: event.clientY };
+    this.isDragging.set(true);
     if (event.currentTarget instanceof HTMLElement) {
       event.currentTarget.setPointerCapture(event.pointerId);
     }
@@ -178,12 +180,14 @@ export class DiscoverComponent {
 
   protected cancelCardDrag(): void {
     this.pointerStart = null;
+    this.isDragging.set(false);
     this.drag.set({ x: 0, y: 0 });
   }
 
   protected finishCardDrag(): void {
     if (!this.pointerStart) return;
     this.pointerStart = null;
+    this.isDragging.set(false);
     const action = this.activeDragAction();
     if (action) {
       this.submitDecision(action);
