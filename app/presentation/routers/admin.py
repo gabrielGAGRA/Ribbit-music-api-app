@@ -1,43 +1,56 @@
 """Administration console router for catalog moderation and executive dashboard."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, status
 
 from app.application.dtos import (
     AuthenticateAdminCommand,
+    CreateTrackCommand,
     RegisterAdministratorCommand,
+    UpdatePlatformCostsCommand,
     UpdateSubscriptionPlanCommand,
 )
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
     CompactCatalogUseCase,
+    CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetExecutiveDashboardUseCase,
+    GetPlatformCostsUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminAccessHistoryUseCase,
+    ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
     RegisterAdministratorUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     UpdateTrackGenreUseCase,
 )
 from app.application.use_cases.auth import AuthenticateAdminUseCase
+from app.application.use_cases.review import DeleteReviewUseCase
+from app.application.use_cases.user import ListPlansUseCase
 from app.domain.exceptions import BusinessRuleViolationError, ExternalServiceError
 from app.presentation.dependencies import (
-    get_container,
     provide,
+    provide_optional,
     require_admin,
 )
 from app.presentation.schemas.admin import (
+    AdminCatalogTrackResponse,
+    AdminTrackAccessEntryResponse,
     AudienceReportResponse,
     BlockTrackRequest,
     CompactCatalogResponse,
+    CreateTrackAdminRequest,
     ExecutiveDashboardResponse,
     PlanResponse,
+    PlatformCostSettingsResponse,
     RegisterAdminRequest,
     SyncCatalogVersionResponse,
     TrackBlockResponse,
@@ -45,35 +58,43 @@ from app.presentation.schemas.admin import (
     TrackGenreResponse,
     UpdateAdminRoleRequest,
     UpdatePlanAdminRequest,
+    UpdatePlatformCostsRequest,
     UpdateTrackExplicitRequest,
     UpdateTrackGenreRequest,
     UserPlanSummaryResponse,
 )
 from app.presentation.schemas.auth import AuthResponse, LoginRequest, UserResponse
 from app.presentation.schemas.tracks_reviews import (
-    CatalogTrackResponse,
+    ReviewActionResponse,
     ReviewResponse,
 )
 
 router = APIRouter(prefix="/api/admin", tags=["Admin Console"])
 
 
-def _get_compact_catalog_use_case(
-    request: Request,
-) -> CompactCatalogUseCase:
-    container = get_container(request)
-    if container.compact_catalog_use_case is None:
+def _require_catalog_use_case[T](
+    use_case: T | None,
+) -> T:
+    if use_case is None:
         raise ExternalServiceError("Catalog file storage is not configured.")
-    return container.compact_catalog_use_case
+    return use_case
+
+
+def _get_compact_catalog_use_case(
+    use_case: Annotated[
+        CompactCatalogUseCase | None, Depends(provide_optional(CompactCatalogUseCase))
+    ],
+) -> CompactCatalogUseCase:
+    return _require_catalog_use_case(use_case)
 
 
 def _get_sync_catalog_version_use_case(
-    request: Request,
+    use_case: Annotated[
+        SyncCatalogVersionUseCase | None,
+        Depends(provide_optional(SyncCatalogVersionUseCase)),
+    ],
 ) -> SyncCatalogVersionUseCase:
-    container = get_container(request)
-    if container.sync_catalog_version_use_case is None:
-        raise ExternalServiceError("Catalog file storage is not configured.")
-    return container.sync_catalog_version_use_case
+    return _require_catalog_use_case(use_case)
 
 
 @router.post("/login", response_model=AuthResponse)
@@ -195,17 +216,82 @@ def update_admin_role(
 
 
 @router.get(
+    "/tracks",
+    response_model=list[AdminCatalogTrackResponse],
+)
+def list_admin_tracks(
+    use_case: Annotated[
+        ListAdminCatalogTracksUseCase,
+        Depends(provide(ListAdminCatalogTracksUseCase)),
+    ],
+    query: Annotated[str | None, Query()] = None,
+    include_deleted: bool = False,
+    min_dislikes: Annotated[int | None, Query(ge=0)] = None,
+    sort_by: Literal[
+        "id_asc", "dislikes_desc", "likes_desc", "superlikes_desc", "recent"
+    ] = "id_asc",
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> list[AdminCatalogTrackResponse]:
+    tracks = use_case.execute(
+        query=query,
+        include_deleted=include_deleted,
+        min_dislikes=min_dislikes,
+        sort_by=sort_by,
+        limit=limit,
+        offset=offset,
+    )
+    return [AdminCatalogTrackResponse.model_validate(t) for t in tracks]
+
+
+@router.post(
+    "/tracks",
+    response_model=AdminCatalogTrackResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_admin_track(
+    req: CreateTrackAdminRequest,
+    use_case: Annotated[
+        CreateTrackUseCase,
+        Depends(provide(CreateTrackUseCase)),
+    ],
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> AdminCatalogTrackResponse:
+    created = use_case.execute(
+        CreateTrackCommand(
+            title=req.title,
+            artist=req.artist,
+            genre=req.genre,
+            duration_seconds=req.duration_seconds,
+            album=req.album,
+            country=req.country,
+            release_year=req.release_year,
+            cover_url=req.cover_url,
+            itunes_preview_url=req.itunes_preview_url,
+            spotify_id=req.spotify_id,
+            explicit=req.explicit,
+        )
+    )
+    return AdminCatalogTrackResponse.model_validate(created)
+
+
+@router.get(
     "/blocked-tracks",
-    response_model=list[CatalogTrackResponse],
+    response_model=list[AdminCatalogTrackResponse],
 )
 def list_blocked_tracks(
     use_case: Annotated[
         ListBlockedTracksUseCase, Depends(provide(ListBlockedTracksUseCase))
     ],
     admin_id: Annotated[int, Depends(require_admin)] = 0,
-) -> list[CatalogTrackResponse]:
-    tracks = use_case.execute()
-    return [CatalogTrackResponse.model_validate(t) for t in tracks]
+) -> list[AdminCatalogTrackResponse]:
+    tracks = (
+        use_case.execute_with_metrics()
+        if type(use_case) is ListBlockedTracksUseCase
+        else use_case.execute()
+    )
+    return [AdminCatalogTrackResponse.model_validate(t) for t in tracks]
 
 
 @router.put(
@@ -270,10 +356,10 @@ def update_track_genre(
     response_model=list[PlanResponse],
 )
 def list_plans(
-    request: Request,
+    use_case: Annotated[ListPlansUseCase, Depends(provide(ListPlansUseCase))],
     admin_id: Annotated[int, Depends(require_admin)] = 0,
 ) -> list[PlanResponse]:
-    plans = get_container(request).plan_repo.list_all()
+    plans = use_case.execute()
     return [PlanResponse.model_validate(p) for p in plans]
 
 
@@ -318,6 +404,19 @@ def get_top_moderation_reviews(
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 
+@router.delete(
+    "/reviews/{review_id}",
+    response_model=ReviewActionResponse,
+)
+def delete_review(
+    review_id: int,
+    use_case: Annotated[DeleteReviewUseCase, Depends(provide(DeleteReviewUseCase))],
+    admin_id: Annotated[int, Depends(require_admin)],
+) -> ReviewActionResponse:
+    success = use_case.execute_as_admin(review_id=review_id)
+    return ReviewActionResponse(success=success, sucesso=success)
+
+
 @router.post(
     "/catalog/compact",
     response_model=CompactCatalogResponse,
@@ -350,6 +449,58 @@ def sync_catalog(
         version=result.version,
         message=result.message,
     )
+
+
+@router.get("/access-history", response_model=list[AdminTrackAccessEntryResponse])
+def get_admin_access_history(
+    use_case: Annotated[
+        ListAdminAccessHistoryUseCase,
+        Depends(provide(ListAdminAccessHistoryUseCase)),
+    ],
+    user_id: Annotated[int | None, Query()] = None,
+    track_id: Annotated[int | None, Query()] = None,
+    only_deleted: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> list[AdminTrackAccessEntryResponse]:
+    entries = use_case.execute(
+        user_id=user_id,
+        track_id=track_id,
+        only_deleted=only_deleted,
+        limit=limit,
+        offset=offset,
+    )
+    return [AdminTrackAccessEntryResponse.model_validate(entry) for entry in entries]
+
+
+@router.get("/costs", response_model=PlatformCostSettingsResponse)
+def get_platform_costs(
+    use_case: Annotated[
+        GetPlatformCostsUseCase, Depends(provide(GetPlatformCostsUseCase))
+    ],
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> PlatformCostSettingsResponse:
+    settings = use_case.execute()
+    return PlatformCostSettingsResponse.model_validate(settings)
+
+
+@router.put("/costs", response_model=PlatformCostSettingsResponse)
+def update_platform_costs(
+    req: UpdatePlatformCostsRequest,
+    use_case: Annotated[
+        UpdatePlatformCostsUseCase, Depends(provide(UpdatePlatformCostsUseCase))
+    ],
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> PlatformCostSettingsResponse:
+    updated = use_case.execute(
+        UpdatePlatformCostsCommand(
+            content_cost_per_track=req.content_cost_per_track,
+            infrastructure_fixed_cost=req.infrastructure_fixed_cost,
+            infrastructure_cost_per_user=req.infrastructure_cost_per_user,
+        )
+    )
+    return PlatformCostSettingsResponse.model_validate(updated)
 
 
 __all__ = ["router"]

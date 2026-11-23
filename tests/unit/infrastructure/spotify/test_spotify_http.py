@@ -2,15 +2,7 @@
 
 import pytest
 
-from app.domain.exceptions import (
-    ExternalServiceError,
-    PermissionDeniedError,
-    SpotifyAuthError,
-    SpotifyError,
-    SpotifyForbiddenError,
-    SpotifyPremiumRequiredError,
-    SpotifyQuotaExceededError,
-)
+from app.domain.exceptions import ExternalServiceError, PermissionDeniedError
 from app.infrastructure.adapters.spotify.auth import SpotifyAuth
 from app.infrastructure.adapters.spotify.credentials import SpotifyCredentials
 from app.infrastructure.adapters.spotify.http import SpotifyHttpClient
@@ -67,8 +59,9 @@ class TestRequest:
 
     def test_scope_checked_before_http(self) -> None:
         client, session = _client()
-        with pytest.raises(SpotifyForbiddenError):
+        with pytest.raises(ExternalServiceError) as info:
             client.request("GET", "/me", scopes=frozenset({"user-read-private"}))
+        assert info.value.details.get("error_kind") == "forbidden"
         assert all("api.spotify.com" not in call["url"] for call in session.calls)
 
     def test_401_refreshes_token_and_retries_once_on_success(self) -> None:
@@ -92,15 +85,16 @@ class TestRequest:
             new_token,
             FakeResponse(401, {"error": {"message": "still_expired"}}),
         )
-        with pytest.raises(SpotifyAuthError) as info:
+        with pytest.raises(ExternalServiceError) as info:
             client.request("GET", "/x")
         assert info.value.details["status_code"] == 401
+        assert info.value.details["error_kind"] == "auth"
 
     def test_403_raises_forbidden_without_retry(self) -> None:
         client, session = _client(FakeResponse(403, {"error": {"message": "nope"}}))
-        with pytest.raises(SpotifyForbiddenError) as info:
+        with pytest.raises(ExternalServiceError) as info:
             client.request("GET", "/x")
-        assert not isinstance(info.value, SpotifyPremiumRequiredError)
+        assert info.value.details["error_kind"] == "forbidden"
         assert len(session.calls) == 2
 
     def test_403_premium_required_raises_specific_error(self) -> None:
@@ -116,17 +110,16 @@ class TestRequest:
                 },
             )
         )
-        with pytest.raises(SpotifyPremiumRequiredError) as info:
+        with pytest.raises(PermissionDeniedError) as info:
             client.request("POST", "/me/player/queue")
-        assert isinstance(info.value, SpotifyForbiddenError)
-        assert isinstance(info.value, PermissionDeniedError)
         assert info.value.details["status_code"] == 403
         assert info.value.details["reason"] == "PREMIUM_REQUIRED"
+        assert info.value.details["rule_name"] == "spotify_premium_required"
         assert len(session.calls) == 2
 
     def test_other_error_status_raises_spotify_error(self) -> None:
         client, _ = _client(FakeResponse(500, {"error": {"message": "down"}}))
-        with pytest.raises(SpotifyError, match="500") as info:
+        with pytest.raises(ExternalServiceError, match="500") as info:
             client.request("GET", "/x")
         assert info.value.details["status_code"] == 500
 
@@ -179,7 +172,7 @@ class TestRateLimit:
     def test_gives_up_after_max_retries(self) -> None:
         limited = FakeResponse(429, {}, {"Retry-After": "1"})
         client, _ = _client(limited, limited, limited, limited)
-        with pytest.raises(SpotifyError, match="rate limit"):
+        with pytest.raises(ExternalServiceError, match="rate limit"):
             client.request("GET", "/x")
 
     def test_quota_exceeded_is_fatal_immediately(self) -> None:
@@ -187,8 +180,9 @@ class TestRateLimit:
         body = {"error": {"status": 429, "reason": "QUOTA_EXCEEDED"}}
         client, session = _client(FakeResponse(429, body), sleeps=sleeps)
 
-        with pytest.raises(SpotifyQuotaExceededError):
+        with pytest.raises(ExternalServiceError) as info:
             client.request("GET", "/x")
+        assert info.value.details.get("error_kind") == "quota_exceeded"
 
         assert sleeps == []
         assert len(session.calls) == 2

@@ -13,16 +13,21 @@ from app.application.ports.services import (
 )
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
+    CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     GetExecutiveDashboardUseCase,
+    GetPlatformCostsUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminAccessHistoryUseCase,
+    ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
     PromoteUserToAdminUseCase,
     RegisterAdministratorUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
 )
@@ -35,6 +40,7 @@ from app.application.use_cases.auth import (
 from app.application.use_cases.discovery import (
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    RecordTrackAccessUseCase,
 )
 from app.application.use_cases.jam import (
     AdvanceJamPlaybackUseCase,
@@ -82,6 +88,7 @@ from app.application.use_cases.user import (
     ListBlockedGenresUseCase,
     ListFamilyMembersUseCase,
     ListPlansUseCase,
+    ListUserAccessHistoryUseCase,
     ListUserInteractionsUseCase,
     RemoveFamilyMemberUseCase,
     UpdateBlockedGenresUseCase,
@@ -97,10 +104,9 @@ ALL_USE_CASES = [
     AuthenticateUserUseCase,
     AuthenticateAdminUseCase,
     AuthenticateWithGoogleUseCase,
-    GetSpotifyAuthorizeUrlUseCase,
-    ConnectSpotifyAccountUseCase,
     GetNextDiscoveryTrackUseCase,
     RecordSwipeInteractionUseCase,
+    RecordTrackAccessUseCase,
     CreateDeckPlaylistUseCase,
     GetPlaylistDeckUseCase,
     AddTrackToPlaylistUseCase,
@@ -137,6 +143,7 @@ ALL_USE_CASES = [
     ListBlockedGenresUseCase,
     UpdateBlockedGenresUseCase,
     ListUserInteractionsUseCase,
+    ListUserAccessHistoryUseCase,
     ChangeTrackInteractionUseCase,
     GetAnnualListeningStatsUseCase,
     LinkSpotifyAccountUseCase,
@@ -144,15 +151,20 @@ ALL_USE_CASES = [
     ListUsersWithPlansUseCase,
     ListAdministratorsUseCase,
     UpdateAdminRoleUseCase,
+    UpdatePlatformCostsUseCase,
     UpdateSubscriptionPlanUseCase,
     UpdateTrackExplicitFlagUseCase,
     BlockTrackUseCase,
+    CreateTrackUseCase,
+    ListAdminCatalogTracksUseCase,
     ListBlockedTracksUseCase,
     GetTopModerationReviewsUseCase,
     GetAudienceReportUseCase,
     GetAuditLogsUseCase,
     PromoteUserToAdminUseCase,
     RegisterAdministratorUseCase,
+    ListAdminAccessHistoryUseCase,
+    GetPlatformCostsUseCase,
 ]
 
 
@@ -215,3 +227,35 @@ def test_container_resolves_service_ports(container: Container) -> None:
 
     spotify_profile = container.resolve(SpotifyUserProfilePort)
     assert isinstance(spotify_profile, SpotifyUserProfilePort)
+
+
+def test_container_optional_spotify_oauth_use_cases(container: Container) -> None:
+    assert container.resolve_optional(GetSpotifyAuthorizeUrlUseCase) is None
+    assert container.resolve_optional(ConnectSpotifyAccountUseCase) is None
+    with pytest.raises(KeyError):
+        container.resolve(GetSpotifyAuthorizeUrlUseCase)
+    with pytest.raises(KeyError):
+        container.resolve(ConnectSpotifyAccountUseCase)
+
+    conn = create_connection(":memory:")
+    try:
+        configured = build_container(
+            settings=Settings(
+                database_path=":memory:",
+                password_hash_iterations=1_000,
+                spotify_client_id="sp_client_id",
+                spotify_redirect_uri="http://127.0.0.1:8888/callback",
+            ),
+            connection=conn,
+        )
+        assert isinstance(
+            configured.resolve(GetSpotifyAuthorizeUrlUseCase),
+            GetSpotifyAuthorizeUrlUseCase,
+        )
+        assert isinstance(
+            configured.resolve(ConnectSpotifyAccountUseCase),
+            ConnectSpotifyAccountUseCase,
+        )
+        configured.http_session.close()
+    finally:
+        conn.close()

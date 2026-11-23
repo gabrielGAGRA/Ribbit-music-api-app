@@ -1,11 +1,11 @@
 <div class="secondary-page explore-page">
-  <form class="explore-search" (submit)="onSearchSubmit($event)">
+  <form class="explore-search" (submit)="submitSearch($event)">
     <label class="search-field">
       <app-icon name="search" />
       <input
         placeholder="Faixa, artista, álbum ou gênero..."
         [value]="query()"
-        (input)="onQueryInput($event)"
+        (input)="updateSearchQuery($event)"
       />
       @if (hasActiveSearch()) {
         <button type="button" aria-label="Limpar busca" (click)="clearQuery()">
@@ -22,12 +22,36 @@
   </form>
 
   @if (hasActiveSearch()) {
-    <div class="section-title">
-      <h2>Resultados da busca</h2>
-      <span>Catálogo sincronizado com o Ribbit</span>
+    <div class="reviews-heading search-results-heading">
+      <div class="section-title">
+        <h2>Resultados da busca</h2>
+        <span>Catálogo sincronizado com o Ribbit</span>
+      </div>
+      <div class="search-controls">
+        @if (state.searchFilterMinRating(); as minRating) {
+          <button
+            type="button"
+            class="filter-chip"
+            (click)="clearMinRatingFilter()"
+            [attr.aria-label]="'Remover filtro de nota mínima ' + minRating"
+          >
+            Nota mínima: {{ minRating }}★+
+            <app-icon name="close" [size]="12" />
+          </button>
+        }
+        <select
+          [value]="state.searchSortBy()"
+          (change)="updateSearchSort($event)"
+          aria-label="Ordenar resultados da busca"
+        >
+          <option value="default">Relevância</option>
+          <option value="rating_desc">Maiores notas</option>
+          <option value="rating_asc">Menores notas</option>
+        </select>
+      </div>
     </div>
     <div class="panel search-results">
-      @for (item of filteredSongs(); track item.title) {
+      @for (item of filteredSongs(); track item.trackId ?? item.title) {
         <div class="song-row">
           <button
             class="song-cover"
@@ -38,8 +62,18 @@
           </button>
           <div class="song-description">
             <strong>{{ item.title }}</strong>
-            <span>{{ item.artist }}</span>
+            <span>
+              {{ item.artist }}
+              @if (hasTrackRating(item)) {
+                <span class="track-rating-badge">
+                  ★ {{ item.averageRating!.toFixed(1) }} ({{ item.reviewCount }})
+                </span>
+              }
+            </span>
           </div>
+          @if (state.isTrackSeen(item.trackId)) {
+            <span class="seen-badge"> <app-icon name="check" [size]="12" /> Ouvido </span>
+          }
           <button
             class="icon-button like-track-btn"
             (click)="likeAndSaveTrack(item)"
@@ -61,47 +95,20 @@
       }
     </div>
   } @else {
-    <div class="section-title">
-      <h2>Ouvidas recentemente</h2>
-      <span>Seu histórico de interações</span>
-    </div>
-    <div class="panel listening-history">
-      @for (item of recentSongs(); track item.title) {
-        <div class="song-row">
-          <button
-            class="song-cover"
-            (click)="selectSong(item)"
-            [attr.aria-label]="'Descobrir ' + item.title"
-          >
-            <img [src]="item.image" [alt]="'Capa de ' + item.title" />
-          </button>
-          <div class="song-description">
-            <strong>{{ item.title }}</strong>
-            <span>{{ item.artist }}</span>
-          </div>
-          <button
-            class="icon-button"
-            (click)="openSongDetails(item)"
-            [attr.aria-label]="'Abrir detalhes de ' + item.title"
-          >
-            <app-icon name="chevron" [size]="17" />
-          </button>
-        </div>
-      }
-      <button class="text-button history-toggle" (click)="toggleHistory()">
-        {{ historyExpanded() ? 'Mostrar menos' : 'Ver histórico completo' }}
-        <app-icon [name]="historyExpanded() ? 'undo' : 'arrow'" [size]="14" />
-      </button>
-    </div>
-
     <div class="reviews-heading">
       <div class="section-title">
         <h2>Reviews da comunidade</h2>
         <span>Sobre as músicas do catálogo</span>
       </div>
-      <select [value]="reviewSort()" (change)="onSortChange($event)" aria-label="Ordenar reviews">
+      <select
+        [value]="reviewSort()"
+        (change)="updateReviewSort($event)"
+        aria-label="Ordenar reviews"
+      >
         <option value="recent">Mais recentes</option>
         <option value="likes">Mais curtidas</option>
+        <option value="rating_desc">Maiores notas</option>
+        <option value="rating_asc">Menores notas</option>
         <option value="oldest">Mais antigas</option>
       </select>
     </div>
@@ -111,10 +118,10 @@
         @let fallback = fallbackReviewSong(idx);
         <article class="review-card">
           <div class="review-song">
-            <img [src]="review.songImage ?? fallback.image" alt="" />
+            <img [src]="review.songImage ?? fallback?.image ?? ''" alt="" />
             <span>
-              <strong>{{ review.songTitle ?? fallback.title }}</strong>
-              <small>{{ review.songArtist ?? fallback.artist }}</small>
+              <strong>{{ review.songTitle ?? fallback?.title ?? '' }}</strong>
+              <small>{{ review.songArtist ?? fallback?.artist ?? '' }}</small>
             </span>
           </div>
           <div class="review-author">

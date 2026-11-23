@@ -7,13 +7,7 @@ lazy from collections.abc import Callable, Mapping
 
 import niquests
 
-from app.domain.exceptions import (
-    SpotifyAuthError,
-    SpotifyError,
-    SpotifyForbiddenError,
-    SpotifyPremiumRequiredError,
-    SpotifyQuotaExceededError,
-)
+from app.domain.exceptions import ExternalServiceError, PermissionDeniedError
 from app.infrastructure.adapters.spotify.auth import HTTP_TIMEOUT_SECONDS, SpotifyAuth
 from app.infrastructure.adapters.spotify.mappers import drop_none
 
@@ -73,15 +67,19 @@ class SpotifyHttpClient:
                 self._auth.invalidate_access_token()
                 try:
                     self._auth.get_access_token()
-                except SpotifyAuthError:
+                except ExternalServiceError as exc:
+                    if exc.details.get("error_kind") != "auth":
+                        raise
                     SpotifyHttpClient._raise_for_status(HTTPStatus.UNAUTHORIZED)
                 continue
             if response.status_code != HTTPStatus.TOO_MANY_REQUESTS:
                 return self._parse(response)
             self._raise_if_quota_exceeded(response)
             if retries >= _MAX_RATE_LIMIT_RETRIES:
-                raise SpotifyError(
-                    "Spotify rate limit persisted after retries", details={"path": path}
+                raise ExternalServiceError(
+                    "Spotify rate limit persisted after retries",
+                    service_name="Spotify",
+                    details={"path": path},
                 )
             retries += 1
             self._sleep(self._retry_after(response))
@@ -98,8 +96,10 @@ class SpotifyHttpClient:
                 method, f"{_API_BASE_URL}{path}", headers=headers, **kwargs
             )
         except niquests.RequestException as exc:
-            raise SpotifyError(
-                f"Failed to communicate with Spotify API: {exc}", details={"path": path}
+            raise ExternalServiceError(
+                f"Failed to communicate with Spotify API: {exc}",
+                service_name="Spotify",
+                details={"path": path},
             ) from exc
 
     @staticmethod
@@ -142,8 +142,10 @@ class SpotifyHttpClient:
     ) -> None:
         details: dict[str, Any] = {"status_code": status}
         if status == HTTPStatus.UNAUTHORIZED:
-            raise SpotifyAuthError(
+            details["error_kind"] = "auth"
+            raise ExternalServiceError(
                 "Spotify rejected the access token; re-authorize the user",
+                service_name="Spotify",
                 details=details,
             )
         if status == HTTPStatus.FORBIDDEN:
@@ -152,21 +154,32 @@ class SpotifyHttpClient:
                 reason is None and message and "premium required" in message.casefold()
             ):
                 details["reason"] = reason or "PREMIUM_REQUIRED"
-                raise SpotifyPremiumRequiredError(
+                details["rule_name"] = "spotify_premium_required"
+                raise PermissionDeniedError(
                     "Spotify denied access: Premium subscription required",
                     details=details,
                 )
-            raise SpotifyForbiddenError(
+            details["error_kind"] = "forbidden"
+            raise ExternalServiceError(
                 "Spotify denied access: scope missing, user not allowlisted, or no Premium",
+                service_name="Spotify",
                 details=details,
             )
-        raise SpotifyError(f"Spotify API returned status {status}", details=details)
+        raise ExternalServiceError(
+            f"Spotify API returned status {status}",
+            service_name="Spotify",
+            details=details,
+        )
 
     @staticmethod
     def _raise_if_quota_exceeded(response: niquests.Response) -> None:
         reason, _ = SpotifyHttpClient._parse_error_payload(response)
         if reason == "QUOTA_EXCEEDED":
-            raise SpotifyQuotaExceededError("Spotify Development-mode quota exceeded")
+            raise ExternalServiceError(
+                "Spotify Development-mode quota exceeded",
+                service_name="Spotify",
+                details={"error_kind": "quota_exceeded"},
+            )
 
     @staticmethod
     def _retry_after(response: niquests.Response) -> float:

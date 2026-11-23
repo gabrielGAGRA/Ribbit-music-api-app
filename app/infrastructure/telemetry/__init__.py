@@ -10,10 +10,8 @@ from app.infrastructure.telemetry.logging import (
     sanitize_payload,
     set_correlation_id,
 )
-from app.infrastructure.telemetry.middleware import CorrelationIdMiddleware
 
 __all__ = [
-    "CorrelationIdMiddleware",
     "JSONLogFormatter",
     "configure_logging",
     "correlation_id_ctx",

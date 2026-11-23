@@ -6,7 +6,7 @@ from app.application.ports.services.spotify import (
     SpotifyUserProfile,
     SpotifyUserProfilePort,
 )
-from app.domain.exceptions import SpotifyAuthError
+from app.domain.exceptions import ExternalServiceError
 
 _SPOTIFY_ME_URL = "https://api.spotify.com/v1/me"
 _HTTP_TIMEOUT_SECONDS = 5.0
@@ -18,7 +18,11 @@ class SpotifyUserProfileAdapter(SpotifyUserProfilePort):
 
     def get_current_user_profile(self, access_token: str) -> SpotifyUserProfile:
         if not access_token.strip():
-            raise SpotifyAuthError("Spotify access token cannot be blank.")
+            raise ExternalServiceError(
+                "Spotify access token cannot be blank.",
+                service_name="Spotify",
+                details={"error_kind": "auth"},
+            )
 
         try:
             resp = self._session.get(
@@ -27,20 +31,27 @@ class SpotifyUserProfileAdapter(SpotifyUserProfilePort):
                 timeout=_HTTP_TIMEOUT_SECONDS,
             )
         except Exception as exc:  # noqa: BLE001
-            raise SpotifyAuthError(
-                "Unable to fetch Spotify profile due to network failure."
+            raise ExternalServiceError(
+                "Unable to fetch Spotify profile due to network failure.",
+                service_name="Spotify",
+                details={"error_kind": "auth"},
             ) from exc
 
         if resp.status_code != 200:
-            raise SpotifyAuthError(
+            raise ExternalServiceError(
                 f"Failed to fetch Spotify user profile: status {resp.status_code}",
-                details={"status_code": resp.status_code},
+                service_name="Spotify",
+                details={"status_code": resp.status_code, "error_kind": "auth"},
             )
 
         data = resp.json()
         user_id = data.get("id")
         if not user_id:
-            raise SpotifyAuthError("Spotify profile response missing 'id' field.")
+            raise ExternalServiceError(
+                "Spotify profile response missing 'id' field.",
+                service_name="Spotify",
+                details={"error_kind": "auth"},
+            )
 
         raw_product = data.get("product")
         return SpotifyUserProfile(

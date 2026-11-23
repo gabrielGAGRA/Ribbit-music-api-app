@@ -20,14 +20,12 @@ from app.infrastructure.repositories import (
 )
 from app.infrastructure.security import PBKDF2PasswordHasher
 from app.infrastructure.telemetry import (
-    CorrelationIdMiddleware,
     JSONLogFormatter,
     configure_logging,
     log_operational_event,
 )
 
 __all__ = [
-    "CorrelationIdMiddleware",
     "DEFAULT_DATABASE_PATH",
     "ITunesAdapter",
     "JSONLogFormatter",

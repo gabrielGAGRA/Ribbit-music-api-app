@@ -64,17 +64,38 @@
         >Rejeitadas<small>{{ formatCappedCount(rejectCount()) }} faixas</small></span
       >
     </button>
+
+    <button
+      role="tab"
+      [attr.aria-selected]="selectedTab() === 'history'"
+      [class.active]="selectedTab() === 'history'"
+      (click)="selectTab('history')"
+    >
+      <app-icon name="clock" [size]="15" />
+      <span
+        >Histórico<small>{{ historyCount() }} faixas</small></span
+      >
+    </button>
   </div>
 
   <div class="panel profile-tab-content" role="tabpanel">
     <div class="section-title">
       <h3>{{ activeTabLabel() }}</h3>
-      <button class="text-button" (click)="viewFullCollection()">
-        Ver coleção completa <app-icon name="arrow" [size]="14" />
-      </button>
+      @if (selectedTab() === 'history') {
+        @if (historySongs().length > 6) {
+          <button class="text-button" (click)="toggleHistory()">
+            {{ historyExpanded() ? 'Mostrar menos' : 'Ver histórico completo' }}
+            <app-icon [name]="historyExpanded() ? 'undo' : 'arrow'" [size]="14" />
+          </button>
+        }
+      } @else {
+        <button class="text-button" (click)="viewFullCollection()">
+          Ver coleção completa <app-icon name="arrow" [size]="14" />
+        </button>
+      }
     </div>
 
-    @for (item of activeTabItems(); track item.title) {
+    @for (item of activeTabItems(); track item.trackId ?? item.title) {
       <div class="song-row">
         <div class="song-cover">
           <img [src]="item.image" alt="" />
@@ -83,6 +104,9 @@
           <strong>{{ item.title }}</strong>
           <span>{{ item.artist }}</span>
         </div>
+        @if (state.isTrackSeen(item.trackId)) {
+          <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+        }
         <button
           class="icon-button"
           [attr.aria-label]="(isSongPlaying(item) ? 'Pausar ' : 'Reproduzir ') + item.title"
@@ -90,11 +114,24 @@
         >
           <app-icon [name]="isSongPlaying(item) ? 'pause' : 'play'" [size]="15" />
         </button>
+        @if (selectedTab() === 'history') {
+          <button
+            class="icon-button"
+            (click)="openSongDetails(item)"
+            [attr.aria-label]="'Abrir detalhes de ' + item.title"
+          >
+            <app-icon name="chevron" [size]="17" />
+          </button>
+        }
       </div>
     } @empty {
       <p class="empty-text">
-        Nenhuma faixa em {{ activeTabLabel().toLowerCase() }} ainda. Deslize na Descoberta para
-        construir sua coleção!
+        @if (selectedTab() === 'history') {
+          Nenhuma faixa acessada recentemente. Explore ou descubra novas músicas!
+        } @else {
+          Nenhuma faixa em {{ activeTabLabel().toLowerCase() }} ainda. Deslize na Descoberta para
+          construir sua coleção!
+        }
       </p>
     }
   </div>

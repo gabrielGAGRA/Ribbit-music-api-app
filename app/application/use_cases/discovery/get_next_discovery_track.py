@@ -84,6 +84,11 @@ class GetNextDiscoveryTrackUseCase:
                 "Failed to write track delta for track %s: %s",
                 track.track_id,
                 exc,
+                extra={
+                    "event": "catalog.delta_write.failed",
+                    "status": "warning",
+                    "track_id": track.track_id,
+                },
             )
 
     def execute(self, user_id: int) -> Track | None:

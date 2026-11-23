@@ -3,13 +3,30 @@
 import angular from 'angular-eslint';
 import oxlint from 'eslint-plugin-oxlint';
 import { defineConfig, globalIgnores } from 'eslint/config';
+import ribbitPlugin from './eslint-ribbit-plugin.mjs';
 
 export default defineConfig(
-  globalIgnores(['app/**', 'tests/unit/**', 'docs/**', 'local/**']),
+  globalIgnores([
+    '.venv/**',
+    'app/**',
+    'tests/**',
+    'scripts/**',
+    'playwright.config.ts',
+    'docs/**',
+    'local/**',
+    'test-results/**',
+    'playwright-report/**',
+  ]),
   { linterOptions: { reportUnusedDisableDirectives: 'error' } },
 
   // Oxlint desativa regras duplicadas no ESLint
   oxlint.configs['flat/recommended'],
+
+  {
+    plugins: {
+      ribbit: ribbitPlugin,
+    },
+  },
 
   // Regras de componentes Angular (.ts)
   {
@@ -39,9 +56,11 @@ export default defineConfig(
       '@angular-eslint/no-uncalled-signals': 'error',
       '@angular-eslint/computed-must-return': 'error',
       '@angular-eslint/use-lifecycle-interface': 'error',
+      '@angular-eslint/no-implicit-take-until-destroyed': 'error',
       '@angular-eslint/component-class-suffix': 'error',
       '@angular-eslint/directive-class-suffix': 'error',
       '@angular-eslint/prefer-on-push-component-change-detection': 'error',
+      'ribbit/require-assertion-comment': 'error',
       'no-restricted-imports': [
         'error',
         {
@@ -50,6 +69,38 @@ export default defineConfig(
               name: '@angular/common',
               importNames: ['NgClass', 'NgStyle'],
               message: 'Use [class.x] and [style.x] bindings instead of NgClass and NgStyle.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  {
+    files: ['**/*.spec.ts'],
+    rules: {
+      'ribbit/require-assertion-comment': 'off',
+    },
+  },
+
+  {
+    files: ['**/*.component.ts'],
+    rules: {
+      'ribbit/component-member-accessibility': 'error',
+      'ribbit/no-dom-event-handler-names': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@angular/common',
+              importNames: ['NgClass', 'NgStyle'],
+              message: 'Use [class.x] and [style.x] bindings instead of NgClass and NgStyle.',
+            },
+            {
+              name: 'rxjs',
+              importNames: ['Subject', 'BehaviorSubject', 'ReplaySubject'],
+              message: 'Use Angular Signals instead of RxJS Subjects in components.',
             },
           ],
         },
@@ -69,6 +120,8 @@ export default defineConfig(
       '@angular-eslint/template/prefer-at-empty': 'error',
       '@angular-eslint/template/prefer-self-closing-tags': 'error',
       '@angular-eslint/template/no-inline-styles': 'error',
+      '@angular-eslint/template/conditional-complexity': ['error', { maxComplexity: 3 }],
+      'ribbit/no-template-snake-case': 'error',
     },
   },
 );

@@ -1,0 +1,489 @@
+<div class="admin-moderation-page">
+  <section class="admin-card moderation-toolbar">
+    <div class="tabs-row" role="tablist" aria-label="Áreas de moderação">
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'catalog'"
+        [class.active]="activeTab() === 'catalog'"
+        (click)="selectTab('catalog')"
+      >
+        <app-icon name="music" [size]="16" />
+        Catálogo Ativo ({{ adminState.activeTracks().length }})
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'blocked'"
+        [class.active]="activeTab() === 'blocked'"
+        (click)="selectTab('blocked')"
+      >
+        <app-icon name="shield" [size]="16" />
+        Faixas Bloqueadas ({{ blockedTracks().length }})
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'reviews'"
+        [class.active]="activeTab() === 'reviews'"
+        (click)="selectTab('reviews')"
+      >
+        <app-icon name="star" [size]="16" />
+        Top Reviews 30d ({{ topReviews().length }})
+      </button>
+    </div>
+
+    @if (activeTab() === 'catalog') {
+      <div class="search-field">
+        <label for="moderation-track-search">Pesquisar faixas ativas</label>
+        <span id="moderation-search-hint" class="field-hint">
+          Busque por título, artista ou álbum para bloquear, editar gênero ou aplicar selo +18
+        </span>
+        <div class="catalog-filter-bar">
+          <div class="search-box">
+            <app-icon name="search" [size]="16" />
+            <input
+              id="moderation-track-search"
+              type="search"
+              placeholder="Ex.: Bohemian Rhapsody, Queen..."
+              aria-describedby="moderation-search-hint"
+              [value]="trackQuery()"
+              (input)="updateTrackQuery($event)"
+              (search)="searchTracks()"
+            />
+          </div>
+          <select
+            class="admin-select"
+            aria-label="Ordenar faixas do catálogo"
+            [value]="catalogSort()"
+            (change)="updateCatalogSort($event)"
+          >
+            <option value="id_asc">Padrão</option>
+            <option value="dislikes_desc">Mais dislikes</option>
+            <option value="likes_desc">Mais likes</option>
+            <option value="superlikes_desc">Mais superlikes</option>
+            <option value="recent">Mais recentes</option>
+          </select>
+          <button
+            type="button"
+            class="tab-pill dislike-filter-toggle"
+            [class.active]="onlyDisliked()"
+            [attr.aria-pressed]="onlyDisliked()"
+            (click)="toggleOnlyDisliked()"
+          >
+            Somente com dislikes
+          </button>
+          <button
+            type="button"
+            class="catalog-action-btn"
+            [attr.aria-expanded]="showCreateTrackForm()"
+            (click)="toggleCreateTrackForm()"
+          >
+            <app-icon name="plus" [size]="14" />
+            {{ showCreateTrackForm() ? 'Fechar formulário' : 'Cadastrar Nova Faixa' }}
+          </button>
+        </div>
+      </div>
+
+      @if (showCreateTrackForm()) {
+        <form class="create-track-form" (submit)="submitCreateTrack($event)">
+          <h3>Cadastrar Nova Faixa</h3>
+          <div class="create-track-grid">
+            <label>
+              Título *
+              <input
+                name="newTrackTitle"
+                required
+                placeholder="Ex.: Midnight Rain"
+                [value]="newTrackTitle()"
+                (input)="updateTextSignal(newTrackTitle, $event)"
+              />
+            </label>
+            <label>
+              Artista *
+              <input
+                name="newTrackArtist"
+                required
+                placeholder="Ex.: Synth Collective"
+                [value]="newTrackArtist()"
+                (input)="updateTextSignal(newTrackArtist, $event)"
+              />
+            </label>
+            <label>
+              Gênero *
+              <input
+                name="newTrackGenre"
+                required
+                placeholder="Ex.: Indie Pop"
+                [value]="newTrackGenre()"
+                (input)="updateTextSignal(newTrackGenre, $event)"
+              />
+            </label>
+            <label>
+              Duração (segundos) *
+              <input
+                name="newTrackDuration"
+                type="number"
+                min="1"
+                required
+                [value]="newTrackDuration()"
+                (input)="updateTextSignal(newTrackDuration, $event)"
+              />
+            </label>
+            <label>
+              Álbum
+              <input
+                name="newTrackAlbum"
+                placeholder="Opcional"
+                [value]="newTrackAlbum()"
+                (input)="updateTextSignal(newTrackAlbum, $event)"
+              />
+            </label>
+            <label>
+              Ano de lançamento
+              <input
+                name="newTrackYear"
+                type="number"
+                min="1900"
+                placeholder="Ex.: 2024"
+                [value]="newTrackYear()"
+                (input)="updateTextSignal(newTrackYear, $event)"
+              />
+            </label>
+          </div>
+          <div class="create-track-actions">
+            <label class="explicit-checkbox">
+              <input
+                type="checkbox"
+                [checked]="newTrackExplicit()"
+                (change)="toggleNewTrackExplicit()"
+              />
+              Conteúdo explícito (+18)
+            </label>
+            <button type="submit" class="catalog-action-btn" [disabled]="isCreatingTrack()">
+              <app-icon name="check" [size]="14" />
+              {{ isCreatingTrack() ? 'Cadastrando...' : 'Salvar Faixa' }}
+            </button>
+          </div>
+        </form>
+      }
+    }
+
+    @if (moderationError()) {
+      <div class="moderation-alert" role="alert">
+        <app-icon name="close" [size]="15" />
+        <span>{{ moderationError() }}</span>
+      </div>
+    }
+  </section>
+
+  @switch (activeTab()) {
+    @case ('catalog') {
+      <section class="admin-card">
+        <div class="section-head catalog-header-row">
+          <div>
+            <h2>Catálogo Musical Disponível</h2>
+          </div>
+          <div class="catalog-actions-group">
+            <button
+              type="button"
+              class="catalog-action-btn"
+              [disabled]="isCompacting()"
+              (click)="compactCatalog()"
+            >
+              <app-icon name="sliders" [size]="14" />
+              {{ isCompacting() ? 'Compactando...' : 'Compactar Catálogo (Delta Tables)' }}
+            </button>
+            <button
+              type="button"
+              class="catalog-action-btn"
+              [disabled]="isSyncing()"
+              (click)="syncCatalog()"
+            >
+              <app-icon name="repeat" [size]="14" />
+              {{ isSyncing() ? 'Sincronizando...' : 'Sincronizar Catálogo' }}
+            </button>
+          </div>
+        </div>
+
+        @if (catalogActionStatus()) {
+          <div class="catalog-status-banner">
+            <app-icon name="sparkles" [size]="14" />
+            <span>{{ catalogActionStatus() }}</span>
+          </div>
+        }
+
+        <div
+          tabindex="0"
+          role="region"
+          aria-labelledby="catalog-tracks-caption"
+          class="table-wrapper"
+        >
+          <table class="admin-table tracks-table">
+            <caption id="catalog-tracks-caption" class="sr-only">
+              Faixas ativas disponíveis no catálogo com controles de selo explícito e bloqueio
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Faixa</th>
+                <th scope="col">Artista / Álbum</th>
+                <th scope="col">Gênero</th>
+                <th scope="col">Duração</th>
+                <th scope="col">Métricas</th>
+                <th scope="col">Classificação +18</th>
+                <th scope="col">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (track of searchedActiveTracks(); track track.trackId) {
+                <tr>
+                  <th scope="row">
+                    <div class="track-title-cell">
+                      <strong>{{ track.title }}</strong>
+                      <small>#{{ track.trackId }}</small>
+                    </div>
+                  </th>
+                  <td>
+                    <div class="track-sub-cell">
+                      <span>{{ track.artist }}</span>
+                      <small>{{ track.album ?? 'Single' }} · {{ track.releaseYear ?? '—' }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    @if (editingTrackId() === track.trackId) {
+                      <div class="edit-genre-inline">
+                        <input
+                          type="text"
+                          class="edit-genre-input"
+                          [value]="editGenreDraft()"
+                          (input)="updateGenreDraft($event)"
+                          (keyup.enter)="saveGenre(track.trackId)"
+                          (keyup.escape)="cancelEditingGenre()"
+                          placeholder="Novo gênero"
+                          maxlength="30"
+                        />
+                        <button
+                          type="button"
+                          class="save-genre-btn"
+                          title="Salvar gênero"
+                          (click)="saveGenre(track.trackId)"
+                        >
+                          Salvar
+                        </button>
+                        <button
+                          type="button"
+                          class="cancel-genre-btn"
+                          title="Cancelar"
+                          (click)="cancelEditingGenre()"
+                        >
+                          <app-icon name="close" [size]="11" />
+                        </button>
+                      </div>
+                    } @else {
+                      <div class="genre-cell-view">
+                        <span class="genre-pill">{{ track.genre }}</span>
+                        <button
+                          type="button"
+                          class="edit-genre-btn"
+                          title="Alterar gênero"
+                          (click)="startEditingGenre(track)"
+                        >
+                          <app-icon name="sparkles" [size]="12" />
+                          Editar
+                        </button>
+                      </div>
+                    }
+                  </td>
+                  <td>{{ formatDuration(track.durationSeconds) }}</td>
+                  <td>
+                    <div class="track-metrics-badges">
+                      <span class="metric-badge like" title="Likes">👍 {{ track.likesCount }}</span>
+                      <span class="metric-badge superlike" title="Superlikes"
+                        >⭐ {{ track.superlikesCount }}</span
+                      >
+                      <span class="metric-badge dislike" title="Dislikes"
+                        >👎 {{ track.dislikesCount }}</span
+                      >
+                    </div>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="explicit-toggle"
+                      [class.active]="track.explicit"
+                      [attr.aria-pressed]="track.explicit"
+                      (click)="toggleExplicit(track)"
+                    >
+                      {{ track.explicit ? '+18 Explícita' : 'Livre (Marcar +18)' }}
+                    </button>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="danger-outline-btn"
+                      (click)="blockTrack(track.trackId)"
+                    >
+                      Bloquear faixa
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="empty-cell">
+                    Nenhuma faixa ativa corresponde ao termo pesquisado.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @case ('blocked') {
+      <section class="admin-card">
+        <div class="section-head">
+          <h2>Faixas Bloqueadas (Soft-Delete)</h2>
+        </div>
+
+        <div
+          tabindex="0"
+          role="region"
+          aria-labelledby="blocked-tracks-caption"
+          class="table-wrapper"
+        >
+          <table class="admin-table tracks-table">
+            <caption id="blocked-tracks-caption" class="sr-only">
+              Faixas bloqueadas que não aparecem nas descobertas de ouvintes
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Faixa Bloqueada</th>
+                <th scope="col">Artista / Álbum</th>
+                <th scope="col">Gênero</th>
+                <th scope="col">Duração</th>
+                <th scope="col">Métricas</th>
+                <th scope="col">Classificação +18</th>
+                <th scope="col">Restauração</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (track of blockedTracks(); track track.trackId) {
+                <tr>
+                  <th scope="row">
+                    <div class="track-title-cell">
+                      <strong>{{ track.title }}</strong>
+                      <small>#{{ track.trackId }}</small>
+                    </div>
+                  </th>
+                  <td>
+                    <div class="track-sub-cell">
+                      <span>{{ track.artist }}</span>
+                      <small>{{ track.album ?? 'Single' }}</small>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="genre-pill">{{ track.genre }}</span>
+                  </td>
+                  <td>{{ formatDuration(track.durationSeconds) }}</td>
+                  <td>
+                    <div class="track-metrics-badges">
+                      <span class="metric-badge like" title="Likes">👍 {{ track.likesCount }}</span>
+                      <span class="metric-badge superlike" title="Superlikes"
+                        >⭐ {{ track.superlikesCount }}</span
+                      >
+                      <span class="metric-badge dislike" title="Dislikes"
+                        >👎 {{ track.dislikesCount }}</span
+                      >
+                    </div>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      class="explicit-toggle"
+                      [class.active]="track.explicit"
+                      [attr.aria-pressed]="track.explicit"
+                      (click)="toggleExplicit(track)"
+                    >
+                      {{ track.explicit ? '+18 Explícita' : 'Livre' }}
+                    </button>
+                  </td>
+                  <td>
+                    <button type="button" class="restore-btn" (click)="restoreTrack(track.trackId)">
+                      Restaurar ao catálogo
+                    </button>
+                  </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="7" class="empty-cell">
+                    Nenhuma faixa bloqueada no momento. Todo o catálogo está ativo.
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+
+    @case ('reviews') {
+      <section class="admin-card">
+        <div class="section-head">
+          <h2>Avaliações Mais Curtidas (Últimos 30 Dias)</h2>
+        </div>
+
+        <div class="reviews-list">
+          @for (review of topReviews(); track review.reviewId) {
+            <article class="review-mod-card">
+              <div class="review-mod-header">
+                <div class="review-author-meta">
+                  <strong>{{ review.authorName }}</strong>
+                  <span class="muted">em</span>
+                  <span class="review-track-tag">
+                    {{ review.trackTitle }} — {{ review.trackArtist }}
+                  </span>
+                </div>
+
+                <div class="review-metrics">
+                  <span class="stars-group" [attr.aria-label]="'Nota ' + review.rating + ' de 5'">
+                    @for (star of starArray(review.rating); track star) {
+                      <app-icon name="star" [size]="14" />
+                    }
+                  </span>
+                  <span class="likes-pill">
+                    <app-icon name="heart" [size]="13" />
+                    {{ review.likesCount }} curtidas
+                  </span>
+                </div>
+              </div>
+
+              <p class="review-body-text">{{ review.text }}</p>
+
+              <div class="review-mod-footer">
+                <small class="muted"
+                  >Review #{{ review.reviewId }} · Usuário #{{ review.userId }}</small
+                >
+                <button
+                  type="button"
+                  class="danger-outline-btn"
+                  (click)="removeReview(review.reviewId)"
+                >
+                  <app-icon name="close" [size]="13" />
+                  Excluir avaliação
+                </button>
+              </div>
+            </article>
+          } @empty {
+            <p class="empty-cell">Nenhuma avaliação pendente de revisão nos últimos 30 dias.</p>
+          }
+        </div>
+      </section>
+    }
+  }
+</div>

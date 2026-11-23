@@ -2,24 +2,21 @@
 
 lazy from collections.abc import Callable
 
-from app.domain.exceptions import (
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
-)
+from app.domain.exceptions import PermissionDeniedError
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.domain.models.user import User
 
 
 def require_spotify_premium(user: User) -> None:
-    """Raises SpotifyConnectionRequiredError or SpotifyPremiumRequiredError based on user state."""
+    """Raises PermissionDeniedError based on user Spotify connection or Premium state."""
     if user.spotify_premium:
         return
     if not user.spotify_id:
-        raise SpotifyConnectionRequiredError(
+        raise PermissionDeniedError(
             "Conecte sua conta do Spotify para utilizar o Pond.",
             details={"rule_name": "spotify_connection_required"},
         )
-    raise SpotifyPremiumRequiredError(
+    raise PermissionDeniedError(
         "Uma conta Spotify Premium é necessária para esta funcionalidade.",
         details={"rule_name": "spotify_premium_required"},
     )
@@ -34,8 +31,11 @@ def execute_with_spotify_premium[T](
     require_spotify_premium(user)
     try:
         return operation()
-    except SpotifyPremiumRequiredError:
-        if user.spotify_premium:
+    except PermissionDeniedError as exc:
+        if (
+            exc.details.get("rule_name") == "spotify_premium_required"
+            and user.spotify_premium
+        ):
             user.update_spotify_premium(False)
             user_repo.save(user)
         raise

@@ -2,8 +2,7 @@
 
 ## 1. Imports and Packages
 
-- **Absolute imports**: Default for project code.
-- **Sibling relative imports**: Acceptable when absolute paths are unnecessarily verbose.
+- **Absolute imports**: Required for all project code (`[tool.ruff.lint.flake8-tidy-imports] ban-relative-imports = "all"`). Do not use relative imports, even within the same package.
 - **Local packages**: Prefer imports that make origin and meaning clear at the call site.
 - **Module import** when it disambiguates a common name or exposes a deliberate namespace (`import package.models.user` then `user.User(...)`).
 - **Direct symbol import** for stable, unambiguous types and public interfaces (`from package.models.user import User`).
@@ -128,7 +127,7 @@ Apply before inventing a new module or leaving a “sparse” constant beside un
 - Prefer one composition class/function that **inlines** session/client/adapter/use-case/router construction — always in the composition root, NEVER in presentation. Avoid a parallel wiring module in the application layer that imports infrastructure concretes.
 - ALWAYS inject adapters and clients from the composition root; do not construct them deeper in the graph. Adapter-internal SDK clients from **supplied** config are OK, but configuration, retry policy, credentials, and lifecycle must be explicit and testable. Prefer composition-root construction when sharing pools or sessions.
 - Group related infrastructure (sessions, clients) at the same composition-root level.
-- **Settings**: Configuration is a dependency, not an ambient global. The settings model is **fields only** — no methods, cached properties, domain imports, or parsing helpers on the class. Load it once at the composition root and never reload ambient settings deeper in the graph.
+- **Settings**: Configuration is a dependency, not an ambient global. The settings model is **fields only** (plus startup invariant validators such as `@model_validator`) — no business methods, cached properties, domain imports, or parsing helpers on the class. Load it once at the composition root and never reload ambient settings deeper in the graph.
   - Domain/application receive typed ports and narrow policy values, never a process-global settings object threaded through the graph.
   - Infrastructure may receive a narrow config object or scalars in `__init__`; never reach into globals from deep call paths.
   - Tests construct settings explicitly; prefer injection over patching ambient settings.

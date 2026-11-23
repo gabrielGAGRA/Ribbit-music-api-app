@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.presentation.schemas.playlists import TrackResponse
+
 
 class InteractionRequest(BaseModel):
     """Payload to record a swipe interaction on a track."""
@@ -44,6 +46,7 @@ class UndoInteractionResponse(BaseModel):
     track_id: int
     action: str
     created_at: datetime | None = None
+    track: TrackResponse | None = None
 
 
 class TrackSearchQuery(BaseModel):
@@ -56,6 +59,8 @@ class TrackSearchQuery(BaseModel):
     year: int | None = None
     start_year: int | None = None
     end_year: int | None = None
+    min_rating: float | None = Field(default=None, ge=1.0, le=5.0)
+    sort_by: Literal["rating_desc", "rating_asc"] | None = None
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 

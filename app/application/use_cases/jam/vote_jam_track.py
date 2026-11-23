@@ -15,11 +15,15 @@ from app.domain.models.interaction import (
     InteractionSource,
 )
 from app.domain.models.jam import JamQueueItem
+from app.domain.models.track_access import TrackAccess
 lazy from app.application.dtos.jam_dtos import VoteJamTrackCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
+lazy from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
+)
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
@@ -36,6 +40,7 @@ class VoteJamTrackUseCase:
     track_repo: TrackRepositoryPort
     interaction_repo: InteractionRepositoryPort | None = None
     spotify_queue: SpotifyHostQueuePort | None = None
+    track_access_repo: TrackAccessRepositoryPort | None = None
 
     def _compute_vote_points(self, command: VoteJamTrackCommand) -> tuple[int, bool]:
         action = InteractionAction.parse(command.action, default=InteractionAction.LIKE)
@@ -136,6 +141,12 @@ class VoteJamTrackUseCase:
             )
         )
 
+    def _record_access(self, user_id: int, track_id: int) -> None:
+        if self.track_access_repo is not None:
+            self.track_access_repo.record(
+                TrackAccess(user_id=user_id, track_id=track_id, source="jam")
+            )
+
     def _maybe_auto_advance(self, jam: Jam) -> None:
         if jam.current_track_id is not None or jam.jam_id is None:
             return
@@ -190,6 +201,7 @@ class VoteJamTrackUseCase:
             command.action,
             is_superlike=is_superlike,
         )
+        self._record_access(command.user_id, command.track_id)
 
         if is_superlike:
             jam.superlikes_used += 1

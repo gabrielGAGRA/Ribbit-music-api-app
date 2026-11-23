@@ -91,9 +91,9 @@
             <small>Pai</small>
           </div>
 
-          @for (member of familyMembers(); track member.user_id) {
-            <div class="slot-bubble is-child" [title]="'Conta Filha: ' + member.display_name">
-              <span>{{ computeInitials(member.display_name) }}</span>
+          @for (member of familyMembers(); track member.userId) {
+            <div class="slot-bubble is-child" [title]="'Conta Filha: ' + member.displayName">
+              <span>{{ computeInitials(member.displayName) }}</span>
               <small>Filha</small>
             </div>
           }
@@ -225,7 +225,7 @@
                 name="childDisplayName"
                 placeholder="Ex.: Lucas Silva"
                 [value]="childDisplayName()"
-                (input)="onDisplayNameInput($event)"
+                (input)="updateChildDisplayName($event)"
                 required
               />
             </label>
@@ -237,7 +237,7 @@
                 name="childEmail"
                 placeholder="Ex.: lucas@familia.com"
                 [value]="childEmail()"
-                (input)="onEmailInput($event)"
+                (input)="updateChildEmail($event)"
                 required
               />
             </label>
@@ -249,7 +249,7 @@
                 name="childPassword"
                 placeholder="Mínimo de 6 caracteres"
                 [value]="childPassword()"
-                (input)="onPasswordInput($event)"
+                (input)="updateChildPassword($event)"
                 required
               />
             </label>
@@ -260,7 +260,7 @@
                 type="date"
                 name="childBirthDate"
                 [value]="childBirthDate()"
-                (input)="onBirthDateInput($event)"
+                (input)="updateChildBirthDate($event)"
               />
             </label>
           </div>
@@ -290,7 +290,7 @@
                 name="existingChildIdentifier"
                 placeholder="Ex.: dependente@email.com ou 42"
                 [value]="existingChildIdentifier()"
-                (input)="onExistingIdentifierInput($event)"
+                (input)="updateExistingChildIdentifier($event)"
                 required
               />
               <small>
@@ -307,7 +307,7 @@
                   name="existingChildPassword"
                   placeholder="Senha de acesso da conta informada"
                   [value]="existingChildPassword()"
-                  (input)="onExistingPasswordInput($event)"
+                  (input)="updateExistingChildPassword($event)"
                   required
                 />
                 <small>
@@ -357,17 +357,17 @@
         </div>
       } @else {
         <div class="family-children-grid">
-          @for (member of familyMembers(); track member.user_id) {
+          @for (member of familyMembers(); track member.userId) {
             <article class="panel child-account-card">
               <div class="child-card-top">
                 <div class="child-identity">
                   <div class="avatar child-avatar" [class.minor]="isMemberMinor(member)">
-                    {{ computeInitials(member.display_name) }}
+                    {{ computeInitials(member.displayName) }}
                   </div>
                   <div class="child-meta">
                     <div class="child-name-row">
-                      <strong>{{ member.display_name }}</strong>
-                      <span class="child-id-tag">#{{ member.user_id }}</span>
+                      <strong>{{ member.displayName }}</strong>
+                      <span class="child-id-tag">#{{ member.userId }}</span>
                     </div>
                     <span class="child-email">{{ member.email }}</span>
                   </div>
@@ -381,10 +381,10 @@
                   <app-icon name="user" [size]="13" />
                   <span>{{ getMemberAgeLabel(member) }}</span>
                 </div>
-                @if (member.birth_date) {
+                @if (member.birthDate) {
                   <div class="spec-pill">
                     <app-icon name="clock" [size]="13" />
-                    <span>Nasc.: {{ member.birth_date }}</span>
+                    <span>Nasc.: {{ member.birthDate }}</span>
                   </div>
                 }
                 <div class="spec-pill protection" [class.is-minor]="isMemberMinor(member)">
@@ -406,32 +406,29 @@
                   <button
                     type="button"
                     class="parental-manage-btn"
-                    [class.active]="editingControlsMemberId() === member.user_id"
+                    [class.active]="editingControlsMemberId() === member.userId"
                     [disabled]="isSavingControls()"
                     (click)="openParentalControls(member)"
                   >
                     <app-icon name="sliders" [size]="13" />
                     {{
-                      editingControlsMemberId() === member.user_id
+                      editingControlsMemberId() === member.userId
                         ? 'Fechar Banimentos'
                         : 'Banir Gêneros / Artistas'
                     }}
                   </button>
                 </div>
 
-                @if (
-                  (member.blocked_genres?.length ?? 0) === 0 &&
-                  (member.blocked_artists?.length ?? 0) === 0
-                ) {
+                @if (!hasParentalBlocks(member)) {
                   <p class="parental-empty-copy">
                     Nenhum gênero ou artista banido para esta conta filha.
                   </p>
                 } @else {
                   <div class="parental-chips-row">
-                    @for (genre of member.blocked_genres ?? []; track genre) {
+                    @for (genre of member.blockedGenres; track genre) {
                       <span class="ban-chip is-genre">Gênero: {{ genre }}</span>
                     }
-                    @for (artist of member.blocked_artists ?? []; track artist) {
+                    @for (artist of member.blockedArtists; track artist) {
                       <span class="ban-chip is-artist">Artista: {{ artist }}</span>
                     }
                   </div>
@@ -439,7 +436,7 @@
               </div>
 
               <!-- Inline Parental Controls Editor -->
-              @if (editingControlsMemberId() === member.user_id) {
+              @if (editingControlsMemberId() === member.userId) {
                 <div class="parental-editor tab-enter">
                   @if (controlsError()) {
                     <div class="family-alert is-error" role="alert">
@@ -488,7 +485,7 @@
                         type="text"
                         placeholder="Outro gênero (ex.: Sertanejo)"
                         [value]="customGenreInput()"
-                        (input)="onCustomGenreInput($event)"
+                        (input)="updateCustomGenreInput($event)"
                         (keydown.enter)="addCustomBlockedGenre($event)"
                       />
                       <button
@@ -527,7 +524,7 @@
                         type="text"
                         placeholder="Nome do artista (ex.: Eminem)"
                         [value]="artistBanInput()"
-                        (input)="onArtistBanInput($event)"
+                        (input)="updateArtistBanInput($event)"
                         (keydown.enter)="addBlockedArtist($event)"
                       />
                       <button
@@ -569,11 +566,11 @@
                 <button
                   type="button"
                   class="unlink-child-btn"
-                  [disabled]="removingMemberId() === member.user_id"
+                  [disabled]="removingMemberId() === member.userId"
                   (click)="removeChildAccount(member)"
                 >
                   <app-icon name="close" [size]="13" />
-                  {{ removingMemberId() === member.user_id ? 'Removendo...' : 'Desvincular Conta' }}
+                  {{ removingMemberId() === member.userId ? 'Removendo...' : 'Desvincular Conta' }}
                 </button>
               </div>
             </article>

@@ -2,6 +2,7 @@ import type { OnInit } from '@angular/core';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { toApiError } from '../../core/api-error';
+import { computeInitials } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
 import { IconComponent } from '../../shared/icon.component';
@@ -18,45 +19,38 @@ import { ProfileApiService } from '../profile/profile-api.service';
 })
 export class SettingsComponent implements OnInit {
   protected readonly state = inject(RibbitStateService);
-  protected readonly profileApi = inject(ProfileApiService);
+  private readonly profileApi = inject(ProfileApiService);
   private readonly router = inject(Router, { optional: true });
 
-  readonly isEditingName = signal<boolean>(false);
-  readonly nameDraft = signal<string>(this.state.userName());
-  readonly isSpotifyLinked = computed<boolean>(() => this.state.isSpotifyLinked());
-  readonly spotifyFeedback = signal<{ type: 'success' | 'error'; message: string } | null>(null);
-  readonly isLinkingSpotify = signal<boolean>(false);
+  protected readonly isEditingName = signal<boolean>(false);
+  protected readonly nameDraft = signal<string>(this.state.userName());
+  protected readonly isSpotifyLinked = computed<boolean>(() => this.state.isSpotifyLinked());
+  protected readonly spotifyFeedback = signal<{
+    type: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  protected readonly isLinkingSpotify = signal<boolean>(false);
   private processedCallbackSearch: string | null = null;
 
   // Password change form state
-  readonly currentPassword = signal<string>('');
-  readonly newPassword = signal<string>('');
-  readonly passwordError = signal<string>('');
-  readonly passwordSuccess = signal<string>('');
-  readonly isChangingPassword = signal<boolean>(false);
+  protected readonly currentPassword = signal<string>('');
+  protected readonly newPassword = signal<string>('');
+  protected readonly passwordError = signal<string>('');
+  protected readonly passwordSuccess = signal<string>('');
+  protected readonly isChangingPassword = signal<boolean>(false);
 
   ngOnInit(): void {
     this.handleSpotifyOAuthCallback();
   }
 
-  readonly userInitials = computed<string>(() => {
-    const parts = this.state
-      .userName()
-      .trim()
-      .split(/\s+/)
-      .filter((part) => part.length > 0);
-    if (parts.length >= 2) {
-      return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
-    }
-    return this.state.userName().slice(0, 2).toUpperCase() || 'RB';
-  });
+  protected readonly userInitials = computed<string>(() => computeInitials(this.state.userName()));
 
-  startEditingName(): void {
+  protected startEditingName(): void {
     this.nameDraft.set(this.state.userName());
     this.isEditingName.set(true);
   }
 
-  saveName(): void {
+  protected saveName(): void {
     const trimmed = this.nameDraft().trim();
     if (trimmed) {
       this.state.setUserName(trimmed);
@@ -64,22 +58,26 @@ export class SettingsComponent implements OnInit {
     this.isEditingName.set(false);
   }
 
-  cancelEditingName(): void {
+  protected cancelEditingName(): void {
     this.nameDraft.set(this.state.userName());
     this.isEditingName.set(false);
   }
 
-  onNameInput(event: Event): void {
-    this.nameDraft.set((event.target as HTMLInputElement).value);
+  protected updateNameDraft(event: Event): void {
+    const value = event.target instanceof HTMLInputElement ? event.target.value : '';
+    this.nameDraft.set(value);
   }
 
-  connectSpotify(): void {
+  protected connectSpotify(): void {
     if (this.isLinkingSpotify()) return;
     this.isLinkingSpotify.set(true);
     this.spotifyFeedback.set(null);
     this.profileApi.getSpotifyAuthorizeUrl().subscribe({
-      next: (res) => {
-        const rawUrl = (res as { authorization_url?: unknown } | null)?.authorization_url;
+      next: (res: unknown) => {
+        const rawUrl =
+          typeof res === 'object' && res !== null && 'authorization_url' in res
+            ? res.authorization_url
+            : undefined;
         if (!this.isValidSpotifyAuthorizeUrl(rawUrl)) {
           this.isLinkingSpotify.set(false);
           this.reportSpotifyClientError('URL de autorização do Spotify inválida.');
@@ -105,13 +103,13 @@ export class SettingsComponent implements OnInit {
     }
   }
 
-  navigateToExternalUrl(url: string): void {
+  private navigateToExternalUrl(url: string): void {
     if (typeof window !== 'undefined') {
       window.location.assign(url);
     }
   }
 
-  disconnectSpotify(): void {
+  protected disconnectSpotify(): void {
     if (this.isLinkingSpotify()) return;
     this.isLinkingSpotify.set(true);
     this.spotifyFeedback.set(null);
@@ -129,14 +127,6 @@ export class SettingsComponent implements OnInit {
         this.handleSpotifyError(err);
       },
     });
-  }
-
-  toggleSpotify(): void {
-    if (this.isSpotifyLinked()) {
-      this.disconnectSpotify();
-    } else {
-      this.connectSpotify();
-    }
   }
 
   private readCallbackQueryParams(): URLSearchParams | null {
@@ -209,62 +199,71 @@ export class SettingsComponent implements OnInit {
     });
   }
 
+  private extractDetail(err: unknown): string | null {
+    if (typeof err !== 'object' || err === null || !('error' in err)) return null;
+    const inner = err.error;
+    if (typeof inner !== 'object' || inner === null || !('detail' in inner)) return null;
+    return typeof inner.detail === 'string' ? inner.detail : null;
+  }
+
   private handleSpotifyError(err: unknown): void {
     this.isLinkingSpotify.set(false);
-    const detail = (err as { error?: { detail?: string } }).error?.detail;
+    const detail = this.extractDetail(err);
     this.reportSpotifyClientError(detail ?? toApiError(err).message);
   }
 
-  goToPlans(): void {
+  protected goToPlans(): void {
     this.state.setPage('plans');
     void this.router?.navigate(['/plans']).catch(() => false);
   }
 
-  goToFamily(): void {
+  protected goToFamily(): void {
     this.state.setPage('family');
     void this.router?.navigate(['/family']).catch(() => false);
   }
 
-  openBlockedGenresModal(): void {
+  protected openBlockedGenresModal(): void {
     this.state.setModal('filters');
   }
 
-  removeBlockedGenre(genre: string): void {
+  protected removeBlockedGenre(genre: string): void {
     const updated = this.state.blockedGenres().filter((g) => g !== genre);
     this.state.setBlockedGenres(updated);
   }
 
-  setTheme(theme: 'light' | 'dark'): void {
+  protected setTheme(theme: 'light' | 'dark'): void {
     this.state.setTheme(theme);
   }
 
-  openOnboardingModal(): void {
+  protected openOnboardingModal(): void {
     this.state.setModal('onboarding');
   }
 
-  cancelSubscription(): void {
+  protected cancelSubscription(): void {
     this.state.cancelSubscription();
   }
 
-  openDeleteModal(): void {
+  protected openDeleteModal(): void {
     this.state.setModal('delete');
   }
 
-  logout(): void {
+  protected logout(): void {
     this.state.logout();
   }
 
   // --- Password Management ---
 
-  onCurrentPasswordInput(event: Event): void {
-    this.currentPassword.set((event.target as HTMLInputElement).value);
+  protected updateCurrentPasswordDraft(event: Event): void {
+    const value = event.target instanceof HTMLInputElement ? event.target.value : '';
+    this.currentPassword.set(value);
   }
 
-  onNewPasswordInput(event: Event): void {
-    this.newPassword.set((event.target as HTMLInputElement).value);
+  protected updateNewPasswordDraft(event: Event): void {
+    const value = event.target instanceof HTMLInputElement ? event.target.value : '';
+    this.newPassword.set(value);
   }
 
-  updatePassword(): void {
+  protected updatePassword(): void {
     const current = this.currentPassword().trim();
     const next = this.newPassword().trim();
 
@@ -291,15 +290,13 @@ export class SettingsComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.isChangingPassword.set(false);
-        const message =
-          (err as { error?: { detail?: string } })?.error?.detail ??
-          (err instanceof Error ? err.message : 'Erro ao atualizar senha.');
+        const message = this.extractDetail(err) ?? toApiError(err).message;
         this.passwordError.set(message);
       },
     });
   }
 
-  openAdminConsole(): void {
+  protected openAdminConsole(): void {
     this.router?.navigate(['/admin']).catch(() => {});
   }
 }

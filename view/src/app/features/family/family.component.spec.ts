@@ -40,7 +40,7 @@ describe('FamilyComponent', () => {
     state.currentPlan.set('Família');
     state.currentPlanId.set(3);
 
-    component.loadFamilyMembers();
+    component['loadFamilyMembers']();
 
     const req = httpMock.expectOne('/api/profile/family/members');
     expect(req.request.method).toBe('GET');
@@ -55,27 +55,28 @@ describe('FamilyComponent', () => {
         primary_account_id: 1,
         blocked_genres: ['Metal'],
         blocked_artists: ['Artist X'],
+        is_admin: false,
       },
     ]);
 
-    expect(component.familyMembers().length).toBe(1);
-    expect(component.isMemberMinor(component.familyMembers()[0]!)).toBe(true);
-    expect(component.usedProfilesCount()).toBe(2);
+    expect(component['familyMembers']().length).toBe(1);
+    expect(component['isMemberMinor'](component['familyMembers']()[0]!)).toBe(true);
+    expect(component['usedProfilesCount']()).toBe(2);
   });
 
   it('creates a new child account using email via POST /api/profile/family/members and reloads list', () => {
     writeAuthToken('parent-jwt');
     state.currentPlan.set('Família');
 
-    component.openAddChildForm('create');
-    component.childDisplayName.set('Pedro Silva');
-    component.childEmail.set('pedro@familia.com');
-    component.childPassword.set('senha123');
-    component.childBirthDate.set('2013-08-20');
+    component['openAddChildForm']('create');
+    component['childDisplayName'].set('Pedro Silva');
+    component['childEmail'].set('pedro@familia.com');
+    component['childPassword'].set('senha123');
+    component['childBirthDate'].set('2013-08-20');
 
-    expect(component.isNewChildMinor()).toBe(true);
+    expect(component['isNewChildMinor']()).toBe(true);
 
-    component.submitAddChild();
+    component['submitAddChild']();
 
     const postReq = httpMock.expectOne('/api/profile/family/members');
     expect(postReq.request.method).toBe('POST');
@@ -109,31 +110,31 @@ describe('FamilyComponent', () => {
       },
     ]);
 
-    expect(component.isFormOpen()).toBe(false);
-    expect(component.familyMembers().length).toBe(1);
+    expect(component['isFormOpen']()).toBe(false);
+    expect(component['familyMembers']().length).toBe(1);
   });
 
   it('prevents double-submission when isSubmitting is already true', () => {
     writeAuthToken('parent-jwt');
-    component.openAddChildForm('create');
-    component.childDisplayName.set('Lucas');
-    component.childEmail.set('lucas@familia.com');
-    component.childPassword.set('Password123!');
-    component.isSubmitting.set(true);
+    component['openAddChildForm']('create');
+    component['childDisplayName'].set('Lucas');
+    component['childEmail'].set('lucas@familia.com');
+    component['childPassword'].set('Password123!');
+    component['isSubmitting'].set(true);
 
-    component.submitAddChild();
+    component['submitAddChild']();
 
     httpMock.expectNone('/api/profile/family/members');
   });
 
   it('shows contextual Portuguese error when creating a child account hits 401 for an already-registered email', () => {
     writeAuthToken('parent-jwt');
-    component.openAddChildForm('create');
-    component.childDisplayName.set('Lucas');
-    component.childEmail.set('jaexiste@familia.com');
-    component.childPassword.set('Password123!');
+    component['openAddChildForm']('create');
+    component['childDisplayName'].set('Lucas');
+    component['childEmail'].set('jaexiste@familia.com');
+    component['childPassword'].set('Password123!');
 
-    component.submitAddChild();
+    component['submitAddChild']();
 
     const addReq = httpMock.expectOne('/api/profile/family/members');
     addReq.flush(
@@ -141,20 +142,20 @@ describe('FamilyComponent', () => {
       { status: 401, statusText: 'Unauthorized' },
     );
 
-    expect(component.isSubmitting()).toBe(false);
-    expect(component.isFormOpen()).toBe(true);
-    expect(component.errorMessage()).toContain('já pertence a uma conta existente');
+    expect(component['isSubmitting']()).toBe(false);
+    expect(component['isFormOpen']()).toBe(true);
+    expect(component['errorMessage']()).toContain('já pertence a uma conta existente');
   });
 
   it('validates password requirement when linking an existing child account by email', () => {
     writeAuthToken('parent-jwt');
     state.currentPlan.set('Família');
 
-    component.openAddChildForm('link');
-    component.existingChildIdentifier.set('existente@familia.com');
-    component.submitAddChild();
+    component['openAddChildForm']('link');
+    component['existingChildIdentifier'].set('existente@familia.com');
+    component['submitAddChild']();
 
-    expect(component.errorMessage()).toContain('Informe a senha da conta');
+    expect(component['errorMessage']()).toContain('Informe a senha da conta');
     httpMock.expectNone('/api/profile/family/members');
   });
 
@@ -162,10 +163,10 @@ describe('FamilyComponent', () => {
     writeAuthToken('parent-jwt');
     state.currentPlan.set('Família');
 
-    component.openAddChildForm('link');
-    component.existingChildIdentifier.set('existente@familia.com');
-    component.existingChildPassword.set('Secret123!');
-    component.submitAddChild();
+    component['openAddChildForm']('link');
+    component['existingChildIdentifier'].set('existente@familia.com');
+    component['existingChildPassword'].set('Secret123!');
+    component['submitAddChild']();
 
     const linkReq = httpMock.expectOne('/api/profile/family/members');
     expect(linkReq.request.method).toBe('POST');
@@ -188,16 +189,16 @@ describe('FamilyComponent', () => {
     const reloadReq = httpMock.expectOne('/api/profile/family/members');
     reloadReq.flush([childDto]);
 
-    expect(component.familyMembers().length).toBe(1);
+    expect(component['familyMembers']().length).toBe(1);
   });
 
   it('links an existing child account by numeric ID and unlinks a child account via DELETE', () => {
     writeAuthToken('parent-jwt');
     state.currentPlan.set('Família');
 
-    component.openAddChildForm('link');
-    component.existingChildIdentifier.set('55');
-    component.submitAddChild();
+    component['openAddChildForm']('link');
+    component['existingChildIdentifier'].set('55');
+    component['submitAddChild']();
 
     const linkReq = httpMock.expectOne('/api/profile/family/members');
     expect(linkReq.request.method).toBe('POST');
@@ -217,9 +218,9 @@ describe('FamilyComponent', () => {
     const reloadReq = httpMock.expectOne('/api/profile/family/members');
     reloadReq.flush([childDto]);
 
-    expect(component.familyMembers().length).toBe(1);
+    expect(component['familyMembers']().length).toBe(1);
 
-    component.removeChildAccount(childDto);
+    component['removeChildAccount'](component['familyMembers']()[0]!);
 
     const delReq = httpMock.expectOne('/api/profile/family/members/55');
     expect(delReq.request.method).toBe('DELETE');
@@ -228,7 +229,7 @@ describe('FamilyComponent', () => {
     const reloadAfterDel = httpMock.expectOne('/api/profile/family/members');
     reloadAfterDel.flush([]);
 
-    expect(component.familyMembers().length).toBe(0);
+    expect(component['familyMembers']().length).toBe(0);
   });
 
   it('updates banned genres and artists for a child account via PUT /api/profile/family/members/{id}/parental-controls', () => {
@@ -236,30 +237,31 @@ describe('FamilyComponent', () => {
     state.currentPlan.set('Família');
 
     const childMember = {
-      user_id: 77,
+      userId: 77,
       email: 'filha@familia.com',
-      display_name: 'Sofia Silva',
+      displayName: 'Sofia Silva',
       age: 14,
-      plan_id: 3,
-      primary_account_id: 1,
-      blocked_genres: ['Metal'],
-      blocked_artists: ['Artist A'],
-      is_admin: false,
+      planId: 3,
+      birthDate: null,
+      primaryAccountId: 1,
+      blockedGenres: ['Metal'],
+      blockedArtists: ['Artist A'],
+      isAdmin: false,
     };
-    component.familyMembers.set([childMember]);
+    component['familyMembers'].set([childMember]);
 
-    component.openParentalControls(childMember);
-    expect(component.editingControlsMemberId()).toBe(77);
-    expect(component.isDraftGenreBlocked('metal')).toBe(true);
+    component['openParentalControls'](childMember);
+    expect(component['editingControlsMemberId']()).toBe(77);
+    expect(component['isDraftGenreBlocked']('metal')).toBe(true);
 
-    component.toggleDraftGenre('Funk');
-    component.customGenreInput.set('Sertanejo');
-    component.addCustomBlockedGenre();
-    component.artistBanInput.set('Artist B');
-    component.addBlockedArtist();
-    component.removeDraftArtist('Artist A');
+    component['toggleDraftGenre']('Funk');
+    component['customGenreInput'].set('Sertanejo');
+    component['addCustomBlockedGenre']();
+    component['artistBanInput'].set('Artist B');
+    component['addBlockedArtist']();
+    component['removeDraftArtist']('Artist A');
 
-    component.saveParentalControls(childMember);
+    component['saveParentalControls'](childMember);
 
     const putReq = httpMock.expectOne('/api/profile/family/members/77/parental-controls');
     expect(putReq.request.method).toBe('PUT');
@@ -269,49 +271,56 @@ describe('FamilyComponent', () => {
     });
 
     putReq.flush({
-      ...childMember,
-      blocked_genres: ['metal', 'funk', 'sertanejo'],
-      blocked_artists: ['artist b'],
-    });
-
-    expect(component.editingControlsMemberId()).toBeNull();
-    expect(component.familyMembers()[0]?.blocked_genres).toEqual(['metal', 'funk', 'sertanejo']);
-    expect(component.familyMembers()[0]?.blocked_artists).toEqual(['artist b']);
-  });
-
-  it('surfaces backend errors when saving parental controls fails', () => {
-    writeAuthToken('parent-jwt');
-    const childMember = {
       user_id: 77,
       email: 'filha@familia.com',
       display_name: 'Sofia Silva',
       age: 14,
       plan_id: 3,
       primary_account_id: 1,
-      blocked_genres: [],
-      blocked_artists: [],
       is_admin: false,
-    };
-    component.familyMembers.set([childMember]);
-    component.openParentalControls(childMember);
-    component.toggleDraftGenre('Trap');
+      blocked_genres: ['metal', 'funk', 'sertanejo'],
+      blocked_artists: ['artist b'],
+    });
 
-    component.saveParentalControls(childMember);
+    expect(component['editingControlsMemberId']()).toBeNull();
+    expect(component['familyMembers']()[0]?.blockedGenres).toEqual(['metal', 'funk', 'sertanejo']);
+    expect(component['familyMembers']()[0]?.blockedArtists).toEqual(['artist b']);
+  });
+
+  it('surfaces backend errors when saving parental controls fails', () => {
+    writeAuthToken('parent-jwt');
+    const childMember = {
+      userId: 77,
+      email: 'filha@familia.com',
+      displayName: 'Sofia Silva',
+      age: 14,
+      planId: 3,
+      birthDate: null,
+      primaryAccountId: 1,
+      blockedGenres: [],
+      blockedArtists: [],
+      isAdmin: false,
+    };
+    component['familyMembers'].set([childMember]);
+    component['openParentalControls'](childMember);
+    component['toggleDraftGenre']('Trap');
+
+    component['saveParentalControls'](childMember);
 
     const putReq = httpMock.expectOne('/api/profile/family/members/77/parental-controls');
     putReq.flush({ detail: 'Not Found' }, { status: 404, statusText: 'Not Found' });
 
-    expect(component.isSavingControls()).toBe(false);
-    expect(component.editingControlsMemberId()).toBe(77);
-    expect(component.controlsError()).toContain('Not Found');
+    expect(component['isSavingControls']()).toBe(false);
+    expect(component['editingControlsMemberId']()).toBe(77);
+    expect(component['controlsError']()).toContain('Not Found');
   });
 
   it('calculates exact age on 18th birthday without UTC off-by-one shift', () => {
     const today = new Date();
     const eighteenYearsAgo = `${today.getFullYear() - 18}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-    component.childBirthDate.set(eighteenYearsAgo);
-    expect(component.calculatedChildAge()).toBe(18);
-    expect(component.isNewChildMinor()).toBe(false);
+    component['childBirthDate'].set(eighteenYearsAgo);
+    expect(component['calculatedChildAge']()).toBe(18);
+    expect(component['isNewChildMinor']()).toBe(false);
   });
 });
 
@@ -399,17 +408,19 @@ describe('FamilyComponent DOM', () => {
     initialGet.flush([childA, childB]);
 
     const mounted = fixture.componentInstance;
-    mounted.openParentalControls(childA);
-    mounted.saveParentalControls(childA);
-    expect(mounted.isSavingControls()).toBe(true);
+    const mappedChildA = mounted['familyMembers']()[0]!;
+    const mappedChildB = mounted['familyMembers']()[1]!;
+    mounted['openParentalControls'](mappedChildA);
+    mounted['saveParentalControls'](mappedChildA);
+    expect(mounted['isSavingControls']()).toBe(true);
 
-    mounted.openParentalControls(childB);
-    expect(mounted.editingControlsMemberId()).toBe(10);
+    mounted['openParentalControls'](mappedChildB);
+    expect(mounted['editingControlsMemberId']()).toBe(10);
 
     const putReq = httpMock.expectOne('/api/profile/family/members/10/parental-controls');
     putReq.flush(childA);
-    expect(mounted.isSavingControls()).toBe(false);
-    expect(mounted.editingControlsMemberId()).toBeNull();
+    expect(mounted['isSavingControls']()).toBe(false);
+    expect(mounted['editingControlsMemberId']()).toBeNull();
   });
 
   it('renders FILHA badge and hides parent capacity bar for child accounts', () => {

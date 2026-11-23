@@ -9,7 +9,7 @@
           <app-frog />
           <h2>Você explorou o lago inteiro.</h2>
           <p>Suas escolhas já estão no perfil. Mais descobertas chegam em breve.</p>
-          <button class="primary-button" (click)="handleUndo()">
+          <button class="primary-button" (click)="undoLastDecision()">
             <app-icon name="undo" [size]="16" />
             Rever última faixa
           </button>
@@ -22,10 +22,10 @@
           [class.love]="animation() === 'love'"
           [class.reject]="animation() === 'reject'"
           [appTransform]="cardTransform()"
-          (pointerdown)="onPointerDown($event)"
-          (pointermove)="onPointerMove($event)"
-          (pointerup)="onPointerUp()"
-          (pointercancel)="onPointerCancel()"
+          (pointerdown)="startCardDrag($event)"
+          (pointermove)="moveCardDrag($event)"
+          (pointerup)="finishCardDrag()"
+          (pointercancel)="cancelCardDrag()"
         >
           <img
             class="album-art"
@@ -87,6 +87,9 @@
 
             <div class="track-tags">
               <span>{{ currentSong().genre }}</span>
+              @if (state.isTrackSeen(currentSong().trackId)) {
+                <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+              }
               <small>
                 <app-icon name="clock" [size]="12" />
                 {{ currentSong().time }}
@@ -118,7 +121,7 @@
       <div>
         <button
           class="swipe-button undo"
-          (click)="handleUndo()"
+          (click)="undoLastDecision()"
           aria-label="Desfazer swipe"
           title="Desfazer último swipe"
         >
@@ -129,7 +132,7 @@
       <div>
         <button
           class="swipe-button reject"
-          (click)="handleDecision('reject')"
+          (click)="submitDecision('reject')"
           [disabled]="state.isDeckEmpty()"
           [class.highlight]="activeDragAction() === 'reject'"
           aria-label="Rejeitar música"
@@ -142,7 +145,7 @@
       <div>
         <button
           class="swipe-button love"
-          (click)="handleDecision('love')"
+          (click)="submitDecision('love')"
           [disabled]="state.isDeckEmpty()"
           [class.highlight]="activeDragAction() === 'love'"
           aria-label="Amar música"
@@ -155,7 +158,7 @@
       <div>
         <button
           class="swipe-button like"
-          (click)="handleDecision('like')"
+          (click)="submitDecision('like')"
           [disabled]="state.isDeckEmpty()"
           [class.highlight]="activeDragAction() === 'like'"
           aria-label="Curtir música"

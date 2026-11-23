@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 import { Router } from '@angular/router';
 import type {
   CommunityReview,
@@ -6,9 +13,11 @@ import type {
   Song,
   SubscriptionPlan,
 } from '@ribbit/shared-types';
+import { readInputValue, readNamedFormControl, readSelectValue } from './dom-event-values';
 import { FrogComponent, type FrogMood } from './frog.component';
 import { IconComponent } from './icon.component';
 import { RibbitStateService } from '../core/ribbit-state.service';
+import type { ReviewSortOption } from '../core/song.service';
 
 interface WordCloudItem {
   readonly name: string;
@@ -35,12 +44,29 @@ export const BACKEND_GENRES: readonly string[] = [
 ];
 
 function readNamedInputValue(form: HTMLFormElement, name: string): string {
-  const item = form.elements.namedItem(name) as
-    | HTMLInputElement
-    | HTMLSelectElement
-    | HTMLTextAreaElement
-    | null;
-  return item?.value?.trim() ?? '';
+  const item = form.elements.namedItem(name);
+  if (
+    item instanceof HTMLInputElement ||
+    item instanceof HTMLSelectElement ||
+    item instanceof HTMLTextAreaElement
+  ) {
+    return item.value.trim();
+  }
+  return '';
+}
+
+function toJamDeckSource(value: string): 'livre' | 'curtidas' | 'playlist' {
+  if (value === 'curtidas' || value === 'playlist') {
+    return value;
+  }
+  return 'livre';
+}
+
+function toReviewSortOption(value: string): ReviewSortOption {
+  if (value === 'rating_desc' || value === 'rating_asc' || value === 'recent') {
+    return value;
+  }
+  return 'likes';
 }
 
 /** Central modal overlay handling playlist creation, filters, track reviews, Jams, 403 upgrade notices, and mock checkout. */
@@ -75,14 +101,14 @@ export class ModalsComponent {
     name,
   }));
 
-  readonly onboardingStep = signal<number>(1);
-  readonly selectedWordCloudGenres = signal<readonly string[]>([]);
-  readonly tutorialDemoAction = signal<'idle' | 'like' | 'love' | 'reject'>('idle');
-  readonly tutorialTopic = signal<'swipe' | 'playlists' | 'jams' | 'family'>('swipe');
-  readonly lastToggledGenre = signal<string>('Rock');
-  readonly ribbyCustomSpeech = signal<string>('');
+  protected readonly onboardingStep = signal<number>(1);
+  protected readonly selectedWordCloudGenres = signal<readonly string[]>([]);
+  protected readonly tutorialDemoAction = signal<'idle' | 'like' | 'love' | 'reject'>('idle');
+  protected readonly tutorialTopic = signal<'swipe' | 'playlists' | 'jams' | 'family'>('swipe');
+  private readonly lastToggledGenre = signal<string>('Rock');
+  private readonly ribbyCustomSpeech = signal<string>('');
 
-  readonly ribbyMood = computed<FrogMood>(() => {
+  protected readonly ribbyMood = computed<FrogMood>(() => {
     const demo = this.tutorialDemoAction();
     if (demo === 'love' || demo === 'like') return 'excited';
     const step = this.onboardingStep();
@@ -91,7 +117,7 @@ export class ModalsComponent {
     return 'celebrate';
   });
 
-  readonly ribbySpeech = computed<string>(() => {
+  protected readonly ribbySpeech = computed<string>(() => {
     const custom = this.ribbyCustomSpeech();
     if (custom) return custom;
     const step = this.onboardingStep();
@@ -122,23 +148,42 @@ export class ModalsComponent {
     return `Tudo sintonizado, ${this.state.userName()}! Seu radar já está vibrando com ${chosen.join(', ')}. Para onde vamos saltar agora?`;
   });
 
-  protected readonly activeFilters = signal<readonly string[]>(['Referência', 'Gênero']);
-  readonly jamDeckSource = signal<'livre' | 'curtidas' | 'playlist'>('livre');
+  private readonly activeFilters = signal<readonly string[]>(['Referência', 'Gênero']);
+  protected readonly jamDeckSource = signal<'livre' | 'curtidas' | 'playlist'>('livre');
   protected readonly rating = signal<number>(5);
   protected readonly paymentMethod = signal<'card' | 'pix'>('card');
   protected readonly searchGenreDraft = signal<string>('Todos');
   protected readonly searchArtistDraft = signal<string>('');
   protected readonly searchStartDateDraft = signal<string>('');
   protected readonly searchEndDateDraft = signal<string>('');
+  protected readonly searchMinRatingDraft = signal<number | null>(null);
+  protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
 
-  readonly currentSong = computed<Song>(() => this.state.currentSong());
-  readonly detailsSong = computed<Song>(() => this.state.detailsTargetSong());
-  readonly trackReviews = computed<readonly CommunityReview[]>(() =>
+  constructor() {
+    effect(() => {
+      const modal = this.state.activeModal();
+      if (modal === 'search-filters') {
+        this.searchGenreDraft.set(this.state.searchFilterGenre());
+        this.searchArtistDraft.set(this.state.searchFilterArtist());
+        this.searchStartDateDraft.set(this.state.searchFilterStartDate());
+        this.searchEndDateDraft.set(this.state.searchFilterEndDate());
+        this.searchMinRatingDraft.set(this.state.searchFilterMinRating());
+      } else if (modal === 'details') {
+        this.rating.set(5);
+      }
+    });
+  }
+
+  protected readonly currentSong = computed<Song>(() => this.state.currentSong());
+  protected readonly detailsSong = computed<Song>(() => this.state.detailsTargetSong());
+  protected readonly trackReviews = computed<readonly CommunityReview[]>(() =>
     this.state.activeTrackReviews(),
   );
-  readonly checkoutPlan = computed<SubscriptionPlan | null>(() => this.state.pendingCheckoutPlan());
+  protected readonly checkoutPlan = computed<SubscriptionPlan | null>(() =>
+    this.state.pendingCheckoutPlan(),
+  );
 
-  readonly playlistViewName = computed<string>(() => {
+  protected readonly playlistViewName = computed<string>(() => {
     const modal = this.state.activeModal();
     if (modal && modal.startsWith('playlist-view:')) {
       return modal.split('playlist-view:')[1] ?? 'Playlist';
@@ -146,30 +191,31 @@ export class ModalsComponent {
     return 'Playlist';
   });
 
-  readonly playlistViewSongs = computed<readonly Song[]>(() => {
+  protected readonly playlistViewSongs = computed<readonly Song[]>(() => {
     const name = this.playlistViewName();
     const matched = this.state.playlists().find((p) => p.name === name);
     return matched?.songs ?? this.state.songs().slice(0, 4);
   });
 
-  onBackdropClick(event: MouseEvent): void {
+  protected closeOnBackdrop(event: MouseEvent): void {
     if (event.target === event.currentTarget) {
       this.closeModal();
     }
   }
 
-  closeModal(): void {
+  protected closeModal(): void {
     this.state.setModal(null);
   }
 
-  isPlaylistViewModal(): boolean {
+  protected isPlaylistViewModal(): boolean {
     const modal = this.state.activeModal();
     return modal !== null && modal.startsWith('playlist-view');
   }
 
-  onSaveQueueSubmit(event: Event): void {
+  protected saveQueueAsPlaylist(event: Event): void {
     event.preventDefault();
-    const form = event.target as HTMLFormElement;
+    if (!(event.target instanceof HTMLFormElement)) return;
+    const form = event.target;
     const queueName = readNamedInputValue(form, 'queueName') || 'Fim de tarde sem pressa';
     const description = readNamedInputValue(form, 'queueDescription');
     this.state.createPlaylist(
@@ -183,37 +229,50 @@ export class ModalsComponent {
     void this.router?.navigate(['/playlists']).catch(() => false);
   }
 
-  selectSearchGenre(genre: string): void {
+  protected selectSearchGenre(genre: string): void {
     this.searchGenreDraft.set(genre);
   }
 
-  onSearchArtistInput(event: Event): void {
-    this.searchArtistDraft.set((event.target as HTMLInputElement).value);
+  protected updateSearchArtistDraft(event: Event): void {
+    this.searchArtistDraft.set(readInputValue(event));
   }
 
-  onSearchStartDateInput(event: Event): void {
-    this.searchStartDateDraft.set((event.target as HTMLInputElement).value);
+  protected updateSearchStartDateDraft(event: Event): void {
+    this.searchStartDateDraft.set(readInputValue(event));
   }
 
-  onSearchEndDateInput(event: Event): void {
-    this.searchEndDateDraft.set((event.target as HTMLInputElement).value);
+  protected updateSearchEndDateDraft(event: Event): void {
+    this.searchEndDateDraft.set(readInputValue(event));
   }
 
-  applyFilters(): void {
+  protected updateSearchMinRating(event: Event): void {
+    const raw = readSelectValue(event).trim();
+    if (!raw) {
+      this.searchMinRatingDraft.set(null);
+      return;
+    }
+    const parsed = Number(raw);
+    this.searchMinRatingDraft.set(
+      Number.isFinite(parsed) && parsed >= 1 && parsed <= 5 ? parsed : null,
+    );
+  }
+
+  protected applyFilters(): void {
     this.state.searchFilterGenre.set(this.searchGenreDraft());
     this.state.searchFilterArtist.set(this.searchArtistDraft().trim());
     this.state.searchFilterStartDate.set(this.searchStartDateDraft());
     this.state.searchFilterEndDate.set(this.searchEndDateDraft());
+    this.state.searchFilterMinRating.set(this.searchMinRatingDraft());
     this.state.searchFilterYear.set(undefined);
     this.closeModal();
     this.state.notify('Filtros de busca aplicados.');
   }
 
-  isGenreSelected(genre: string): boolean {
+  protected isGenreSelected(genre: string): boolean {
     return this.state.selectedGenres().includes(genre);
   }
 
-  toggleSelectedGenre(genre: string): void {
+  protected toggleSelectedGenre(genre: string): void {
     const list = this.state.selectedGenres();
     if (list.includes(genre)) {
       this.state.setSelectedGenres(list.filter((g) => g !== genre));
@@ -226,36 +285,37 @@ export class ModalsComponent {
     this.state.setSelectedGenres([...list, genre]);
   }
 
-  isGenreBlocked(genre: string): boolean {
+  protected isGenreBlocked(genre: string): boolean {
     return this.state.blockedGenres().includes(genre);
   }
 
-  toggleBlockedGenre(genre: string): void {
+  protected toggleBlockedGenre(genre: string): void {
     const list = this.state.blockedGenres();
     const updated = list.includes(genre) ? list.filter((g) => g !== genre) : [...list, genre];
     this.state.setBlockedGenres(updated);
   }
 
-  saveFrequencies(): void {
+  protected saveFrequencies(): void {
     this.state.saveFavoriteGenres(this.state.selectedGenres());
     this.closeModal();
     this.state.notify('Sua frequência foi atualizada.');
   }
 
-  isFilterActive(filter: string): boolean {
+  protected isFilterActive(filter: string): boolean {
     return this.activeFilters().includes(filter);
   }
 
-  toggleFilter(filter: string): void {
+  protected toggleFilter(filter: string): void {
     const list = this.activeFilters();
     this.activeFilters.set(
       list.includes(filter) ? list.filter((f) => f !== filter) : [...list, filter],
     );
   }
 
-  onCreatePlaylistSubmit(event: Event): void {
+  protected createPlaylistFromForm(event: Event): void {
     event.preventDefault();
-    const form = event.target as HTMLFormElement;
+    if (!(event.target instanceof HTMLFormElement)) return;
+    const form = event.target;
     const name = readNamedInputValue(form, 'name') || 'Minha nova frequência';
     const rawDuration = Number(readNamedInputValue(form, 'duration'));
     const duration = Number.isFinite(rawDuration) && rawDuration >= 10 ? rawDuration : 45;
@@ -267,29 +327,29 @@ export class ModalsComponent {
     void this.router?.navigate(['/playlists']).catch(() => false);
   }
 
-  addToExistingPlaylist(index: number): void {
+  protected addToExistingPlaylist(index: number): void {
     this.state.addSongToPlaylist(index);
     this.closeModal();
   }
 
-  openCreateFromAdd(): void {
+  protected openCreateFromAdd(): void {
     this.state.setModal('playlist');
   }
 
-  onJamDeckSourceChange(event: Event): void {
-    const val = (event.target as HTMLSelectElement).value as 'livre' | 'curtidas' | 'playlist';
-    this.jamDeckSource.set(val);
+  protected updateJamDeckSource(event: Event): void {
+    this.jamDeckSource.set(toJamDeckSource(readSelectValue(event)));
   }
 
-  onCreateJamSubmit(event: Event): void {
+  protected createJamFromForm(event: Event): void {
     event.preventDefault();
-    const form = event.target as HTMLFormElement;
+    if (!(event.target instanceof HTMLFormElement)) return;
+    const form = event.target;
     const roomName = readNamedInputValue(form, 'roomName') || this.state.jamState().roomName;
     const durationMinutes = this.parseJamDuration(form);
     const threshold = Number(readNamedInputValue(form, 'threshold')) || 3;
-    const deckSource = (readNamedInputValue(form, 'deck_source') ||
-      this.jamDeckSource() ||
-      'livre') as 'livre' | 'curtidas' | 'playlist';
+    const deckSource = toJamDeckSource(
+      readNamedInputValue(form, 'deck_source') || this.jamDeckSource() || 'livre',
+    );
     const sourcePlaylistId = this.parseJamSourcePlaylist(form, deckSource);
     const maxSuperlikes = Number(readNamedInputValue(form, 'max_superlikes')) || 5;
 
@@ -324,63 +384,69 @@ export class ModalsComponent {
     return parsed > 0 ? parsed : null;
   }
 
-  rateSong(stars: number): void {
+  protected rateSong(stars: number): void {
     this.rating.set(stars);
   }
 
-  onCommentSubmit(event: Event): void {
+  protected submitTrackComment(event: Event): void {
     event.preventDefault();
-    const form = event.target as HTMLFormElement;
-    const input = form.elements.namedItem('commentText') as HTMLInputElement;
+    const input = readNamedFormControl(event.target, 'commentText');
+    if (!input) return;
     const text = input.value.trim();
-    if (text) {
-      this.state.publishTrackReview(this.rating(), text);
+    const currentRating = this.rating();
+    if (currentRating >= 1 && currentRating <= 5) {
+      this.state.publishTrackReview(currentRating, text);
       input.value = '';
     }
   }
 
-  deleteReview(reviewId: number): void {
+  protected updateTrackReviewSort(event: Event): void {
+    const sortBy = toReviewSortOption(readSelectValue(event));
+    this.state.loadReviewsForTrack(this.detailsSong(), sortBy);
+  }
+
+  protected deleteReview(reviewId: number): void {
     this.state.deleteTrackReview(reviewId);
   }
 
-  isOwnReview(review: CommunityReview): boolean {
+  protected isOwnReview(review: CommunityReview): boolean {
     const uid = this.state.userId();
     return uid !== null && review.userId === uid;
   }
 
-  selectPaymentMethod(method: 'card' | 'pix'): void {
+  protected selectPaymentMethod(method: 'card' | 'pix'): void {
     this.paymentMethod.set(method);
   }
 
-  onCheckoutSubmit(event: Event): void {
+  protected submitCheckout(event: Event): void {
     event.preventDefault();
     this.state.confirmMockPlanCheckout(this.paymentMethod());
   }
 
-  goToPlansFromUpgrade(): void {
+  protected goToPlansFromUpgrade(): void {
     this.closeModal();
     this.state.setPage('plans');
     void this.router?.navigate(['/plans']).catch(() => false);
   }
 
-  goToSettingsFromSpotify(): void {
+  protected goToSettingsFromSpotify(): void {
     this.closeModal();
     this.state.setPage('settings');
     void this.router?.navigate(['/settings']).catch(() => false);
   }
 
-  addBySwipe(): void {
+  protected addBySwipe(): void {
     this.closeModal();
     this.state.setPage('discover');
     void this.router?.navigate(['/discover']).catch(() => false);
     this.state.notify('Descubra músicas e use + para adicionar à playlist.');
   }
 
-  confirmDeleteAccount(): void {
+  protected confirmDeleteAccount(): void {
     this.state.deleteAccount();
   }
 
-  goToExploreRadar(): void {
+  protected goToExploreRadar(): void {
     this.closeModal();
     this.state.setPage('explore');
     void this.router?.navigate(['/explore']).catch(() => false);
@@ -412,7 +478,7 @@ export class ModalsComponent {
 
     Object.assign(res, this.extractPlaylistDates(form));
 
-    return res as Omit<DeckPlaylistApiRequest, 'name' | 'duration_minutes'>;
+    return res;
   }
 
   private extractPlaylistDates(form: HTMLFormElement): { startDate?: string; endDate?: string } {
@@ -433,7 +499,7 @@ export class ModalsComponent {
       ? lineup
           .split(',')
           .map((a) => a.trim())
-          .filter(Boolean)
+          .filter((item) => item.length > 0)
       : [];
   }
 
@@ -486,27 +552,27 @@ export class ModalsComponent {
     return { referencePlaylistId, sourcePlaylistId };
   }
 
-  nextOnboardingStep(): void {
+  protected nextOnboardingStep(): void {
     this.ribbyCustomSpeech.set('');
     this.onboardingStep.update((s) => Math.min(3, s + 1));
   }
 
-  prevOnboardingStep(): void {
+  protected prevOnboardingStep(): void {
     this.ribbyCustomSpeech.set('');
     this.onboardingStep.update((s) => Math.max(1, s - 1));
   }
 
-  goToOnboardingStep(step: number): void {
+  protected goToOnboardingStep(step: number): void {
     this.ribbyCustomSpeech.set('');
     this.onboardingStep.set(Math.max(1, Math.min(3, step)));
   }
 
-  selectTutorialTopic(topic: 'swipe' | 'playlists' | 'jams' | 'family'): void {
+  protected selectTutorialTopic(topic: 'swipe' | 'playlists' | 'jams' | 'family'): void {
     this.ribbyCustomSpeech.set('');
     this.tutorialTopic.set(topic);
   }
 
-  triggerDemoSwipe(action: 'like' | 'love' | 'reject'): void {
+  protected triggerDemoSwipe(action: 'like' | 'love' | 'reject'): void {
     this.tutorialDemoAction.set(action);
     if (action === 'like') {
       this.ribbyCustomSpeech.set(
@@ -528,21 +594,21 @@ export class ModalsComponent {
     }, 850);
   }
 
-  pokeRibby(): void {
+  protected pokeRibby(): void {
     const phrases = [
       'Ribbit! Sabia que você pode usar uma playlist sua como referência pra criar outra?',
       'Ribbit! Dica de ouro: na Descoberta você escolhe na lateral direita se o swipe salva nas Curtidas ou direto numa Playlist!',
       'Ribbit! Nas Jams, se a galera der Superlike suficiente, a música fura a fila na hora!',
     ];
-    const random = phrases[Math.floor(Math.random() * phrases.length)] ?? phrases[0]!;
+    const random = phrases[Math.floor(Math.random() * phrases.length)] ?? phrases[0] ?? '';
     this.ribbyCustomSpeech.set(random);
   }
 
-  isWordCloudSelected(genre: string): boolean {
+  protected isWordCloudSelected(genre: string): boolean {
     return this.selectedWordCloudGenres().includes(genre);
   }
 
-  toggleWordCloudGenre(genre: string): void {
+  protected toggleWordCloudGenre(genre: string): void {
     this.ribbyCustomSpeech.set('');
     const list = this.selectedWordCloudGenres();
     if (list.includes(genre)) {
@@ -560,7 +626,7 @@ export class ModalsComponent {
     this.selectedWordCloudGenres.set([...list, genre]);
   }
 
-  savePreferencesAndNext(): void {
+  protected savePreferencesAndNext(): void {
     this.ribbyCustomSpeech.set('');
     const chosen = this.selectedWordCloudGenres().slice(0, MAX_FAVORITE_GENRES);
     this.state.saveFavoriteGenres(chosen);
@@ -571,7 +637,7 @@ export class ModalsComponent {
     this.onboardingStep.set(3);
   }
 
-  finishOnboarding(): void {
+  protected finishOnboarding(): void {
     this.ribbyCustomSpeech.set('');
     const chosen = this.selectedWordCloudGenres().slice(0, MAX_FAVORITE_GENRES);
     this.state.saveFavoriteGenres(chosen);
@@ -583,7 +649,7 @@ export class ModalsComponent {
     this.onboardingStep.set(1);
   }
 
-  finishAndNavigate(page: string): void {
+  protected finishAndNavigate(page: string): void {
     this.finishOnboarding();
     this.state.setPage(page);
     if (this.router) {

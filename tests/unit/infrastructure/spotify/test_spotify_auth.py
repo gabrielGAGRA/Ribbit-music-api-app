@@ -6,7 +6,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from app.domain.exceptions import SpotifyAuthError, SpotifyError, SpotifyForbiddenError
+from app.domain.exceptions import ExternalServiceError
 from app.infrastructure.adapters.spotify.auth import SpotifyAuth, SpotifyAuthMode
 from app.infrastructure.adapters.spotify.credentials import SpotifyCredentials
 from tests.utils.fakes import FakeResponse, FakeSession, network_error
@@ -108,15 +108,17 @@ class TestClientCredentials:
         auth = SpotifyAuth(
             SpotifyCredentials(client_id="id", client_secret="sec"), FakeSession()
         )
-        with pytest.raises(SpotifyForbiddenError):
+        with pytest.raises(ExternalServiceError) as info:
             auth.require_any_scope(frozenset({"user-top-read"}))
+        assert info.value.details.get("error_kind") == "forbidden"
 
     def test_authorize_url_requires_redirect_uri(self) -> None:
         auth = SpotifyAuth(
             SpotifyCredentials(client_id="id", client_secret="sec"), FakeSession()
         )
-        with pytest.raises(SpotifyAuthError, match="redirect_uri"):
+        with pytest.raises(ExternalServiceError, match="redirect_uri") as info:
             auth.get_authorize_url(["a"], state="s")
+        assert info.value.details.get("error_kind") == "auth"
 
 
 @pytest.mark.unit
@@ -128,23 +130,23 @@ class TestTokenEndpointFailures:
         )
 
     def test_network_failure_is_mapped(self) -> None:
-        with pytest.raises(SpotifyError, match="token endpoint") as info:
+        with pytest.raises(ExternalServiceError, match="token endpoint") as info:
             self._auth(network_error()).get_access_token()
         assert info.value.details["service_name"] == "Spotify"
 
     def test_error_status_exposes_status_code(self) -> None:
-        with pytest.raises(SpotifyError, match="401") as info:
+        with pytest.raises(ExternalServiceError, match="401") as info:
             self._auth(
                 FakeResponse(401, {"error": "invalid_client"})
             ).get_access_token()
         assert info.value.details["error"] == "invalid_client"
 
     def test_non_json_success_body_is_mapped(self) -> None:
-        with pytest.raises(SpotifyError, match="unexpected payload"):
+        with pytest.raises(ExternalServiceError, match="unexpected payload"):
             self._auth(FakeResponse(200)).get_access_token()
 
     def test_payload_without_access_token_is_mapped(self) -> None:
-        with pytest.raises(SpotifyError, match="unexpected payload"):
+        with pytest.raises(ExternalServiceError, match="unexpected payload"):
             self._auth(FakeResponse(200, {"expires_in": 3600})).get_access_token()
 
 
@@ -184,8 +186,9 @@ class TestAuthorizationCode:
         assert tokens.refresh_token == "RT"
         assert auth.get_access_token() == "AT"
         auth.require_any_scope(frozenset({"user-top-read"}))
-        with pytest.raises(SpotifyForbiddenError):
+        with pytest.raises(ExternalServiceError) as info:
             auth.require_any_scope(frozenset({"user-modify-playback-state"}))
+        assert info.value.details.get("error_kind") == "forbidden"
 
     def test_refresh_replaces_refresh_token_when_returned(self) -> None:
         session = FakeSession(_token("AT2", "RT2"))
@@ -209,20 +212,23 @@ class TestAuthorizationCode:
         assert session.calls[0]["data"]["refresh_token"] == "RT2"
 
     def test_without_refresh_token_requires_authorization(self) -> None:
-        with pytest.raises(SpotifyAuthError, match="authorization"):
+        with pytest.raises(ExternalServiceError, match="authorization") as info:
             self._auth().get_access_token()
+        assert info.value.details.get("error_kind") == "auth"
 
     def test_refresh_without_refresh_token_fails(self) -> None:
-        with pytest.raises(SpotifyAuthError, match="refresh_token"):
+        with pytest.raises(ExternalServiceError, match="refresh_token") as info:
             self._auth().refresh_access_token()
+        assert info.value.details.get("error_kind") == "auth"
 
     def test_invalid_grant_clears_tokens(self) -> None:
         auth = self._auth(
             FakeResponse(400, {"error": "invalid_grant"}), refresh_token="RT1"
         )
-        with pytest.raises(SpotifyAuthError, match="invalid_grant"):
+        with pytest.raises(ExternalServiceError, match="invalid_grant") as info:
             auth.refresh_access_token()
-        with pytest.raises(SpotifyAuthError, match="authorization"):
+        assert info.value.details.get("error_kind") == "auth"
+        with pytest.raises(ExternalServiceError, match="authorization"):
             auth.get_access_token()
 
 
@@ -263,8 +269,9 @@ class TestPkce:
         auth = SpotifyAuth(
             SpotifyCredentials(client_id="id", redirect_uri=REDIRECT), FakeSession()
         )
-        with pytest.raises(SpotifyAuthError, match="code_verifier"):
+        with pytest.raises(ExternalServiceError, match="code_verifier") as info:
             auth.exchange_code("CODE")
+        assert info.value.details.get("error_kind") == "auth"
 
 
 @pytest.mark.unit
