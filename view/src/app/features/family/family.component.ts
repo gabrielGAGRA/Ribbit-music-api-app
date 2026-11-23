@@ -9,13 +9,16 @@ import {
 import { Router } from '@angular/router';
 import type {
   AddFamilyMemberApiRequest,
-  UserApiDto,
+  FamilyMember,
+  UpdateMemberParentalControlsApiRequest,
 } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
+import { computeInitials } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { PlanService } from '../../core/services/plan.service';
-import { WidthPercentDirective } from '../../shared/dynamic-style.directive';
+import { PlanService } from '../../core/plan.service';
+import { WidthPercentDirective } from '../../shared/width-percent.directive';
+import { readInputValue } from '../../shared/dom-event-values';
 import { FrogComponent } from '../../shared/frog.component';
 import { IconComponent } from '../../shared/icon.component';
 import { BACKEND_GENRES } from '../../shared/modals.component';
@@ -78,36 +81,40 @@ export class FamilyComponent {
 
   protected readonly availableGenres: readonly string[] = BACKEND_GENRES;
 
-  readonly familyMembers = signal<readonly UserApiDto[]>([]);
-  readonly isLoading = signal<boolean>(false);
-  readonly errorMessage = signal<string>('');
-  readonly successMessage = signal<string>('');
+  protected readonly familyMembers = signal<readonly FamilyMember[]>([]);
+  protected readonly isLoading = signal<boolean>(false);
+  protected readonly errorMessage = signal<string>('');
+  protected readonly successMessage = signal<string>('');
 
-  readonly isFormOpen = signal<boolean>(false);
-  readonly addMode = signal<'create' | 'link'>('create');
-  readonly isSubmitting = signal<boolean>(false);
-  readonly removingMemberId = signal<number | null>(null);
+  protected readonly isFormOpen = signal<boolean>(false);
+  protected readonly addMode = signal<'create' | 'link'>('create');
+  protected readonly isSubmitting = signal<boolean>(false);
+  protected readonly removingMemberId = signal<number | null>(null);
 
   // Create new child account fields
-  readonly childDisplayName = signal<string>('');
-  readonly childEmail = signal<string>('');
-  readonly childPassword = signal<string>('');
-  readonly childBirthDate = signal<string>('');
+  protected readonly childDisplayName = signal<string>('');
+  protected readonly childEmail = signal<string>('');
+  protected readonly childPassword = signal<string>('');
+  protected readonly childBirthDate = signal<string>('');
 
   // Link existing child account field (email or numeric ID) and credentials
-  readonly existingChildIdentifier = signal<string>('');
-  readonly existingChildPassword = signal<string>('');
+  protected readonly existingChildIdentifier = signal<string>('');
+  protected readonly existingChildPassword = signal<string>('');
 
   // Parental controls editor state (banned genres & artists per child)
-  readonly editingControlsMemberId = signal<number | null>(null);
-  readonly draftBlockedGenres = signal<readonly string[]>([]);
-  readonly customGenreInput = signal<string>('');
-  readonly isSavingControls = signal<boolean>(false);
-  readonly controlsError = signal<string>('');
+  protected readonly editingControlsMemberId = signal<number | null>(null);
+  private readonly draftBlockedGenres = signal<readonly string[]>([]);
+  protected readonly draftBlockedArtists = signal<readonly string[]>([]);
+  protected readonly customGenreInput = signal<string>('');
+  protected readonly artistBanInput = signal<string>('');
+  protected readonly isSavingControls = signal<boolean>(false);
+  protected readonly controlsError = signal<string>('');
 
-  readonly isChildAccount = computed<boolean>(() => this.state.primaryAccountId() !== null);
+  protected readonly isChildAccount = computed<boolean>(
+    () => this.state.primaryAccountId() !== null,
+  );
 
-  readonly isFamilyPlan = computed<boolean>(() => {
+  protected readonly isFamilyPlan = computed<boolean>(() => {
     const planName = this.state.currentPlan().toLowerCase();
     if (planName.includes('famíl') || planName.includes('famil')) {
       return true;
@@ -118,7 +125,7 @@ export class FamilyComponent {
     return (matched?.max_profiles ?? 1) > 1;
   });
 
-  readonly maxProfiles = computed<number>(() => {
+  protected readonly maxProfiles = computed<number>(() => {
     const currentPlanId = this.state.currentPlanId();
     const plans = this.planService?.rawPlans() ?? [];
     const matched = plans.find((p) => p.plan_id === currentPlanId);
@@ -131,30 +138,32 @@ export class FamilyComponent {
         p.name.toLowerCase().includes('famíl') ||
         p.name.toLowerCase().includes('famil'),
     );
-    return familyPlan?.max_profiles ?? 6;
+    return familyPlan?.max_profiles ?? 4;
   });
 
-  readonly maxChildAccounts = computed<number>(() => Math.max(1, this.maxProfiles() - 1));
+  protected readonly maxChildAccounts = computed<number>(() => Math.max(1, this.maxProfiles() - 1));
 
-  readonly usedProfilesCount = computed<number>(() => 1 + this.familyMembers().length);
+  protected readonly usedProfilesCount = computed<number>(() => 1 + this.familyMembers().length);
 
-  readonly occupancyPercent = computed<number>(() =>
+  protected readonly occupancyPercent = computed<number>(() =>
     Math.min(100, Math.round((this.usedProfilesCount() / this.maxProfiles()) * 100)),
   );
 
-  readonly availableSlots = computed<readonly number[]>(() => {
+  protected readonly availableSlots = computed<readonly number[]>(() => {
     const remaining = Math.max(0, this.maxChildAccounts() - this.familyMembers().length);
     return Array.from({ length: remaining }, (_, idx) => idx + 1);
   });
 
-  readonly parentInitials = computed<string>(() => this.computeInitials(this.state.userName()));
+  protected readonly parentInitials = computed<string>(() =>
+    this.computeInitials(this.state.userName()),
+  );
 
-  readonly calculatedChildAge = computed<number | null>(() => {
+  protected readonly calculatedChildAge = computed<number | null>(() => {
     const raw = this.childBirthDate().trim();
     return raw ? calculateAgeFromBirthDate(raw) : null;
   });
 
-  readonly isNewChildMinor = computed<boolean>(() => {
+  protected readonly isNewChildMinor = computed<boolean>(() => {
     const age = this.calculatedChildAge();
     return age !== null && age < 18;
   });
@@ -167,40 +176,33 @@ export class FamilyComponent {
     });
   }
 
-  computeInitials(name: string): string {
-    const parts = name
-      .trim()
-      .split(/\s+/)
-      .filter((p) => p.length > 0);
-    if (parts.length >= 2) {
-      return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
-    }
-    return name.slice(0, 2).toUpperCase() || 'CF';
+  protected computeInitials(name: string): string {
+    return computeInitials(name, 'CF');
   }
 
-  isMemberMinor(member: UserApiDto): boolean {
-    if (member.age != null && member.age > 0 && member.age < 18) {
+  protected isMemberMinor(member: FamilyMember): boolean {
+    if (member.age !== null && member.age > 0 && member.age < 18) {
       return true;
     }
-    if (member.birth_date) {
-      const age = calculateAgeFromBirthDate(member.birth_date);
+    if (member.birthDate) {
+      const age = calculateAgeFromBirthDate(member.birthDate);
       return age !== null && age < 18;
     }
     return false;
   }
 
-  getMemberAgeLabel(member: UserApiDto): string {
-    if (member.age != null && member.age > 0) {
+  protected getMemberAgeLabel(member: FamilyMember): string {
+    if (member.age !== null && member.age > 0) {
       return `${member.age} anos`;
     }
-    if (member.birth_date) {
-      const age = calculateAgeFromBirthDate(member.birth_date);
+    if (member.birthDate) {
+      const age = calculateAgeFromBirthDate(member.birthDate);
       if (age !== null) return `${age} anos`;
     }
     return 'Idade não informada';
   }
 
-  loadFamilyMembers(): void {
+  private loadFamilyMembers(): void {
     if (!this.profileApi || !readAuthToken()) return;
     this.isLoading.set(true);
     this.errorMessage.set('');
@@ -216,49 +218,49 @@ export class FamilyComponent {
     });
   }
 
-  openAddChildForm(mode: 'create' | 'link' = 'create'): void {
+  protected openAddChildForm(mode: 'create' | 'link' = 'create'): void {
     this.addMode.set(mode);
     this.isFormOpen.set(true);
     this.errorMessage.set('');
     this.successMessage.set('');
   }
 
-  closeAddChildForm(): void {
+  protected closeAddChildForm(): void {
     this.isFormOpen.set(false);
     this.errorMessage.set('');
     this.resetFormFields();
   }
 
-  switchAddMode(mode: 'create' | 'link'): void {
+  protected switchAddMode(mode: 'create' | 'link'): void {
     this.addMode.set(mode);
     this.errorMessage.set('');
   }
 
-  onDisplayNameInput(event: Event): void {
-    this.childDisplayName.set((event.target as HTMLInputElement).value);
+  protected updateChildDisplayName(event: Event): void {
+    this.childDisplayName.set(readInputValue(event));
   }
 
-  onEmailInput(event: Event): void {
-    this.childEmail.set((event.target as HTMLInputElement).value);
+  protected updateChildEmail(event: Event): void {
+    this.childEmail.set(readInputValue(event));
   }
 
-  onPasswordInput(event: Event): void {
-    this.childPassword.set((event.target as HTMLInputElement).value);
+  protected updateChildPassword(event: Event): void {
+    this.childPassword.set(readInputValue(event));
   }
 
-  onBirthDateInput(event: Event): void {
-    this.childBirthDate.set((event.target as HTMLInputElement).value);
+  protected updateChildBirthDate(event: Event): void {
+    this.childBirthDate.set(readInputValue(event));
   }
 
-  onExistingIdentifierInput(event: Event): void {
-    this.existingChildIdentifier.set((event.target as HTMLInputElement).value);
+  protected updateExistingChildIdentifier(event: Event): void {
+    this.existingChildIdentifier.set(readInputValue(event));
   }
 
-  onExistingPasswordInput(event: Event): void {
-    this.existingChildPassword.set((event.target as HTMLInputElement).value);
+  protected updateExistingChildPassword(event: Event): void {
+    this.existingChildPassword.set(readInputValue(event));
   }
 
-  submitAddChild(event?: Event): void {
+  protected submitAddChild(event?: Event): void {
     event?.preventDefault();
     if (this.isSubmitting()) return;
     this.errorMessage.set('');
@@ -336,17 +338,17 @@ export class FamilyComponent {
 
   private executeAddRequest(payload: AddFamilyMemberApiRequest, toastMsg: string): void {
     if (!this.profileApi || !readAuthToken()) {
-      const mockChild: UserApiDto = {
-        user_id: Math.floor(Math.random() * 900) + 100,
+      const mockChild: FamilyMember = {
+        userId: Math.floor(Math.random() * 900) + 100,
         email: payload.email ?? `dependente_${payload.dependent_user_id ?? 1}@ribbit.app`,
-        display_name: payload.display_name ?? `Conta Filha #${payload.dependent_user_id ?? 1}`,
+        displayName: payload.display_name ?? `Conta Filha #${payload.dependent_user_id ?? 1}`,
         age: this.calculatedChildAge() ?? 16,
-        plan_id: this.state.currentPlanId(),
-        birth_date: payload.birth_date ?? null,
-        primary_account_id: this.state.userId() ?? 1,
-        blocked_genres: [],
-        blocked_artists: [],
-        is_admin: false,
+        planId: this.state.currentPlanId(),
+        birthDate: payload.birth_date ?? null,
+        primaryAccountId: this.state.userId() ?? 1,
+        blockedGenres: [],
+        blockedArtists: [],
+        isAdmin: false,
       };
       this.familyMembers.update((list) => [...list, mockChild]);
       this.state.notify(toastMsg);
@@ -382,27 +384,27 @@ export class FamilyComponent {
     });
   }
 
-  removeChildAccount(member: UserApiDto): void {
+  protected removeChildAccount(member: FamilyMember): void {
     this.errorMessage.set('');
     this.successMessage.set('');
 
     if (!this.profileApi || !readAuthToken()) {
-      this.familyMembers.update((list) => list.filter((m) => m.user_id !== member.user_id));
-      if (this.editingControlsMemberId() === member.user_id) {
+      this.familyMembers.update((list) => list.filter((m) => m.userId !== member.userId));
+      if (this.editingControlsMemberId() === member.userId) {
         this.closeParentalControls();
       }
-      this.state.notify(`Conta filha de ${member.display_name} desvinculada do plano.`);
+      this.state.notify(`Conta filha de ${member.displayName} desvinculada do plano.`);
       return;
     }
 
-    this.removingMemberId.set(member.user_id);
-    this.profileApi.removeFamilyMember(member.user_id).subscribe({
+    this.removingMemberId.set(member.userId);
+    this.profileApi.removeFamilyMember(member.userId).subscribe({
       next: () => {
         this.removingMemberId.set(null);
-        if (this.editingControlsMemberId() === member.user_id) {
+        if (this.editingControlsMemberId() === member.userId) {
           this.closeParentalControls();
         }
-        this.state.notify(`Conta filha de ${member.display_name} desvinculada do plano.`);
+        this.state.notify(`Conta filha de ${member.displayName} desvinculada do plano.`);
         this.loadFamilyMembers();
       },
       error: (err: unknown) => {
@@ -414,31 +416,35 @@ export class FamilyComponent {
 
   // --- Parental Controls (Genres & Artists Banning) ---
 
-  openParentalControls(member: UserApiDto): void {
+  protected openParentalControls(member: FamilyMember): void {
     if (this.isSavingControls()) return;
-    if (this.editingControlsMemberId() === member.user_id) {
+    if (this.editingControlsMemberId() === member.userId) {
       this.closeParentalControls();
       return;
     }
-    this.editingControlsMemberId.set(member.user_id);
-    this.draftBlockedGenres.set([...(member.blocked_genres ?? [])]);
+    this.editingControlsMemberId.set(member.userId);
+    this.draftBlockedGenres.set([...member.blockedGenres]);
+    this.draftBlockedArtists.set([...member.blockedArtists]);
     this.customGenreInput.set('');
+    this.artistBanInput.set('');
     this.controlsError.set('');
     this.successMessage.set('');
   }
 
-  closeParentalControls(): void {
+  protected closeParentalControls(): void {
     this.editingControlsMemberId.set(null);
     this.draftBlockedGenres.set([]);
+    this.draftBlockedArtists.set([]);
     this.customGenreInput.set('');
+    this.artistBanInput.set('');
     this.controlsError.set('');
   }
 
-  isDraftGenreBlocked(genre: string): boolean {
+  protected isDraftGenreBlocked(genre: string): boolean {
     return containsCaseInsensitive(this.draftBlockedGenres(), genre);
   }
 
-  toggleDraftGenre(genre: string): void {
+  protected toggleDraftGenre(genre: string): void {
     const current = this.draftBlockedGenres();
     if (containsCaseInsensitive(current, genre)) {
       this.draftBlockedGenres.set(removeCaseInsensitive(current, genre));
@@ -447,11 +453,11 @@ export class FamilyComponent {
     this.draftBlockedGenres.set([...current, genre.trim()]);
   }
 
-  onCustomGenreInput(event: Event): void {
-    this.customGenreInput.set((event.target as HTMLInputElement).value);
+  protected updateCustomGenreInput(event: Event): void {
+    this.customGenreInput.set(readInputValue(event));
   }
 
-  addCustomBlockedGenre(event?: Event): void {
+  protected addCustomBlockedGenre(event?: Event): void {
     event?.preventDefault();
     const cleaned = this.customGenreInput().trim();
     if (!cleaned) return;
@@ -461,31 +467,59 @@ export class FamilyComponent {
     this.customGenreInput.set('');
   }
 
-  removeDraftGenre(genre: string): void {
+  protected removeDraftGenre(genre: string): void {
     this.draftBlockedGenres.update((list) => removeCaseInsensitive(list, genre));
   }
 
-  getExtraDraftGenres(): readonly string[] {
+  protected hasParentalBlocks(member: FamilyMember): boolean {
+    const hasGenres = member.blockedGenres.length > 0;
+    const hasArtists = member.blockedArtists.length > 0;
+    return hasGenres || hasArtists;
+  }
+
+  protected getExtraDraftGenres(): readonly string[] {
     return this.draftBlockedGenres().filter(
       (genre) => !containsCaseInsensitive(this.availableGenres, genre),
     );
   }
 
-  saveParentalControls(member: UserApiDto): void {
+  protected updateArtistBanInput(event: Event): void {
+    this.artistBanInput.set(readInputValue(event));
+  }
+
+  protected addBlockedArtist(event?: Event): void {
+    event?.preventDefault();
+    const cleaned = this.artistBanInput().trim();
+    if (!cleaned) return;
+    if (!containsCaseInsensitive(this.draftBlockedArtists(), cleaned)) {
+      this.draftBlockedArtists.update((list) => [...list, cleaned]);
+    }
+    this.artistBanInput.set('');
+  }
+
+  protected removeDraftArtist(artist: string): void {
+    this.draftBlockedArtists.update((list) => removeCaseInsensitive(list, artist));
+  }
+
+  protected saveParentalControls(member: FamilyMember): void {
     this.controlsError.set('');
     this.errorMessage.set('');
     this.successMessage.set('');
 
-    const blockedGenres = [...this.draftBlockedGenres()];
-    const toastMsg = `Restrições parentais atualizadas para ${member.display_name}.`;
+    const payload: UpdateMemberParentalControlsApiRequest = {
+      blocked_genres: [...this.draftBlockedGenres()],
+      blocked_artists: [...this.draftBlockedArtists()],
+    };
+    const toastMsg = `Restrições parentais atualizadas para ${member.displayName}.`;
 
     if (!this.profileApi || !readAuthToken()) {
       this.familyMembers.update((list) =>
         list.map((item) =>
-          item.user_id === member.user_id
+          item.userId === member.userId
             ? {
                 ...item,
-                blocked_genres: blockedGenres,
+                blockedGenres: payload.blocked_genres,
+                blockedArtists: payload.blocked_artists,
               }
             : item,
         ),
@@ -497,11 +531,11 @@ export class FamilyComponent {
     }
 
     this.isSavingControls.set(true);
-    this.profileApi.updateFamilyMemberBlockedGenres(member.user_id, blockedGenres).subscribe({
+    this.profileApi.updateFamilyMemberParentalControls(member.userId, payload).subscribe({
       next: (updatedMember) => {
         this.isSavingControls.set(false);
         this.familyMembers.update((list) =>
-          list.map((item) => (item.user_id === updatedMember.user_id ? updatedMember : item)),
+          list.map((item) => (item.userId === updatedMember.userId ? updatedMember : item)),
         );
         this.state.notify(toastMsg);
         this.successMessage.set(toastMsg);
@@ -509,19 +543,26 @@ export class FamilyComponent {
       },
       error: (err: unknown) => {
         this.isSavingControls.set(false);
-        this.controlsError.set(toApiError(err).message);
+        const apiErr = toApiError(err);
+        if (apiErr.status === 404 || apiErr.status === 405) {
+          this.controlsError.set(
+            `O backend ainda não possui o endpoint de persistência de restrições parentais para contas filhas (PUT /api/profile/family/members/{id}/parental-controls): ${apiErr.message}`,
+          );
+        } else {
+          this.controlsError.set(apiErr.message);
+        }
       },
     });
   }
 
-  goToPlans(): void {
+  protected goToPlans(): void {
     this.state.setPage('plans');
     if (this.router) {
       void this.router.navigate(['/plans']).catch(() => false);
     }
   }
 
-  goToProfile(): void {
+  protected goToProfile(): void {
     this.state.setPage('profile');
     if (this.router) {
       void this.router.navigate(['/profile']).catch(() => false);

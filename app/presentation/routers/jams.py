@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.application.dtos.jam_dtos import (
     CloseJamCommand,
@@ -25,7 +25,7 @@ from app.application.use_cases.jam import (
     VoteSkipJamTrackUseCase,
 )
 from app.presentation.dependencies.auth import require_user
-from app.presentation.dependencies.container import get_container
+from app.presentation.dependencies.container import provide
 from app.presentation.schemas.common import ActionSuccessResponse
 from app.presentation.schemas.jams import (
     CreateJamRequest,
@@ -46,124 +46,11 @@ from app.presentation.schemas.playlists import (
 router = APIRouter(prefix="/api/jams", tags=["Collaborative Jams"])
 
 
-def get_create_jam_use_case(request: Request) -> CreateJamUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(CreateJamUseCase)
-    except KeyError:
-        return CreateJamUseCase(
-            jam_repo=container.jam_repo,
-            user_repo=container.user_repo,
-            playlist_repo=container.playlist_repo,
-        )
-
-
-def get_join_jam_use_case(request: Request) -> JoinJamUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(JoinJamUseCase)
-    except KeyError:
-        return JoinJamUseCase(
-            jam_repo=container.jam_repo,
-            user_repo=container.user_repo,
-        )
-
-
-def get_jam_deck_use_case(request: Request) -> GetJamDeckUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(GetJamDeckUseCase)
-    except KeyError:
-        return GetJamDeckUseCase(
-            jam_repo=container.jam_repo,
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            playlist_repo=container.playlist_repo,
-            interaction_repo=container.interaction_repo,
-        )
-
-
-def get_vote_jam_track_use_case(request: Request) -> VoteJamTrackUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(VoteJamTrackUseCase)
-    except KeyError:
-        return VoteJamTrackUseCase(
-            jam_repo=container.jam_repo,
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            interaction_repo=container.interaction_repo,
-            spotify_queue=getattr(container, "spotify_host_queue", None),
-        )
-
-
-def get_vote_skip_jam_track_use_case(request: Request) -> VoteSkipJamTrackUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(VoteSkipJamTrackUseCase)
-    except KeyError:
-        return VoteSkipJamTrackUseCase(
-            jam_repo=container.jam_repo,
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            spotify_queue=getattr(container, "spotify_host_queue", None),
-        )
-
-
-def get_advance_jam_playback_use_case(request: Request) -> AdvanceJamPlaybackUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(AdvanceJamPlaybackUseCase)
-    except KeyError:
-        return AdvanceJamPlaybackUseCase(
-            jam_repo=container.jam_repo,
-            track_repo=container.track_repo,
-            user_repo=container.user_repo,
-            spotify_queue=getattr(container, "spotify_host_queue", None),
-        )
-
-
-def get_save_queue_track_use_case(request: Request) -> SaveQueueTrackUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(SaveQueueTrackUseCase)
-    except KeyError:
-        return SaveQueueTrackUseCase(
-            jam_repo=container.jam_repo,
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            interaction_repo=container.interaction_repo,
-            playlist_repo=container.playlist_repo,
-        )
-
-
-def get_close_jam_use_case(request: Request) -> CloseJamUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(CloseJamUseCase)
-    except KeyError:
-        return CloseJamUseCase(
-            jam_repo=container.jam_repo,
-        )
-
-
-def get_jam_state_use_case(request: Request) -> GetJamStateUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(GetJamStateUseCase)
-    except KeyError:
-        return GetJamStateUseCase(
-            jam_repo=container.jam_repo,
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-        )
-
-
 @router.post("", response_model=JamResponse, status_code=status.HTTP_201_CREATED)
 def create_jam(
     req: CreateJamRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[CreateJamUseCase, Depends(get_create_jam_use_case)],
+    use_case: Annotated[CreateJamUseCase, Depends(provide(CreateJamUseCase))],
 ) -> JamResponse:
     jam = use_case.execute(
         CreateJamCommand(
@@ -183,7 +70,7 @@ def create_jam(
 def join_jam(
     req: JoinJamRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[JoinJamUseCase, Depends(get_join_jam_use_case)],
+    use_case: Annotated[JoinJamUseCase, Depends(provide(JoinJamUseCase))],
 ) -> JamResponse:
     jam = use_case.execute(room_code=req.room_code, user_id=current_user_id)
     return JamResponse.model_validate(jam)
@@ -193,7 +80,7 @@ def join_jam(
 def get_jam_state(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[GetJamStateUseCase, Depends(get_jam_state_use_case)],
+    use_case: Annotated[GetJamStateUseCase, Depends(provide(GetJamStateUseCase))],
 ) -> JamStateResponse:
     state = use_case.execute(jam_id=jam_id, user_id=current_user_id)
     if isinstance(state, dict):
@@ -227,7 +114,7 @@ def vote_jam_track(
     jam_id: int,
     req: VoteJamTrackRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[VoteJamTrackUseCase, Depends(get_vote_jam_track_use_case)],
+    use_case: Annotated[VoteJamTrackUseCase, Depends(provide(VoteJamTrackUseCase))],
 ) -> JamQueueItemResponse:
     queue_item = use_case.execute(
         VoteJamTrackCommand(
@@ -246,7 +133,7 @@ def skip_jam_track(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
-        VoteSkipJamTrackUseCase, Depends(get_vote_skip_jam_track_use_case)
+        VoteSkipJamTrackUseCase, Depends(provide(VoteSkipJamTrackUseCase))
     ],
     req: SkipJamTrackRequest | None = None,
 ) -> SkipVoteResponse:
@@ -294,7 +181,7 @@ def skip_jam_track(
 def get_jam_deck(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[GetJamDeckUseCase, Depends(get_jam_deck_use_case)],
+    use_case: Annotated[GetJamDeckUseCase, Depends(provide(GetJamDeckUseCase))],
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     cursor_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> PaginatedTracksResponse:
@@ -320,7 +207,7 @@ def save_queue_track(
     jam_id: int,
     req: SaveQueueTrackRequest,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[SaveQueueTrackUseCase, Depends(get_save_queue_track_use_case)],
+    use_case: Annotated[SaveQueueTrackUseCase, Depends(provide(SaveQueueTrackUseCase))],
 ) -> ActionSuccessResponse:
     success = use_case.execute(
         SaveQueueTrackCommand(
@@ -337,7 +224,7 @@ def save_queue_track(
 def close_jam(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[CloseJamUseCase, Depends(get_close_jam_use_case)],
+    use_case: Annotated[CloseJamUseCase, Depends(provide(CloseJamUseCase))],
 ) -> JamResponse:
     jam = use_case.execute(
         CloseJamCommand(
@@ -353,7 +240,7 @@ def advance_jam_playback(
     jam_id: int,
     current_user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
-        AdvanceJamPlaybackUseCase, Depends(get_advance_jam_playback_use_case)
+        AdvanceJamPlaybackUseCase, Depends(provide(AdvanceJamPlaybackUseCase))
     ],
 ) -> JamResponse:
     jam = use_case.execute(

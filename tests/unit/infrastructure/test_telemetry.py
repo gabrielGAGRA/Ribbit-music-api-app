@@ -6,8 +6,8 @@ import sys
 import uuid
 
 import pytest
-from fastapi import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
+lazy from starlette.types import Message, Receive, Scope, Send
 
 from app.composition import create_app
 from app.config import Settings
@@ -19,7 +19,7 @@ from app.infrastructure.telemetry.logging import (
     log_operational_event,
     set_correlation_id,
 )
-from app.infrastructure.telemetry.middleware import CorrelationIdMiddleware
+from app.presentation.middleware import CorrelationIdMiddleware
 
 
 class LogCaptureHandler(logging.Handler):
@@ -38,20 +38,48 @@ class LogCaptureHandler(logging.Handler):
             self.formatted_lines.append(self.format(record))
 
 
-def _make_dummy_request(
+def _make_dummy_scope(
     path: str = "/test",
     method: str = "GET",
     headers: list[tuple[bytes, bytes]] | None = None,
     client: tuple[str, int] = ("127.0.0.1", 50000),
-) -> Request:
-    scope = {
+) -> Scope:
+    return {
         "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "scheme": "http",
         "method": method,
         "path": path,
+        "raw_path": path.encode("ascii"),
+        "query_string": b"",
         "headers": headers or [],
         "client": client,
+        "server": ("testserver", 80),
     }
-    return Request(scope)
+
+
+async def _run_asgi(
+    middleware: CorrelationIdMiddleware, scope: Scope
+) -> tuple[int, dict[str, str], bytes]:
+    status_code = 500
+    headers: dict[str, str] = {}
+    body_chunks: list[bytes] = []
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: Message) -> None:
+        nonlocal status_code
+        if message["type"] == "http.response.start":
+            status_code = int(message["status"])
+            for k, v in message.get("headers", []):
+                headers[k.decode("latin-1").lower()] = v.decode("latin-1")
+        elif message["type"] == "http.response.body":
+            body_chunks.append(message.get("body", b""))
+
+    await middleware(scope, receive, send)
+    return status_code, headers, b"".join(body_chunks)
 
 
 @pytest.mark.unit
@@ -221,34 +249,68 @@ def test_log_operational_event_helper() -> None:
 
 @pytest.mark.unit
 def test_configure_logging() -> None:
-    target_logger = logging.getLogger("app")
-    prev_level = target_logger.level
-    prev_propagate = target_logger.propagate
-    prev_handlers = list(target_logger.handlers)
+    logger_names = ("app", "uvicorn", "uvicorn.error", "uvicorn.access")
+    saved = [
+        (
+            logging.getLogger(name),
+            logging.getLogger(name).level,
+            logging.getLogger(name).propagate,
+            list(logging.getLogger(name).handlers),
+        )
+        for name in logger_names
+    ]
     try:
         app_logger = configure_logging("DEBUG")
         assert app_logger.level == logging.DEBUG
         assert len(app_logger.handlers) == 1
         assert isinstance(app_logger.handlers[0].formatter, JSONLogFormatter)
     finally:
-        target_logger.setLevel(prev_level)
-        target_logger.propagate = prev_propagate
-        target_logger.handlers = prev_handlers
+        for logger_obj, prev_level, prev_propagate, prev_handlers in saved:
+            logger_obj.setLevel(prev_level)
+            logger_obj.propagate = prev_propagate
+            logger_obj.handlers = prev_handlers
+
+
+@pytest.mark.unit
+def test_configure_logging_configures_uvicorn_loggers_with_json_formatter() -> None:
+    logger_names = ("app", "uvicorn", "uvicorn.error", "uvicorn.access")
+    saved = [
+        (
+            logging.getLogger(name),
+            logging.getLogger(name).level,
+            logging.getLogger(name).propagate,
+            list(logging.getLogger(name).handlers),
+        )
+        for name in logger_names
+    ]
+    try:
+        configure_logging("WARNING")
+        for name in ("uvicorn", "uvicorn.access"):
+            uv_logger = logging.getLogger(name)
+            assert uv_logger.level == logging.WARNING
+            assert uv_logger.propagate is False
+            assert len(uv_logger.handlers) == 1
+            assert isinstance(uv_logger.handlers[0].formatter, JSONLogFormatter)
+    finally:
+        for logger_obj, prev_level, prev_propagate, prev_handlers in saved:
+            logger_obj.setLevel(prev_level)
+            logger_obj.propagate = prev_propagate
+            logger_obj.handlers = prev_handlers
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_correlation_id_middleware_generates_id() -> None:
-    async def downstream_app(_request: Request) -> Response:
-        return JSONResponse({"status": "ok"})
+    async def downstream_app(scope: Scope, receive: Receive, send: Send) -> None:
+        await JSONResponse({"status": "ok"})(scope, receive, send)
 
     middleware = CorrelationIdMiddleware(downstream_app)
-    req = _make_dummy_request(path="/api/test")
+    scope = _make_dummy_scope(path="/api/test")
 
-    response = await middleware.dispatch(req, downstream_app)
+    _, headers, _ = await _run_asgi(middleware, scope)
 
-    assert "X-Correlation-Id" in response.headers
-    corr_id = response.headers["X-Correlation-Id"]
+    assert "x-correlation-id" in headers
+    corr_id = headers["x-correlation-id"]
     assert len(corr_id) == 32
     uuid_obj = uuid.UUID(hex=corr_id)
     assert uuid_obj.hex == corr_id
@@ -257,29 +319,29 @@ async def test_correlation_id_middleware_generates_id() -> None:
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_correlation_id_middleware_reuses_incoming_x_correlation_id() -> None:
-    async def downstream_app(_request: Request) -> Response:
-        return JSONResponse({"status": "ok"})
+    async def downstream_app(scope: Scope, receive: Receive, send: Send) -> None:
+        await JSONResponse({"status": "ok"})(scope, receive, send)
 
     middleware = CorrelationIdMiddleware(downstream_app)
-    req = _make_dummy_request(headers=[(b"x-correlation-id", b"custom-trace-id-123")])
+    scope = _make_dummy_scope(headers=[(b"x-correlation-id", b"custom-trace-id-123")])
 
-    response = await middleware.dispatch(req, downstream_app)
+    _, headers, _ = await _run_asgi(middleware, scope)
 
-    assert response.headers["X-Correlation-Id"] == "custom-trace-id-123"
+    assert headers["x-correlation-id"] == "custom-trace-id-123"
 
 
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_correlation_id_middleware_reuses_incoming_x_request_id() -> None:
-    async def downstream_app(_request: Request) -> Response:
-        return JSONResponse({"status": "ok"})
+    async def downstream_app(scope: Scope, receive: Receive, send: Send) -> None:
+        await JSONResponse({"status": "ok"})(scope, receive, send)
 
     middleware = CorrelationIdMiddleware(downstream_app)
-    req = _make_dummy_request(headers=[(b"x-request-id", b"incoming-request-abc")])
+    scope = _make_dummy_scope(headers=[(b"x-request-id", b"incoming-request-abc")])
 
-    response = await middleware.dispatch(req, downstream_app)
+    _, headers, _ = await _run_asgi(middleware, scope)
 
-    assert response.headers["X-Correlation-Id"] == "incoming-request-abc"
+    assert headers["x-correlation-id"] == "incoming-request-abc"
 
 
 @pytest.mark.unit
@@ -287,17 +349,17 @@ async def test_correlation_id_middleware_reuses_incoming_x_request_id() -> None:
 async def test_correlation_id_middleware_sets_and_cleans_contextvar() -> None:
     captured_context_id: list[str | None] = []
 
-    async def downstream_app(_request: Request) -> Response:
+    async def downstream_app(scope: Scope, receive: Receive, send: Send) -> None:
         captured_context_id.append(get_correlation_id())
-        return JSONResponse({"status": "ok"})
+        await JSONResponse({"status": "ok"})(scope, receive, send)
 
     middleware = CorrelationIdMiddleware(downstream_app)
-    req = _make_dummy_request(headers=[(b"x-correlation-id", b"ctx-test-id")])
+    scope = _make_dummy_scope(headers=[(b"x-correlation-id", b"ctx-test-id")])
 
     assert get_correlation_id() is None
-    response = await middleware.dispatch(req, downstream_app)
+    _, headers, _ = await _run_asgi(middleware, scope)
 
-    assert response.headers["X-Correlation-Id"] == "ctx-test-id"
+    assert headers["x-correlation-id"] == "ctx-test-id"
     assert captured_context_id == ["ctx-test-id"]
     assert get_correlation_id() is None
 
@@ -305,18 +367,18 @@ async def test_correlation_id_middleware_sets_and_cleans_contextvar() -> None:
 @pytest.mark.unit
 @pytest.mark.anyio
 async def test_correlation_id_middleware_captures_unhandled_exception() -> None:
-    async def failing_app(_request: Request) -> Response:
+    async def failing_app(_scope: Scope, _receive: Receive, _send: Send) -> None:
         raise RuntimeError("Downstream service failure")
 
     middleware = CorrelationIdMiddleware(failing_app)
-    req = _make_dummy_request(
+    scope = _make_dummy_scope(
         path="/failing", headers=[(b"x-correlation-id", b"err-trace-1")]
     )
 
-    response = await middleware.dispatch(req, failing_app)
+    status_code, headers, _ = await _run_asgi(middleware, scope)
 
-    assert response.status_code == 500
-    assert response.headers["X-Correlation-Id"] == "err-trace-1"
+    assert status_code == 500
+    assert headers["x-correlation-id"] == "err-trace-1"
     assert get_correlation_id() is None
 
 
@@ -324,23 +386,30 @@ async def test_correlation_id_middleware_captures_unhandled_exception() -> None:
 @pytest.mark.anyio
 async def test_correlation_id_middleware_logs_operational_events() -> None:
     capture = LogCaptureHandler(formatter=JSONLogFormatter())
-    telemetry_logger = logging.getLogger("app.telemetry.middleware")
+    telemetry_logger = logging.getLogger("app.presentation.middleware")
     prev_level = telemetry_logger.level
     telemetry_logger.setLevel(logging.INFO)
     telemetry_logger.addHandler(capture)
 
-    async def successful_app(_request: Request) -> Response:
-        return JSONResponse({"status": "ok"})
+    async def successful_app(scope: Scope, receive: Receive, send: Send) -> None:
+        await JSONResponse({"status": "ok"})(scope, receive, send)
 
-    async def error_app(_request: Request) -> Response:
-        return JSONResponse({"error": "Bad Gateway"}, status_code=502)
+    async def client_error_app(scope: Scope, receive: Receive, send: Send) -> None:
+        await JSONResponse({"error": "Not Found"}, status_code=404)(
+            scope, receive, send
+        )
+
+    async def error_app(scope: Scope, receive: Receive, send: Send) -> None:
+        await JSONResponse({"error": "Bad Gateway"}, status_code=502)(
+            scope, receive, send
+        )
 
     try:
         middleware = CorrelationIdMiddleware(successful_app)
-        req = _make_dummy_request(
+        scope = _make_dummy_scope(
             path="/users/me", headers=[(b"x-correlation-id", b"log-test-id")]
         )
-        await middleware.dispatch(req, successful_app)
+        await _run_asgi(middleware, scope)
 
         events = [json.loads(line) for line in capture.formatted_lines]
         assert len(events) >= 2
@@ -357,13 +426,24 @@ async def test_correlation_id_middleware_logs_operational_events() -> None:
         assert success_event["status_code"] == 200
         assert "duration_ms" in success_event
 
-        # Test failure logging
+        # Test 4xx client_error logging
+        capture.records.clear()
+        capture.formatted_lines.clear()
+
+        middleware_4xx = CorrelationIdMiddleware(client_error_app)
+        await _run_asgi(middleware_4xx, _make_dummy_scope(path="/missing"))
+
+        client_events = [json.loads(line) for line in capture.formatted_lines]
+        assert client_events[-1]["event"] == "request.client_error"
+        assert client_events[-1]["status"] == "warning"
+        assert client_events[-1]["status_code"] == 404
+
+        # Test 5xx failure logging
         capture.records.clear()
         capture.formatted_lines.clear()
 
         middleware_err = CorrelationIdMiddleware(error_app)
-        err_req = _make_dummy_request(path="/error")
-        await middleware_err.dispatch(err_req, error_app)
+        await _run_asgi(middleware_err, _make_dummy_scope(path="/error"))
 
         err_events = [json.loads(line) for line in capture.formatted_lines]
         fail_event = err_events[-1]

@@ -33,8 +33,6 @@ class User:
     is_admin: bool = False
     created_at: datetime | None = None
     birth_date: str | None = None
-    guardian_name: str | None = None
-    guardian_email: str | None = None
 
     @staticmethod
     def _normalize_genre(genre: str) -> str:
@@ -56,11 +54,6 @@ class User:
             raise ValueError("Age cannot be negative.")
         if self.birth_date is not None:
             self.birth_date = self.birth_date.strip() or None
-        if self.guardian_name is not None:
-            self.guardian_name = self.guardian_name.strip() or None
-        if self.guardian_email is not None:
-            cleaned_guardian_email = self.guardian_email.strip().lower()
-            self.guardian_email = cleaned_guardian_email or None
         self.blocked_genres = frozenset(
             self._normalize_genre(genre)
             for genre in self.blocked_genres
@@ -111,10 +104,13 @@ class User:
         return tuple(sorted(self.MINOR_RESTRICTED_GENRE_TERMS))
 
     def can_listen(self, track: Track) -> bool:
-        genre = self._normalize_genre(track.genre)
-        return (
-            not self.is_track_restricted_for_minor(track)
-            and genre not in self.blocked_genres
+        from app.domain.services.genre_names import (  # noqa: PLC0415
+            genre_matches_preference,
+        )
+
+        return not self.is_track_restricted_for_minor(track) and not any(
+            genre_matches_preference(track.genre, blocked)
+            for blocked in self.blocked_genres
         )
 
     def is_track_restricted_for_minor(self, track: Track) -> bool:
@@ -144,22 +140,6 @@ class User:
 
     def change_plan(self, plan_id: int) -> Self:
         self.plan_id = plan_id
-        return self
-
-    def has_guardian(self) -> bool:
-        return bool(self.guardian_name and self.guardian_email)
-
-    def assign_guardian(self, guardian_name: str, guardian_email: str) -> Self:
-        cleaned_name = guardian_name.strip()
-        cleaned_email = guardian_email.strip().lower()
-        if len(cleaned_name) < 2:
-            raise ValueError("Guardian name must have at least 2 characters.")
-        if "@" not in cleaned_email or "." not in cleaned_email.split("@")[-1]:
-            raise ValueError("Guardian email must be valid.")
-        if cleaned_email == self.email.strip().lower():
-            raise ValueError("Guardian email must differ from the minor account email.")
-        self.guardian_name = cleaned_name
-        self.guardian_email = cleaned_email
         return self
 
     def unlink_primary_account(self, fallback_plan_id: int) -> Self:
@@ -242,23 +222,14 @@ class User:
     def is_favorite_genre(self, track: Track) -> bool:
         if not self.favorite_genres or not track.genre.strip():
             return False
+        from app.domain.services.genre_names import (  # noqa: PLC0415
+            genre_matches_preference,
+        )
 
-        track_genre = self._normalize_genre(track.genre)
-        if track_genre in self.favorite_genres:
-            return True
-
-        genre_tokens = self._genre_tokens(track.genre)
-        if not genre_tokens:
-            return False
-
-        for favorite in self.favorite_genres:
-            fav_tokens = self._genre_tokens(favorite)
-            if fav_tokens and any(
-                genre_tokens[index : index + len(fav_tokens)] == fav_tokens
-                for index in range(len(genre_tokens) - len(fav_tokens) + 1)
-            ):
-                return True
-        return False
+        return any(
+            genre_matches_preference(track.genre, favorite)
+            for favorite in self.favorite_genres
+        )
 
     def recommendation_weight(
         self,

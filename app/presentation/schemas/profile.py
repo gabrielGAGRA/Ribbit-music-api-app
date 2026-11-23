@@ -31,9 +31,6 @@ class ChangePlanRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     new_plan_id: int
-    guardian_name: str | None = Field(default=None, max_length=100)
-    guardian_email: str | None = Field(default=None, max_length=254)
-    guardian_confirmed_adult: bool = False
 
 
 class BlockedGenresRequest(BaseModel):

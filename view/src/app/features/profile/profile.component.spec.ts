@@ -8,7 +8,7 @@ import { ProfileComponent } from './profile.component';
 import { authInterceptor } from '../../core/auth.interceptor';
 import { writeAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { SongService } from '../../core/services/song.service';
+import { SongService } from '../../core/song.service';
 
 describe('ProfileComponent', () => {
   let component: ProfileComponent;
@@ -26,32 +26,35 @@ describe('ProfileComponent', () => {
     component = TestBed.runInInjectionContext(() => new ProfileComponent());
   });
 
-  it('should switch between like, love, and reject tabs', () => {
-    expect(component.selectedTab()).toBe('like');
-    component.selectTab('love');
-    expect(component.selectedTab()).toBe('love');
+  it('should switch between like, love, reject, and history tabs', () => {
+    expect(component['selectedTab']()).toBe('like');
+    component['selectTab']('love');
+    expect(component['selectedTab']()).toBe('love');
+    component['selectTab']('history');
+    expect(component['selectedTab']()).toBe('history');
+    expect(component['activeTabLabel']()).toBe('Histórico de acessos');
   });
 
   it('should calculate real counts from state collections', () => {
-    expect(component.likeCount()).toBe(0);
+    expect(component['likeCount']()).toBe(0);
     state.decide('love');
-    expect(component.likeCount()).toBe(1);
-    expect(component.loveCount()).toBe(1);
+    expect(component['likeCount']()).toBe(1);
+    expect(component['loveCount']()).toBe(1);
     state.decide('reject');
-    expect(component.rejectCount()).toBe(1);
+    expect(component['rejectCount']()).toBe(1);
   });
 
   it('should cancel subscription to free plan', () => {
     state.setPlan('Individual');
     expect(state.currentPlan()).toBe('Individual');
 
-    component.cancelSubscription();
+    component['cancelSubscription']();
     expect(state.currentPlan()).toBe('Free');
     expect(state.toast()).toContain('cancelada');
   });
 
   it('should set page to settings on goToSettings', () => {
-    component.goToSettings();
+    component['goToSettings']();
     expect(state.activePage()).toBe('settings');
   });
 
@@ -110,9 +113,9 @@ describe('ProfileComponent', () => {
       },
     ]);
 
-    expect(component.userReviews().length).toBe(1);
-    expect(component.userReviews()[0]?.id).toBe(1);
-    expect(component.userReviews()[0]?.rating).toBe(5);
+    expect(component['userReviews']().length).toBe(1);
+    expect(component['userReviews']()[0]?.id).toBe(1);
+    expect(component['userReviews']()[0]?.rating).toBe(5);
   });
 
   it('reloads user reviews immediately when deleteReview succeeds', () => {
@@ -121,7 +124,7 @@ describe('ProfileComponent', () => {
     const state = TestBed.inject(RibbitStateService);
     const refreshSpy = vi.spyOn(state, 'refreshCatalogAndFeed').mockImplementation(() => undefined);
 
-    component.deleteReview({
+    component['deleteReview']({
       id: 77,
       author: 'Eu',
       initials: 'EU',
@@ -141,5 +144,38 @@ describe('ProfileComponent', () => {
 
     expect(refreshSpy).toHaveBeenCalledOnce();
     localStorage.clear();
+  });
+
+  it('derives deduplicated historySongs from state.accessHistory and toggles historyExpanded', () => {
+    state.accessHistory.set(
+      Array.from({ length: 8 }, (_, idx) => ({
+        access_id: idx + 1,
+        user_id: 1,
+        track_id: idx === 7 ? 1 : idx + 1,
+        track_title: `Faixa ${idx + 1}`,
+        track_artist: 'Artista Teste',
+        track_genre: 'Pop',
+        track_album: 'Álbum',
+        track_duration_seconds: 180,
+        track_cover_url: null,
+        track_preview_url: null,
+        track_explicit: false,
+        track_is_deleted: false,
+        source: 'play',
+        accessed_at: '2026-11-21T12:00:00Z',
+      })),
+    );
+
+    component['selectTab']('history');
+    expect(component['historyCount']()).toBe(7);
+    expect(component['activeTabItems']().length).toBe(6);
+
+    component['toggleHistory']();
+    expect(component['historyExpanded']()).toBe(true);
+    expect(component['activeTabItems']().length).toBe(7);
+
+    const template = readFileSync(resolve(__dirname, './profile.component.html'), 'utf8');
+    expect(template).toContain('Histórico');
+    expect(template).toContain('Ouvido');
   });
 });

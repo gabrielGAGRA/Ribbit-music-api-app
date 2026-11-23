@@ -225,6 +225,15 @@ def test_flow_2_discovery_and_preview_fallback(
     def mock_find_preview(term: str) -> TrackPreview:
         nonlocal fallback_called
         fallback_called = True
+        for candidate in container.track_repo.list_active(limit=100):
+            if candidate.title.lower() in term.lower():
+                return TrackPreview(
+                    external_id=f"itunes-{candidate.track_id}",
+                    title=candidate.title,
+                    artist=candidate.artist,
+                    preview_url="https://audio-ssl.itunes.apple.com/preview/acoustic_sunrise.mp3",
+                    cover_url="https://itunes.apple.com/cover.jpg",
+                )
         return TrackPreview(
             external_id="itunes-9999",
             title="Acoustic Sunrise",
@@ -362,8 +371,8 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
     )
     assert dep_res.status_code in (200, 201), dep_res.text
 
-    # 4. Add dependents up to max limit (1 titular + 5 dependents)
-    for i in range(2, 5):
+    # 4. Add dependents up to max limit (1 titular + 3 dependents = 4 profiles)
+    for i in range(2, 3):
         resp = client.post(
             "/api/profile/family/members",
             headers=headers,
@@ -523,53 +532,56 @@ def test_discovery_undo_removes_latest_swipe(client: TestClient) -> None:
     assert client.post("/api/discovery/undo", headers=headers).status_code == 404
 
 
-def test_minor_can_register_and_use_individual_plan_with_guardian_and_minor_filters(
+def test_minor_blocked_from_paid_plans_and_filtered_as_family_dependent(
     client: TestClient,
 ) -> None:
     plans = client.get("/api/plans").json()
     indiv_id = next(plan["plan_id"] for plan in plans if plan["name"] == "Individual")
     family_id = next(plan["plan_id"] for plan in plans if plan["name"] == "Família")
 
-    # Minor cannot register for Family plan as titular even with guardian
-    fam_minor = client.post(
-        "/api/auth/register",
+    # Minor cannot register directly for Individual or Family plans
+    for blocked_plan_id, email in (
+        (indiv_id, "minor_indiv_blocked@example.com"),
+        (family_id, "minor_fam_blocked@example.com"),
+    ):
+        res = client.post(
+            "/api/auth/register",
+            json={
+                "email": email,
+                "password": "Password123!",
+                "display_name": "Minor Blocked",
+                "birth_date": "2012-05-15",
+                "plan_id": blocked_plan_id,
+            },
+        )
+        assert res.status_code == 400
+
+    # Adult titular creates a Family account and adds a minor dependent
+    _, titular_headers = _register_and_login(
+        client, "adult_family_holder@example.com", "1988-05-15", family_id
+    )
+    dep_res = client.post(
+        "/api/profile/family/members",
+        headers=titular_headers,
         json={
-            "email": "minor_fam_blocked@example.com",
+            "email": "minor_family_dep@example.com",
             "password": "Password123!",
-            "display_name": "Minor Fam",
+            "display_name": "Minor Dependent",
             "birth_date": "2012-05-15",
-            "plan_id": family_id,
-            "guardian_name": "Ana Responsavel",
-            "guardian_email": "ana@responsavel.com",
-            "guardian_confirmed_adult": True,
         },
     )
-    assert fam_minor.status_code == 400
+    assert dep_res.status_code in (200, 201), dep_res.text
 
-    # Minor CAN register for Individual plan with guardian authorization
-    reg = client.post(
-        "/api/auth/register",
-        json={
-            "email": "minor_individual@example.com",
-            "password": "Password123!",
-            "display_name": "Minor Individual",
-            "birth_date": "2012-05-15",
-            "plan_id": indiv_id,
-            "guardian_name": "Ana Responsavel",
-            "guardian_email": "ana@responsavel.com",
-            "guardian_confirmed_adult": True,
-        },
+    login_res = client.post(
+        "/api/auth/login",
+        json={"email": "minor_family_dep@example.com", "password": "Password123!"},
     )
-    assert reg.status_code == 201, reg.text
-    user_data = reg.json()["user"]
-    assert user_data["plan_id"] == indiv_id
-    assert user_data["guardian_name"] == "Ana Responsavel"
-    assert user_data["guardian_email"] == "ana@responsavel.com"
+    assert login_res.status_code == 200
+    minor_headers = {"Authorization": f"Bearer {login_res.json()['access_token']}"}
 
-    headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
-    # Minor content protections remain active on Individual plan ("Rap God" is explicit/Hip Hop)
+    # Minor content protections remain active ("Rap God" is explicit/Hip Hop)
     for _ in range(5):
-        next_res = client.get("/api/discovery/next", headers=headers)
+        next_res = client.get("/api/discovery/next", headers=minor_headers)
         assert next_res.status_code == 200
         if not next_res.json():
             break
@@ -578,14 +590,9 @@ def test_minor_can_register_and_use_individual_plan_with_guardian_and_minor_filt
         assert track["title"] != "Rap God"
         client.post(
             "/api/discovery/interact",
-            headers=headers,
+            headers=minor_headers,
             json={"track_id": track["track_id"], "action": "dislike"},
         )
-
-    # Paid Individual undo works for the guardian-authorized minor
-    undo_res = client.post("/api/discovery/undo", headers=headers)
-    assert undo_res.status_code == 200
-    assert undo_res.json()["track"] is not None
 
 
 def test_discovery_undo_is_unavailable_for_free_plan(client: TestClient) -> None:
@@ -1379,7 +1386,8 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
         json={"room_name": "Blocked Jam", "duration_minutes": 30},
     )
     assert blocked.status_code == 403, blocked.text
-    assert blocked.json()["error"] == "SpotifyConnectionRequiredError"
+    assert blocked.json()["error"] == "PermissionDeniedError"
+    assert blocked.json()["details"]["rule_name"] == "spotify_connection_required"
 
     class _StubSpotifyAuth:
         def exchange_code(self, code: str) -> SimpleNamespace:
@@ -1397,10 +1405,15 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
                 product=self.product,
             )
 
+    from app.application.use_cases.spotify import ConnectSpotifyAccountUseCase
+
     profile_stub = _StubSpotifyProfile("premium")
-    connect_uc = app.state.container.connect_spotify_account_use_case
-    object.__setattr__(connect_uc, "spotify_auth", _StubSpotifyAuth())
-    object.__setattr__(connect_uc, "spotify_profile", profile_stub)
+    connect_uc = ConnectSpotifyAccountUseCase(
+        user_repo=app.state.container.user_repo,
+        spotify_auth=_StubSpotifyAuth(),  # type: ignore[arg-type]
+        spotify_profile=profile_stub,
+    )
+    app.state.container._type_registry[ConnectSpotifyAccountUseCase] = connect_uc
     state = headers["Authorization"].removeprefix("Bearer ")
 
     callback_prem = client.post(
@@ -1433,13 +1446,14 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
         json={"room_name": "Downgraded Jam", "duration_minutes": 30},
     )
     assert blocked_again.status_code == 403, blocked_again.text
-    assert blocked_again.json()["error"] == "SpotifyPremiumRequiredError"
+    assert blocked_again.json()["error"] == "PermissionDeniedError"
+    assert blocked_again.json()["details"]["rule_name"] == "spotify_premium_required"
 
 
 def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
     client: TestClient, app
 ) -> None:
-    from app.domain.exceptions import SpotifyPremiumRequiredError
+    from app.domain.exceptions import PermissionDeniedError
 
     plans = client.get("/api/plans").json()
     free_id = next(p["plan_id"] for p in plans if p["name"] == "Free")
@@ -1475,7 +1489,10 @@ def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
     class _StubHostQueue:
         def enqueue_track(self, user: Any, track_uri: str) -> None:
             if should_fail:
-                raise SpotifyPremiumRequiredError()
+                raise PermissionDeniedError(
+                    "Premium required",
+                    details={"rule_name": "spotify_premium_required"},
+                )
             enqueued.append((user.user_id, track_uri))
 
         def skip_to_next(self, user: Any) -> None:
@@ -1521,7 +1538,8 @@ def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
         json={"track_id": track_two.track_id, "action": "like"},
     )
     assert vote_fail.status_code == 403, vote_fail.text
-    assert vote_fail.json()["error"] == "SpotifyPremiumRequiredError"
+    assert vote_fail.json()["error"] == "PermissionDeniedError"
+    assert vote_fail.json()["details"]["rule_name"] == "spotify_premium_required"
 
     reloaded_owner = container.user_repo.find_by_id(owner.user_id)
     assert reloaded_owner is not None

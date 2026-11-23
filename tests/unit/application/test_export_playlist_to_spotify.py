@@ -14,8 +14,8 @@ from app.application.use_cases.playlist.export_playlist_to_spotify import (
 )
 from app.domain.exceptions import (
     EntityNotFoundError,
+    ExternalServiceError,
     PermissionDeniedError,
-    SpotifyConnectionRequiredError,
 )
 from app.domain.models.playlist import Playlist
 from app.domain.models.track import Track
@@ -110,7 +110,7 @@ def test_export_playlist_to_spotify_unlinked_account_raises_connection_required_
         export_port=export_port,
     )
 
-    with pytest.raises(SpotifyConnectionRequiredError) as exc_info:
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(user_id=1, playlist_id=5)
 
     assert exc_info.value.details.get("rule_name") == "spotify_connection_required"
@@ -236,3 +236,83 @@ def test_export_playlist_to_spotify_playlist_not_found_raises_entity_not_found()
 
     with pytest.raises(EntityNotFoundError, match="Playlist with ID 404 not found"):
         use_case.execute(user_id=1, playlist_id=404)
+
+
+@pytest.mark.parametrize("error_kind", ["auth", "forbidden"])
+def test_export_playlist_to_spotify_auth_or_forbidden_error_maps_to_permission_denied(
+    error_kind: str,
+) -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=25,
+        plan_id=2,
+        spotify_id="spotify_user_123",
+    )
+    playlist = Playlist(playlist_id=5, user_id=1, name="Pond Favorites")
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+
+    export_port = MagicMock(spec=PlaylistExportPort)
+    export_port.export_playlist.side_effect = ExternalServiceError(
+        "Spotify rejected token.",
+        service_name="spotify",
+        details={"error_kind": error_kind},
+    )
+
+    use_case = ExportPlaylistToSpotifyUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        export_port=export_port,
+    )
+
+    with pytest.raises(PermissionDeniedError) as exc_info:
+        use_case.execute(user_id=1, playlist_id=5)
+
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"
+    playlist_repo.save.assert_not_called()
+
+
+def test_export_playlist_to_spotify_other_external_service_error_propagates() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=25,
+        plan_id=2,
+        spotify_id="spotify_user_123",
+    )
+    playlist = Playlist(playlist_id=5, user_id=1, name="Pond Favorites")
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+
+    original_error = ExternalServiceError(
+        "Spotify rate limit exceeded.",
+        service_name="spotify",
+        details={"error_kind": "rate_limit"},
+    )
+    export_port = MagicMock(spec=PlaylistExportPort)
+    export_port.export_playlist.side_effect = original_error
+
+    use_case = ExportPlaylistToSpotifyUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        export_port=export_port,
+    )
+
+    with pytest.raises(ExternalServiceError) as exc_info:
+        use_case.execute(user_id=1, playlist_id=5)
+
+    assert exc_info.value is original_error
+    playlist_repo.save.assert_not_called()

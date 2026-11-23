@@ -12,13 +12,26 @@ import type { Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import type { CommunityReview, Song } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
-import { mapTrackDtoToSong } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
-import { MOCK_REVIEWS } from '../../core/mocks/reviews.mock';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { SongService } from '../../core/services/song.service';
-import type { ReviewSortOption } from '../../core/services/song.service';
+import { SongService } from '../../core/song.service';
+import type { ReviewSortOption } from '../../core/song.service';
+import { readInputValue, readSelectValue } from '../../shared/dom-event-values';
 import { IconComponent } from '../../shared/icon.component';
+
+function toSearchSortOption(value: string): 'default' | 'rating_desc' | 'rating_asc' {
+  if (value === 'rating_desc' || value === 'rating_asc') {
+    return value;
+  }
+  return 'default';
+}
+
+function toReviewSortOption(value: string): ReviewSortOption {
+  if (value === 'rating_desc' || value === 'rating_asc' || value === 'recent') {
+    return value;
+  }
+  return 'likes';
+}
 
 function compareByRating(a: CommunityReview, b: CommunityReview, asc: boolean): number {
   const diff = asc ? (a.rating ?? 0) - (b.rating ?? 0) : (b.rating ?? 0) - (a.rating ?? 0);
@@ -53,7 +66,7 @@ function compareReviews(
 })
 export class ExploreComponent implements OnInit {
   protected readonly state = inject(RibbitStateService);
-  protected readonly songService = inject(SongService);
+  private readonly songService = inject(SongService);
   private readonly router = inject(Router, { optional: true });
 
   readonly query = this.state.searchQuery;
@@ -63,11 +76,10 @@ export class ExploreComponent implements OnInit {
   readonly reviewLikes = signal<Record<number, boolean>>({});
   protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
   private readonly serverSearchResults = signal<readonly Song[] | null>(null);
-  private readonly recentHistoryApiSongs = signal<readonly Song[]>([]);
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSearchSub: Subscription | null = null;
 
-  readonly hasActiveSearch = computed<boolean>(() => {
+  protected readonly hasActiveSearch = computed<boolean>(() => {
     const q = this.query().trim();
     const genre = this.state.searchFilterGenre();
     const artist = this.state.searchFilterArtist().trim();
@@ -88,7 +100,7 @@ export class ExploreComponent implements OnInit {
     );
   });
 
-  readonly filteredSongs = computed<readonly Song[]>(() => {
+  protected readonly filteredSongs = computed<readonly Song[]>(() => {
     if (!this.hasActiveSearch()) return [];
     const serverResults = this.serverSearchResults();
     if (serverResults !== null) {
@@ -145,42 +157,15 @@ export class ExploreComponent implements OnInit {
     return endYear === undefined || trackYear <= endYear;
   }
 
-  readonly recentSongs = computed<readonly Song[]>(() => {
-    const accessEntries = this.state.accessHistory();
-    const seen = new Set<number>();
-    const fromAccess: Song[] = [];
-    for (const entry of accessEntries) {
-      if (seen.has(entry.track_id)) continue;
-      seen.add(entry.track_id);
-      fromAccess.push({
-        trackId: entry.track_id,
-        title: entry.track_title,
-        artist: entry.track_artist,
-        genre: entry.track_genre,
-        album: entry.track_album ?? entry.track_title,
-        durationSeconds: entry.track_duration_seconds,
-        time: `${Math.floor(entry.track_duration_seconds / 60)}:${String(entry.track_duration_seconds % 60).padStart(2, '0')}`,
-        image: entry.track_cover_url ?? '',
-        year: '',
-        match: 0,
-        ...(entry.track_preview_url ? { previewUrl: entry.track_preview_url } : {}),
-        explicit: entry.track_explicit,
-      });
-    }
-    const source = fromAccess.length > 0 ? fromAccess : this.recentHistoryApiSongs();
-    return this.historyExpanded() ? source : source.slice(0, 3);
-  });
-
-  readonly sortedReviews = computed<readonly CommunityReview[]>(() => {
+  private readonly sortedReviews = computed<readonly CommunityReview[]>(() => {
     const sort = this.reviewSort();
     const likes = this.reviewLikes();
-    const apiReviews = this.songService.reviews();
-    const reviews = apiReviews.length > 0 || readAuthToken() ? apiReviews : MOCK_REVIEWS;
+    const reviews = this.songService.reviews();
 
     return [...reviews].sort((a, b) => compareReviews(a, b, sort, likes));
   });
 
-  readonly displayedReviews = computed<readonly CommunityReview[]>(() =>
+  protected readonly displayedReviews = computed<readonly CommunityReview[]>(() =>
     this.sortedReviews().slice(0, 6),
   );
 
@@ -261,12 +246,12 @@ export class ExploreComponent implements OnInit {
       });
   }
 
-  onSearchSubmit(event: Event): void {
+  protected submitSearch(event: Event): void {
     event.preventDefault();
     this.triggerSearch();
   }
 
-  triggerSearch(): void {
+  private triggerSearch(): void {
     this.clearPendingSearch();
     if (!this.hasActiveSearch()) {
       this.serverSearchResults.set(null);
@@ -280,22 +265,17 @@ export class ExploreComponent implements OnInit {
   ngOnInit(): void {
     if (!readAuthToken()) return;
 
-    this.songService.getRecentInteractedTracks(30).subscribe({
-      next: (items) => {
-        this.recentHistoryApiSongs.set(items.map((entry) => mapTrackDtoToSong(entry.track)));
-      },
-      error: () => {
-        // Fallback to catalog order if endpoint fails
-      },
-    });
-
     if (this.songService.reviews().length === 0) {
       this.state.refreshCatalogAndFeed();
     }
   }
 
-  onQueryInput(event: Event): void {
-    this.query.set((event.target as HTMLInputElement).value);
+  protected hasTrackRating(song: Song): boolean {
+    return (song.reviewCount ?? 0) > 0 && song.averageRating != null;
+  }
+
+  protected updateSearchQuery(event: Event): void {
+    this.query.set(readInputValue(event));
   }
 
   private parseDateYear(dateValue: string): number | undefined {
@@ -305,35 +285,27 @@ export class ExploreComponent implements OnInit {
     return Number.isFinite(parsed) && parsed >= 1900 ? parsed : undefined;
   }
 
-  clearQuery(): void {
+  protected clearQuery(): void {
     this.state.clearSearchFilters();
   }
 
-  clearMinRatingFilter(): void {
+  protected clearMinRatingFilter(): void {
     this.state.searchFilterMinRating.set(null);
   }
 
-  onSearchSortChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value as
-      | 'default'
-      | 'rating_desc'
-      | 'rating_asc';
-    this.state.searchSortBy.set(value);
+  protected updateSearchSort(event: Event): void {
+    this.state.searchSortBy.set(toSearchSortOption(readSelectValue(event)));
   }
 
-  toggleHistory(): void {
-    this.historyExpanded.update((v) => !v);
-  }
-
-  onSortChange(event: Event): void {
-    const sort = (event.target as HTMLSelectElement).value as ReviewSortOption;
+  protected updateReviewSort(event: Event): void {
+    const sort = toReviewSortOption(readSelectValue(event));
     this.reviewSort.set(sort);
     if (readAuthToken()) {
       this.state.loadCommunityFeed(sort);
     }
   }
 
-  toggleReviewLike(id: number): void {
+  protected toggleReviewLike(id: number): void {
     const alreadyLiked = Boolean(this.reviewLikes()[id]);
     this.reviewLikes.update((cur) => ({
       ...cur,
@@ -349,19 +321,20 @@ export class ExploreComponent implements OnInit {
     }
   }
 
-  fallbackReviewSong(idx: number): Song {
+  protected fallbackReviewSong(idx: number): Song | undefined {
     const list = this.state.songs();
-    return list[idx % list.length] ?? list[0]!;
+    if (list.length === 0) return undefined;
+    return list[idx % list.length] ?? list[0];
   }
 
-  selectSong(song: Song): void {
+  protected selectSong(song: Song): void {
     this.state.recordTrackAccess(song, 'search');
     this.state.discoverySong.set(song);
     this.state.setPage('discover');
     void this.router?.navigate(['/discover']).catch(() => false);
   }
 
-  likeAndSaveTrack(song: Song): void {
+  protected likeAndSaveTrack(song: Song): void {
     if (song.trackId === undefined) return;
     this.songService.likeAndSaveSearchTrack(song.trackId).subscribe({
       next: () => {
@@ -375,11 +348,11 @@ export class ExploreComponent implements OnInit {
     });
   }
 
-  openSongDetails(song: Song): void {
+  protected openSongDetails(song: Song): void {
     this.state.openTrackDetailsModal(song);
   }
 
-  openSearchFilters(): void {
+  protected openSearchFilters(): void {
     this.state.setModal('search-filters');
   }
 }

@@ -29,9 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
     preferred_theme TEXT NOT NULL DEFAULT 'light',
     is_admin INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
-    birth_date TEXT,
-    guardian_name TEXT,
-    guardian_email TEXT
+    birth_date TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -191,7 +189,7 @@ CREATE TABLE IF NOT EXISTS platform_cost_settings (
 -- Plans
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (1, 'Free', 0.0, 1);
 INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (2, 'Individual', 14.9, 1);
-INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (3, 'Família', 27.9, 6);
+INSERT OR IGNORE INTO plans (plan_id, name, monthly_price, max_profiles) VALUES (3, 'Família', 27.9, 4);
 
 -- Users (Admin, Adult Demo, Minor Demo, Family Demo)
 INSERT OR IGNORE INTO users (user_id, email, password_hash, display_name, age, plan_id, preferred_theme, is_admin, created_at, birth_date, favorite_genres) VALUES (1, 'admin@ribbit.example.com', '03381f606f24bf46246d41ba575e97b4$3c9c7b091e51b82e9c98893b38cf14a753b27fb8e6f567234f442ba788144a62', 'Administrador Local', 30, 1, 'light', 1, '1970-01-01T00:00:00+00:00', '1996-01-01', NULL);

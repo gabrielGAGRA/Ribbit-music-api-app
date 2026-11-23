@@ -2,11 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import type { DecisionKind, Playlist, Song } from '@ribbit/shared-types';
 import { AudioPlayerService } from '../../core/audio-player.service';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { PlaylistService } from '../../core/services/playlist.service';
-import {
-  TransformStyleDirective,
-  WaveBarStyleDirective,
-} from '../../shared/dynamic-style.directive';
+import { PlaylistService } from '../../core/playlist.service';
+import { TransformStyleDirective } from '../../shared/transform-style.directive';
+import { WaveBarStyleDirective } from '../../shared/wave-bar-style.directive';
 import { FrogComponent } from '../../shared/frog.component';
 import { IconComponent } from '../../shared/icon.component';
 
@@ -24,15 +22,15 @@ export class DiscoverComponent {
   protected readonly player = inject(AudioPlayerService);
   private readonly playlistService = inject(PlaylistService);
 
-  readonly selectedTargetPlaylistId = signal<number | null>(null);
+  protected readonly selectedTargetPlaylistId = signal<number | null>(null);
 
-  readonly targetPlaylist = computed<Playlist | null>(() => {
+  protected readonly targetPlaylist = computed<Playlist | null>(() => {
     const id = this.selectedTargetPlaylistId();
     if (id === null) return null;
     return this.state.playlists().find((p) => p.playlistId === id) ?? null;
   });
 
-  selectTargetPlaylist(playlistId: number | null): void {
+  protected selectTargetPlaylist(playlistId: number | null): void {
     this.selectedTargetPlaylistId.set(playlistId);
     if (playlistId !== null) {
       const pl = this.state.playlists().find((p) => p.playlistId === playlistId);
@@ -44,11 +42,11 @@ export class DiscoverComponent {
     }
   }
 
-  openCreatePlaylist(): void {
+  protected openCreatePlaylist(): void {
     this.state.setModal('playlist');
   }
 
-  getPlaylistCover(playlist: Playlist): string {
+  protected getPlaylistCover(playlist: Playlist): string {
     const pId = playlist.playlistId;
     if (pId !== undefined) {
       const cached = this.playlistService.coverBlobUrls()[pId];
@@ -68,31 +66,17 @@ export class DiscoverComponent {
     );
   }
 
-  onTargetPlaylistChange(event: Event): void {
-    const select = event.target as HTMLSelectElement;
-    const val = select.value;
-    if (!val) {
-      this.selectTargetPlaylist(null);
-    } else {
-      this.selectTargetPlaylist(Number(val));
-    }
-  }
-
-  protected readonly availableModes: readonly string[] = [
-    'Para você',
-    'Por Referência',
-    'Fora da bolha',
-  ];
   protected readonly waveformBars = Array.from({ length: 65 });
 
-  readonly animation = signal<string>('');
-  readonly drag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
+  protected readonly animation = signal<string>('');
+  private readonly drag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
+  protected readonly isDragging = signal<boolean>(false);
 
   private pointerStart: { readonly x: number; readonly y: number } | null = null;
 
-  readonly currentSong = computed<Song>(() => this.state.currentSong());
+  protected readonly currentSong = computed<Song>(() => this.state.currentSong());
 
-  readonly activeDragAction = computed<DecisionKind | null>(() => {
+  protected readonly activeDragAction = computed<DecisionKind | null>(() => {
     const { x, y } = this.drag();
     const threshold = 40;
     const absX = Math.abs(x);
@@ -113,33 +97,20 @@ export class DiscoverComponent {
     return null;
   });
 
-  readonly cardTransform = computed<string>(() => {
+  protected readonly cardTransform = computed<string>(() => {
     const d = this.drag();
     if (d.x === 0 && d.y === 0) return '';
     return `translate(${d.x}px, ${d.y}px) rotate(${d.x / 30}deg)`;
   });
 
-  readonly formattedPreviewTime = computed<string>(() => {
+  protected readonly formattedPreviewTime = computed<string>(() => {
     const sec = Math.round(this.player.progress() * 0.3);
     return String(sec).padStart(2, '0');
   });
 
-  selectMode(mode: string): void {
-    this.state.mode.set(mode);
-    this.state.loadNextDiscoveryTrack();
-    if (!this.state.discoverySong()) {
-      if (mode === 'Por Referência') {
-        this.state.currentIndex.set(1);
-      } else if (mode === 'Fora da bolha') {
-        this.state.currentIndex.set(2);
-      } else {
-        this.state.currentIndex.set(0);
-      }
-    }
-  }
-
-  handleDecision(kind: DecisionKind): void {
+  protected submitDecision(kind: DecisionKind): void {
     if (this.animation()) return;
+    this.player.pause();
     this.animation.set(kind);
     const target = this.targetPlaylist();
     const song = this.currentSong();
@@ -158,17 +129,16 @@ export class DiscoverComponent {
       }
 
       this.state.decide(kind);
-      this.player.resetProgress();
       this.animation.set('');
       this.drag.set({ x: 0, y: 0 });
     }, 260);
   }
 
-  handleUndo(): void {
+  protected undoLastDecision(): void {
     this.state.undo();
   }
 
-  togglePlay(): void {
+  protected togglePlay(): void {
     if (this.player.isPlaying()) {
       this.player.pause();
       return;
@@ -182,26 +152,24 @@ export class DiscoverComponent {
     this.player.play();
   }
 
-  openFilters(): void {
-    this.state.setModal('filters');
-  }
-
-  openDetails(): void {
+  protected openDetails(): void {
     this.state.setModal('details');
   }
 
-  openAddModal(): void {
+  protected openAddModal(): void {
     this.state.setModal('add');
   }
 
-  onPointerDown(event: PointerEvent): void {
-    const target = event.target as HTMLElement;
-    if (target.closest('button')) return;
+  protected startCardDrag(event: PointerEvent): void {
+    if (event.target instanceof HTMLElement && event.target.closest('button')) return;
     this.pointerStart = { x: event.clientX, y: event.clientY };
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    this.isDragging.set(true);
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
   }
 
-  onPointerMove(event: PointerEvent): void {
+  protected moveCardDrag(event: PointerEvent): void {
     if (this.pointerStart) {
       this.drag.set({
         x: event.clientX - this.pointerStart.x,
@@ -210,17 +178,19 @@ export class DiscoverComponent {
     }
   }
 
-  onPointerCancel(): void {
+  protected cancelCardDrag(): void {
     this.pointerStart = null;
+    this.isDragging.set(false);
     this.drag.set({ x: 0, y: 0 });
   }
 
-  onPointerUp(): void {
+  protected finishCardDrag(): void {
     if (!this.pointerStart) return;
     this.pointerStart = null;
+    this.isDragging.set(false);
     const action = this.activeDragAction();
     if (action) {
-      this.handleDecision(action);
+      this.submitDecision(action);
     } else {
       this.drag.set({ x: 0, y: 0 });
     }

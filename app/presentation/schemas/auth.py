@@ -24,8 +24,6 @@ class UserResponse(BaseModel):
     preferred_theme: str = "dark"
     is_admin: bool = False
     created_at: datetime | None = None
-    guardian_name: str | None = None
-    guardian_email: str | None = None
 
 
 class RegisterUserRequest(BaseModel):

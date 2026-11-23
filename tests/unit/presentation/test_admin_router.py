@@ -2,8 +2,6 @@
 
 from unittest.mock import MagicMock
 
-from fastapi import Request
-
 from app.application.dtos import (
     AdminCatalogTrackResult,
     AuthenticateAdminCommand,
@@ -282,16 +280,18 @@ def test_block_track_with_request_body_unblocks_track() -> None:
 
 
 def test_list_plans_router_returns_plans_from_container() -> None:
+    from app.application.use_cases.user import ListPlansUseCase
+
     mock_plan = Plan(
         plan_id=1,
         name="Free",
         initial_monthly_price=0.0,
         initial_max_profiles=1,
     )
-    mock_request = MagicMock(spec=Request)
-    mock_request.app.state.container.plan_repo.list_all.return_value = [mock_plan]
+    mock_use_case = MagicMock(spec=ListPlansUseCase)
+    mock_use_case.execute.return_value = [mock_plan]
 
-    res = list_plans(request=mock_request)
+    res = list_plans(use_case=mock_use_case)
 
     assert len(res) == 1
     assert res[0].plan_id == 1

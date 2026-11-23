@@ -12,11 +12,7 @@ from app.application.ports.repositories.playlist_repository import (
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.get_jam_deck import GetJamDeckUseCase
-from app.domain.exceptions import (
-    PermissionDeniedError,
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
-)
+from app.domain.exceptions import PermissionDeniedError
 from app.domain.models import (
     Interaction,
     InteractionAction,
@@ -556,8 +552,9 @@ def test_get_jam_deck_requires_spotify_premium() -> None:
         user_repo=user_repo,
         track_repo=MagicMock(spec=TrackRepositoryPort),
     )
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(jam_id=10, user_id=1)
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
 
     user_repo.find_by_id.return_value = User(
         user_id=1,
@@ -569,5 +566,6 @@ def test_get_jam_deck_requires_spotify_premium() -> None:
         spotify_id=None,
         spotify_premium=False,
     )
-    with pytest.raises(SpotifyConnectionRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(jam_id=10, user_id=1)
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"

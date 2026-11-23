@@ -4,7 +4,7 @@ import path from 'node:path';
 export default defineConfig({
   resolve: {
     alias: {
-      '@ribbit/shared-types': path.resolve(__dirname, './view/src/types/index.ts'),
+      '@ribbit/shared-types': path.resolve(__dirname, './view/src/app/core/models/index.ts'),
       '@core': path.resolve(__dirname, './view/src/app/core'),
       '@shared': path.resolve(__dirname, './view/src/app/shared'),
       '@features': path.resolve(__dirname, './view/src/app/features'),

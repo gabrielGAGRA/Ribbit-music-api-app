@@ -1,11 +1,11 @@
 import type { Routes } from '@angular/router';
 import { adminAuthGuard } from './features/admin/admin-auth.guard';
-import { AdminDashboardComponent } from './features/admin/admin-dashboard.component';
-import { AdminLoginComponent } from './features/admin/admin-login.component';
-import { AdminModerationComponent } from './features/admin/admin-moderation.component';
-import { AdminPlansComponent } from './features/admin/admin-plans.component';
+import { AdminDashboardComponent } from './features/admin/dashboard/admin-dashboard.component';
+import { AdminLoginComponent } from './features/admin/login/admin-login.component';
+import { AdminModerationComponent } from './features/admin/moderation/admin-moderation.component';
+import { AdminPlansComponent } from './features/admin/plans/admin-plans.component';
 import { AdminShellComponent } from './features/admin/admin-shell.component';
-import { AdminUsersComponent } from './features/admin/admin-users.component';
+import { AdminUsersComponent } from './features/admin/users/admin-users.component';
 import { DashboardComponent } from './features/dashboard/dashboard.component';
 import { DiscoverComponent } from './features/discover/discover.component';
 import { ExploreComponent } from './features/explore/explore.component';

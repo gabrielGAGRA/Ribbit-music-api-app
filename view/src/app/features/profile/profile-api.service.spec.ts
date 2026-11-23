@@ -80,7 +80,7 @@ describe('ProfileApiService', () => {
     service
       .addFamilyMember({ email: 'newdep@ribbit.app', display_name: 'New Dep' })
       .subscribe((res) => {
-        expect(res.user_id).toBe(21);
+        expect(res.userId).toBe(21);
       });
 
     const addReq = httpMock.expectOne('/api/profile/family/members');
@@ -99,7 +99,7 @@ describe('ProfileApiService', () => {
     });
 
     service.removeFamilyMember(21).subscribe((res) => {
-      expect(res.user_id).toBe(21);
+      expect(res.userId).toBe(21);
     });
 
     const deleteReq = httpMock.expectOne('/api/profile/family/members/21');
@@ -113,14 +113,21 @@ describe('ProfileApiService', () => {
       is_admin: false,
     });
 
-    service.updateFamilyMemberBlockedGenres(21, ['Metal']).subscribe((res) => {
-      expect(res.blocked_genres).toEqual(['metal']);
-    });
+    service
+      .updateFamilyMemberParentalControls(21, {
+        blocked_genres: ['Metal'],
+        blocked_artists: ['Eminem'],
+      })
+      .subscribe((res) => {
+        expect(res.blockedGenres).toEqual(['metal']);
+        expect(res.blockedArtists).toEqual(['eminem']);
+      });
 
-    const controlsReq = httpMock.expectOne('/api/profile/family/members/21/blocked-genres');
+    const controlsReq = httpMock.expectOne('/api/profile/family/members/21/parental-controls');
     expect(controlsReq.request.method).toBe('PUT');
     expect(controlsReq.request.body).toEqual({
       blocked_genres: ['Metal'],
+      blocked_artists: ['Eminem'],
     });
     controlsReq.flush({
       user_id: 21,
@@ -129,6 +136,7 @@ describe('ProfileApiService', () => {
       age: 20,
       plan_id: 3,
       blocked_genres: ['metal'],
+      blocked_artists: ['eminem'],
       is_admin: false,
     });
   });

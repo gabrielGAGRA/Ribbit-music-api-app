@@ -5,11 +5,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.application.use_cases.jam.get_jam_state import GetJamStateUseCase
-from app.domain.exceptions import (
-    EntityNotFoundError,
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
-)
+from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models import Jam, JamQueueItem, Track, User
 
 
@@ -195,8 +191,9 @@ def test_get_jam_state_requires_spotify_premium() -> None:
         user_repo=user_repo,
         track_repo=MagicMock(),
     )
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(jam_id=1, user_id=1)
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
 
 
 def test_get_jam_state_requires_spotify_connection_when_unlinked() -> None:
@@ -216,5 +213,6 @@ def test_get_jam_state_requires_spotify_connection_when_unlinked() -> None:
         user_repo=user_repo,
         track_repo=MagicMock(),
     )
-    with pytest.raises(SpotifyConnectionRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(jam_id=1, user_id=1)
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"

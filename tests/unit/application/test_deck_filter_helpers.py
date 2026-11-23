@@ -111,3 +111,30 @@ def test_extract_deck_filters_tuple() -> None:
     assert artists == ["Queen"]
     assert years == [1990]
     assert countries == ["UK"]
+
+
+def test_portuguese_country_dictionary_translation_and_filter_matching() -> None:
+    from app.domain.services.country_names import (
+        country_matches,
+        expand_country_terms,
+        translate_country_to_pt,
+    )
+
+    assert translate_country_to_pt("BR") == "Brasil"
+    assert translate_country_to_pt("usa") == "Estados Unidos"
+    assert translate_country_to_pt("US") == "Estados Unidos"
+    assert translate_country_to_pt("GB") == "Reino Unido"
+    assert translate_country_to_pt("United Kingdom") == "Reino Unido"
+    assert translate_country_to_pt("kr") == "Coreia do Sul"
+    assert translate_country_to_pt(None) is None
+
+    assert country_matches("BR", ["Brasil"]) is True
+    assert country_matches("USA", ["Estados Unidos"]) is True
+    assert country_matches("US", ["Estados Unidos"]) is True
+    assert country_matches("GB", ["Reino Unido"]) is True
+    assert country_matches("Brasil", ["BR"]) is True
+    assert country_matches("Australia", ["Estados Unidos"]) is False
+
+    exact_codes, name_terms = expand_country_terms(["Estados Unidos"])
+    assert "us" in exact_codes and "usa" in exact_codes
+    assert any(t.lower() == "estados unidos" for t in name_terms)

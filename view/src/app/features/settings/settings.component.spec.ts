@@ -42,38 +42,43 @@ describe('SettingsComponent', () => {
   });
 
   it('should compute user initials accurately', () => {
-    expect(component.userInitials()).toBe('JL');
+    expect(component['userInitials']()).toBe('JL');
 
     state.setUserName('Lucas');
-    expect(component.userInitials()).toBe('LU');
+    expect(component['userInitials']()).toBe('LU');
   });
 
   it('should allow editing and saving display name', () => {
-    component.startEditingName();
-    expect(component.isEditingName()).toBe(true);
+    component['startEditingName']();
+    expect(component['isEditingName']()).toBe(true);
 
-    component.nameDraft.set('João Silva');
-    component.saveName();
+    component['nameDraft'].set('João Silva');
+    component['saveName']();
 
     expect(state.userName()).toBe('João Silva');
-    expect(component.isEditingName()).toBe(false);
+    expect(component['isEditingName']()).toBe(false);
   });
 
   it('should allow canceling name edit', () => {
-    component.startEditingName();
-    component.nameDraft.set('Outro Nome');
-    component.cancelEditingName();
+    component['startEditingName']();
+    component['nameDraft'].set('Outro Nome');
+    component['cancelEditingName']();
 
     expect(state.userName()).toBe('João Lucas');
-    expect(component.isEditingName()).toBe(false);
+    expect(component['isEditingName']()).toBe(false);
   });
 
   it('should initiate Spotify OAuth via GET /api/spotify/authorize and redirect to authorization_url', () => {
     writeAuthToken('jwt-token');
-    const redirectSpy = vi.spyOn(component, 'navigateToExternalUrl').mockImplementation(() => {});
+    const redirectSpy = vi
+      .spyOn(
+        component as unknown as { navigateToExternalUrl: (url: string) => void },
+        'navigateToExternalUrl',
+      )
+      .mockImplementation(() => {});
 
-    component.toggleSpotify();
-    expect(component.isLinkingSpotify()).toBe(true);
+    component['connectSpotify']();
+    expect(component['isLinkingSpotify']()).toBe(true);
 
     const authReq = httpMock.expectOne('/api/spotify/authorize');
     expect(authReq.request.method).toBe('GET');
@@ -88,7 +93,12 @@ describe('SettingsComponent', () => {
 
   it('should reject insecure, off-domain, or missing authorization_url payloads', () => {
     writeAuthToken('jwt-token');
-    const redirectSpy = vi.spyOn(component, 'navigateToExternalUrl').mockImplementation(() => {});
+    const redirectSpy = vi
+      .spyOn(
+        component as unknown as { navigateToExternalUrl: (url: string) => void },
+        'navigateToExternalUrl',
+      )
+      .mockImplementation(() => {});
 
     const invalidPayloads: readonly Record<string, unknown>[] = [
       { authorization_url: 'http://accounts.spotify.com/authorize?client_id=test' },
@@ -96,13 +106,13 @@ describe('SettingsComponent', () => {
       {},
     ];
     for (const payload of invalidPayloads) {
-      component.connectSpotify();
+      component['connectSpotify']();
       const authReq = httpMock.expectOne('/api/spotify/authorize');
       authReq.flush(payload);
 
       expect(redirectSpy).not.toHaveBeenCalled();
-      expect(component.isLinkingSpotify()).toBe(false);
-      expect(component.spotifyFeedback()?.type).toBe('error');
+      expect(component['isLinkingSpotify']()).toBe(false);
+      expect(component['spotifyFeedback']()?.type).toBe('error');
     }
   });
 
@@ -138,22 +148,27 @@ describe('SettingsComponent', () => {
     expect(readAuthToken()).toBe(validJwt);
     expect(window.location.pathname).toBe('/settings');
     expect(window.location.search).toBe('');
-    expect(retryComp.spotifyFeedback()?.type).toBe('error');
+    expect(retryComp['spotifyFeedback']()?.type).toBe('error');
   });
 
   it('should surface unlink failure cleanly and keep reconnect functional', () => {
     writeAuthToken('jwt-token');
-    const redirectSpy = vi.spyOn(component, 'navigateToExternalUrl').mockImplementation(() => {});
+    const redirectSpy = vi
+      .spyOn(
+        component as unknown as { navigateToExternalUrl: (url: string) => void },
+        'navigateToExternalUrl',
+      )
+      .mockImplementation(() => {});
 
-    component.disconnectSpotify();
+    component['disconnectSpotify']();
     httpMock
       .expectOne((r) => r.url === '/api/spotify/connection' && r.method === 'DELETE')
       .flush({ detail: 'Internal Server Error' }, { status: 500, statusText: 'Server Error' });
 
-    expect(component.isLinkingSpotify()).toBe(false);
-    expect(component.spotifyFeedback()?.type).toBe('error');
+    expect(component['isLinkingSpotify']()).toBe(false);
+    expect(component['spotifyFeedback']()?.type).toBe('error');
 
-    component.connectSpotify();
+    component['connectSpotify']();
     httpMock.expectOne('/api/spotify/authorize').flush({
       authorization_url: 'https://accounts.spotify.com/authorize?client_id=test&state=ok',
     });
@@ -166,7 +181,7 @@ describe('SettingsComponent', () => {
     state.blockedGenres.set(['Metal', 'Sertanejo']);
     expect(state.blockedGenres()).toContain('Metal');
 
-    component.removeBlockedGenre('Metal');
+    component['removeBlockedGenre']('Metal');
     expect(state.blockedGenres()).not.toContain('Metal');
     expect(state.blockedGenres()).toContain('Sertanejo');
   });
@@ -175,32 +190,32 @@ describe('SettingsComponent', () => {
     state.setPlan('Individual');
     expect(state.currentPlan()).toBe('Individual');
 
-    component.cancelSubscription();
+    component['cancelSubscription']();
     expect(state.currentPlan()).toBe('Free');
   });
 
   it('should trigger delete modal and logout', () => {
-    component.openDeleteModal();
+    component['openDeleteModal']();
     expect(state.activeModal()).toBe('delete');
 
-    component.logout();
+    component['logout']();
     expect(state.authView()).toBe('login');
   });
 
   it('should validate and update user password via ProfileApiService', () => {
-    component.currentPassword.set('');
-    component.newPassword.set('');
-    component.updatePassword();
-    expect(component.passwordError()).toContain('Informe a senha atual');
+    component['currentPassword'].set('');
+    component['newPassword'].set('');
+    component['updatePassword']();
+    expect(component['passwordError']()).toContain('Informe a senha atual');
 
-    component.currentPassword.set('oldpass123');
-    component.newPassword.set('123');
-    component.updatePassword();
-    expect(component.passwordError()).toContain('mínimo 6 caracteres');
+    component['currentPassword'].set('oldpass123');
+    component['newPassword'].set('123');
+    component['updatePassword']();
+    expect(component['passwordError']()).toContain('mínimo 6 caracteres');
 
-    component.newPassword.set('newsecret123');
-    component.updatePassword();
-    expect(component.isChangingPassword()).toBe(true);
+    component['newPassword'].set('newsecret123');
+    component['updatePassword']();
+    expect(component['isChangingPassword']()).toBe(true);
 
     const req = httpMock.expectOne('/api/profile/me');
     expect(req.request.method).toBe('PUT');
@@ -218,14 +233,14 @@ describe('SettingsComponent', () => {
       is_admin: false,
     });
 
-    expect(component.isChangingPassword()).toBe(false);
-    expect(component.passwordSuccess()).toBe('Senha alterada com sucesso!');
-    expect(component.currentPassword()).toBe('');
-    expect(component.newPassword()).toBe('');
+    expect(component['isChangingPassword']()).toBe(false);
+    expect(component['passwordSuccess']()).toBe('Senha alterada com sucesso!');
+    expect(component['currentPassword']()).toBe('');
+    expect(component['newPassword']()).toBe('');
   });
 
   it('should navigate to the unified parental control screen (/family)', () => {
-    component.goToFamily();
+    component['goToFamily']();
     expect(state.activePage()).toBe('family');
   });
 
@@ -295,7 +310,7 @@ describe('SettingsComponent DOM', () => {
       '/callback?code=spotify_code_1&state=signed_state',
     );
     const mounted = harness.routeDebugElement?.componentInstance as SettingsComponent;
-    expect(mounted.isLinkingSpotify()).toBe(true);
+    expect(mounted['isLinkingSpotify']()).toBe(true);
 
     const callbackReq = httpMock.expectOne('/api/spotify/callback');
     expect(callbackReq.request.method).toBe('POST');
@@ -317,7 +332,7 @@ describe('SettingsComponent DOM', () => {
 
     expect(window.location.pathname).toBe('/settings');
     expect(window.location.search).toBe('');
-    expect(mounted.isLinkingSpotify()).toBe(false);
+    expect(mounted['isLinkingSpotify']()).toBe(false);
     expect(state.spotifyId()).toBe('real_spotify_user');
     expect(state.spotifyPremium()).toBe(true);
 

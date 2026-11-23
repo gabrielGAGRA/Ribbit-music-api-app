@@ -6,9 +6,12 @@ import {
   inject,
   signal,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterOutlet } from '@angular/router';
+import { EMPTY } from 'rxjs';
 import { filter } from 'rxjs/operators';
-import type { NavigationItem, Song } from '@ribbit/shared-types';
+import type { NavigationItem, Playlist } from '@ribbit/shared-types';
+import { computeInitials } from './core/api-mappers';
 import { AudioPlayerService } from './core/audio-player.service';
 import { RibbitStateService } from './core/ribbit-state.service';
 import { AuthComponent } from './features/auth/auth.component';
@@ -23,6 +26,11 @@ interface PageHeading {
   readonly titleHighlight?: string;
   readonly description: string;
 }
+
+const DEFAULT_PAGE_HEADING: PageHeading = {
+  eyebrow: 'MY RIBBIT',
+  description: '',
+};
 
 const PAGE_HEADINGS: Record<string, PageHeading> = {
   discover: {
@@ -116,7 +124,7 @@ export class AppComponent {
   private readonly player = inject(AudioPlayerService);
   private readonly router = inject(Router, { optional: true });
 
-  readonly isAdminRoute = signal<boolean>(
+  protected readonly isAdminRoute = signal<boolean>(
     typeof window !== 'undefined' && window.location.pathname.startsWith('/admin'),
   );
 
@@ -128,25 +136,15 @@ export class AppComponent {
     { id: 'profile', label: 'Meu perfil', sub: 'My Ribbit', icon: 'user' },
   ];
 
-  readonly userInitials = computed<string>(() => {
-    const parts = this.state
-      .userName()
-      .trim()
-      .split(/\s+/)
-      .filter((item) => item.length > 0);
-    if (parts.length >= 2) {
-      return `${parts[0]![0] ?? ''}${parts[1]![0] ?? ''}`.toUpperCase();
-    }
-    return this.state.userName().slice(0, 2).toUpperCase() || 'RB';
-  });
+  protected readonly userInitials = computed<string>(() => computeInitials(this.state.userName()));
 
-  readonly isProfileArea = computed<boolean>(() =>
+  private readonly isProfileArea = computed<boolean>(() =>
     ['profile', 'dashboard', 'likes', 'loved', 'rejected', 'plans', 'family'].includes(
       this.state.activePage(),
     ),
   );
 
-  readonly breadcrumbLabel = computed<string>(() => {
+  protected readonly breadcrumbLabel = computed<string>(() => {
     if (this.state.activePage() === 'settings') return 'Configurações';
     if (this.state.activePage() === 'family') return 'Plano Família';
     if (this.isProfileArea()) return 'Meu perfil';
@@ -154,27 +152,30 @@ export class AppComponent {
     return nav ? nav.label : 'Descoberta';
   });
 
-  readonly currentHeading = computed<PageHeading>(() => {
+  protected readonly currentHeading = computed<PageHeading>(() => {
     const page = this.state.activePage();
-    return PAGE_HEADINGS[page] ?? PAGE_HEADINGS['profile']!;
+    return PAGE_HEADINGS[page] ?? DEFAULT_PAGE_HEADING;
   });
 
-  readonly likedCount = computed<number>(() => this.state.likedSongs().length);
-  readonly lovedCount = computed<number>(() => this.state.lovedSongs().length);
-  readonly rejectedCount = computed<number>(() => this.state.rejectedSongs().length);
-
-  readonly dailyDiscoveries = computed<number>(() =>
-    Math.min(this.likedCount() + this.rejectedCount(), 20),
+  protected readonly likedCount = computed<number>(() => this.state.likedSongs().length);
+  protected readonly lovedCount = computed<number>(() => this.state.lovedSongs().length);
+  protected readonly rejectedCount = computed<number>(() => this.state.rejectedSongs().length);
+  protected readonly sidebarPlaylists = computed<readonly Playlist[]>(() =>
+    this.state.playlists().slice(0, 2),
   );
 
-  readonly dailyProgressPercent = computed<number>(() =>
-    Math.min(this.dailyDiscoveries() * 5, 100),
-  );
+  protected formatCappedCount(count: number): string {
+    return count > 99 ? '99+' : String(count);
+  }
 
-  readonly recentDiscoveries = computed<readonly Song[]>(() => {
-    const liked = this.state.likedSongs();
-    return liked.length > 0 ? liked.slice(0, 3) : this.state.songs().slice(0, 3);
-  });
+  private readonly navigationEnd = toSignal(
+    this.router
+      ? this.router.events.pipe(
+          filter((event): event is NavigationEnd => event instanceof NavigationEnd),
+        )
+      : EMPTY,
+    { initialValue: null },
+  );
 
   constructor() {
     let previousPage = this.state.activePage();
@@ -189,31 +190,31 @@ export class AppComponent {
 
     if (this.router) {
       this.isAdminRoute.set(this.router.url.startsWith('/admin'));
-      this.router.events
-        .pipe(filter((event): event is NavigationEnd => event instanceof NavigationEnd))
-        .subscribe((event) => {
-          const isAdmin = event.urlAfterRedirects.startsWith('/admin');
-          this.isAdminRoute.set(isAdmin);
-          if (isAdmin) return;
-          const path = this.resolveActivePageFromUrl(event.urlAfterRedirects);
-          if (path && path !== this.state.activePage()) {
-            this.state.setPage(path);
-          }
-        });
     }
+    effect(() => {
+      const event = this.navigationEnd();
+      if (!event) return;
+      const isAdmin = event.urlAfterRedirects.startsWith('/admin');
+      this.isAdminRoute.set(isAdmin);
+      if (isAdmin) return;
+      const path = this.resolveActivePageFromUrl(event.urlAfterRedirects);
+      if (path && path !== this.state.activePage()) {
+        this.state.setPage(path);
+      }
+    });
   }
 
-  resolveActivePageFromUrl(url: string): string {
+  private resolveActivePageFromUrl(url: string): string {
     const rawSegment = url.replace(/^\//, '').split(/[/?#]/)[0] || 'discover';
     return rawSegment === 'callback' ? 'settings' : rawSegment;
   }
 
-  isNavItemActive(id: string): boolean {
+  protected isNavItemActive(id: string): boolean {
     if (id === 'profile') return this.isProfileArea();
     return this.state.activePage() === id;
   }
 
-  changePage(id: string): void {
+  protected changePage(id: string): void {
     if (id === 'playlists') {
       this.state.resetPlaylistsView();
     }
@@ -223,11 +224,11 @@ export class AppComponent {
     }
   }
 
-  openCreatePlaylist(): void {
+  protected openCreatePlaylist(): void {
     this.state.setModal('playlist');
   }
 
-  openJamModal(): void {
+  protected openJamModal(): void {
     if (!this.state.isSpotifyLinked()) {
       this.state.promptSpotifyConnection(
         'Conecte sua conta do Spotify para criar uma Jam no Pond.',
@@ -241,15 +242,11 @@ export class AppComponent {
     this.state.setModal('jam');
   }
 
-  openFilters(): void {
-    this.state.setModal('filters');
-  }
-
-  openNotifications(): void {
+  protected openNotifications(): void {
     this.state.setModal('notifications');
   }
 
-  openTutorial(): void {
+  protected openTutorial(): void {
     this.state.setModal('onboarding');
   }
 

@@ -1,0 +1,111 @@
+<div class="admin-plans-page">
+  <div class="plans-endpoint-bar">
+    <span class="eyebrow blue">GESTÃO DE PLANOS</span>
+    <span class="muted">
+      Alterações recalculam a receita líquida estimada do Dashboard Executivo no servidor.
+    </span>
+  </div>
+
+  <div class="plans-cards-grid">
+    @for (plan of adminState.plans(); track plan.planId) {
+      <article class="admin-card plan-admin-card" [class.editing]="editingPlanId() === plan.planId">
+        <div class="plan-card-top">
+          <div>
+            <span class="plan-id-pill">ID #{{ plan.planId }}</span>
+            <h2>{{ plan.name }}</h2>
+          </div>
+          <strong class="plan-price-tag">
+            {{ formatPrice(plan.monthlyPrice) }}<small>/mês</small>
+          </strong>
+        </div>
+
+        <dl class="plan-stats-list">
+          <div>
+            <dt>Cota máxima de perfis</dt>
+            <dd>{{ plan.maxProfiles }} {{ plan.maxProfiles === 1 ? 'perfil' : 'perfis' }}</dd>
+          </div>
+          <div>
+            <dt>Assinantes vinculados</dt>
+            <dd>{{ subscriberCount(plan.name) }} contas</dd>
+          </div>
+        </dl>
+
+        @if (editingPlanId() === plan.planId) {
+          @if (formError()) {
+            <div class="plan-error-banner" role="alert">
+              <app-icon name="close" [size]="14" />
+              <span>{{ formError() }}</span>
+            </div>
+          }
+
+          <form class="plan-edit-form" (submit)="savePlan($event, plan.planId)">
+            <div class="plan-field">
+              <label [attr.for]="'plan-name-' + plan.planId">Nome comercial *</label>
+              <span class="field-hint">Deve ser único entre todos os planos</span>
+              <input
+                [attr.id]="'plan-name-' + plan.planId"
+                type="text"
+                required
+                minlength="2"
+                [value]="nameDraft()"
+                (input)="updateNameDraft($event)"
+              />
+            </div>
+
+            <div class="plan-field-row">
+              <div class="plan-field">
+                <label [attr.for]="'plan-price-' + plan.planId">Mensalidade (R$) *</label>
+                <span class="field-hint">Valor &ge; 0,00</span>
+                <input
+                  [attr.id]="'plan-price-' + plan.planId"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  required
+                  [value]="priceDraft()"
+                  (input)="updatePriceDraft($event)"
+                />
+              </div>
+
+              <div class="plan-field">
+                <label [attr.for]="'plan-profiles-' + plan.planId">Máx. perfis *</label>
+                <span class="field-hint">Mínimo: 1 perfil (validado pelo servidor)</span>
+                <input
+                  [attr.id]="'plan-profiles-' + plan.planId"
+                  type="number"
+                  step="1"
+                  min="1"
+                  required
+                  [value]="maxProfilesDraft()"
+                  (input)="updateMaxProfilesDraft($event)"
+                />
+              </div>
+            </div>
+
+            <div class="plan-form-actions">
+              <button type="submit" class="primary-button small-btn" [disabled]="isSaving()">
+                <app-icon name="check" [size]="15" />
+                {{ isSaving() ? 'Salvando...' : 'Salvar plano' }}
+              </button>
+              <button
+                type="button"
+                class="outline-button small-btn"
+                [disabled]="isSaving()"
+                (click)="cancelEditing()"
+              >
+                Cancelar
+              </button>
+            </div>
+          </form>
+        } @else {
+          <button type="button" class="outline-button full-width" (click)="startEditing(plan)">
+            <app-icon name="sliders" [size]="15" />
+            Editar parâmetros do plano
+          </button>
+        }
+      </article>
+    } @empty {
+      <p class="muted">Nenhum plano disponível.</p>
+    }
+  </div>
+</div>

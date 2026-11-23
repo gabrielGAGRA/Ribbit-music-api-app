@@ -1,16 +1,20 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import type { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 import type {
   ActionSuccessApiDto,
   AddFamilyMemberApiRequest,
+  FamilyMember,
   InteractionApiDto,
   SpotifyAuthorizeUrlApiResponse,
   SpotifyConnectCallbackApiRequest,
   SwipeApiAction,
+  UpdateMemberParentalControlsApiRequest,
   UserApiDto,
   UserProfileApiDto,
 } from '@ribbit/shared-types';
+import { mapFamilyMemberDto } from '../../core/api-mappers';
 
 /** Communicates with /api/profile endpoints for user profile, history, and preferences. */
 @Injectable({ providedIn: 'root' })
@@ -116,27 +120,33 @@ export class ProfileApiService {
   }
 
   /** Lists dependent user profiles enrolled in the authenticated user's family plan. */
-  listFamilyMembers(): Observable<UserApiDto[]> {
-    return this.http.get<UserApiDto[]>('/api/profile/family/members');
+  listFamilyMembers(): Observable<readonly FamilyMember[]> {
+    return this.http
+      .get<readonly UserApiDto[]>('/api/profile/family/members')
+      .pipe(map((members) => members.map((member) => mapFamilyMemberDto(member))));
   }
 
   /** Adds or registers a dependent user to the authenticated user's family plan. */
-  addFamilyMember(payload: AddFamilyMemberApiRequest): Observable<UserApiDto> {
-    return this.http.post<UserApiDto>('/api/profile/family/members', payload);
+  addFamilyMember(payload: AddFamilyMemberApiRequest): Observable<FamilyMember> {
+    return this.http
+      .post<UserApiDto>('/api/profile/family/members', payload)
+      .pipe(map((member) => mapFamilyMemberDto(member)));
   }
 
   /** Removes a dependent user profile from the authenticated user's family plan. */
-  removeFamilyMember(memberId: number): Observable<UserApiDto> {
-    return this.http.delete<UserApiDto>(`/api/profile/family/members/${memberId}`);
+  removeFamilyMember(memberId: number): Observable<FamilyMember> {
+    return this.http
+      .delete<UserApiDto>(`/api/profile/family/members/${memberId}`)
+      .pipe(map((member) => mapFamilyMemberDto(member)));
   }
 
-  /** Updates blocked genres for a dependent account in the family plan. */
-  updateFamilyMemberBlockedGenres(
+  /** Updates parental control restrictions (blocked genres and artists) for a dependent account. */
+  updateFamilyMemberParentalControls(
     memberId: number,
-    blockedGenres: readonly string[],
-  ): Observable<UserApiDto> {
-    return this.http.put<UserApiDto>(`/api/profile/family/members/${memberId}/blocked-genres`, {
-      blocked_genres: [...blockedGenres],
-    });
+    payload: UpdateMemberParentalControlsApiRequest,
+  ): Observable<FamilyMember> {
+    return this.http
+      .put<UserApiDto>(`/api/profile/family/members/${memberId}/parental-controls`, payload)
+      .pipe(map((member) => mapFamilyMemberDto(member)));
   }
 }

@@ -5,7 +5,7 @@ import type { ActivatedRouteSnapshot, RouterStateSnapshot } from '@angular/route
 import { Router, UrlTree, provideRouter } from '@angular/router';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminAuthGuard } from './admin-auth.guard';
-import { AdminLoginComponent } from './admin-login.component';
+import { AdminLoginComponent } from './login/admin-login.component';
 import { AdminShellComponent } from './admin-shell.component';
 import { AdminStateService } from './admin-state.service';
 
@@ -139,6 +139,5 @@ describe('Admin Auth Guard, Login & Shell', () => {
 
     shell['signOutAdmin']();
     expect(state.isAuthenticated()).toBe(false);
-    shell.ngOnDestroy();
   });
 });
