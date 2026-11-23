@@ -1,10 +1,28 @@
 """Ports and result types for external music catalog and export services."""
 
+import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 lazy from collections.abc import Sequence
 
 lazy from app.domain.models.track import ExternalTrackId
+
+_FEAT_SUFFIX_RE = re.compile(r"\s*[\(\[](?:feat|ft)\.?\s+[^)\]]*[\)\]]", re.IGNORECASE)
+_NON_ALNUM_RE = re.compile(r"[^\w\s]", re.UNICODE)
+
+
+def normalize_match_text(value: str | None) -> str:
+    if not value:
+        return ""
+    stripped = _FEAT_SUFFIX_RE.sub("", value)
+    ascii_folded = "".join(
+        ch
+        for ch in unicodedata.normalize("NFKD", stripped)
+        if not unicodedata.combining(ch)
+    )
+    cleaned = _NON_ALNUM_RE.sub(" ", ascii_folded.lower())
+    return " ".join(cleaned.split())
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -32,6 +50,27 @@ class TrackPreview:
     country: str | None = None
     album: str | None = None
     release_year: int | None = None
+
+    def matches_track(self, *, title: str, artist: str) -> bool:
+        """Verifies the preview's title and artist reasonably match the target track."""
+        p_title = normalize_match_text(self.title)
+        t_title = normalize_match_text(title)
+        p_artist = normalize_match_text(self.artist)
+        t_artist = normalize_match_text(artist)
+        if not p_title or not t_title or not p_artist or not t_artist:
+            return False
+        title_ok = p_title in t_title or t_title in p_title
+        artist_parts = [
+            normalize_match_text(part)
+            for part in artist.split(",")
+            if normalize_match_text(part)
+        ]
+        artist_ok = (
+            p_artist in t_artist
+            or t_artist in p_artist
+            or any(part in p_artist or p_artist in part for part in artist_parts)
+        )
+        return title_ok and artist_ok
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -68,6 +107,27 @@ class TrackPreviewPort(Protocol):
             ExternalServiceError: If the external provider fails or times out.
         """
         ...
+
+
+def lookup_matching_preview(
+    preview_port: TrackPreviewPort, *, title: str, artist: str
+) -> TrackPreview | None:
+    """Queries preview_port with progressive fallback terms and returns the first valid match."""
+    primary_artist = artist.split(",", maxsplit=1)[0].strip()
+    base_title = title.split("--", maxsplit=1)[0].split(" - ", maxsplit=1)[0].strip()
+    candidates = [
+        f"{artist} {title}".strip(),
+        f"{primary_artist} {base_title}".strip(),
+    ]
+    seen: set[str] = set()
+    for term in candidates:
+        if not term or term in seen:
+            continue
+        seen.add(term)
+        preview = preview_port.find_preview(term)
+        if preview is not None and preview.matches_track(title=title, artist=artist):
+            return preview
+    return None
 
 
 @runtime_checkable

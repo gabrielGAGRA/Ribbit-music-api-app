@@ -3,6 +3,7 @@
 import json
 from typing import Any, TypedDict
 
+from app.domain.services.country_names import country_matches
 lazy from app.domain.models.track import Track
 
 
@@ -72,7 +73,7 @@ def matches_track_filters(
         return False
     if artist and not matches_any(track.artist, artist):
         return False
-    return not (country and not matches_any(track.country, country))
+    return not (country and not country_matches(track.country, country))
 
 
 def extract_dict_filters(payload: dict[str, Any]) -> DeckFilters:

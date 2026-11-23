@@ -44,6 +44,10 @@ export class ProfileComponent implements OnInit {
   readonly loveCount = computed<number>(() => this.state.lovedSongs().length);
   readonly rejectCount = computed<number>(() => this.state.rejectedSongs().length);
 
+  formatCappedCount(count: number): string {
+    return count > 99 ? '99+' : String(count);
+  }
+
   readonly activeTabLabel = computed<string>(() => {
     const tab = this.selectedTab();
     return tab === 'like' ? 'Curtidas' : tab === 'love' ? 'Amadas' : 'Rejeitadas';
@@ -61,6 +65,10 @@ export class ProfileComponent implements OnInit {
   });
 
   readonly userReviews = computed<readonly CommunityReview[]>(() => {
+    const ownReviews = this.songService.userReviews();
+    if (ownReviews.length > 0) {
+      return ownReviews;
+    }
     const uid = this.state.userId();
     const userName = this.state.userName().trim().toLowerCase();
     return this.songService.reviews().filter((review) => {
@@ -72,8 +80,16 @@ export class ProfileComponent implements OnInit {
   });
 
   ngOnInit(): void {
-    if (readAuthToken() && this.songService.reviews().length === 0) {
-      this.state.refreshCatalogAndFeed();
+    if (readAuthToken()) {
+      this.songService
+        .loadUserReviews({
+          currentUserId: this.state.userId() ?? undefined,
+          currentUserName: this.state.userName(),
+        })
+        .subscribe({ error: () => undefined });
+      if (this.songService.reviews().length === 0) {
+        this.state.refreshCatalogAndFeed();
+      }
     }
   }
 

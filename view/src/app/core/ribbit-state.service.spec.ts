@@ -58,9 +58,9 @@ function flushInitialHydration(httpMock: HttpTestingController): void {
   httpMock.expectOne('/api/profile/favorite-genres').flush(['Indie']);
   httpMock.expectOne('/api/profile/theme').flush('dark');
   httpMock.expectOne('/api/tracks/search?limit=50').flush([SAMPLE_TRACK]);
-  httpMock.expectOne('/api/reviews/feed?days=30&limit=20').flush([]);
+  httpMock.expectOne('/api/reviews/feed?days=1&limit=20').flush([]);
   httpMock.expectOne('/api/playlists').flush([]);
-  httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+  httpMock.expectOne('/api/reviews/recent-interacted?limit=1000').flush([]);
   httpMock.expectOne('/api/profile/interactions').flush([]);
   httpMock.expectOne('/api/discovery/next').flush(SAMPLE_TRACK);
 }
@@ -123,7 +123,7 @@ describe('RibbitStateService', () => {
     });
 
     httpMock.expectOne('/api/discovery/next').flush(null);
-    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=1000').flush([
       {
         interaction: {
           interaction_id: 1,
@@ -147,7 +147,7 @@ describe('RibbitStateService', () => {
       action: 'superlike',
       created_at: '2026-01-01T12:00:00Z',
     });
-    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=1000').flush([]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
 
     expect(service.isDeckEmpty()).toBe(false);
@@ -169,7 +169,7 @@ describe('RibbitStateService', () => {
       created_at: '2026-01-01T12:00:00Z',
     });
     httpMock.expectOne('/api/discovery/next').flush(null);
-    httpMock.expectOne('/api/reviews/recent-interacted?limit=100').flush([]);
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=1000').flush([]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
 
     service.undo();

@@ -48,9 +48,12 @@ export class PlaylistsComponent {
   readonly deckCandidates = signal<readonly Song[]>([]);
   readonly deckCursor = signal<number>(0);
   readonly deckLoadedFromBackend = signal<boolean>(false);
+  readonly isLoadingDeck = signal<boolean>(false);
   protected readonly fallbackCursor = signal<number>(0);
   protected readonly deckDrag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
+  readonly isDragging = signal<boolean>(false);
   private deckPointerStart: { readonly x: number; readonly y: number } | null = null;
+  private deckModifiedDuringSwipe = false;
 
   constructor() {
     let lastReset = this.state.playlistsViewReset();
@@ -116,9 +119,11 @@ export class PlaylistsComponent {
   readonly activeTrack = computed<Song | null>(() => {
     const fromDeck = this.currentDeckTrack();
     if (fromDeck) return fromDeck;
-    if (this.deckLoadedFromBackend()) return null;
     const p = this.selectedPlaylist();
     if (!p) return null;
+    if (this.deckLoadedFromBackend() || this.isLoadingDeck() || (p.playlistId !== undefined && readAuthToken())) {
+      return null;
+    }
     const existingKeys = new Set(
       (p.songs ?? []).map((s) => (s.trackId !== undefined ? String(s.trackId) : s.title)),
     );
@@ -169,6 +174,10 @@ export class PlaylistsComponent {
     }
     const next = !this.isSwipeMode();
     this.isSwipeMode.set(next);
+    if (!next && this.deckModifiedDuringSwipe) {
+      this.deckModifiedDuringSwipe = false;
+      this.state.refreshPlaylists();
+    }
     if (next && this.deckCandidates().length === 0) {
       this.loadPlaylistDeck();
     }
@@ -177,26 +186,44 @@ export class PlaylistsComponent {
   openPlaylistSwipeDeck(playlist: Playlist): void {
     this.openPlaylistView(playlist);
     this.isSwipeMode.set(true);
-    this.loadPlaylistDeck();
+  }
+
+  private preloadUpcomingDeckImages(candidates: readonly Song[], startIndex: number): void {
+    if (typeof Image === 'undefined') return;
+    for (let i = startIndex; i < Math.min(startIndex + 3, candidates.length); i++) {
+      const url = candidates[i]?.image;
+      if (url) {
+        const img = new Image();
+        img.src = url;
+      }
+    }
   }
 
   loadPlaylistDeck(): void {
     const p = this.selectedPlaylist();
-    if (!p?.playlistId) {
+    if (!p?.playlistId || !readAuthToken()) {
+      this.isLoadingDeck.set(false);
       this.deckLoadedFromBackend.set(false);
       this.deckCandidates.set(this.state.songs());
       this.deckCursor.set(0);
+      this.preloadUpcomingDeckImages(this.state.songs(), 0);
       return;
     }
+    this.isLoadingDeck.set(true);
+    this.deckCandidates.set([]);
+    this.deckCursor.set(0);
     this.playlistService.getPlaylistDeck(p.playlistId, 25).subscribe({
       next: (page) => {
         const candidates = page.items.map((dto) => mapTrackDtoToSong(dto));
+        this.isLoadingDeck.set(false);
         this.deckLoadedFromBackend.set(true);
         this.deckCandidates.set(candidates);
         this.deckCursor.set(0);
+        this.preloadUpcomingDeckImages(candidates, 0);
       },
       error: () => {
-        this.deckLoadedFromBackend.set(false);
+        this.isLoadingDeck.set(false);
+        this.deckLoadedFromBackend.set(true);
         this.deckCandidates.set([]);
         this.deckCursor.set(0);
       },
@@ -252,50 +279,48 @@ export class PlaylistsComponent {
   swipeDeckTrack(action: 'like' | 'dislike'): void {
     const p = this.selectedPlaylist();
     const track = this.activeTrack();
+    this.isDragging.set(false);
     this.deckDrag.set({ x: 0, y: 0 });
+    this.player.pause();
     if (!p || !track) return;
 
     if (action === 'like') {
+      this.selectedPlaylist.update((current) => {
+        if (!current) return current;
+        const currentSongs = current.songs ?? [];
+        const exists =
+          track.trackId !== undefined && currentSongs.some((s) => s.trackId === track.trackId);
+        const updatedSongs = exists ? currentSongs : [...currentSongs, track];
+        return {
+          ...current,
+          count: updatedSongs.length,
+          songs: updatedSongs,
+        };
+      });
+      this.state.notify(`"${track.title}" adicionada a ${p.name}!`);
+
       if (p.playlistId !== undefined && track.trackId !== undefined && readAuthToken()) {
+        this.deckModifiedDuringSwipe = true;
         this.playlistService.addTrackToPlaylist(p.playlistId, track.trackId, 'like').subscribe({
-          next: () => {
-            const currentSongs = p.songs ?? [];
-            const exists = currentSongs.some((s) => s.trackId === track.trackId);
-            const updatedSongs = exists ? currentSongs : [...currentSongs, track];
-            const updated: Playlist = {
-              ...p,
-              count: updatedSongs.length,
-              songs: updatedSongs,
-            };
-            this.selectedPlaylist.set(updated);
-            this.state.refreshPlaylists();
-            this.state.notify(`"${track.title}" adicionada a ${p.name}!`);
-          },
           error: (err: unknown) => {
             this.state.notify(toApiError(err).message);
+            this.state.refreshPlaylists();
           },
         });
-      } else {
-        const currentSongs = p.songs ?? [];
-        const updated: Playlist = {
-          ...p,
-          count: currentSongs.length + 1,
-          songs: [...currentSongs, track],
-        };
-        this.selectedPlaylist.set(updated);
-        this.state.notify(`"${track.title}" adicionada a ${p.name}!`);
       }
     }
 
-    this.deckCursor.update((c) => c + 1);
+    const nextCursor = this.deckCursor() + 1;
+    this.deckCursor.set(nextCursor);
     this.fallbackCursor.update((c) => c + 1);
-    this.player.resetProgress();
+    this.preloadUpcomingDeckImages(this.deckCandidates(), nextCursor);
   }
 
   onDeckPointerDown(event: PointerEvent): void {
     const target = event.target as HTMLElement | null;
     if (target?.closest('button')) return;
     this.deckPointerStart = { x: event.clientX, y: event.clientY };
+    this.isDragging.set(true);
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
 
@@ -310,12 +335,14 @@ export class PlaylistsComponent {
 
   onDeckPointerCancel(): void {
     this.deckPointerStart = null;
+    this.isDragging.set(false);
     this.deckDrag.set({ x: 0, y: 0 });
   }
 
   onDeckPointerUp(): void {
     if (!this.deckPointerStart) return;
     this.deckPointerStart = null;
+    this.isDragging.set(false);
     const { x } = this.deckDrag();
     if (x > 65) {
       this.swipeDeckTrack('like');
@@ -393,7 +420,6 @@ export class PlaylistsComponent {
           const freshHasTracks = (fresh.songs?.length ?? 0) > 0;
           if (!freshHasTracks) {
             this.isSwipeMode.set(true);
-            this.loadPlaylistDeck();
           }
         },
         error: () => {
@@ -405,6 +431,10 @@ export class PlaylistsComponent {
 
   closePlaylistView(): void {
     this.player.pause();
+    if (this.deckModifiedDuringSwipe) {
+      this.deckModifiedDuringSwipe = false;
+      this.state.refreshPlaylists();
+    }
     this.deckLoadedFromBackend.set(false);
     this.selectedPlaylist.set(null);
     this.isSwipeMode.set(false);

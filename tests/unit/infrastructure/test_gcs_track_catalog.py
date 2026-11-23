@@ -1000,3 +1000,213 @@ def test_fetch_tracks_skips_missing_delta_blob_without_dropping_other_deltas() -
     tracks = adapter.fetch_tracks()
     queen = next(t for t in tracks if t.title == "Bohemian Rhapsody")
     assert queen.itunes_preview_url == "https://audio-ssl.itunes.apple.com/queen.m4a"
+
+
+def test_delta_merge_orders_chronologically_and_preserves_known_genre() -> None:
+    base_parquet = _build_test_parquet_bytes()
+    newer_delta = _parquet_bytes(
+        {
+            "spotify_id": ["sp-1"],
+            "title": ["Bohemian Rhapsody"],
+            "artist": ["Queen"],
+            "genre": ["Classic Rock"],
+            "country": ["GB"],
+            "created_at": ["2026-11-19T12:00:00+00:00"],
+        }
+    )
+    older_delta = _parquet_bytes(
+        {
+            "spotify_id": ["sp-1"],
+            "title": ["Bohemian Rhapsody"],
+            "artist": ["Queen"],
+            "genre": ["Pop"],
+            "country": ["USA"],
+            "created_at": ["2026-11-18T12:00:00+00:00"],
+        }
+    )
+    unknown_latest = _parquet_bytes(
+        {
+            "spotify_id": ["sp-1"],
+            "title": ["Bohemian Rhapsody"],
+            "artist": ["Queen"],
+            "genre": ["Unknown"],
+            "created_at": ["2026-11-19T13:00:00+00:00"],
+        }
+    )
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_as_bytes.return_value = base_parquet
+    mock_bucket.blob.return_value = mock_base_blob
+    mock_client.bucket.return_value = mock_bucket
+
+    # Intentionally place newer delta first with alphabetically earlier filename.
+    blob_newer = MagicMock()
+    blob_newer.name = "Songs/deltas/delta_aaaa.parquet"
+    blob_newer.download_as_bytes.return_value = newer_delta
+
+    blob_older = MagicMock()
+    blob_older.name = "Songs/deltas/delta_zzzz.parquet"
+    blob_older.download_as_bytes.return_value = older_delta
+
+    blob_unknown = MagicMock()
+    blob_unknown.name = "Songs/deltas/delta_mmmm.parquet"
+    blob_unknown.download_as_bytes.return_value = unknown_latest
+
+    mock_client.list_blobs.return_value = [blob_newer, blob_older, blob_unknown]
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+    )
+    tracks = adapter.fetch_tracks()
+    queen = next(t for t in tracks if t.title == "Bohemian Rhapsody")
+    assert queen.genre == "Classic Rock"
+    assert queen.country == "GB"
+
+
+def test_compact_catalog_streams_large_string_schema_assigns_track_id_and_applies_full_updates() -> (
+    None
+):
+    base_schema = pa.schema(
+        [
+            pa.field("track_id", pa.int64()),
+            pa.field("spotify_id", pa.large_string()),
+            pa.field("title", pa.large_string()),
+            pa.field("artist", pa.large_string()),
+            pa.field("album", pa.large_string()),
+            pa.field("duration_seconds", pa.int64()),
+            pa.field("genre", pa.large_string()),
+            pa.field("country", pa.large_string()),
+            pa.field("release_year", pa.int64()),
+            pa.field("cover_url", pa.large_string()),
+            pa.field("itunes_preview_url", pa.large_string()),
+            pa.field("explicit", pa.int64()),
+            pa.field("is_deleted", pa.int64()),
+            pa.field("created_at", pa.large_string()),
+        ]
+    )
+    base_table = pa.Table.from_pylist(
+        [
+            {
+                "track_id": 100,
+                "spotify_id": "sp-existing",
+                "title": "Existing Song",
+                "artist": "Existing Artist",
+                "album": "Old Album",
+                "duration_seconds": 200,
+                "genre": "Unknown",
+                "country": "USA",
+                "release_year": 2020,
+                "cover_url": None,
+                "itunes_preview_url": None,
+                "explicit": 0,
+                "is_deleted": 0,
+                "created_at": "2026-01-01T00:00:00+00:00",
+            },
+            {
+                "track_id": 101,
+                "spotify_id": "sp-to-delete",
+                "title": "Delete Me",
+                "artist": "Old Artist",
+                "album": "Alb",
+                "duration_seconds": 180,
+                "genre": "Pop",
+                "country": "US",
+                "release_year": 2019,
+                "cover_url": None,
+                "itunes_preview_url": None,
+                "explicit": 0,
+                "is_deleted": 0,
+                "created_at": "2026-01-01T00:00:00+00:00",
+            },
+        ],
+        schema=base_schema,
+    )
+    buf = io.BytesIO()
+    pq.write_table(base_table, buf)
+    base_bytes = buf.getvalue()
+
+    update_delta = _parquet_bytes(
+        {
+            "spotify_id": ["sp-existing"],
+            "title": ["Existing Song"],
+            "artist": ["Existing Artist"],
+            "genre": ["Forró"],
+            "country": ["BR"],
+            "explicit": [1],
+            "created_at": ["2026-11-19T12:00:00+00:00"],
+        }
+    )
+    delete_delta = _parquet_bytes(
+        {
+            "spotify_id": ["sp-to-delete"],
+            "title": ["Delete Me"],
+            "artist": ["Old Artist"],
+            "is_deleted": [1],
+            "created_at": ["2026-11-19T12:01:00+00:00"],
+        }
+    )
+    new_track_delta = _parquet_bytes(
+        {
+            "spotify_id": ["sp-brand-new"],
+            "title": ["Utopia"],
+            "artist": ["Delights"],
+            "album": ["Utopia EP"],
+            "duration_seconds": [210],
+            "genre": ["Indie"],
+            "country": [None],
+            "release_year": [2024],
+            "cover_url": ["https://img.example.com/utopia.jpg"],
+            "itunes_preview_url": ["https://audio.example.com/utopia.m4a"],
+            "explicit": [0],
+            "is_deleted": [0],
+            "created_at": ["2026-11-19T12:02:00+00:00"],
+        }
+    )
+
+    mock_client = MagicMock(spec=storage.Client)
+    mock_bucket = MagicMock()
+    mock_base_blob = MagicMock()
+    mock_base_blob.download_as_bytes.return_value = base_bytes
+    mock_version_blob = MagicMock()
+    mock_version_blob.exists.return_value = False
+
+    def _get_blob(name: str) -> MagicMock:
+        if name.endswith("catalog_version.json"):
+            return mock_version_blob
+        return mock_base_blob
+
+    mock_bucket.blob.side_effect = _get_blob
+    mock_client.bucket.return_value = mock_bucket
+
+    b1, b2, b3 = MagicMock(), MagicMock(), MagicMock()
+    b1.name = "Songs/deltas/delta_1.parquet"
+    b1.download_as_bytes.return_value = update_delta
+    b2.name = "Songs/deltas/delta_2.parquet"
+    b2.download_as_bytes.return_value = delete_delta
+    b3.name = "Songs/deltas/delta_3.parquet"
+    b3.download_as_bytes.return_value = new_track_delta
+    mock_client.list_blobs.return_value = [b1, b2, b3]
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="music-catalog-bucket",
+        file_path="Songs/songs_final.parquet",
+        storage_client=mock_client,
+    )
+    new_version = adapter.compact_catalog()
+    assert new_version == 2
+
+    compacted_bytes = mock_base_blob.upload_from_string.call_args[0][0]
+    compacted_table = pq.read_table(io.BytesIO(compacted_bytes))
+    assert compacted_table.schema.equals(base_schema)
+    rows = {r["spotify_id"]: r for r in compacted_table.to_pylist()}
+    assert rows["sp-existing"]["genre"] == "Forró"
+    assert rows["sp-existing"]["country"] == "BR"
+    assert rows["sp-existing"]["explicit"] == 1
+    assert rows["sp-to-delete"]["is_deleted"] == 1
+    assert rows["sp-brand-new"]["track_id"] == 102
+    assert rows["sp-brand-new"]["is_deleted"] == 0
+    assert rows["sp-brand-new"]["created_at"] == "2026-11-19T12:02:00+00:00"

@@ -15,6 +15,10 @@ class ReviewRepositoryPort(Protocol):
         """Returns non-deleted reviews for a track."""
         ...
 
+    def list_by_user(self, user_id: int, limit: int) -> list[ReviewComment]:
+        """Returns non-deleted reviews authored by a user."""
+        ...
+
     def list_top_recent(self, days: int, limit: int) -> list[ReviewComment]:
         """Returns the most liked non-deleted reviews from the last `days` days."""
         ...

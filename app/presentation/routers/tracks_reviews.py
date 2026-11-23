@@ -13,6 +13,7 @@ from app.application.use_cases.review import (
     GetCommunityFeedUseCase,
     GetRecentlyInteractedTracksUseCase,
     GetTrackReviewsUseCase,
+    GetUserReviewsUseCase,
     LikeReviewCommentUseCase,
     PublishReviewUseCase,
     SaveSearchTrackLikeUseCase,
@@ -154,7 +155,7 @@ def get_recently_interacted_tracks(
         GetRecentlyInteractedTracksUseCase,
         Depends(_get_recently_interacted_tracks_use_case),
     ],
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 20,
 ) -> list[RecentInteractedTrackResponse]:
     items = use_case.execute(user_id=user_id, limit=limit)
     return [
@@ -196,6 +197,16 @@ def get_community_feed(
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
 ) -> list[ReviewResponse]:
     reviews = use_case.execute(days=days, limit=limit)
+    return [ReviewResponse.model_validate(r) for r in reviews]
+
+
+@router.get("/api/reviews/me", response_model=list[ReviewResponse])
+def get_my_reviews(
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[GetUserReviewsUseCase, Depends(provide(GetUserReviewsUseCase))],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> list[ReviewResponse]:
+    reviews = use_case.execute(user_id=user_id, limit=limit)
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 

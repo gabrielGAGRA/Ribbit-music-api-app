@@ -10,6 +10,8 @@ from app.application.ports.repositories.user_repository import UserRepositoryPor
 from app.application.ports.services.music_service import (
     CatalogTrack,
     TrackCatalogPort,
+    TrackPreview,
+    TrackPreviewPort,
 )
 from app.application.use_cases.review.search_tracks import SearchTracksUseCase
 from app.domain.exceptions import EntityNotFoundError
@@ -334,3 +336,122 @@ def test_search_tracks_expands_start_year_and_end_year_range() -> None:
         limit=50,
         offset=0,
     )
+
+
+def test_search_tracks_ignores_mismatched_itunes_preview_metadata() -> None:
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="hash",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = []
+    track_repo.save.side_effect = lambda t: t
+
+    music_service = MagicMock(spec=TrackCatalogPort)
+    music_service.search_tracks.return_value = [
+        CatalogTrack(
+            external_id="sp-pirocada-1",
+            title="Pirocada Quente",
+            artist="MC Teste",
+            album="Baile",
+            preview_url=None,
+            duration_ms=150_000,
+            cover_url="https://sp.example.com/cover.jpg",
+            release_year=2025,
+            explicit=True,
+        )
+    ]
+
+    preview_port = MagicMock(spec=TrackPreviewPort)
+    preview_port.find_preview.return_value = TrackPreview(
+        external_id="it-other-99",
+        title="Completely Different Song",
+        artist="Unrelated US Artist",
+        preview_url="https://itunes.example.com/wrong.m4a",
+        cover_url="https://itunes.example.com/wrong.jpg",
+        genre="Country",
+        country=None,
+    )
+
+    use_case = SearchTracksUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        music_service=music_service,
+        track_preview_port=preview_port,
+    )
+    results = use_case.execute(SearchTracksCommand(user_id=1, query="Pirocada Quente"))
+
+    assert len(results) == 1
+    assert results[0].genre == "Unknown"
+    assert results[0].itunes_preview_url is None
+    assert results[0].cover_url == "https://sp.example.com/cover.jpg"
+    assert results[0].country is None
+
+
+def test_search_tracks_preview_fallback_strips_suffix_and_extra_artists() -> None:
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="hash",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = []
+    track_repo.save.side_effect = lambda t: t
+
+    music_service = MagicMock(spec=TrackCatalogPort)
+    music_service.search_tracks.return_value = [
+        CatalogTrack(
+            external_id="sp-pirocada-2",
+            title="Pirocada Quente -- Deluxe Remix",
+            artist="MC Jvila, Mc Negao Original",
+            album="Baile",
+            preview_url=None,
+            duration_ms=150_000,
+            cover_url="https://sp.example.com/cover2.jpg",
+            release_year=2025,
+            explicit=True,
+        )
+    ]
+
+    preview_port = MagicMock(spec=TrackPreviewPort)
+    preview_port.find_preview.side_effect = [
+        None,
+        TrackPreview(
+            external_id="it-ok-1",
+            title="Pirocada Quente",
+            artist="MC Jvila",
+            preview_url="https://itunes.example.com/ok.m4a",
+            cover_url="https://itunes.example.com/ok.jpg",
+            genre="Baile Funk",
+            country=None,
+        ),
+    ]
+
+    use_case = SearchTracksUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        music_service=music_service,
+        track_preview_port=preview_port,
+    )
+    results = use_case.execute(SearchTracksCommand(user_id=1, query="Pirocada Quente"))
+
+    assert len(results) == 1
+    assert results[0].genre == "Baile Funk"
+    assert results[0].itunes_preview_url == "https://itunes.example.com/ok.m4a"
+    assert [c.args[0] for c in preview_port.find_preview.call_args_list] == [
+        "MC Jvila, Mc Negao Original Pirocada Quente -- Deluxe Remix",
+        "MC Jvila Pirocada Quente",
+    ]
