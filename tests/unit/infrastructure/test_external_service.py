@@ -21,6 +21,8 @@ def test_find_preview_returns_track_preview_on_success() -> None:
                 "trackId": 1440806723,
                 "trackName": "Bohemian Rhapsody",
                 "artistName": "Queen",
+                "country": "USA",
+                "primaryGenreName": "Rock",
                 "previewUrl": "https://audio-ssl.itunes.apple.com/preview.m4a",
                 "artworkUrl100": "https://is1-ssl.mzstatic.com/image/100x100bb.jpg",
             }
@@ -37,11 +39,50 @@ def test_find_preview_returns_track_preview_on_success() -> None:
     assert preview.artist == "Queen"
     assert preview.preview_url == "https://audio-ssl.itunes.apple.com/preview.m4a"
     assert preview.cover_url == "https://is1-ssl.mzstatic.com/image/100x100bb.jpg"
+    assert preview.genre == "Rock"
+    assert preview.country is None
     mock_session.get.assert_called_once_with(
         "https://itunes.apple.com/search",
-        params={"term": "Bohemian Rhapsody Queen", "media": "music", "limit": "1"},
+        params={"term": "Bohemian Rhapsody Queen", "media": "music", "limit": "5"},
         timeout=5.0,
     )
+
+
+def test_find_preview_picks_matching_item_from_top_five_results() -> None:
+    mock_session = MagicMock(spec=niquests.Session)
+    mock_response = MagicMock()
+    mock_response.status_code = HTTPStatus.OK
+    mock_response.json.return_value = {
+        "resultCount": 2,
+        "results": [
+            {
+                "trackId": 1,
+                "trackName": "Wrong Cover Song",
+                "artistName": "Cover Band",
+                "primaryGenreName": "Country",
+                "country": "USA",
+            },
+            {
+                "trackId": 2,
+                "trackName": "Utopia",
+                "artistName": "Delights",
+                "primaryGenreName": "Indie",
+                "country": "USA",
+                "previewUrl": "https://audio-ssl.itunes.apple.com/utopia.m4a",
+            },
+        ],
+    }
+    mock_session.get.return_value = mock_response
+
+    adapter = ITunesAdapter(session=mock_session)
+    preview = adapter.find_preview("Delights Utopia")
+
+    assert preview is not None
+    assert preview.external_id == "2"
+    assert preview.title == "Utopia"
+    assert preview.artist == "Delights"
+    assert preview.genre == "Indie"
+    assert preview.country is None
 
 
 def test_find_preview_returns_none_when_results_empty() -> None:

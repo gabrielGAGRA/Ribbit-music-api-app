@@ -11,7 +11,6 @@ from app.application.use_cases.playlist.deck_filter_helpers import (
     matches_track_filters,
 )
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
-from app.domain.models.interaction import InteractionAction
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
@@ -97,10 +96,8 @@ class GetPlaylistDeckUseCase:
     def _resolve_excluded_ids(self, playlist: Playlist, eff_user_id: int) -> set[int]:
         excluded_ids = {t.track_id for t in playlist.tracks if t.track_id is not None}
         if self.interaction_repo:
-            rejected = self.interaction_repo.list_by_user(
-                eff_user_id, action=InteractionAction.DISLIKE
-            )
-            excluded_ids.update(i.track_id for i in rejected)
+            interacted = self.interaction_repo.list_by_user(eff_user_id)
+            excluded_ids.update(i.track_id for i in interacted)
         return excluded_ids
 
     def _fetch_candidates(
@@ -114,14 +111,13 @@ class GetPlaylistDeckUseCase:
         user: User,
         excluded_ids: set[int],
     ) -> list[Track]:
-        candidates: list[Track] = []
         if source_playlist_id is not None:
             source_playlist = self.playlist_repo.find_by_id(source_playlist_id)
-            if source_playlist is not None:
-                candidates = list(source_playlist.tracks)
+            if source_playlist is not None and source_playlist.tracks:
+                return list(source_playlist.tracks)
 
-        if not candidates and (genre_f or artist_f or year_f or country_f):
-            candidates = self.track_repo.find_by_filters(
+        if genre_f or artist_f or year_f or country_f:
+            return self.track_repo.find_by_filters(
                 artist=artist_f,
                 genre=genre_f,
                 country=country_f,
@@ -129,16 +125,13 @@ class GetPlaylistDeckUseCase:
                 limit=100,
             )
 
-        if not candidates:
-            candidates = self.track_repo.list_active(
-                limit=100,
-                excluded_genres=list(user.blocked_genres),
-                excluded_genre_terms=user.restricted_genre_terms(),
-                block_explicit=user.is_minor(),
-                excluded_ids=list(excluded_ids),
-            )
-
-        return candidates
+        return self.track_repo.list_active(
+            limit=100,
+            excluded_genres=list(user.blocked_genres),
+            excluded_genre_terms=user.restricted_genre_terms(),
+            block_explicit=user.is_minor(),
+            excluded_ids=list(excluded_ids),
+        )
 
     def execute(
         self,

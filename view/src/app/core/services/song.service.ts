@@ -59,9 +59,11 @@ export class SongService {
   private readonly http = inject(HttpClient);
   private readonly songsSignal = signal<readonly Song[]>(MOCK_SONGS);
   private readonly reviewsSignal = signal<readonly CommunityReview[]>([]);
+  private readonly userReviewsSignal = signal<readonly CommunityReview[]>([]);
 
   readonly songs = this.songsSignal.asReadonly();
   readonly reviews = this.reviewsSignal.asReadonly();
+  readonly userReviews = this.userReviewsSignal.asReadonly();
 
   /** Fetches the next candidate track from /api/discovery/next, or null when deck is empty. */
   getNextDiscoverySong(): Observable<Song | null> {
@@ -127,7 +129,7 @@ export class SongService {
     } = {},
   ): Observable<readonly CommunityReview[]> {
     const params = new HttpParams()
-      .set('days', String(options.days ?? 30))
+      .set('days', String(options.days ?? 1))
       .set('limit', String(options.limit ?? 20));
     return this.http.get<readonly ReviewApiDto[]>('/api/reviews/feed', { params }).pipe(
       map((dtos) =>
@@ -142,6 +144,33 @@ export class SongService {
       ),
       tap((reviews) => {
         this.reviewsSignal.set(reviews);
+      }),
+    );
+  }
+
+  /** Loads all-time reviews authored by the authenticated user from /api/reviews/me. */
+  loadUserReviews(
+    options: {
+      readonly trackLookup?: ReadonlyMap<number, Song>;
+      readonly currentUserId?: number;
+      readonly currentUserName?: string;
+      readonly limit?: number;
+    } = {},
+  ): Observable<readonly CommunityReview[]> {
+    const params = new HttpParams().set('limit', String(options.limit ?? 50));
+    return this.http.get<readonly ReviewApiDto[]>('/api/reviews/me', { params }).pipe(
+      map((dtos) =>
+        dtos.map((dto) =>
+          mapReviewDtoToCommunityReview({
+            dto,
+            track: options.trackLookup?.get(dto.track_id),
+            currentUserId: options.currentUserId,
+            currentUserName: options.currentUserName,
+          }),
+        ),
+      ),
+      tap((reviews) => {
+        this.userReviewsSignal.set(reviews);
       }),
     );
   }

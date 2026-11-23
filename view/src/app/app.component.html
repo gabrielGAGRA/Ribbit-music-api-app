@@ -43,21 +43,21 @@
             <app-icon name="heart" [size]="15" />
           </span>
           Músicas curtidas
-          <span class="library-count">{{ likedCount() }}</span>
+          <span class="library-count">{{ formatCappedCount(likedCount()) }}</span>
         </button>
         <button (click)="changePage('loved')">
           <span class="library-icon pink">
             <app-icon name="star" [size]="15" />
           </span>
           Minhas amadas
-          <span class="library-count">{{ lovedCount() }}</span>
+          <span class="library-count">{{ formatCappedCount(lovedCount()) }}</span>
         </button>
         <button (click)="changePage('rejected')">
           <span class="library-icon rejected">
             <app-icon name="close" [size]="15" />
           </span>
           Rejeitadas
-          <span class="library-count">{{ rejectedCount() }}</span>
+          <span class="library-count">{{ formatCappedCount(rejectedCount()) }}</span>
         </button>
         <button [class.active]="state.activePage() === 'family'" (click)="changePage('family')">
           <span class="library-icon">

@@ -152,6 +152,28 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         rows = cursor.fetchall()
         return [_row_to_review(r) for r in rows]
 
+    def list_by_user(self, user_id: int, limit: int) -> list[ReviewComment]:
+        self._pull_deltas()
+        cursor = self.conn.execute(
+            """
+            SELECT
+                r.*,
+                u.display_name AS author_name,
+                t.title AS track_title,
+                t.artist AS track_artist,
+                t.cover_url AS track_image
+            FROM reviews r
+            LEFT JOIN users u ON u.user_id = r.user_id
+            LEFT JOIN tracks t ON t.track_id = r.track_id
+            WHERE r.user_id = ? AND r.is_deleted = 0
+            ORDER BY r.created_at DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        )
+        rows = cursor.fetchall()
+        return [_row_to_review(r) for r in rows]
+
     def list_top_recent(self, days: int, limit: int) -> list[ReviewComment]:
         self._pull_deltas()
         min_date_str = (datetime.now(UTC) - timedelta(days=days)).isoformat()

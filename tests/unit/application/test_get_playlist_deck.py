@@ -312,3 +312,41 @@ def test_get_playlist_deck_combines_genre_year_and_country_filters() -> None:
         limit=100,
     )
     assert [t.track_id for t in result.items] == [31]
+
+
+def test_get_playlist_deck_returns_empty_when_filters_match_nothing() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="hash",
+        display_name="User",
+        age=25,
+        plan_id=1,
+    )
+    playlist = Playlist(
+        playlist_id=31,
+        user_id=1,
+        name="BR Only",
+        deck_filters='{"genre": [], "year": [], "artist": [], "country": ["BR"]}',
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+
+    empty_tracks: list[Track] = []
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = empty_tracks
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+    )
+    result = use_case.execute(playlist_id=31, user_id=1)
+
+    assert result.items == []
+    assert result.has_more is False
+    track_repo.list_active.assert_not_called()

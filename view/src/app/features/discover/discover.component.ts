@@ -87,6 +87,7 @@ export class DiscoverComponent {
 
   readonly animation = signal<string>('');
   readonly drag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
+  readonly isDragging = signal<boolean>(false);
 
   private pointerStart: { readonly x: number; readonly y: number } | null = null;
 
@@ -126,7 +127,7 @@ export class DiscoverComponent {
 
   selectMode(mode: string): void {
     this.state.mode.set(mode);
-    this.state.loadNextDiscoveryTrack();
+    this.state.loadNextDiscoveryTrack(true);
     if (!this.state.discoverySong()) {
       if (mode === 'Por Referência') {
         this.state.currentIndex.set(1);
@@ -140,6 +141,7 @@ export class DiscoverComponent {
 
   handleDecision(kind: DecisionKind): void {
     if (this.animation()) return;
+    this.player.pause();
     this.animation.set(kind);
     const target = this.targetPlaylist();
     const song = this.currentSong();
@@ -158,7 +160,6 @@ export class DiscoverComponent {
       }
 
       this.state.decide(kind);
-      this.player.resetProgress();
       this.animation.set('');
       this.drag.set({ x: 0, y: 0 });
     }, 260);
@@ -197,6 +198,7 @@ export class DiscoverComponent {
     const target = event.target as HTMLElement;
     if (target.closest('button')) return;
     this.pointerStart = { x: event.clientX, y: event.clientY };
+    this.isDragging.set(true);
     (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
   }
 
@@ -211,12 +213,14 @@ export class DiscoverComponent {
 
   onPointerCancel(): void {
     this.pointerStart = null;
+    this.isDragging.set(false);
     this.drag.set({ x: 0, y: 0 });
   }
 
   onPointerUp(): void {
     if (!this.pointerStart) return;
     this.pointerStart = null;
+    this.isDragging.set(false);
     const action = this.activeDragAction();
     if (action) {
       this.handleDecision(action);

@@ -20,10 +20,11 @@ class TrackRepositoryPort(Protocol):
         limit: int,
         excluded_genres: Sequence[str] = (),
         excluded_genre_terms: Sequence[str] = (),
+        preferred_genres: Sequence[str] = (),
         block_explicit: bool = False,
         excluded_ids: Sequence[int] = (),
     ) -> list[Track]:
-        """Returns non-deleted tracks eligible for discovery, in a stable order."""
+        """Returns non-deleted tracks eligible for discovery."""
         ...
 
     def find_by_filters(

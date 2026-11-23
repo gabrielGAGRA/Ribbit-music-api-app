@@ -163,6 +163,10 @@ export class AppComponent {
   readonly lovedCount = computed<number>(() => this.state.lovedSongs().length);
   readonly rejectedCount = computed<number>(() => this.state.rejectedSongs().length);
 
+  formatCappedCount(count: number): string {
+    return count > 99 ? '99+' : String(count);
+  }
+
   readonly dailyDiscoveries = computed<number>(() =>
     Math.min(this.likedCount() + this.rejectedCount(), 20),
   );

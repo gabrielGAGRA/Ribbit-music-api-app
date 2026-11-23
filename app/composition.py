@@ -92,6 +92,7 @@ from app.application.use_cases.review import (
     GetCommunityFeedUseCase,
     GetRecentlyInteractedTracksUseCase,
     GetTrackReviewsUseCase,
+    GetUserReviewsUseCase,
     LikeReviewCommentUseCase,
     PublishReviewUseCase,
     SaveSearchTrackLikeUseCase,
@@ -230,6 +231,7 @@ class Container:
     publish_review_use_case: PublishReviewUseCase
     delete_review_use_case: DeleteReviewUseCase
     get_track_reviews_use_case: GetTrackReviewsUseCase
+    get_user_reviews_use_case: GetUserReviewsUseCase
     get_community_feed_use_case: GetCommunityFeedUseCase
     like_review_comment_use_case: LikeReviewCommentUseCase
     get_recently_interacted_tracks_use_case: GetRecentlyInteractedTracksUseCase
@@ -619,6 +621,7 @@ def build_container(
         ),
         delete_review_use_case=DeleteReviewUseCase(review_repo),
         get_track_reviews_use_case=GetTrackReviewsUseCase(track_repo, review_repo),
+        get_user_reviews_use_case=GetUserReviewsUseCase(review_repo),
         get_community_feed_use_case=GetCommunityFeedUseCase(review_repo),
         like_review_comment_use_case=LikeReviewCommentUseCase(review_repo),
         get_recently_interacted_tracks_use_case=GetRecentlyInteractedTracksUseCase(
@@ -691,11 +694,15 @@ def build_container(
         update_subscription_plan_use_case=UpdateSubscriptionPlanUseCase(
             plan_repo, user_repo=user_repo
         ),
-        update_track_explicit_flag_use_case=UpdateTrackExplicitFlagUseCase(track_repo),
+        update_track_explicit_flag_use_case=UpdateTrackExplicitFlagUseCase(
+            track_repo=track_repo, catalog_file_port=catalog_adapter
+        ),
         update_track_genre_use_case=UpdateTrackGenreUseCase(
             track_repo=track_repo, catalog_file_port=catalog_adapter
         ),
-        block_track_use_case=BlockTrackUseCase(track_repo),
+        block_track_use_case=BlockTrackUseCase(
+            track_repo=track_repo, catalog_file_port=catalog_adapter
+        ),
         list_blocked_tracks_use_case=ListBlockedTracksUseCase(track_repo),
         get_top_moderation_reviews_use_case=GetTopModerationReviewsUseCase(review_repo),
         get_audience_report_use_case=GetAudienceReportUseCase(user_repo, track_repo),
