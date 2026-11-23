@@ -713,3 +713,69 @@ def test_get_next_discovery_track_replaces_example_com_placeholder_urls() -> Non
     )
     assert result.cover_url == "https://is1-ssl.mzstatic.com/bohemian.jpg"
     track_repo.save.assert_called_once_with(placeholder_track)
+
+
+def test_get_next_discovery_track_excludes_tracks_without_itunes_preview_and_retries() -> (
+    None
+):
+    import random
+
+    from app.application.ports.services.catalog_source import TrackCatalogFilePort
+    from app.application.ports.services.music_service import TrackPreviewPort
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+        favorite_genres=frozenset({"rock"}),
+    )
+    missing_preview = Track(
+        track_id=1,
+        title="No Preview Song",
+        artist="Ghost Band",
+        duration_seconds=180,
+        genre="Rock",
+        itunes_preview_url=None,
+    )
+    playable = Track(
+        track_id=2,
+        title="Playable Song",
+        artist="Real Band",
+        duration_seconds=200,
+        genre="Pop",
+        itunes_preview_url="https://audio-ssl.itunes.apple.com/playable.m4a",
+        cover_url="https://is1-ssl.mzstatic.com/playable.jpg",
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_interacted_track_ids.return_value = []
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.list_active.return_value = [missing_preview, playable]
+    track_repo.save.side_effect = lambda t: t
+
+    preview_service = MagicMock(spec=TrackPreviewPort)
+    preview_service.find_preview.return_value = None
+    catalog_port = MagicMock(spec=TrackCatalogFilePort)
+
+    # Seed chosen so missing_preview (Rock, weight 3.0) is picked first, then playable.
+    rng = random.Random(1)  # noqa: S311
+    use_case = GetNextDiscoveryTrackUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+        track_preview_port=preview_service,
+        catalog_file_port=catalog_port,
+        rng=rng,
+    )
+    result = use_case.execute(user_id=1)
+
+    assert result is playable
+    assert missing_preview.is_deleted is True
+    track_repo.save.assert_called_once_with(missing_preview)
+    catalog_port.write_track_delta.assert_called_once()
+    assert catalog_port.write_track_delta.call_args.kwargs["is_deleted"] is True

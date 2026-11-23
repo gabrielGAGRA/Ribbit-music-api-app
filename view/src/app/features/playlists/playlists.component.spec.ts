@@ -346,8 +346,6 @@ describe('PlaylistsComponent', () => {
     expect(addReq.request.body).toEqual({ track_id: 101, action: 'like' });
     addReq.flush({ success: true, message: 'Track added' });
 
-    httpMock.expectOne('/api/playlists').flush([]);
-
     expect(component['deckCursor']()).toBe(1);
     expect(component['currentDeckTrack']()?.title).toBe('Song B');
     expect(component['selectedPlaylist']()?.count).toBe(1);

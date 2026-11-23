@@ -17,6 +17,7 @@
       } @else {
         <article
           class="discovery-card"
+          [class.is-dragging]="isDragging()"
           [class.like]="animation() === 'like'"
           [class.love]="animation() === 'love'"
           [class.reject]="animation() === 'reject'"
@@ -86,7 +87,6 @@
 
             <div class="track-tags">
               <span>{{ currentSong().genre }}</span>
-              <span>Acústico</span>
               @if (state.isTrackSeen(currentSong().trackId)) {
                 <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
               }

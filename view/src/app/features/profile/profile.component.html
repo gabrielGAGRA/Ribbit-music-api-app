@@ -37,7 +37,7 @@
     >
       <app-icon name="heart" [size]="15" />
       <span
-        >Curtidas<small>{{ likeCount() }} faixas</small></span
+        >Curtidas<small>{{ formatCappedCount(likeCount()) }} faixas</small></span
       >
     </button>
 
@@ -49,7 +49,7 @@
     >
       <app-icon name="star" [size]="15" />
       <span
-        >Amadas<small>{{ loveCount() }} faixas</small></span
+        >Amadas<small>{{ formatCappedCount(loveCount()) }} faixas</small></span
       >
     </button>
 
@@ -61,7 +61,7 @@
     >
       <app-icon name="close" [size]="15" />
       <span
-        >Rejeitadas<small>{{ rejectCount() }} faixas</small></span
+        >Rejeitadas<small>{{ formatCappedCount(rejectCount()) }} faixas</small></span
       >
     </button>
 
@@ -138,7 +138,7 @@
 
   <div class="panel profile-reviews-section">
     <div class="section-title">
-      <h3>Suas avaliações ({{ userReviews().length }})</h3>
+      <h3>Suas avaliações ({{ formatCappedCount(userReviews().length) }})</h3>
       <span>Comentários e notas publicados por você</span>
     </div>
 

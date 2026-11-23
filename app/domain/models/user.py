@@ -104,10 +104,13 @@ class User:
         return tuple(sorted(self.MINOR_RESTRICTED_GENRE_TERMS))
 
     def can_listen(self, track: Track) -> bool:
-        genre = self._normalize_genre(track.genre)
-        return (
-            not self.is_track_restricted_for_minor(track)
-            and genre not in self.blocked_genres
+        from app.domain.services.genre_names import (  # noqa: PLC0415
+            genre_matches_preference,
+        )
+
+        return not self.is_track_restricted_for_minor(track) and not any(
+            genre_matches_preference(track.genre, blocked)
+            for blocked in self.blocked_genres
         )
 
     def is_track_restricted_for_minor(self, track: Track) -> bool:
@@ -219,23 +222,14 @@ class User:
     def is_favorite_genre(self, track: Track) -> bool:
         if not self.favorite_genres or not track.genre.strip():
             return False
+        from app.domain.services.genre_names import (  # noqa: PLC0415
+            genre_matches_preference,
+        )
 
-        track_genre = self._normalize_genre(track.genre)
-        if track_genre in self.favorite_genres:
-            return True
-
-        genre_tokens = self._genre_tokens(track.genre)
-        if not genre_tokens:
-            return False
-
-        for favorite in self.favorite_genres:
-            fav_tokens = self._genre_tokens(favorite)
-            if fav_tokens and any(
-                genre_tokens[index : index + len(fav_tokens)] == fav_tokens
-                for index in range(len(genre_tokens) - len(fav_tokens) + 1)
-            ):
-                return True
-        return False
+        return any(
+            genre_matches_preference(track.genre, favorite)
+            for favorite in self.favorite_genres
+        )
 
     def recommendation_weight(
         self,

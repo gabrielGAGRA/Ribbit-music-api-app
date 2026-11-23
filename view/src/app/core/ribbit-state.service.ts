@@ -137,6 +137,9 @@ export class RibbitStateService implements OnDestroy {
   readonly accessHistory = signal<readonly TrackAccessHistoryItem[]>([]);
   readonly seenTrackIds = signal<ReadonlySet<number>>(new Set());
   readonly discoverySong = signal<Song | null>(null);
+  private readonly discoveryQueue: Song[] = [];
+  private discoveryPrefetchInFlight = false;
+  private readonly discoveryQueueTarget = 3;
   readonly isDeckEmpty = signal<boolean>(false);
   private readonly swipeUndoStack = signal<
     readonly {
@@ -451,16 +454,77 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
-  /** Fetches the next candidate song for the Discovery deck. */
-  loadNextDiscoveryTrack(): void {
+  private preloadCoverImage(url: string | undefined): void {
+    if (!url || typeof Image === 'undefined') return;
+    const img = new Image();
+    img.src = url;
+  }
+
+  private refillDiscoveryQueue(): void {
+    if (
+      !readAuthToken() ||
+      this.discoveryPrefetchInFlight ||
+      this.discoveryQueue.length >= this.discoveryQueueTarget
+    ) {
+      return;
+    }
+    this.discoveryPrefetchInFlight = true;
+    this.songService.getNextDiscoverySong().subscribe({
+      next: (song) => {
+        this.discoveryPrefetchInFlight = false;
+        if (!song) return;
+        const currentId = this.discoverySong()?.trackId;
+        const alreadyQueued = this.discoveryQueue.some(
+          (queued) => queued.trackId !== undefined && queued.trackId === song.trackId,
+        );
+        if (
+          song.trackId !== undefined &&
+          song.trackId !== currentId &&
+          !alreadyQueued
+        ) {
+          this.discoveryQueue.push(song);
+          this.preloadCoverImage(song.image);
+        }
+        if (this.discoveryQueue.length < this.discoveryQueueTarget) {
+          setTimeout(() => {
+            this.refillDiscoveryQueue();
+          }, 0);
+        }
+      },
+      error: () => {
+        this.discoveryPrefetchInFlight = false;
+      },
+    });
+  }
+
+  /** Fetches the next candidate song for the Discovery deck (using prefetched queue when ready). */
+  loadNextDiscoveryTrack(resetQueue = false): void {
     if (!readAuthToken()) return;
+    if (resetQueue) {
+      this.discoveryQueue.length = 0;
+    }
+    const nextSong = this.discoveryQueue.shift();
+    if (nextSong) {
+      this.discoverySong.set(nextSong);
+      this.isDeckEmpty.set(false);
+      this.audioPlayer.loadTrack(nextSong.previewUrl);
+      setTimeout(() => {
+        this.refillDiscoveryQueue();
+      }, 0);
+      return;
+    }
     this.songService.getNextDiscoverySong().subscribe({
       next: (song) => {
         if (song) {
           this.discoverySong.set(song);
           this.isDeckEmpty.set(false);
+          this.preloadCoverImage(song.image);
           this.audioPlayer.loadTrack(song.previewUrl);
+          setTimeout(() => {
+            this.refillDiscoveryQueue();
+          }, 0);
         } else {
+          this.discoveryQueue.length = 0;
           this.discoverySong.set(null);
           this.isDeckEmpty.set(true);
         }
@@ -489,7 +553,7 @@ export class RibbitStateService implements OnDestroy {
     if (!readAuthToken()) return;
     forkJoin({
       recent: this.songService
-        .getRecentInteractedTracks(100)
+        .getRecentInteractedTracks(1000)
         .pipe(catchError(() => of<readonly RecentInteractedTrackApiDto[]>([]))),
       allHistory: this.profileApi.listHistory().pipe(catchError(() => of([]))),
     }).subscribe(({ recent, allHistory }) => {
@@ -573,7 +637,7 @@ export class RibbitStateService implements OnDestroy {
     if (readAuthToken()) {
       this.profileApi.updateFavoriteGenres(limited).subscribe({
         next: () => {
-          this.loadNextDiscoveryTrack();
+          this.loadNextDiscoveryTrack(true);
           this.notify('Gêneros favoritos atualizados com sucesso!');
         },
         error: (err: unknown) => {
@@ -723,9 +787,17 @@ export class RibbitStateService implements OnDestroy {
     }
 
     if (song.trackId !== undefined && readAuthToken()) {
+      const hadQueued = this.discoveryQueue.length > 0;
+      if (hadQueued) {
+        this.loadNextDiscoveryTrack();
+      }
       this.songService.recordSwipe(song.trackId, kind).subscribe({
         next: () => {
-          this.loadNextDiscoveryTrack();
+          if (!hadQueued) {
+            this.loadNextDiscoveryTrack();
+          } else {
+            this.refillDiscoveryQueue();
+          }
           this.refreshInteractedCollections();
           this.refreshAccessHistory();
         },
@@ -1563,6 +1635,7 @@ export class RibbitStateService implements OnDestroy {
     this.recentAccessTimestamps.clear();
     this.playlists.set([]);
     this.activeTrackReviews.set([]);
+    this.discoveryQueue.length = 0;
     this.discoverySong.set(null);
     this.swipeUndoStack.set([]);
     this.isDeckEmpty.set(false);

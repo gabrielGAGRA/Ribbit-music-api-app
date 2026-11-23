@@ -7,8 +7,49 @@ import niquests
 from app.application.ports.services.music_service import (
     TrackPreview,
     TrackPreviewPort,
+    normalize_match_text,
 )
 from app.domain.exceptions import ExternalServiceError
+
+
+def _map_preview_item(item: dict[str, object]) -> TrackPreview:
+    raw_year = str(item.get("releaseDate") or "")[:4]
+    return TrackPreview(
+        external_id=str(item.get("trackId")),
+        title=str(item["trackName"]) if item.get("trackName") is not None else None,
+        artist=str(item["artistName"]) if item.get("artistName") is not None else None,
+        preview_url=(
+            str(item["previewUrl"]) if item.get("previewUrl") is not None else None
+        ),
+        cover_url=(
+            str(item["artworkUrl100"])
+            if item.get("artworkUrl100") is not None
+            else None
+        ),
+        genre=(
+            str(item["primaryGenreName"])
+            if item.get("primaryGenreName") is not None
+            else None
+        ),
+        country=None,
+        album=(
+            str(item["collectionName"])
+            if item.get("collectionName") is not None
+            else None
+        ),
+        release_year=int(raw_year) if raw_year.isdigit() else None,
+    )
+
+
+def _select_best_preview(results: list[dict[str, object]], term: str) -> TrackPreview:
+    norm_term = normalize_match_text(term)
+    candidates = [_map_preview_item(item) for item in results]
+    for candidate in candidates:
+        c_title = normalize_match_text(candidate.title)
+        c_artist = normalize_match_text(candidate.artist)
+        if c_title and c_artist and c_title in norm_term and c_artist in norm_term:
+            return candidate
+    return candidates[0]
 
 
 class ITunesAdapter(TrackPreviewPort):
@@ -24,7 +65,7 @@ class ITunesAdapter(TrackPreviewPort):
             ExternalServiceError: If the external provider fails or times out.
         """
         try:
-            params = {"term": term, "media": "music", "limit": "1"}
+            params = {"term": term, "media": "music", "limit": "5"}
             res = self._session.get(
                 "https://itunes.apple.com/search",
                 params=params,
@@ -34,19 +75,7 @@ class ITunesAdapter(TrackPreviewPort):
                 data = res.json()
                 results = data.get("results", [])
                 if results:
-                    first = results[0]
-                    raw_year = str(first.get("releaseDate") or "")[:4]
-                    return TrackPreview(
-                        external_id=str(first.get("trackId")),
-                        title=first.get("trackName"),
-                        artist=first.get("artistName"),
-                        preview_url=first.get("previewUrl"),
-                        cover_url=first.get("artworkUrl100"),
-                        genre=first.get("primaryGenreName"),
-                        country=first.get("country"),
-                        album=first.get("collectionName"),
-                        release_year=int(raw_year) if raw_year.isdigit() else None,
-                    )
+                    return _select_best_preview(results, term)
                 return None
             raise ExternalServiceError(
                 f"iTunes API returned unexpected status {res.status_code}",

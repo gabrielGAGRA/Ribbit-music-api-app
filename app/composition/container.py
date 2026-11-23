@@ -722,11 +722,15 @@ def build_container(
         update_subscription_plan_use_case=UpdateSubscriptionPlanUseCase(
             plan_repo, user_repo=user_repo
         ),
-        update_track_explicit_flag_use_case=UpdateTrackExplicitFlagUseCase(track_repo),
+        update_track_explicit_flag_use_case=UpdateTrackExplicitFlagUseCase(
+            track_repo=track_repo, catalog_file_port=catalog_adapter
+        ),
         update_track_genre_use_case=UpdateTrackGenreUseCase(
             track_repo=track_repo, catalog_file_port=catalog_adapter
         ),
-        block_track_use_case=BlockTrackUseCase(track_repo),
+        block_track_use_case=BlockTrackUseCase(
+            track_repo=track_repo, catalog_file_port=catalog_adapter
+        ),
         list_blocked_tracks_use_case=ListBlockedTracksUseCase(track_repo),
         create_track_use_case=CreateTrackUseCase(
             track_repo=track_repo, catalog_file_port=catalog_adapter

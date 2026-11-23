@@ -92,6 +92,7 @@
 
                 <article
                   class="discovery-card playlist-swipe-card"
+                  [class.is-dragging]="isDragging()"
                   [class.is-liking]="activeDeckDragAction() === 'like'"
                   [class.is-rejecting]="activeDeckDragAction() === 'dislike'"
                   [appTransform]="deckCardTransform()"
@@ -152,7 +153,6 @@
 
                     <div class="track-tags">
                       <span>{{ deckTrack.genre }}</span>
-                      <span>Acústico</span>
                       @if (state.isTrackSeen(deckTrack.trackId)) {
                         <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
                       }
@@ -219,10 +219,14 @@
             </div>
           } @else {
             <div class="panel empty-deck-panel">
-              <p>Carregando sugestões ou você já revisou todas as opções deste lote!</p>
-              <button class="primary-button" (click)="loadMoreRecommendations()">
-                Buscar mais recomendações
-              </button>
+              @if (isLoadingDeck()) {
+                <p>Carregando sugestões para esta playlist...</p>
+              } @else {
+                <p>Nenhuma música encontrada para os filtros desta playlist.</p>
+                <button class="primary-button" (click)="loadMoreRecommendations()">
+                  Buscar novamente
+                </button>
+              }
             </div>
           }
         </div>

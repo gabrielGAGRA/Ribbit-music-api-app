@@ -63,6 +63,10 @@ export class ProfileComponent implements OnInit {
 
   protected readonly historyCount = computed<number>(() => this.historySongs().length);
 
+  protected formatCappedCount(count: number): string {
+    return count > 99 ? '99+' : String(count);
+  }
+
   private readonly displayedHistorySongs = computed<readonly Song[]>(() =>
     this.historyExpanded() ? this.historySongs() : this.historySongs().slice(0, 6),
   );

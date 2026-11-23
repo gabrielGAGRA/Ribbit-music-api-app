@@ -122,7 +122,7 @@ def get_recently_interacted_tracks(
         GetRecentlyInteractedTracksUseCase,
         Depends(provide(GetRecentlyInteractedTracksUseCase)),
     ],
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 20,
 ) -> list[RecentInteractedTrackResponse]:
     items = use_case.execute(user_id=user_id, limit=limit)
     return [

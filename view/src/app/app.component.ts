@@ -164,6 +164,10 @@ export class AppComponent {
     this.state.playlists().slice(0, 2),
   );
 
+  protected formatCappedCount(count: number): string {
+    return count > 99 ? '99+' : String(count);
+  }
+
   private readonly navigationEnd = toSignal(
     this.router
       ? this.router.events.pipe(
