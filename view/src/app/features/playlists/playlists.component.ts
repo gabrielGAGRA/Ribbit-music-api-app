@@ -115,27 +115,29 @@ export class PlaylistsComponent {
     return list[cursor] ?? null;
   });
 
+  private songKey(song: Song): string {
+    return song.trackId !== undefined ? String(song.trackId) : song.title;
+  }
+
+  private pickFallbackTrack(playlist: Playlist): Song | null {
+    const existingKeys = new Set((playlist.songs ?? []).map((s) => this.songKey(s)));
+    const all = this.state.songs();
+    const available = all.filter((s) => !existingKeys.has(this.songKey(s)));
+    const pool = available.length > 0 ? available : all;
+    if (pool.length === 0) return null;
+    const idx = this.fallbackCursor() % pool.length;
+    return pool[idx] ?? pool[0] ?? null;
+  }
+
   protected readonly activeTrack = computed<Song | null>(() => {
     const fromDeck = this.currentDeckTrack();
     if (fromDeck) return fromDeck;
-    const p = this.selectedPlaylist();
-    if (!p) return null;
-    if (this.deckLoadedFromBackend() || this.isLoadingDeck() || (p.playlistId !== undefined && readAuthToken())) {
+    const playlist = this.selectedPlaylist();
+    const isServerDeck = Boolean(playlist?.playlistId !== undefined && readAuthToken());
+    if (!playlist || this.deckLoadedFromBackend() || this.isLoadingDeck() || isServerDeck) {
       return null;
     }
-    const existingKeys = new Set(
-      (p.songs ?? []).map((s) => (s.trackId !== undefined ? String(s.trackId) : s.title)),
-    );
-    const all = this.state.songs();
-    const available = all.filter(
-      (s) => !existingKeys.has(s.trackId !== undefined ? String(s.trackId) : s.title),
-    );
-    const pool = available.length > 0 ? available : all;
-    if (pool.length > 0) {
-      const idx = this.fallbackCursor() % pool.length;
-      return pool[idx] ?? pool[0] ?? null;
-    }
-    return null;
+    return this.pickFallbackTrack(playlist);
   });
 
   protected readonly activeDeckDragAction = computed<'like' | 'dislike' | null>(() => {
