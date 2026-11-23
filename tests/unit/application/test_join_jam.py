@@ -7,11 +7,7 @@ import pytest
 from app.application.ports.repositories.jam_repository import JamRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.join_jam import JoinJamUseCase
-from app.domain.exceptions import (
-    EntityNotFoundError,
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
-)
+from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models import User
 from app.domain.models.jam import Jam
 
@@ -78,8 +74,9 @@ def test_join_jam_blocks_unlinked_and_non_spotify_premium_user() -> None:
 
     use_case = JoinJamUseCase(jam_repo=jam_repo, user_repo=user_repo)
 
-    with pytest.raises(SpotifyConnectionRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(room_code="JAM-ABC123", user_id=5)
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"
 
     linked_free_user = User(
         user_id=5,
@@ -93,6 +90,7 @@ def test_join_jam_blocks_unlinked_and_non_spotify_premium_user() -> None:
     )
     user_repo.find_by_id.return_value = linked_free_user
 
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(room_code="JAM-ABC123", user_id=5)
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
     jam_repo.add_participant.assert_not_called()

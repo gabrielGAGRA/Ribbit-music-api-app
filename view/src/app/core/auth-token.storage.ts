@@ -49,6 +49,30 @@ export function writeAuthToken(token: string): void {
   }
 }
 
+function isUserIdentity(
+  value: object,
+): value is Pick<UserApiDto, 'user_id' | 'display_name' | 'email'> {
+  return (
+    'user_id' in value &&
+    typeof value.user_id === 'number' &&
+    'display_name' in value &&
+    typeof value.display_name === 'string' &&
+    'email' in value &&
+    typeof value.email === 'string'
+  );
+}
+
+function isUserApiDto(value: unknown): value is UserApiDto {
+  if (typeof value !== 'object' || value === null) return false;
+  return (
+    isUserIdentity(value) &&
+    'role' in value &&
+    typeof value.role === 'string' &&
+    'plan_id' in value &&
+    typeof value.plan_id === 'number'
+  );
+}
+
 /** Reads the cached authenticated user payload if available. */
 export function readStoredUser(): UserApiDto | null {
   try {
@@ -56,15 +80,7 @@ export function readStoredUser(): UserApiDto | null {
     const raw = localStorage.getItem(AUTH_USER_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'user_id' in parsed &&
-      'display_name' in parsed
-    ) {
-      return parsed as UserApiDto;
-    }
-    return null;
+    return isUserApiDto(parsed) ? parsed : null;
   } catch {
     // Corrupted JSON falls back cleanly to unauthenticated
     return null;

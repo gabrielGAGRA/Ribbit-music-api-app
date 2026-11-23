@@ -1,10 +1,11 @@
-import { provideHttpClient } from '@angular/common/http';
+﻿import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuthSessionNotifier } from '../../core/auth-session.notifier';
 import { readAdminAuthToken, writeAdminAuthToken } from '../../core/auth-token.storage';
-import { AdminDomainError, AdminStateService } from './admin-state.service';
+import { AdminDomainError } from './admin-domain-error';
+import { AdminStateService } from './admin-state.service';
 
 describe('AdminStateService', () => {
   let service: AdminStateService;
@@ -74,7 +75,7 @@ describe('AdminStateService', () => {
         is_admin: true,
       },
     ]);
-    httpMock.expectOne('/api/tracks/search?limit=100').flush(
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush(
       overrides?.activeTracks ?? [
         {
           track_id: 500,
@@ -151,14 +152,14 @@ describe('AdminStateService', () => {
     flushHydration();
 
     expect(service.hasHydrated()).toBe(true);
-    expect(service.executiveDashboard().total_users).toBe(42);
-    expect(service.executiveDashboard().estimated_net_revenue).toBe(228.9);
-    expect(service.audienceReport().total_tracks).toBe(120);
+    expect(service.executiveDashboard().totalUsers).toBe(42);
+    expect(service.executiveDashboard().estimatedNetRevenue).toBe(228.9);
+    expect(service.audienceReport().totalTracks).toBe(120);
     expect(service.blockedGenreRanking()[0]?.genre).toBe('Sertanejo');
     expect(service.usersWithPlans().length).toBe(2);
     expect(service.activeTracks().length).toBe(1);
     expect(service.blockedTracks().length).toBe(1);
-    expect(service.topModerationReviews()[0]?.author_name).toBe('Ouvinte Pro');
+    expect(service.topModerationReviews()[0]?.authorName).toBe('Ouvinte Pro');
   });
 
   it('surfaces backend authentication errors without falling back to local mocks', () => {
@@ -258,7 +259,7 @@ describe('AdminStateService', () => {
     });
 
     expect(createdEmail).toBe('novo@usp.br');
-    expect(service.administrators().some((a) => a.user_id === 9)).toBe(true);
+    expect(service.administrators().some((a) => a.userId === 9)).toBe(true);
 
     httpMock.expectOne('/api/admin/users').flush([]);
     httpMock.expectOne('/api/admin/dashboard').flush({
@@ -312,8 +313,8 @@ describe('AdminStateService', () => {
       plan_id: 2,
       is_admin: true,
     });
-    expect(service.administrators().some((a) => a.user_id === 2)).toBe(true);
-    expect(service.usersWithPlans().find((u) => u.user_id === 2)?.is_admin).toBe(true);
+    expect(service.administrators().some((a) => a.userId === 2)).toBe(true);
+    expect(service.usersWithPlans().find((u) => u.userId === 2)?.isAdmin).toBe(true);
   });
 
   it('updates plans via PUT /api/admin/plans/{id} and refreshes dashboard metrics', () => {
@@ -341,8 +342,8 @@ describe('AdminStateService', () => {
     });
     httpMock.expectOne('/api/admin/users').flush([]);
 
-    expect(service.plans().find((p) => p.plan_id === 2)?.name).toBe('Ribbit Pro+');
-    expect(service.executiveDashboard().estimated_net_revenue).toBe(248.9);
+    expect(service.plans().find((p) => p.planId === 2)?.name).toBe('Ribbit Pro+');
+    expect(service.executiveDashboard().estimatedNetRevenue).toBe(248.9);
   });
 
   it('handles track search, block/restore, explicit, genre, compact, sync, and review delete errors', () => {
@@ -350,12 +351,12 @@ describe('AdminStateService', () => {
     flushHydration();
 
     service.fetchCatalogTracksFromBackend('no-match').subscribe();
-    const searchReq = httpMock.expectOne('/api/tracks/search?limit=100&query=no-match');
+    const searchReq = httpMock.expectOne('/api/admin/tracks?limit=100&query=no-match');
     searchReq.flush([]);
     expect(service.activeTracks().length).toBe(0);
 
     service.fetchCatalogTracksFromBackend('').subscribe();
-    httpMock.expectOne('/api/tracks/search?limit=100').flush([
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([
       {
         track_id: 500,
         title: 'Evidências',
@@ -378,8 +379,14 @@ describe('AdminStateService', () => {
       active_tracks: 114,
       blocked_genres: {},
     });
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 42,
+      estimated_net_revenue: 500,
+      users_by_plan: {},
+      revenue_by_plan: {},
+    });
     expect(service.activeTracks().length).toBe(0);
-    expect(service.blockedTracks().some((t) => t.track_id === 500)).toBe(true);
+    expect(service.blockedTracks().some((t) => t.trackId === 500)).toBe(true);
 
     let compactError: unknown;
     service.compactCatalog().subscribe({
@@ -405,15 +412,13 @@ describe('AdminStateService', () => {
       },
     });
     httpMock
-      .expectOne('/api/reviews/900')
+      .expectOne('/api/admin/reviews/900')
       .flush(
-        { error: 'ForbiddenError', message: 'Only the author can delete this review.' },
-        { status: 403, statusText: 'Forbidden' },
+        { error: 'EntityNotFoundError', message: 'Review with ID 900 not found.' },
+        { status: 404, statusText: 'Not Found' },
       );
     expect(deleteReviewError).toBeInstanceOf(AdminDomainError);
-    expect((deleteReviewError as AdminDomainError).message).toBe(
-      'Only the author can delete this review.',
-    );
+    expect((deleteReviewError as AdminDomainError).message).toBe('Review with ID 900 not found.');
   });
 
   it('cancels in-flight hydration when logoutAdmin is called before requests settle', () => {
@@ -436,7 +441,7 @@ describe('AdminStateService', () => {
     const pendingAudience = httpMock.expectOne('/api/admin/audience');
     const pendingUsers = httpMock.expectOne('/api/admin/users');
     const pendingAdmins = httpMock.expectOne('/api/admin/administrators');
-    const pendingTracks = httpMock.expectOne('/api/tracks/search?limit=100');
+    const pendingTracks = httpMock.expectOne('/api/admin/tracks?limit=100');
     const pendingBlocked = httpMock.expectOne('/api/admin/blocked-tracks');
     const pendingReviews = httpMock.expectOne('/api/admin/reviews');
 
@@ -453,5 +458,137 @@ describe('AdminStateService', () => {
     expect(service.isAuthenticated()).toBe(false);
     expect(service.hasHydrated()).toBe(false);
     expect(service.isLoading()).toBe(false);
+  });
+
+  it('loads admin catalog with sortBy/minDislikes and normalizes track metrics', () => {
+    service
+      .loadAdminCatalog({
+        query: 'Rock',
+        sortBy: 'dislikes_desc',
+        minDislikes: 2,
+      })
+      .subscribe((tracks) => {
+        expect(tracks.length).toBe(1);
+        expect(tracks[0]?.dislikesCount).toBe(5);
+        expect(tracks[0]?.likesCount).toBe(0);
+      });
+
+    const req = httpMock.expectOne(
+      '/api/admin/tracks?limit=100&query=Rock&sort_by=dislikes_desc&min_dislikes=2',
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      {
+        track_id: 12,
+        title: 'Heavy Riff',
+        artist: 'Band',
+        duration_seconds: 220,
+        genre: 'Rock',
+        explicit: false,
+        is_deleted: false,
+        dislikes_count: 5,
+      },
+    ]);
+  });
+
+  it('loads global admin access history with optional userId and onlyDeleted filters', () => {
+    service.loadAccessHistory({ userId: 4, onlyDeleted: true, limit: 50 });
+
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === '/api/admin/access-history' &&
+        r.params.get('user_id') === '4' &&
+        r.params.get('only_deleted') === 'true' &&
+        r.params.get('limit') === '50',
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      {
+        access_id: 9,
+        user_id: 4,
+        user_display_name: 'Usuário Demo',
+        user_email: 'usuario@ribbit.example.com',
+        track_id: 593,
+        track_title: 'Faixa Removida',
+        track_artist: 'Ribbit Archive',
+        track_genre: 'Pop',
+        track_is_deleted: true,
+        source: 'play',
+        accessed_at: '2026-02-01T10:12:00+00:00',
+      },
+    ]);
+
+    expect(service.accessHistory().length).toBe(1);
+    expect(service.accessHistory()[0]?.trackIsDeleted).toBe(true);
+  });
+
+  it('computes plan revenuePercent against gross_revenue even when net revenue is negative, and updates costs', () => {
+    service.hydrateFromBackend();
+    httpMock.expectOne('/api/admin/plans').flush([
+      { plan_id: 1, name: 'Free', monthly_price: 0, max_profiles: 1 },
+      { plan_id: 2, name: 'Individual', monthly_price: 20, max_profiles: 1 },
+      { plan_id: 3, name: 'Família', monthly_price: 30, max_profiles: 6 },
+    ]);
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 4,
+      estimated_net_revenue: -50.0,
+      gross_revenue: 50.0,
+      content_cost: 40.0,
+      infrastructure_cost: 60.0,
+      total_costs: 100.0,
+      users_by_plan: { Free: 2, Individual: 1, Família: 1 },
+      revenue_by_plan: { Free: 0, Individual: 20, Família: 30 },
+    });
+    httpMock.expectOne('/api/admin/audience').flush({
+      total_users: 4,
+      total_tracks: 10,
+      active_tracks: 9,
+      blocked_genres: {},
+      total_accesses: 12,
+      accesses_by_track: [
+        { track_id: 1, title: 'Hit', artist: 'A', is_deleted: false, access_count: 8 },
+      ],
+      accesses_by_genre: [
+        { genre: 'Pop', access_count: 8 },
+        { genre: 'Rock', access_count: 4 },
+      ],
+    });
+    httpMock.expectOne('/api/admin/users').flush([]);
+    httpMock.expectOne('/api/admin/administrators').flush([]);
+    httpMock.expectOne('/api/admin/tracks?limit=100').flush([]);
+    httpMock.expectOne('/api/admin/blocked-tracks').flush([]);
+    httpMock.expectOne('/api/admin/reviews').flush([]);
+
+    const breakdown = service.planBreakdown();
+    const indiv = breakdown.find((p) => p.planName === 'Individual');
+    const fam = breakdown.find((p) => p.planName === 'Família');
+    expect(indiv?.revenuePercent).toBe(40);
+    expect(fam?.revenuePercent).toBe(60);
+    expect(service.topAccessedTracks()[0]?.percent).toBe(100);
+    expect(service.accessesByGenreRanking()[1]?.percent).toBe(50);
+
+    service
+      .updatePlatformCosts({
+        content_cost_per_track: 0.05,
+        infrastructure_fixed_cost: 12,
+        infrastructure_cost_per_user: 0.5,
+      })
+      .subscribe();
+
+    const putReq = httpMock.expectOne('/api/admin/costs');
+    expect(putReq.request.method).toBe('PUT');
+    putReq.flush({
+      content_cost_per_track: 0.05,
+      infrastructure_fixed_cost: 12,
+      infrastructure_cost_per_user: 0.5,
+    });
+    httpMock.expectOne('/api/admin/dashboard').flush({
+      total_users: 4,
+      estimated_net_revenue: 35.5,
+      gross_revenue: 50.0,
+      users_by_plan: { Free: 2, Individual: 1, Família: 1 },
+      revenue_by_plan: { Free: 0, Individual: 20, Família: 30 },
+    });
+    expect(service.executiveDashboard().estimatedNetRevenue).toBe(35.5);
   });
 });

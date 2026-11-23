@@ -1,35 +1,37 @@
 ---
 trigger: always_on
-description: Use for rule priority, where to find docs, and when to invoke skills (planning, review, commit, and rule governance).
+description: Use for rule priority, progressive disclosure navigation (when to read what), and the single registry of skill and plugin invocations.
 ---
 
-<!-- TEMPLATE: Inject-ready rule. Replace every FILL block with target-repo facts; delete this banner when done. -->
+# Meta Rules — Priority, Skills & Navigation
 
-# Meta rules
-## Priority (highest -> lowest)
-1. AGENTS.md - persona and behavioral constraints
-2. project-rules - repo scope, tech stack
-3. agents-feature-checklist - change order (before, during, and after implementation)
-4. project-architecture / project-domain-api - layout and sandbox explanations and pointers
-5. project-tests - test layout and pointers
-6. docs/llm/python-engineering-rules.md - coding standards (passive; read only when implementing)
+## 1. Rule Priority 
 
-## Skill Invocation (single registry)
+1. `.agents/AGENTS.md`
+2. `.agents/rules/meta-rules.md`
+3. Scoped subtree rules (`app/AGENTS.md`, `view/AGENTS.md`) — local architecture boundaries and verification gates.
+4. `.agents/rules/tests-guide.md` — test pyramid, markers, and execution commands.
+5. Deep passive guides (`docs/llm/app/*`, `docs/llm/view/*`) — coding judgment standards (read on demand before writing or reviewing code in that layer).
+
+## 2. Skill & Workflow Invocation Registry
+
 | Trigger / Intent | Action |
 | --- | --- |
-| Commit, branch, or any git write | @commit |
-| Create, edit, or self-heal agent rules / conventions | @project-rules-writing |
-| User asks for a PR code review | @PR-code-review |
-| Conflicts ith other commits made in the repository| @catchup |
-| Ambiguous or relevant behavior change, before planning | @interview-plan |
-| Any diff before delivery or git write | @adversarial-review |
+| Medium or ambiguous change (before coding) | `@interview-plan` |
+| Big change, non-trivial feature or architectural change | EGM plugin (`/egm:egm-brainstorm` -> `/egm:egm-draft` -> `/egm:egm-review`) |
+| Building, redesigning, auditing, or polishing frontend UI (`view/`) | `@frontend-design`, `@impeccable` |
+| User asks for a PR or code review | `@code-review` |
+| Risky diff before delivery | `@adversarial-review` (isolated subagent) |
+| Commit, branch push, PR draft | `@commit` |
 
-## Navigation - when to read what
-| Question | Read |
+## 3. Navigation — When to Read What
+
+| Question / Task | Where to Look |
 | --- | --- |
-<!-- FILL: Navigation row — HTTP contract, validation, external I/O, AI message format. Discover: project-domain-api rule + routers/schemas. Keep: project-domain-api + docs/llm/domain-api-guide.md. -->
-<!-- FILL: Navigation row — layer map / package layout. Discover: app/ tree. Keep: project-architecture + docs/llm/architecture-guide.md. -->
-<!-- FILL: Navigation row — env, secrets, deploy runtime config. Discover: app/config.py, pipeline/, infra yaml. Keep: list concrete config paths. -->
-| Python patterns, imports, DIP | docs/llm/software-engineering-rules.md |
-<!-- FILL: Navigation row — test tree and pytest markers. Discover: tests/, pytest.ini. Keep: project-tests + docs/llm/tests-guide.md + tests/pytest.ini. -->
-| Rule create / update / self-healing | @project-rules-writing skill |
+| Python judgment rules | `docs/llm/app/python-engineering-rules.md` |
+| Runtime configuration, environment variables, OAuth/GCS settings | `app/config.py`, `app/composition/` |
+| HTTP contract, routers, Pydantic schemas, auth dependencies, error mapping | `app/presentation/routers/`, `app/presentation/schemas/`, `app/presentation/exception_handlers.py` |
+| Frontend layout, Signals/Zoneless setup, quality gate | `view/AGENTS.md` |
+| Angular component, template, DI, and Signals judgment rules | `docs/llm/view/angular-style-guide.md` |
+| TypeScript typing, error handling, class visibility, and naming rules | `docs/llm/view/typescript-engineering-rules.md` |
+| Backend unit/integration, frontend, and browser E2E tests | `.agents/rules/tests-guide.md`, `pyproject.toml`, `vitest.config.ts`, `playwright.config.ts` |

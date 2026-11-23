@@ -157,6 +157,8 @@ def test_seed_database_populates_plans_admin_and_sample_tracks() -> None:
         assert "Free" in plan_names
         assert "Individual" in plan_names
         assert "Família" in plan_names
+        family_plan = next(p for p in plans if p["name"] == "Família")
+        assert family_plan["max_profiles"] == 4
 
         # Check admin user
         admin = conn.execute(

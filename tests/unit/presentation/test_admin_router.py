@@ -2,19 +2,21 @@
 
 from unittest.mock import MagicMock
 
-from fastapi import Request
-
 from app.application.dtos import (
+    AdminCatalogTrackResult,
     AuthenticateAdminCommand,
+    CreateTrackCommand,
     RegisterAdministratorCommand,
     UpdateSubscriptionPlanCommand,
 )
 from app.application.dtos.auth_dtos import AuthResult
 from app.application.use_cases.admin import (
     BlockTrackUseCase,
+    CreateTrackUseCase,
     GetAudienceReportUseCase,
     GetExecutiveDashboardUseCase,
     GetTopModerationReviewsUseCase,
+    ListAdminCatalogTracksUseCase,
     ListAdministratorsUseCase,
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
@@ -24,12 +26,16 @@ from app.application.use_cases.admin import (
     UpdateTrackExplicitFlagUseCase,
 )
 from app.application.use_cases.auth import AuthenticateAdminUseCase
+from app.application.use_cases.review import DeleteReviewUseCase
 from app.domain.models import Plan, ReviewComment, Track, User
 from app.presentation.routers.admin import (
     block_track,
+    create_admin_track,
+    delete_review,
     get_audience_report,
     get_executive_dashboard,
     get_top_moderation_reviews,
+    list_admin_tracks,
     list_administrators,
     list_blocked_tracks,
     list_plans,
@@ -42,6 +48,7 @@ from app.presentation.routers.admin import (
 )
 from app.presentation.schemas.admin import (
     BlockTrackRequest,
+    CreateTrackAdminRequest,
     RegisterAdminRequest,
     UpdateAdminRoleRequest,
     UpdatePlanAdminRequest,
@@ -96,6 +103,20 @@ def test_get_executive_dashboard_returns_aggregated_metrics() -> None:
     assert res.users_by_plan == {"Free": 25, "Premium": 25}
     assert res.revenue_by_plan == {"Free": 0.0, "Premium": 499.50}
     mock_use_case.execute.assert_called_once_with()
+
+
+def test_admin_delete_review_router_calls_use_case_and_returns_success() -> None:
+    mock_use_case = MagicMock(spec=DeleteReviewUseCase)
+    mock_use_case.execute_as_admin.return_value = True
+
+    response = delete_review(
+        review_id=50,
+        use_case=mock_use_case,
+        admin_id=1,
+    )
+
+    assert response.success is True
+    mock_use_case.execute_as_admin.assert_called_once_with(review_id=50)
 
 
 def test_list_users_returns_user_plan_summaries() -> None:
@@ -259,16 +280,18 @@ def test_block_track_with_request_body_unblocks_track() -> None:
 
 
 def test_list_plans_router_returns_plans_from_container() -> None:
+    from app.application.use_cases.user import ListPlansUseCase
+
     mock_plan = Plan(
         plan_id=1,
         name="Free",
         initial_monthly_price=0.0,
         initial_max_profiles=1,
     )
-    mock_request = MagicMock(spec=Request)
-    mock_request.app.state.container.plan_repo.list_all.return_value = [mock_plan]
+    mock_use_case = MagicMock(spec=ListPlansUseCase)
+    mock_use_case.execute.return_value = [mock_plan]
 
-    res = list_plans(request=mock_request)
+    res = list_plans(use_case=mock_use_case)
 
     assert len(res) == 1
     assert res[0].plan_id == 1
@@ -336,3 +359,78 @@ def test_get_top_moderation_reviews_returns_mapped_reviews() -> None:
     assert res[0].review_id == 9
     assert res[0].likes_count == 42
     mock_use_case.execute.assert_called_once_with()
+
+
+def test_list_admin_tracks_router_forwards_filters_and_returns_metrics() -> None:
+    mock_use_case = MagicMock(spec=ListAdminCatalogTracksUseCase)
+    mock_use_case.execute.return_value = [
+        AdminCatalogTrackResult(
+            track_id=10,
+            title="Track X",
+            artist="Artist Y",
+            duration_seconds=200,
+            genre="Rock",
+            likes_count=4,
+            dislikes_count=3,
+            superlikes_count=1,
+            average_rating=4.5,
+            review_count=2,
+        )
+    ]
+
+    res = list_admin_tracks(
+        use_case=mock_use_case,
+        query="Track",
+        include_deleted=True,
+        min_dislikes=2,
+        sort_by="dislikes_desc",
+        limit=50,
+        offset=0,
+    )
+
+    assert len(res) == 1
+    assert res[0].dislikes_count == 3
+    assert res[0].superlikes_count == 1
+    assert res[0].average_rating == 4.5
+    mock_use_case.execute.assert_called_once_with(
+        query="Track",
+        include_deleted=True,
+        min_dislikes=2,
+        sort_by="dislikes_desc",
+        limit=50,
+        offset=0,
+    )
+
+
+def test_create_admin_track_router_forwards_command() -> None:
+    mock_use_case = MagicMock(spec=CreateTrackUseCase)
+    mock_use_case.execute.return_value = AdminCatalogTrackResult(
+        track_id=55,
+        title="Created Song",
+        artist="Admin Artist",
+        duration_seconds=195,
+        genre="Pop",
+        explicit=True,
+    )
+
+    req = CreateTrackAdminRequest(
+        title="Created Song",
+        artist="Admin Artist",
+        genre="Pop",
+        duration_seconds=195,
+        explicit=True,
+    )
+    res = create_admin_track(req=req, use_case=mock_use_case)
+
+    assert res.track_id == 55
+    assert res.title == "Created Song"
+    assert res.explicit is True
+    mock_use_case.execute.assert_called_once_with(
+        CreateTrackCommand(
+            title="Created Song",
+            artist="Admin Artist",
+            genre="Pop",
+            duration_seconds=195,
+            explicit=True,
+        )
+    )

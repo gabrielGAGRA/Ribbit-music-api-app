@@ -15,11 +15,7 @@ from app.application.ports.repositories.playlist_repository import (
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.use_cases.jam.save_queue_track import SaveQueueTrackUseCase
-from app.domain.exceptions import (
-    EntityNotFoundError,
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
-)
+from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models import (
     InteractionAction,
     Jam,
@@ -135,8 +131,9 @@ def test_save_queue_track_requires_spotify_premium() -> None:
         track_repo=MagicMock(spec=TrackRepositoryPort),
         interaction_repo=MagicMock(spec=InteractionRepositoryPort),
     )
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(SaveQueueTrackCommand(jam_id=10, user_id=1, track_id=50))
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
 
 
 def test_save_queue_track_requires_spotify_connection_when_unlinked() -> None:
@@ -157,5 +154,6 @@ def test_save_queue_track_requires_spotify_connection_when_unlinked() -> None:
         track_repo=MagicMock(spec=TrackRepositoryPort),
         interaction_repo=MagicMock(spec=InteractionRepositoryPort),
     )
-    with pytest.raises(SpotifyConnectionRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(SaveQueueTrackCommand(jam_id=10, user_id=1, track_id=50))
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"

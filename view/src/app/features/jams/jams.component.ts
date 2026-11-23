@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import type { JamQueueTrack, Song } from '@ribbit/shared-types';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { TransformStyleDirective } from '../../shared/dynamic-style.directive';
+import { TransformStyleDirective } from '../../shared/transform-style.directive';
 import { IconComponent } from '../../shared/icon.component';
 
 /** Collaborative Jam workspace supporting room joining, deck voting, skip consensus, and queue saving. */
@@ -17,23 +17,23 @@ import { IconComponent } from '../../shared/icon.component';
 export class JamsComponent {
   protected readonly state = inject(RibbitStateService);
 
-  readonly jamView = signal<'swipe' | 'room'>('swipe');
-  readonly jamDeckCursor = signal<number>(0);
-  protected readonly jamDrag = signal<number>(0);
+  protected readonly jamView = signal<'swipe' | 'room'>('swipe');
+  private readonly jamDeckCursor = signal<number>(0);
+  private readonly jamDrag = signal<number>(0);
   private jamPointerStart: number | null = null;
 
-  readonly currentSong = computed<Song>(
+  protected readonly currentSong = computed<Song>(
     () => this.state.jamState().currentTrack ?? this.state.currentSong(),
   );
 
-  readonly currentJamDeckSong = computed<Song>(() => {
+  protected readonly currentJamDeckSong = computed<Song>(() => {
     const jamDeck = this.state.jamDeckSongs();
     const list = jamDeck.length > 0 ? jamDeck : this.state.songs();
     const cursor = this.jamDeckCursor();
     return list[cursor % list.length] ?? this.state.currentSong();
   });
 
-  readonly upcomingQueueItems = computed<readonly JamQueueTrack[]>(() => {
+  protected readonly upcomingQueueItems = computed<readonly JamQueueTrack[]>(() => {
     const liveQueue = this.state.jamState().queueItems ?? [];
     if (liveQueue.length > 0 || this.state.jamState().jamId !== undefined) {
       return liveQueue;
@@ -44,24 +44,28 @@ export class JamsComponent {
       .map((song, idx) => ({ song, votePoints: 4 - idx }));
   });
 
-  readonly formattedDurationMinutes = computed<string>(() =>
+  protected readonly formattedDurationMinutes = computed<string>(() =>
     String(this.state.jamState().durationMinutes).padStart(2, '0'),
   );
 
-  readonly jamSuperlikesCount = computed<number>(() => this.state.jamState().superlikesCount || 0);
-  readonly jamSuperlikesLimit = computed<number>(() => this.state.jamState().superlikesLimit || 5);
+  protected readonly jamSuperlikesCount = computed<number>(
+    () => this.state.jamState().superlikesCount || 0,
+  );
+  protected readonly jamSuperlikesLimit = computed<number>(
+    () => this.state.jamState().superlikesLimit || 5,
+  );
 
-  readonly jamCardTransform = computed<string>(() => {
+  protected readonly jamCardTransform = computed<string>(() => {
     const drag = this.jamDrag();
     if (drag === 0) return '';
     return `translateX(${drag}px) rotate(${drag / 30}deg)`;
   });
 
-  selectJamView(view: 'swipe' | 'room'): void {
+  protected selectJamView(view: 'swipe' | 'room'): void {
     this.jamView.set(view);
   }
 
-  openJamModal(): void {
+  protected openJamModal(): void {
     if (!this.state.isSpotifyLinked()) {
       this.state.promptSpotifyConnection(
         'Conecte sua conta do Spotify para criar uma Jam no Pond.',
@@ -75,7 +79,7 @@ export class JamsComponent {
     this.state.setModal('jam');
   }
 
-  joinJam(code: string): void {
+  private joinJam(code: string): void {
     const cleaned = code.trim();
     if (!cleaned) return;
     if (!this.state.isSpotifyLinked()) {
@@ -97,14 +101,14 @@ export class JamsComponent {
     this.state.notify(`Você entrou na Jam (${cleaned})! Deslize para pontuar músicas.`);
   }
 
-  onJoinSubmit(event: Event): void {
+  protected submitJoinRoom(event: Event): void {
     event.preventDefault();
-    const form = event.target as HTMLFormElement;
-    const input = form.elements.namedItem('jamCode') as HTMLInputElement;
-    this.joinJam(input.value || 'RIBBIT-729');
+    if (!(event.target instanceof HTMLFormElement)) return;
+    const input = event.target.elements.namedItem('jamCode');
+    this.joinJam(input instanceof HTMLInputElement && input.value ? input.value : 'RIBBIT-729');
   }
 
-  copyCode(): void {
+  protected copyCode(): void {
     const code = this.state.jamState().code;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(code);
@@ -112,15 +116,15 @@ export class JamsComponent {
     this.state.notify(`Código ${code} copiado.`);
   }
 
-  voteSkip(): void {
+  protected voteSkip(): void {
     this.state.voteSkipJam();
   }
 
-  advanceJam(): void {
+  protected advanceJam(): void {
     this.state.advanceJam();
   }
 
-  fetchMoreJamDeck(): void {
+  private fetchMoreJamDeck(): void {
     const jamId = this.state.jamState().jamId;
     const nextCursor = this.state.jamDeckNextCursor();
     if (jamId && nextCursor) {
@@ -128,11 +132,11 @@ export class JamsComponent {
     }
   }
 
-  likeCurrent(): void {
+  protected likeCurrent(): void {
     this.state.saveJamQueueSong(this.currentSong());
   }
 
-  loveTrack(song: Song): void {
+  protected loveTrack(song: Song): void {
     if (this.state.jamState().jamId !== undefined) {
       this.state.saveJamQueueSong(song);
       return;
@@ -140,11 +144,11 @@ export class JamsComponent {
     this.state.notify(`${song.title} foi adicionada às suas favoritas.`);
   }
 
-  leaveJam(): void {
+  protected leaveJam(): void {
     this.state.closeOrLeaveJam();
   }
 
-  decideJamCard(action: 'reject' | 'like' | 'superlike'): void {
+  protected decideJamCard(action: 'reject' | 'like' | 'superlike'): void {
     const song = this.currentJamDeckSong();
     const currentJam = this.state.jamState();
 
@@ -181,23 +185,25 @@ export class JamsComponent {
     }
   }
 
-  onJamPointerDown(event: PointerEvent): void {
+  protected startJamCardDrag(event: PointerEvent): void {
     this.jamPointerStart = event.clientX;
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    if (event.currentTarget instanceof HTMLElement) {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
   }
 
-  onJamPointerMove(event: PointerEvent): void {
+  protected moveJamCardDrag(event: PointerEvent): void {
     if (this.jamPointerStart !== null) {
       this.jamDrag.set(event.clientX - this.jamPointerStart);
     }
   }
 
-  onJamPointerCancel(): void {
+  protected cancelJamCardDrag(): void {
     this.jamPointerStart = null;
     this.jamDrag.set(0);
   }
 
-  onJamPointerUp(): void {
+  protected finishJamCardDrag(): void {
     if (this.jamPointerStart === null) return;
     this.jamPointerStart = null;
     const drag = this.jamDrag();

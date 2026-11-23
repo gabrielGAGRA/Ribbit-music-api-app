@@ -1,4 +1,4 @@
-import { Component, ChangeDetectionStrategy, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 export type FrogMood = 'idle' | 'wave' | 'talk' | 'excited' | 'celebrate';
 
@@ -14,4 +14,14 @@ export class FrogComponent {
   readonly size = input<number | undefined>(undefined);
   readonly mood = input<FrogMood>('idle');
   readonly speaking = input<boolean>(false);
+
+  protected readonly svgClass = computed<string>(() => {
+    const base = this.small() ? 'frog small' : this.size() === 64 ? 'frog size-64' : 'frog';
+    const speakingClass = this.speaking() ? ' is-speaking' : '';
+    return `${base} mood-${this.mood()}${speakingClass}`;
+  });
+
+  protected readonly isMouthOpen = computed<boolean>(
+    () => this.speaking() || this.mood() === 'talk' || this.mood() === 'celebrate',
+  );
 }

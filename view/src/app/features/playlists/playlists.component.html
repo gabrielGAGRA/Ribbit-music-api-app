@@ -56,7 +56,7 @@
                 type="file"
                 accept="image/*"
                 class="hidden-file-input"
-                (change)="onCoverFileSelected($event)"
+                (change)="uploadPlaylistCover($event)"
               />
               <app-icon name="filter" [size]="15" />
               {{ isUploadingCover() ? 'Enviando...' : 'Alterar Capa' }}
@@ -96,10 +96,10 @@
                   [class.is-liking]="activeDeckDragAction() === 'like'"
                   [class.is-rejecting]="activeDeckDragAction() === 'dislike'"
                   [appTransform]="deckCardTransform()"
-                  (pointerdown)="onDeckPointerDown($event)"
-                  (pointermove)="onDeckPointerMove($event)"
-                  (pointerup)="onDeckPointerUp()"
-                  (pointercancel)="onDeckPointerCancel()"
+                  (pointerdown)="startDeckCardDrag($event)"
+                  (pointermove)="moveDeckCardDrag($event)"
+                  (pointerup)="finishDeckCardDrag()"
+                  (pointercancel)="cancelDeckCardDrag()"
                 >
                   <img
                     class="album-art"
@@ -153,6 +153,9 @@
 
                     <div class="track-tags">
                       <span>{{ deckTrack.genre }}</span>
+                      @if (state.isTrackSeen(deckTrack.trackId)) {
+                        <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+                      }
                       <small>
                         <app-icon name="clock" [size]="12" />
                         {{ deckTrack.time }}
@@ -235,7 +238,11 @@
           </div>
 
           <div class="panel tracks-table">
-            @for (track of selectedPlaylistTracks(); track track.title; let i = $index) {
+            @for (
+              track of selectedPlaylistTracks();
+              track track.trackId ?? track.title;
+              let i = $index
+            ) {
               <div class="track-row">
                 <span class="track-index">0{{ i + 1 }}</span>
                 <div class="song-cover">
@@ -247,6 +254,9 @@
                     >{{ track.artist }} · <small>{{ track.genre }}</small></span
                   >
                 </div>
+                @if (state.isTrackSeen(track.trackId)) {
+                  <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+                }
                 <span class="song-duration">{{ track.time }}</span>
 
                 <div class="track-item-actions">

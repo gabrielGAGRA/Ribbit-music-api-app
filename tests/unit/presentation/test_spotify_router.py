@@ -9,7 +9,7 @@ from app.application.use_cases.spotify import (
     ConnectSpotifyAccountUseCase,
     GetSpotifyAuthorizeUrlUseCase,
 )
-from app.domain.exceptions import AuthenticationRequiredError
+from app.domain.exceptions import AuthenticationRequiredError, ExternalServiceError
 from app.domain.models.user import User
 from app.infrastructure.security.token_service import HMACTokenService
 from app.presentation.routers.spotify import (
@@ -17,6 +17,29 @@ from app.presentation.routers.spotify import (
     get_spotify_authorize_url,
 )
 from app.presentation.schemas.spotify import SpotifyConnectCallbackRequest
+
+
+def test_get_spotify_authorize_url_raises_when_unconfigured() -> None:
+    token_service = HMACTokenService(secret_key="secret-key")
+    with pytest.raises(ExternalServiceError, match="Spotify OAuth is not configured."):
+        get_spotify_authorize_url(
+            user_id=42,
+            token_service=token_service,
+            use_case=None,
+        )
+
+
+def test_connect_spotify_callback_raises_when_unconfigured() -> None:
+    token_service = HMACTokenService(secret_key="secret-key")
+    state = token_service.create_access_token(user_id=42)
+    req = SpotifyConnectCallbackRequest(code="valid_code", state=state)
+    with pytest.raises(ExternalServiceError, match="Spotify OAuth is not configured."):
+        connect_spotify_callback(
+            req=req,
+            user_id=42,
+            token_service=token_service,
+            use_case=None,
+        )
 
 
 def test_get_spotify_authorize_url_generates_signed_state() -> None:

@@ -35,8 +35,8 @@ describe('DashboardComponent', () => {
       { status: 403, statusText: 'Forbidden' },
     );
 
-    expect(component.isPremiumLocked()).toBe(true);
-    component.goToPlans();
+    expect(component['isPremiumLocked']()).toBe(true);
+    component['goToPlans']();
     expect(state.activePage()).toBe('plans');
   });
 
@@ -52,8 +52,8 @@ describe('DashboardComponent', () => {
       top_artists: ['Terno Rei', 'Liniker'],
     });
 
-    expect(component.isPremiumLocked()).toBe(false);
-    expect(component.hoursLabel()).toBe('18.4h');
-    expect(component.favoriteGenres()[0]?.genre).toBe('Indie');
+    expect(component['isPremiumLocked']()).toBe(false);
+    expect(component['hoursLabel']()).toBe('18.4h');
+    expect(component['favoriteGenres']()[0]?.genre).toBe('Indie');
   });
 });

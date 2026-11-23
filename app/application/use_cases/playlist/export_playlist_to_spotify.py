@@ -4,8 +4,8 @@ from dataclasses import dataclass
 
 from app.domain.exceptions import (
     EntityNotFoundError,
+    ExternalServiceError,
     PermissionDeniedError,
-    SpotifyConnectionRequiredError,
 )
 lazy from app.application.ports.repositories.playlist_repository import (
     PlaylistRepositoryPort,
@@ -29,7 +29,7 @@ class ExportPlaylistToSpotifyUseCase:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
         if not user.spotify_id:
-            raise SpotifyConnectionRequiredError(
+            raise PermissionDeniedError(
                 "Conecte sua conta do Spotify para exportar playlists.",
                 details={"rule_name": "spotify_connection_required"},
             )
@@ -44,13 +44,21 @@ class ExportPlaylistToSpotifyUseCase:
             )
 
         external_track_ids = [t.spotify_id or str(t.track_id) for t in playlist.tracks]
-        spotify_playlist_id = self.export_port.export_playlist(
-            account_id=user.spotify_id,
-            name=playlist.name,
-            track_ids=external_track_ids,
-            access_token=user.spotify_access_token,
-            refresh_token=user.spotify_refresh_token,
-        )
+        try:
+            spotify_playlist_id = self.export_port.export_playlist(
+                account_id=user.spotify_id,
+                name=playlist.name,
+                track_ids=external_track_ids,
+                access_token=user.spotify_access_token,
+                refresh_token=user.spotify_refresh_token,
+            )
+        except ExternalServiceError as exc:
+            if exc.details.get("error_kind") in ("auth", "forbidden"):
+                raise PermissionDeniedError(
+                    "Conecte sua conta do Spotify para exportar playlists.",
+                    details={"rule_name": "spotify_connection_required"},
+                ) from exc
+            raise
 
         playlist.export(spotify_playlist_id)
         return self.playlist_repo.save(playlist)

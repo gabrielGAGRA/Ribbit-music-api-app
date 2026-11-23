@@ -6,6 +6,9 @@ from app.application.use_cases.discovery.get_next_discovery_track import (
 from app.application.use_cases.discovery.record_swipe_interaction import (
     RecordSwipeInteractionUseCase,
 )
+from app.application.use_cases.discovery.record_track_access import (
+    RecordTrackAccessUseCase,
+)
 from app.application.use_cases.discovery.undo_latest_discovery_interaction import (
     UndoLatestDiscoveryInteractionUseCase,
 )
@@ -13,5 +16,6 @@ from app.application.use_cases.discovery.undo_latest_discovery_interaction impor
 __all__ = [
     "GetNextDiscoveryTrackUseCase",
     "RecordSwipeInteractionUseCase",
+    "RecordTrackAccessUseCase",
     "UndoLatestDiscoveryInteractionUseCase",
 ]

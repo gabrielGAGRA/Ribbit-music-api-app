@@ -4,10 +4,9 @@ import { Router } from '@angular/router';
 import type { MetricItem, RankedArtist, RankedGenre } from '@ribbit/shared-types';
 import { isPremiumRequiredError, toApiError } from '../../core/api-error';
 import { readAuthToken } from '../../core/auth-token.storage';
-import { MOCK_FAVORITE_GENRES, MOCK_METRICS } from '../../core/mocks/dashboard.mock';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { DashboardService } from '../../core/services/dashboard.service';
-import { WidthPercentDirective } from '../../shared/dynamic-style.directive';
+import { DashboardService } from './dashboard.service';
+import { WidthPercentDirective } from '../../shared/width-percent.directive';
 import { IconComponent } from '../../shared/icon.component';
 
 /** Renders annual retrospective listening stats from /api/profile/stats, or an upgrade CTA when Free (403). */
@@ -20,19 +19,21 @@ import { IconComponent } from '../../shared/icon.component';
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardComponent implements OnInit {
-  protected readonly state = inject(RibbitStateService);
+  private readonly state = inject(RibbitStateService);
   private readonly dashboardService = inject(DashboardService);
   private readonly router = inject(Router, { optional: true });
 
-  readonly hoursLabel = signal<string>('0h');
-  readonly metrics = signal<readonly MetricItem[]>(MOCK_METRICS);
-  readonly favoriteGenres = signal<readonly RankedGenre[]>(MOCK_FAVORITE_GENRES);
-  readonly loadedArtists = signal<readonly RankedArtist[] | null>(null);
-  readonly isPremiumLocked = signal<boolean>(false);
+  protected readonly hoursLabel = signal<string>('0h');
+  protected readonly metrics = signal<readonly MetricItem[]>([]);
+  protected readonly favoriteGenres = signal<readonly RankedGenre[]>([]);
+  private readonly loadedArtists = signal<readonly RankedArtist[] | null>(null);
+  protected readonly isPremiumLocked = signal<boolean>(false);
 
-  readonly userFirstName = computed<string>(() => this.state.userName().split(' ')[0] || 'Ouvinte');
+  protected readonly userFirstName = computed<string>(
+    () => this.state.userName().split(' ')[0] || 'Ouvinte',
+  );
 
-  readonly favoriteArtists = computed<readonly RankedArtist[]>(() => {
+  protected readonly favoriteArtists = computed<readonly RankedArtist[]>(() => {
     const apiArtists = this.loadedArtists();
     if (apiArtists !== null) {
       return apiArtists;
@@ -66,12 +67,12 @@ export class DashboardComponent implements OnInit {
     });
   }
 
-  goToPlans(): void {
+  protected goToPlans(): void {
     this.state.setPage('plans');
     void this.router?.navigate(['/plans']).catch(() => false);
   }
 
-  searchArtist(artist: string): void {
+  protected searchArtist(artist: string): void {
     this.state.searchQuery.set(artist);
     this.state.setPage('explore');
     void this.router?.navigate(['/explore']).catch(() => false);

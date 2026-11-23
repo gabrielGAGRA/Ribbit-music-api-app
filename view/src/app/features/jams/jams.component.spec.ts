@@ -37,7 +37,7 @@ describe('JamsComponent', () => {
     state.spotifyPremium.set(true);
     expect(state.jamState().active).toBe(false);
 
-    component.joinJam('RIBBIT-123');
+    component['joinJam']('RIBBIT-123');
     const joinReq = httpMock.expectOne('/api/jams/join');
     expect(joinReq.request.method).toBe('POST');
     expect(joinReq.request.body).toEqual({ room_code: 'RIBBIT-123' });
@@ -76,29 +76,29 @@ describe('JamsComponent', () => {
     });
 
     expect(state.jamState().active).toBe(true);
-    expect(component.jamView()).toBe('swipe');
+    expect(component['jamView']()).toBe('swipe');
   });
 
   it('should vote to skip current track', () => {
     state.setJamActive(true);
     expect(state.jamVotes()).toBe(0);
-    component.voteSkip();
+    component['voteSkip']();
     expect(state.jamVotes()).toBe(1);
   });
 
   it('should allow copying room code', () => {
-    component.copyCode();
+    component['copyCode']();
     expect(state.toast()).toContain('copiado');
   });
 
   it('should handle jam swipe actions and superlikes quota', () => {
     state.setJamActive(true);
-    const initialCursor = component.jamDeckCursor();
-    component.decideJamCard('like');
-    expect(component.jamDeckCursor()).toBe(initialCursor + 1);
+    const initialCursor = component['jamDeckCursor']();
+    component['decideJamCard']('like');
+    expect(component['jamDeckCursor']()).toBe(initialCursor + 1);
 
-    component.decideJamCard('superlike');
-    expect(component.jamSuperlikesCount()).toBe(1);
+    component['decideJamCard']('superlike');
+    expect(component['jamSuperlikesCount']()).toBe(1);
   });
 
   it('should allow vertical scroll on jam swipe card and stack join form on mobile', () => {
@@ -113,7 +113,7 @@ describe('JamsComponent', () => {
 
   it('prompts spotify connection modal when unlinked user tries to open jam modal', () => {
     state.spotifyId.set(null);
-    component.openJamModal();
+    component['openJamModal']();
     expect(state.activeModal()).toBe('spotify-connect');
     expect(state.spotifyPromptReason()).toContain('Conecte sua conta do Spotify');
   });
@@ -121,21 +121,21 @@ describe('JamsComponent', () => {
   it('shows warning notification when linked non-premium user tries to open jam modal', () => {
     state.spotifyId.set('spot_user_1');
     state.spotifyPremium.set(false);
-    component.openJamModal();
+    component['openJamModal']();
     expect(state.activeModal()).toBeNull();
     expect(state.toast()).toContain('Spotify Premium é necessária');
   });
 
   it('prompts spotify connection modal when unlinked user tries to join jam', () => {
     state.spotifyId.set(null);
-    component.joinJam('123456');
+    component['joinJam']('123456');
     expect(state.activeModal()).toBe('spotify-connect');
   });
 
   it('shows warning notification when linked non-premium user tries to join jam', () => {
     state.spotifyId.set('spot_user_1');
     state.spotifyPremium.set(false);
-    component.joinJam('123456');
+    component['joinJam']('123456');
     expect(state.activeModal()).toBeNull();
     expect(state.toast()).toContain('Spotify Premium é necessária');
   });
@@ -155,7 +155,7 @@ describe('JamsComponent', () => {
     });
     state.jamDeckNextCursor.set(200);
 
-    component.advanceJam();
+    component['advanceJam']();
     const advReq = httpMock.expectOne('/api/jams/35/advance');
     expect(advReq.request.method).toBe('POST');
     advReq.flush({});
@@ -178,7 +178,7 @@ describe('JamsComponent', () => {
       skip_votes: 0,
     });
 
-    component.fetchMoreJamDeck();
+    component['fetchMoreJamDeck']();
     const deckReq = httpMock.expectOne('/api/jams/35/deck?limit=30&cursor_id=200');
     expect(deckReq.request.method).toBe('GET');
     deckReq.flush({ items: [], next_cursor: null, has_more: false });
@@ -200,7 +200,7 @@ describe('JamsComponent', () => {
       durationMinutes: 0,
     });
 
-    component.leaveJam();
+    component['leaveJam']();
 
     const closeReq = httpMock.expectOne('/api/jams/44/close');
     expect(closeReq.request.method).toBe('POST');
@@ -227,7 +227,7 @@ describe('JamsComponent', () => {
       durationMinutes: 0,
     });
 
-    component.leaveJam();
+    component['leaveJam']();
 
     httpMock.expectNone('/api/jams/55/close');
     expect(state.jamState().active).toBe(false);

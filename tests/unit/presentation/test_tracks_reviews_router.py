@@ -39,12 +39,6 @@ from app.presentation.schemas.tracks_reviews import (
 )
 
 
-def _request_with_track(track: Track) -> MagicMock:
-    request = MagicMock()
-    request.app.state.container.track_repo.find_by_id.return_value = track
-    return request
-
-
 def test_search_tracks_forwards_command_and_serializes_tracks() -> None:
     mock_use_case = MagicMock(spec=SearchTracksUseCase)
     track = Track(
@@ -195,7 +189,9 @@ def test_get_community_feed_accepts_custom_query_params() -> None:
     )
     mock_use_case.execute.return_value = [review]
 
-    res = get_community_feed(use_case=mock_use_case, days=14, limit=25)
+    res = get_community_feed(
+        use_case=mock_use_case, days=14, limit=25, sort_by="rating_desc"
+    )
 
     assert len(res) == 1
     assert res[0].review_id == 1
@@ -203,7 +199,9 @@ def test_get_community_feed_accepts_custom_query_params() -> None:
     assert res[0].track_title == "Song A"
     assert res[0].track_artist == "Artist B"
     assert res[0].track_image == "https://example.com/cover.jpg"
-    mock_use_case.execute.assert_called_once_with(days=14, limit=25)
+    mock_use_case.execute.assert_called_once_with(
+        days=14, limit=25, sort_by="rating_desc"
+    )
 
 
 def test_get_community_feed_defaults() -> None:
@@ -214,18 +212,11 @@ def test_get_community_feed_defaults() -> None:
     res = get_community_feed(use_case=mock_use_case)
 
     assert res == []
-    mock_use_case.execute.assert_called_once_with(days=5, limit=10)
+    mock_use_case.execute.assert_called_once_with(days=None, limit=10, sort_by="likes")
 
 
 def test_get_track_reviews_returns_review_list_for_active_track() -> None:
     mock_use_case = MagicMock()
-    track = Track(
-        track_id=101,
-        title="Song",
-        artist="Artist",
-        duration_seconds=200,
-        genre="Pop",
-    )
     review = ReviewComment(
         review_id=50,
         user_id=7,
@@ -238,13 +229,14 @@ def test_get_track_reviews_returns_review_list_for_active_track() -> None:
 
     result = get_track_reviews(
         track_id=101,
-        request=_request_with_track(track),
         use_case=mock_use_case,
     )
 
     assert len(result) == 1
     assert result[0].review_id == 50
-    mock_use_case.execute.assert_called_once_with(track_id=101)
+    mock_use_case.execute.assert_called_once_with(
+        track_id=101, limit=50, sort_by="recent"
+    )
 
 
 def test_like_review_router_passes_review_and_user_id() -> None:

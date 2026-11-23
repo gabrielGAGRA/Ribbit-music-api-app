@@ -15,6 +15,8 @@ import type {
   RecentInteractedTrackApiDto,
   Song,
   SubscriptionPlan,
+  TrackAccessHistoryItem,
+  TrackAccessSource,
   UserApiDto,
 } from '@ribbit/shared-types';
 import {
@@ -34,16 +36,26 @@ import {
   writeAuthToken,
   writeStoredUser,
 } from './auth-token.storage';
-import { MOCK_REVIEWS } from './mocks/reviews.mock';
-import { MOCK_SONGS } from './mocks/songs.mock';
-import { PlanService } from './services/plan.service';
-import { PlaylistService } from './services/playlist.service';
-import { SongService } from './services/song.service';
+import { PlanService } from './plan.service';
+import { PlaylistService } from './playlist.service';
+import { SongService } from './song.service';
+import type { ReviewSortOption } from './song.service';
 import { JamService } from '../features/jams/jam.service';
 import { ProfileApiService } from '../features/profile/profile-api.service';
 
-export const INITIAL_SONGS: readonly Song[] = MOCK_SONGS;
-export const INITIAL_REVIEWS: readonly CommunityReview[] = MOCK_REVIEWS;
+export const INITIAL_SONGS: readonly Song[] = [];
+export const INITIAL_REVIEWS: readonly CommunityReview[] = [];
+
+const EMPTY_SONG: Song = {
+  title: '',
+  artist: '',
+  genre: '',
+  time: '0:00',
+  image: '',
+  album: '',
+  year: '',
+  match: 0,
+};
 
 function getStoredGenres(key: string, fallback: readonly string[]): readonly string[] {
   try {
@@ -119,18 +131,27 @@ export class RibbitStateService implements OnDestroy {
   private readonly hasInitialToken = readAuthToken() !== null;
   private jamPollTimer: ReturnType<typeof setInterval> | null = null;
   private readonly unsubscribeUnauthorized: () => void;
+  private readonly recentAccessTimestamps = new Map<string, number>();
 
   readonly songs = signal<readonly Song[]>(INITIAL_SONGS);
+  readonly accessHistory = signal<readonly TrackAccessHistoryItem[]>([]);
+  readonly seenTrackIds = signal<ReadonlySet<number>>(new Set());
   readonly discoverySong = signal<Song | null>(null);
   private readonly discoveryQueue: Song[] = [];
   private discoveryPrefetchInFlight = false;
   private readonly discoveryQueueTarget = 3;
   readonly isDeckEmpty = signal<boolean>(false);
-  readonly lastSwiped = signal<{
-    readonly song: Song;
-    readonly kind: DecisionKind;
-    readonly index: number;
-  } | null>(null);
+  private readonly swipeUndoStack = signal<
+    readonly {
+      readonly song: Song;
+      readonly kind: DecisionKind;
+      readonly index: number;
+    }[]
+  >([]);
+  readonly lastSwiped = computed(() => {
+    const stack = this.swipeUndoStack();
+    return stack[stack.length - 1] ?? null;
+  });
 
   readonly history = signal<readonly Decision[]>([]);
   readonly likedSongs = signal<readonly Song[]>([]);
@@ -148,6 +169,11 @@ export class RibbitStateService implements OnDestroy {
   readonly primaryAccountId = signal<number | null>(this.initialUser?.primary_account_id ?? null);
   readonly userEmail = signal<string>(this.initialUser?.email ?? '');
   readonly userName = signal<string>(this.initialUser?.display_name ?? 'Visitante');
+  readonly userAge = signal<number | null>(this.initialUser?.age ?? null);
+  readonly isMinorUser = computed<boolean>(() => {
+    const age = this.userAge();
+    return age !== null && age < 18;
+  });
   readonly currentPlanId = signal<number>(this.initialUser?.plan_id ?? 1);
   readonly currentPlan = signal<string>('Free');
   readonly spotifyId = signal<string | null>(this.initialUser?.spotify_id ?? null);
@@ -185,6 +211,10 @@ export class RibbitStateService implements OnDestroy {
   readonly searchFilterYear = signal<number | undefined>(undefined);
   readonly searchFilterStartDate = signal<string>('');
   readonly searchFilterEndDate = signal<string>('');
+  readonly searchFilterMinRating = signal<number | null>(null);
+  readonly searchSortBy = signal<'default' | 'rating_desc' | 'rating_asc'>('default');
+  readonly communityFeedSort = signal<ReviewSortOption>('likes');
+  readonly trackReviewsSort = signal<ReviewSortOption>('recent');
 
   readonly superlikesGoal = signal<number>(3);
   readonly superlikesCount = computed<number>(() => this.lovedSongs().length);
@@ -213,7 +243,7 @@ export class RibbitStateService implements OnDestroy {
     }
     const list = this.songs();
     const idx = this.currentIndex();
-    return list[idx % list.length] ?? INITIAL_SONGS[0]!;
+    return list.length > 0 ? (list[idx % list.length] ?? EMPTY_SONG) : EMPTY_SONG;
   });
 
   readonly detailsTargetSong = computed<Song>(
@@ -271,6 +301,7 @@ export class RibbitStateService implements OnDestroy {
       const target = this.detailsTargetSong();
       if (target.trackId !== undefined) {
         this.loadReviewsForTrack(target);
+        this.recordTrackAccess(target, 'details');
       }
     } else if (modal === null) {
       this.selectedDetailsSong.set(null);
@@ -341,7 +372,58 @@ export class RibbitStateService implements OnDestroy {
     this.refreshCatalogAndFeed();
     this.refreshPlaylists();
     this.refreshInteractedCollections();
+    this.refreshAccessHistory();
     this.loadNextDiscoveryTrack();
+  }
+
+  /** Reloads active track access history and distinct seen track IDs from /api/profile/access-history. */
+  refreshAccessHistory(): void {
+    if (!readAuthToken()) return;
+    this.songService
+      .getUserAccessHistory(100, 0)
+      .pipe(catchError(() => of(null)))
+      .subscribe((res) => {
+        if (res === null) return;
+        this.accessHistory.set(res.items);
+        this.seenTrackIds.set(new Set(res.seen_track_ids));
+      });
+  }
+
+  /** Checks whether the given track ID has already been seen/listened by the user. */
+  isTrackSeen(trackId?: number): boolean {
+    if (trackId === undefined) return false;
+    return this.seenTrackIds().has(trackId);
+  }
+
+  /** Records an explicit track access, updating seenTrackIds optimistically and deduplicating rapid clicks. */
+  recordTrackAccess(song: Song, source: TrackAccessSource): void {
+    const trackId = song.trackId;
+    if (trackId === undefined) return;
+
+    this.seenTrackIds.update((prev) => {
+      if (prev.has(trackId)) return prev;
+      const next = new Set(prev);
+      next.add(trackId);
+      return next;
+    });
+
+    const dedupeKey = `${String(trackId)}:${source}`;
+    const now = Date.now();
+    const lastRecorded = this.recentAccessTimestamps.get(dedupeKey);
+    if (lastRecorded !== undefined && now - lastRecorded < 5000) {
+      return;
+    }
+    this.recentAccessTimestamps.set(dedupeKey, now);
+
+    if (!readAuthToken()) return;
+    this.songService.recordTrackAccess(trackId, source).subscribe({
+      next: () => {
+        this.refreshAccessHistory();
+      },
+      error: () => {
+        // Non-blocking telemetry: keep optimistic seen state
+      },
+    });
   }
 
   /** Synchronizes blocked genres, favorite genres, and theme preference from /api/profile/*. */
@@ -350,11 +432,11 @@ export class RibbitStateService implements OnDestroy {
     forkJoin({
       blocked: this.profileApi
         .listBlockedGenres()
-        .pipe(catchError(() => of(null as readonly string[] | null))),
+        .pipe(catchError(() => of<readonly string[] | null>(null))),
       favorites: this.profileApi
         .getFavoriteGenres()
-        .pipe(catchError(() => of(null as readonly string[] | null))),
-      theme: this.profileApi.getTheme().pipe(catchError(() => of(null as string | null))),
+        .pipe(catchError(() => of<readonly string[] | null>(null))),
+      theme: this.profileApi.getTheme().pipe(catchError(() => of<string | null>(null))),
     }).subscribe(({ blocked, favorites, theme }) => {
       if (blocked !== null) {
         this.blockedGenres.set([...blocked]);
@@ -466,7 +548,7 @@ export class RibbitStateService implements OnDestroy {
     forkJoin({
       recent: this.songService
         .getRecentInteractedTracks(1000)
-        .pipe(catchError(() => of([] as readonly RecentInteractedTrackApiDto[]))),
+        .pipe(catchError(() => of<readonly RecentInteractedTrackApiDto[]>([]))),
       allHistory: this.profileApi.listHistory().pipe(catchError(() => of([]))),
     }).subscribe(({ recent, allHistory }) => {
       this.applyInteractedHistory(recent, allHistory.length);
@@ -490,6 +572,7 @@ export class RibbitStateService implements OnDestroy {
             trackLookup: lookup,
             currentUserId: this.userId() ?? undefined,
             currentUserName: this.userName(),
+            sortBy: this.communityFeedSort(),
           })
           .pipe(catchError(() => of([])))
           .subscribe();
@@ -565,6 +648,10 @@ export class RibbitStateService implements OnDestroy {
   initiatePlanSelection(plan: SubscriptionPlan): void {
     if (plan.name === this.currentPlan()) {
       this.notify(`Você já está no plano ${plan.displayName}.`);
+      return;
+    }
+    if (this.isMinorUser() && plan.name !== 'Free') {
+      this.notify('Somente usuários maiores de 18 anos podem assinar planos pagos.');
       return;
     }
     if (plan.name === 'Free') {
@@ -679,9 +766,19 @@ export class RibbitStateService implements OnDestroy {
       { index: idx, kind, ...(song.trackId !== undefined ? { trackId: song.trackId } : {}) },
     ];
     this.history.set(nextHistory);
-    this.lastSwiped.set({ song, kind, index: idx });
+    this.swipeUndoStack.update((stack) => [...stack, { song, kind, index: idx }]);
     this.applyLocalSwipeCollectionUpdate(song, kind);
     this.notifySwipeDecision(kind);
+
+    if (song.trackId !== undefined) {
+      const swipedTrackId = song.trackId;
+      this.seenTrackIds.update((prev) => {
+        if (prev.has(swipedTrackId)) return prev;
+        const next = new Set(prev);
+        next.add(swipedTrackId);
+        return next;
+      });
+    }
 
     if (song.trackId !== undefined && readAuthToken()) {
       const hadQueued = this.discoveryQueue.length > 0;
@@ -696,6 +793,7 @@ export class RibbitStateService implements OnDestroy {
             this.refillDiscoveryQueue();
           }
           this.refreshInteractedCollections();
+          this.refreshAccessHistory();
         },
         error: (err: unknown) => {
           this.notify(toApiError(err).message);
@@ -709,23 +807,28 @@ export class RibbitStateService implements OnDestroy {
 
   /** Restores the last swiped song back onto the Discovery card so the user can re-decide. */
   undo(): void {
-    const last = this.lastSwiped();
-    if (!last) {
-      this.notify('Você ainda não fez nenhum swipe.');
-      return;
-    }
+    const stack = this.swipeUndoStack();
+    const last = stack[stack.length - 1] ?? null;
 
     if (readAuthToken()) {
       this.songService.undoSwipe().subscribe({
-        next: () => {
-          this.currentIndex.set(last.index);
-          if (last.song.trackId !== undefined) {
-            this.discoverySong.set(last.song);
+        next: (res) => {
+          const popped = stack[stack.length - 1] ?? null;
+          if (popped) {
+            this.swipeUndoStack.update((items) => items.slice(0, -1));
+            this.currentIndex.set(popped.index);
+          }
+          const restoredSong = res.track
+            ? mapTrackDtoToSong(res.track)
+            : (popped?.song ?? this.songs().find((s) => s.trackId === res.track_id) ?? null);
+          if (restoredSong) {
+            this.discoverySong.set(restoredSong);
+            this.removeSongFromLocalCollections(restoredSong);
+            this.audioPlayer.loadTrack(restoredSong.previewUrl);
+            this.audioPlayer.setProgress(24);
           }
           this.isDeckEmpty.set(false);
-          this.lastSwiped.set(null);
           this.history.update((items) => items.slice(0, -1));
-          this.audioPlayer.loadTrack(last.song.previewUrl);
           this.refreshInteractedCollections();
           this.notify('Último swipe desfeito. Avalie a faixa novamente.');
         },
@@ -736,9 +839,19 @@ export class RibbitStateService implements OnDestroy {
             );
             return;
           }
-          this.notify(toApiError(err).message);
+          const apiErr = toApiError(err);
+          if (apiErr.status === 404) {
+            this.notify('Você ainda não fez nenhum swipe.');
+            return;
+          }
+          this.notify(apiErr.message);
         },
       });
+      return;
+    }
+
+    if (!last) {
+      this.notify('Você ainda não fez nenhum swipe.');
       return;
     }
 
@@ -746,10 +859,12 @@ export class RibbitStateService implements OnDestroy {
     if (last.song.trackId !== undefined) {
       this.discoverySong.set(last.song);
     }
+    this.removeSongFromLocalCollections(last.song);
     this.isDeckEmpty.set(false);
-    this.lastSwiped.set(null);
+    this.swipeUndoStack.update((items) => items.slice(0, -1));
     this.history.update((items) => items.slice(0, -1));
     this.audioPlayer.loadTrack(last.song.previewUrl);
+    this.audioPlayer.setProgress(24);
     this.notify('Último swipe desfeito. Avalie a faixa novamente.');
   }
 
@@ -872,10 +987,11 @@ export class RibbitStateService implements OnDestroy {
       );
     }
 
-    if (playlist.playlistId && song.trackId !== undefined && readAuthToken()) {
-      this.playlistService.addTrackToPlaylist(playlist.playlistId, song.trackId).subscribe({
+    const playlistId = playlist.playlistId;
+    if (playlistId && song.trackId !== undefined && readAuthToken()) {
+      this.playlistService.addTrackToPlaylist(playlistId, song.trackId).subscribe({
         next: () => {
-          this.refreshSinglePlaylist(playlist.playlistId!);
+          this.refreshSinglePlaylist(playlistId);
           this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
         },
         error: (err: unknown) => {
@@ -1023,13 +1139,14 @@ export class RibbitStateService implements OnDestroy {
   /** Registers a skip vote on the active Jam track via POST /api/jams/{id}/skip-vote. */
   voteSkipJam(): void {
     const jam = this.jamState();
-    if (!jam.jamId) {
+    const jamId = jam.jamId;
+    if (!jamId) {
       this.jamState.set({ ...jam, votes: jam.votes + 1 });
       this.notify('Seu voto para pular foi registrado.');
       return;
     }
     const activeTrackId = jam.currentTrack?.trackId;
-    this.jamService.voteSkip(jam.jamId, activeTrackId).subscribe({
+    this.jamService.voteSkip(jamId, activeTrackId).subscribe({
       next: (res) => {
         this.jamState.update((cur) => ({
           ...cur,
@@ -1037,7 +1154,7 @@ export class RibbitStateService implements OnDestroy {
           voteThreshold: res.threshold,
           active: res.is_active,
         }));
-        this.syncJamState(jam.jamId!);
+        this.syncJamState(jamId);
         this.notify(
           res.advanced
             ? 'Votação atingida! Pulando para a próxima faixa da Jam.'
@@ -1109,8 +1226,41 @@ export class RibbitStateService implements OnDestroy {
     }
   }
 
+  /** Reloads community reviews feed with the specified or active sort order. */
+  loadCommunityFeed(sortBy?: ReviewSortOption): void {
+    if (sortBy) {
+      this.communityFeedSort.set(sortBy);
+    }
+    if (!readAuthToken()) return;
+    const lookup = this.buildTrackLookup(this.songs());
+    this.songService
+      .loadCommunityFeed({
+        trackLookup: lookup,
+        currentUserId: this.userId() ?? undefined,
+        currentUserName: this.userName(),
+        sortBy: this.communityFeedSort(),
+      })
+      .pipe(catchError(() => of([])))
+      .subscribe();
+  }
+
+  /** Resets all search query and filter signals to their defaults. */
+  clearSearchFilters(): void {
+    this.searchQuery.set('');
+    this.searchFilterGenre.set('Todos');
+    this.searchFilterArtist.set('');
+    this.searchFilterYear.set(undefined);
+    this.searchFilterStartDate.set('');
+    this.searchFilterEndDate.set('');
+    this.searchFilterMinRating.set(null);
+    this.searchSortBy.set('default');
+  }
+
   /** Loads reviews for a specific track into activeTrackReviews. */
-  loadReviewsForTrack(song: Song): void {
+  loadReviewsForTrack(song: Song, sortBy?: ReviewSortOption): void {
+    if (sortBy) {
+      this.trackReviewsSort.set(sortBy);
+    }
     if (song.trackId === undefined) return;
     this.songService
       .getTrackReviews({
@@ -1118,6 +1268,7 @@ export class RibbitStateService implements OnDestroy {
         track: song,
         currentUserId: this.userId() ?? undefined,
         currentUserName: this.userName(),
+        sortBy: this.trackReviewsSort(),
       })
       .subscribe({
         next: (reviews) => {
@@ -1230,9 +1381,14 @@ export class RibbitStateService implements OnDestroy {
     this.primaryAccountId.set(user.primary_account_id ?? null);
     this.userEmail.set(user.email);
     this.userName.set(user.display_name);
+    this.userAge.set(user.age ?? null);
     this.currentPlanId.set(user.plan_id);
     this.spotifyId.set(user.spotify_id ?? null);
     this.spotifyPremium.set(Boolean(user.spotify_premium));
+    this.applyUserPreferencesFromDto(user);
+  }
+
+  private applyUserPreferencesFromDto(user: UserApiDto): void {
     this.blockedGenres.set(user.blocked_genres ? [...user.blocked_genres] : []);
     this.blockedArtists.set(user.blocked_artists ? [...user.blocked_artists] : []);
     if (user.preferred_theme === 'light' || user.preferred_theme === 'dark') {
@@ -1272,18 +1428,33 @@ export class RibbitStateService implements OnDestroy {
     this.rejectedSongs.set(rejected);
   }
 
+  private removeSongFromLocalCollections(song: Song): void {
+    const notSame = (item: Song): boolean =>
+      song.trackId !== undefined ? item.trackId !== song.trackId : item.title !== song.title;
+
+    this.likedSongs.update((list) => list.filter((item) => notSame(item)));
+    this.lovedSongs.update((list) => list.filter((item) => notSame(item)));
+    this.rejectedSongs.update((list) => list.filter((item) => notSame(item)));
+  }
+
   private applyLocalSwipeCollectionUpdate(song: Song, kind: DecisionKind): void {
     const notSame = (item: Song): boolean =>
       song.trackId !== undefined ? item.trackId !== song.trackId : item.title !== song.title;
 
     this.likedSongs.update((list) =>
-      kind === 'reject' ? list.filter(notSame) : [song, ...list.filter(notSame)],
+      kind === 'reject'
+        ? list.filter((item) => notSame(item))
+        : [song, ...list.filter((item) => notSame(item))],
     );
     this.lovedSongs.update((list) =>
-      kind === 'love' ? [song, ...list.filter(notSame)] : list.filter(notSame),
+      kind === 'love'
+        ? [song, ...list.filter((item) => notSame(item))]
+        : list.filter((item) => notSame(item)),
     );
     this.rejectedSongs.update((list) =>
-      kind === 'reject' ? [song, ...list.filter(notSame)] : list.filter(notSame),
+      kind === 'reject'
+        ? [song, ...list.filter((item) => notSame(item))]
+        : list.filter((item) => notSame(item)),
     );
   }
 
@@ -1361,7 +1532,10 @@ export class RibbitStateService implements OnDestroy {
       accumulatedMinutes: Math.round(jamDto.accumulated_duration_seconds / 60),
       superlikesCount: jamDto.superlikes_used,
       superlikesLimit: jamDto.max_superlikes,
-      deckSource: (jamDto.deck_source as 'livre' | 'curtidas' | 'playlist') || 'livre',
+      deckSource:
+        jamDto.deck_source === 'curtidas' || jamDto.deck_source === 'playlist'
+          ? jamDto.deck_source
+          : 'livre',
       ...(jamDto.source_playlist_id != null ? { sourcePlaylistId: jamDto.source_playlist_id } : {}),
       queueItems: [],
     });
@@ -1450,16 +1624,20 @@ export class RibbitStateService implements OnDestroy {
     this.likedSongs.set([]);
     this.lovedSongs.set([]);
     this.rejectedSongs.set([]);
+    this.accessHistory.set([]);
+    this.seenTrackIds.set(new Set());
+    this.recentAccessTimestamps.clear();
     this.playlists.set([]);
     this.activeTrackReviews.set([]);
     this.discoveryQueue.length = 0;
     this.discoverySong.set(null);
-    this.lastSwiped.set(null);
+    this.swipeUndoStack.set([]);
     this.isDeckEmpty.set(false);
     this.jamState.set(DEFAULT_JAM_STATE);
     this.userId.set(null);
     this.userEmail.set('');
     this.userName.set('Visitante');
+    this.userAge.set(null);
     this.currentPlan.set('Free');
     this.currentPlanId.set(1);
     this.spotifyId.set(null);

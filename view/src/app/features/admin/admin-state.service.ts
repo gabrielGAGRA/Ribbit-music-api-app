@@ -5,11 +5,11 @@ import { Router } from '@angular/router';
 import type { Observable, Subscription } from 'rxjs';
 import { forkJoin, throwError } from 'rxjs';
 import { catchError, map, tap } from 'rxjs/operators';
+import { AdminDomainError } from './admin-domain-error';
 import type {
   ActionSuccessApiDto,
-  AdminModerationReview,
-  AdminSession,
-  AdminUserPlanSummary,
+  AdminTrackAccessEntry as AdminTrackAccessEntryApiDto,
+  AdminUserPlanSummary as AdminUserPlanSummaryApiDto,
   AudienceReportApiDto,
   AuthApiResponse,
   BlockedGenreEntry,
@@ -17,14 +17,15 @@ import type {
   ExecutiveDashboardApiDto,
   PlanApiDto,
   PlanBreakdownEntry,
+  PlatformCostSettingsApiDto,
   RegisterAdminApiRequest,
   ReviewApiDto,
   SyncCatalogVersionApiResponse,
-  TrackApiDto,
   TrackBlockApiResponse,
   TrackExplicitApiResponse,
   TrackGenreApiResponse,
   UpdateAdminPlanPayload,
+  UpdatePlatformCostsPayload,
   UserApiDto,
 } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
@@ -35,6 +36,55 @@ import {
   readAdminAuthToken,
   writeAdminAuthToken,
 } from '../../core/auth-token.storage';
+import type {
+  AdminAdministrator,
+  AdminModerationReview,
+  AdminPlanItem,
+  AdminSession,
+  AdminTrackAccessEntry,
+  AdminTrackApiDto,
+  AdminTrackItem,
+  AdminUserPlanSummary,
+  AudienceReport,
+  ExecutiveDashboard,
+  GenreAccessCount,
+  PlatformCostSettings,
+  TrackAccessRank,
+} from './admin-mappers';
+import {
+  mapAdminAdministratorDto,
+  mapAdminModerationReviewDto,
+  mapAdminPlanDto,
+  mapAdminTrackAccessEntryDto,
+  mapAdminTrackDto,
+  mapAdminUserPlanSummaryDto,
+  mapAudienceReportDto,
+  mapExecutiveDashboardDto,
+  mapPlatformCostSettingsDto,
+} from './admin-mappers';
+
+export type { AdminTrackItem } from './admin-mappers';
+
+export type AdminTrackSortOption =
+  | 'id_asc'
+  | 'dislikes_desc'
+  | 'likes_desc'
+  | 'superlikes_desc'
+  | 'recent';
+
+export interface CreateAdminTrackPayload {
+  readonly title: string;
+  readonly artist: string;
+  readonly genre: string;
+  readonly duration_seconds: number;
+  readonly album?: string;
+  readonly country?: string;
+  readonly release_year?: number | null;
+  readonly cover_url?: string;
+  readonly itunes_preview_url?: string;
+  readonly spotify_id?: string;
+  readonly explicit: boolean;
+}
 
 const ADMIN_SESSION_STORAGE_KEY = 'ribbit-admin-session';
 const LEGACY_ADMIN_STORAGE_KEYS: readonly string[] = [
@@ -44,33 +94,30 @@ const LEGACY_ADMIN_STORAGE_KEYS: readonly string[] = [
   'ribbit-admin-reviews',
 ];
 
-const EMPTY_DASHBOARD: ExecutiveDashboardApiDto = {
-  total_users: 0,
-  estimated_net_revenue: 0,
-  users_by_plan: {},
-  revenue_by_plan: {},
+const EMPTY_DASHBOARD: ExecutiveDashboard = {
+  totalUsers: 0,
+  estimatedNetRevenue: 0,
+  usersByPlan: {},
+  revenueByPlan: {},
+  grossRevenue: 0,
+  contentCost: 0,
+  infrastructureCost: 0,
+  totalCosts: 0,
+  activeTracksCount: 0,
+  contentCostPerTrack: 0.04,
+  infrastructureFixedCost: 10,
+  infrastructureCostPerUser: 0.5,
 };
 
-const EMPTY_AUDIENCE: AudienceReportApiDto = {
-  total_users: 0,
-  total_tracks: 0,
-  active_tracks: 0,
-  blocked_genres: {},
+const EMPTY_AUDIENCE: AudienceReport = {
+  totalUsers: 0,
+  totalTracks: 0,
+  activeTracks: 0,
+  blockedGenres: {},
+  totalAccesses: 0,
+  accessesByTrack: [],
+  accessesByGenre: [],
 };
-
-/** Represents a domain, validation, or API error in the administrative console. */
-export class AdminDomainError extends Error {
-  readonly code: 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'RULE' | 'DUPLICATE' | 'API';
-
-  constructor(
-    message: string,
-    code: 'AUTH' | 'FORBIDDEN' | 'NOT_FOUND' | 'RULE' | 'DUPLICATE' | 'API' = 'RULE',
-  ) {
-    super(message);
-    this.name = 'AdminDomainError';
-    this.code = code;
-  }
-}
 
 function clearLegacyAdminMockStorage(): void {
   try {
@@ -83,14 +130,51 @@ function clearLegacyAdminMockStorage(): void {
   }
 }
 
-function isValidAdminSession(parsed: unknown): parsed is AdminSession {
-  if (typeof parsed !== 'object' || parsed === null) return false;
+function parseCamelSession(parsed: object): AdminSession | null {
   if (
-    !('user_id' in parsed && 'email' in parsed && 'display_name' in parsed && 'is_admin' in parsed)
+    'userId' in parsed &&
+    typeof parsed.userId === 'number' &&
+    'email' in parsed &&
+    typeof parsed.email === 'string' &&
+    'displayName' in parsed &&
+    typeof parsed.displayName === 'string' &&
+    'isAdmin' in parsed &&
+    Boolean(parsed.isAdmin)
   ) {
-    return false;
+    return {
+      userId: parsed.userId,
+      email: parsed.email,
+      displayName: parsed.displayName,
+      isAdmin: true,
+    };
   }
-  return Boolean((parsed as AdminSession).is_admin);
+  return null;
+}
+
+function parseLegacySession(parsed: object): AdminSession | null {
+  if (
+    'user_id' in parsed &&
+    typeof parsed.user_id === 'number' &&
+    'email' in parsed &&
+    typeof parsed.email === 'string' &&
+    'display_name' in parsed &&
+    typeof parsed.display_name === 'string' &&
+    'is_admin' in parsed &&
+    Boolean(parsed.is_admin)
+  ) {
+    return {
+      userId: parsed.user_id,
+      email: parsed.email,
+      displayName: parsed.display_name,
+      isAdmin: true,
+    };
+  }
+  return null;
+}
+
+function parseStoredSession(parsed: unknown): AdminSession | null {
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  return parseCamelSession(parsed) ?? parseLegacySession(parsed);
 }
 
 function readStoredSession(): AdminSession | null {
@@ -103,7 +187,7 @@ function readStoredSession(): AdminSession | null {
     const raw = localStorage.getItem(ADMIN_SESSION_STORAGE_KEY);
     if (!raw) return null;
     const parsed: unknown = JSON.parse(raw);
-    return isValidAdminSession(parsed) ? parsed : null;
+    return parseStoredSession(parsed);
   } catch {
     // Ignore malformed session entries and require fresh authentication
     return null;
@@ -135,20 +219,20 @@ function toPercent(part: number, total: number): number {
 }
 
 function buildBreakdownFromDashboard(
-  dashboard: ExecutiveDashboardApiDto,
-  plans: readonly PlanApiDto[],
+  dashboard: ExecutiveDashboard,
+  plans: readonly AdminPlanItem[],
 ): readonly PlanBreakdownEntry[] {
-  const totalUsers = dashboard.total_users;
-  const totalRevenue = dashboard.estimated_net_revenue;
+  const totalUsers = dashboard.totalUsers;
+  const grossRevenue = dashboard.grossRevenue;
   return plans.map((plan) => {
-    const count = dashboard.users_by_plan[plan.name] ?? 0;
-    const rev = Math.round((dashboard.revenue_by_plan[plan.name] ?? 0) * 100) / 100;
+    const count = dashboard.usersByPlan[plan.name] ?? 0;
+    const rev = Math.round((dashboard.revenueByPlan[plan.name] ?? 0) * 100) / 100;
     return {
       planName: plan.name,
       userCount: count,
       userPercent: toPercent(count, totalUsers),
       revenue: rev,
-      revenuePercent: toPercent(rev, totalRevenue),
+      revenuePercent: toPercent(rev, grossRevenue),
     };
   });
 }
@@ -195,39 +279,6 @@ function buildRegisterAdminPayload(payload: RegisterAdminApiRequest): RegisterAd
   };
 }
 
-function resolveReviewTrackMeta(
-  dto: ReviewApiDto,
-  track: TrackApiDto | undefined,
-): { readonly title: string; readonly artist: string } {
-  return {
-    title: dto.track_title ?? track?.title ?? `Faixa #${dto.track_id}`,
-    artist: dto.track_artist ?? track?.artist ?? 'Artista do Catálogo',
-  };
-}
-
-function mapModerationReview(
-  dto: ReviewApiDto,
-  index: number,
-  userById: ReadonlyMap<number, AdminUserPlanSummary>,
-  trackById: ReadonlyMap<number, TrackApiDto>,
-): AdminModerationReview {
-  const author = userById.get(dto.user_id);
-  const trackMeta = resolveReviewTrackMeta(dto, trackById.get(dto.track_id));
-  return {
-    review_id: dto.review_id ?? index + 1,
-    user_id: dto.user_id,
-    author_name: dto.author_name ?? author?.display_name ?? `Usuário #${dto.user_id}`,
-    track_id: dto.track_id,
-    track_title: trackMeta.title,
-    track_artist: trackMeta.artist,
-    rating: dto.rating,
-    text: dto.text ?? '',
-    likes_count: dto.likes_count,
-    created_at: dto.created_at ?? '',
-    is_deleted: dto.is_deleted,
-  };
-}
-
 function mapAdminDomainError(err: unknown): AdminDomainError {
   if (err instanceof AdminDomainError) {
     return err;
@@ -259,19 +310,20 @@ export class AdminStateService implements OnDestroy {
   private readonly router = inject(Router, { optional: true });
 
   private readonly sessionSignal = signal<AdminSession | null>(readStoredSession());
-  private readonly plansSignal = signal<readonly PlanApiDto[]>([]);
+  private readonly plansSignal = signal<readonly AdminPlanItem[]>([]);
   private readonly usersSignal = signal<readonly AdminUserPlanSummary[]>([]);
-  private readonly administratorsSignal = signal<readonly UserApiDto[]>([]);
-  private readonly activeTracksSignal = signal<readonly TrackApiDto[]>([]);
-  private readonly blockedTracksSignal = signal<readonly TrackApiDto[]>([]);
+  private readonly administratorsSignal = signal<readonly AdminAdministrator[]>([]);
+  private readonly activeTracksSignal = signal<readonly AdminTrackItem[]>([]);
+  private readonly blockedTracksSignal = signal<readonly AdminTrackItem[]>([]);
   private readonly reviewsSignal = signal<readonly AdminModerationReview[]>([]);
-  private readonly dashboardSignal = signal<ExecutiveDashboardApiDto>(EMPTY_DASHBOARD);
-  private readonly audienceSignal = signal<AudienceReportApiDto>(EMPTY_AUDIENCE);
+  private readonly dashboardSignal = signal<ExecutiveDashboard>(EMPTY_DASHBOARD);
+  private readonly audienceSignal = signal<AudienceReport>(EMPTY_AUDIENCE);
   private readonly isLoadingSignal = signal<boolean>(false);
   private readonly syncErrorSignal = signal<string>('');
   private readonly toastSignal = signal<string>('');
   private readonly hasHydratedSignal = signal<boolean>(false);
   private readonly lastCatalogQuerySignal = signal<string>('');
+  private readonly accessHistorySignal = signal<readonly AdminTrackAccessEntry[]>([]);
 
   private readonly unsubscribeAdminUnauthorized: () => void;
   private hydrationSub: Subscription | null = null;
@@ -280,7 +332,7 @@ export class AdminStateService implements OnDestroy {
   private toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly currentAdmin = this.sessionSignal.asReadonly();
-  readonly isAuthenticated = computed<boolean>(() => Boolean(this.sessionSignal()?.is_admin));
+  readonly isAuthenticated = computed<boolean>(() => Boolean(this.sessionSignal()?.isAdmin));
   readonly plans = this.plansSignal.asReadonly();
   readonly usersWithPlans = this.usersSignal.asReadonly();
   readonly administrators = this.administratorsSignal.asReadonly();
@@ -293,11 +345,12 @@ export class AdminStateService implements OnDestroy {
   readonly toastMessage = this.toastSignal.asReadonly();
   readonly hasHydrated = this.hasHydratedSignal.asReadonly();
   readonly lastCatalogQuery = this.lastCatalogQuerySignal.asReadonly();
+  readonly accessHistory = this.accessHistorySignal.asReadonly();
 
   readonly topModerationReviews = computed<readonly AdminModerationReview[]>(() =>
     [...this.reviewsSignal()]
-      .filter((review) => !review.is_deleted)
-      .sort((left, right) => right.likes_count - left.likes_count)
+      .filter((review) => !review.isDeleted)
+      .sort((left, right) => right.likesCount - left.likesCount)
       .slice(0, 10),
   );
 
@@ -306,8 +359,30 @@ export class AdminStateService implements OnDestroy {
   );
 
   readonly blockedGenreRanking = computed<readonly BlockedGenreEntry[]>(() =>
-    buildBlockedGenreEntries(this.audienceSignal().blocked_genres),
+    buildBlockedGenreEntries(this.audienceSignal().blockedGenres),
   );
+
+  readonly accessesByGenreRanking = computed<
+    readonly (GenreAccessCount & { readonly percent: number })[]
+  >(() => {
+    const list = this.audienceSignal().accessesByGenre;
+    const maxCount = list[0]?.accessCount ?? 0;
+    return list.map((item) => ({
+      ...item,
+      percent: maxCount > 0 ? Math.round((item.accessCount / maxCount) * 100) : 0,
+    }));
+  });
+
+  readonly topAccessedTracks = computed<
+    readonly (TrackAccessRank & { readonly percent: number })[]
+  >(() => {
+    const list = this.audienceSignal().accessesByTrack;
+    const maxCount = list[0]?.accessCount ?? 0;
+    return list.map((item) => ({
+      ...item,
+      percent: maxCount > 0 ? Math.round((item.accessCount / maxCount) * 100) : 0,
+    }));
+  });
 
   constructor() {
     clearLegacyAdminMockStorage();
@@ -346,15 +421,15 @@ export class AdminStateService implements OnDestroy {
           }
           writeAdminAuthToken(response.access_token);
           const session: AdminSession = {
-            user_id: response.user.user_id,
+            userId: response.user.user_id,
             email: response.user.email,
-            display_name: response.user.display_name,
-            is_admin: response.user.is_admin,
+            displayName: response.user.display_name,
+            isAdmin: response.user.is_admin,
           };
           this.sessionSignal.set(session);
           writeStoredSession(session);
           this.hydrateFromBackend();
-          this.notify(`Bem-vindo ao Console Admin, ${session.display_name}.`);
+          this.notify(`Bem-vindo ao Console Admin, ${session.displayName}.`);
           return session;
         }),
         catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
@@ -369,16 +444,29 @@ export class AdminStateService implements OnDestroy {
     this.syncErrorSignal.set('');
 
     this.hydrationSub = forkJoin({
-      plans: this.http.get<readonly PlanApiDto[]>('/api/admin/plans'),
-      dashboard: this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
-      audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
-      users: this.http.get<readonly AdminUserPlanSummary[]>('/api/admin/users'),
-      admins: this.http.get<readonly UserApiDto[]>('/api/admin/administrators'),
-      activeTracks: this.http.get<readonly TrackApiDto[]>('/api/tracks/search', {
-        params: new HttpParams().set('limit', '100'),
-        context: createAdminHttpContext(),
-      }),
-      blockedTracks: this.http.get<readonly TrackApiDto[]>('/api/admin/blocked-tracks'),
+      plans: this.http
+        .get<readonly PlanApiDto[]>('/api/admin/plans')
+        .pipe(map((items) => items.map((item) => mapAdminPlanDto(item)))),
+      dashboard: this.http
+        .get<ExecutiveDashboardApiDto>('/api/admin/dashboard')
+        .pipe(map((dto) => mapExecutiveDashboardDto(dto))),
+      audience: this.http
+        .get<AudienceReportApiDto>('/api/admin/audience')
+        .pipe(map((dto) => mapAudienceReportDto(dto))),
+      users: this.http
+        .get<readonly AdminUserPlanSummaryApiDto[]>('/api/admin/users')
+        .pipe(map((items) => items.map((item) => mapAdminUserPlanSummaryDto(item)))),
+      admins: this.http
+        .get<readonly UserApiDto[]>('/api/admin/administrators')
+        .pipe(map((items) => items.map((item) => mapAdminAdministratorDto(item)))),
+      activeTracks: this.http
+        .get<readonly AdminTrackApiDto[]>('/api/admin/tracks', {
+          params: new HttpParams().set('limit', '100'),
+        })
+        .pipe(map((items) => items.map((item) => mapAdminTrackDto(item)))),
+      blockedTracks: this.http
+        .get<readonly AdminTrackApiDto[]>('/api/admin/blocked-tracks')
+        .pipe(map((items) => items.map((item) => mapAdminTrackDto(item)))),
       reviews: this.http.get<readonly ReviewApiDto[]>('/api/admin/reviews'),
     }).subscribe({
       next: (payload) => {
@@ -416,7 +504,7 @@ export class AdminStateService implements OnDestroy {
   }
 
   /** Registers a new eligible administrator via POST /api/admin/administrators. */
-  registerAdministrator(payload: RegisterAdminApiRequest): Observable<UserApiDto> {
+  registerAdministrator(payload: RegisterAdminApiRequest): Observable<AdminAdministrator> {
     let requestBody: RegisterAdminApiRequest;
     try {
       requestBody = buildRegisterAdminPayload(payload);
@@ -425,26 +513,27 @@ export class AdminStateService implements OnDestroy {
     }
 
     return this.http.post<UserApiDto>('/api/admin/administrators', requestBody).pipe(
+      map((dto) => mapAdminAdministratorDto(dto)),
       tap((createdAdmin) => {
         this.administratorsSignal.update((current) => [
-          ...current.filter((admin) => admin.user_id !== createdAdmin.user_id),
+          ...current.filter((admin) => admin.userId !== createdAdmin.userId),
           createdAdmin,
         ]);
         this.refreshUsersAndMetrics();
-        this.notify(`Administrador "${createdAdmin.display_name}" cadastrado com sucesso.`);
+        this.notify(`Administrador "${createdAdmin.displayName}" cadastrado com sucesso.`);
       }),
       catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
     );
   }
 
   /** Promotes an existing user to administrator via PUT /api/admin/administrators/{id}. */
-  promoteUserToAdmin(userId: number): Observable<UserApiDto> {
+  promoteUserToAdmin(userId: number): Observable<AdminAdministrator> {
     return this.updateAdminRole(userId, true);
   }
 
   /** Updates administrator privileges via PUT /api/admin/administrators/{id}. */
-  updateAdminRole(targetUserId: number, isAdmin: boolean): Observable<UserApiDto> {
-    const activeAdminId = this.sessionSignal()?.user_id;
+  updateAdminRole(targetUserId: number, isAdmin: boolean): Observable<AdminAdministrator> {
+    const activeAdminId = this.sessionSignal()?.userId;
     if (activeAdminId === targetUserId && !isAdmin) {
       return throwError(
         () => new AdminDomainError('Administrador não pode revogar o próprio acesso.', 'RULE'),
@@ -456,28 +545,27 @@ export class AdminStateService implements OnDestroy {
         is_admin: isAdmin,
       })
       .pipe(
+        map((dto) => mapAdminAdministratorDto(dto)),
         tap((remoteUser) => {
           this.usersSignal.update((users) =>
             users.map((user) =>
-              user.user_id === remoteUser.user_id
-                ? { ...user, is_admin: remoteUser.is_admin }
-                : user,
+              user.userId === remoteUser.userId ? { ...user, isAdmin: remoteUser.isAdmin } : user,
             ),
           );
-          if (remoteUser.is_admin) {
+          if (remoteUser.isAdmin) {
             this.administratorsSignal.update((admins) => [
-              ...admins.filter((admin) => admin.user_id !== remoteUser.user_id),
+              ...admins.filter((admin) => admin.userId !== remoteUser.userId),
               remoteUser,
             ]);
           } else {
             this.administratorsSignal.update((admins) =>
-              admins.filter((admin) => admin.user_id !== remoteUser.user_id),
+              admins.filter((admin) => admin.userId !== remoteUser.userId),
             );
           }
           this.notify(
-            remoteUser.is_admin
-              ? `${remoteUser.display_name} agora possui acesso administrativo.`
-              : `Acesso administrativo de ${remoteUser.display_name} revogado.`,
+            remoteUser.isAdmin
+              ? `${remoteUser.displayName} agora possui acesso administrativo.`
+              : `Acesso administrativo de ${remoteUser.displayName} revogado.`,
           );
         }),
         catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
@@ -485,15 +573,15 @@ export class AdminStateService implements OnDestroy {
   }
 
   /** Updates plan pricing, name, or profile limits via PUT /api/admin/plans/{id}. */
-  updatePlan(planId: number, payload: UpdateAdminPlanPayload): Observable<PlanApiDto> {
-    const existingPlan = this.plansSignal().find((item) => item.plan_id === planId);
+  updatePlan(planId: number, payload: UpdateAdminPlanPayload): Observable<AdminPlanItem> {
+    const existingPlan = this.plansSignal().find((item) => item.planId === planId);
     if (!existingPlan) {
       return throwError(() => new AdminDomainError(`Plano ${planId} não encontrado.`, 'NOT_FOUND'));
     }
 
     let resolvedName = existingPlan.name;
-    let resolvedPrice = existingPlan.monthly_price;
-    let resolvedMaxProfiles = existingPlan.max_profiles;
+    let resolvedPrice = existingPlan.monthlyPrice;
+    let resolvedMaxProfiles = existingPlan.maxProfiles;
     try {
       if (payload.new_name !== undefined) {
         resolvedName = this.validatePlanName(planId, payload.new_name);
@@ -515,9 +603,10 @@ export class AdminStateService implements OnDestroy {
         max_profiles: resolvedMaxProfiles,
       })
       .pipe(
+        map((dto) => mapAdminPlanDto(dto)),
         tap((remotePlan) => {
           this.plansSignal.update((plans) =>
-            plans.map((item) => (item.plan_id === planId ? remotePlan : item)),
+            plans.map((item) => (item.planId === planId ? remotePlan : item)),
           );
           this.refreshDashboardAndUsers();
           this.notify(`Plano "${remotePlan.name}" atualizado com sucesso.`);
@@ -526,28 +615,55 @@ export class AdminStateService implements OnDestroy {
       );
   }
 
-  /** Queries GET /api/tracks/search on the backend and updates active catalog tracks. */
-  fetchCatalogTracksFromBackend(query: string): Observable<readonly TrackApiDto[]> {
-    let params = new HttpParams().set('limit', '100');
-    const trimmed = query.trim();
+  /** Queries GET /api/admin/tracks with optional search, sort, and dislike filter. */
+  loadAdminCatalog(
+    options: {
+      readonly query?: string;
+      readonly sortBy?: AdminTrackSortOption;
+      readonly minDislikes?: number | null;
+      readonly limit?: number;
+    } = {},
+  ): Observable<readonly AdminTrackItem[]> {
+    let params = new HttpParams().set('limit', String(options.limit ?? 100));
+    const trimmed = options.query?.trim() ?? '';
     if (trimmed) {
       params = params.set('query', trimmed);
     }
+    if (options.sortBy && options.sortBy !== 'id_asc') {
+      params = params.set('sort_by', options.sortBy);
+    }
+    if (options.minDislikes !== null && options.minDislikes !== undefined) {
+      params = params.set('min_dislikes', String(options.minDislikes));
+    }
 
     const expectedEpoch = this.sessionEpoch;
-    return this.http
-      .get<readonly TrackApiDto[]>('/api/tracks/search', {
-        params,
-        context: createAdminHttpContext(),
-      })
-      .pipe(
-        tap((remoteTracks) => {
-          if (this.sessionEpoch !== expectedEpoch) return;
-          this.activeTracksSignal.set(remoteTracks);
-          this.lastCatalogQuerySignal.set(trimmed);
-        }),
-        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
-      );
+    return this.http.get<readonly AdminTrackApiDto[]>('/api/admin/tracks', { params }).pipe(
+      map((items) => items.map((item) => mapAdminTrackDto(item))),
+      tap((remoteTracks) => {
+        if (this.sessionEpoch !== expectedEpoch) return;
+        this.activeTracksSignal.set(remoteTracks);
+        this.lastCatalogQuerySignal.set(trimmed);
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
+  }
+
+  /** Queries GET /api/admin/tracks on the backend and updates active catalog tracks. */
+  fetchCatalogTracksFromBackend(query: string): Observable<readonly AdminTrackItem[]> {
+    return this.loadAdminCatalog({ query });
+  }
+
+  /** Creates a new catalog track via POST /api/admin/tracks and refreshes metrics. */
+  createTrack(payload: CreateAdminTrackPayload): Observable<AdminTrackItem> {
+    return this.http.post<AdminTrackApiDto>('/api/admin/tracks', payload).pipe(
+      map((item) => mapAdminTrackDto(item)),
+      tap((created) => {
+        this.activeTracksSignal.update((tracks) => [created, ...tracks]);
+        this.refreshAudienceAndDashboard();
+        this.notify(`Faixa "${created.title}" cadastrada no catálogo.`);
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
   }
 
   /** Blocks or restores a catalog track via PUT /api/admin/tracks/{id}/block. */
@@ -559,7 +675,7 @@ export class AdminStateService implements OnDestroy {
       .pipe(
         tap((response) => {
           this.applyTrackBlockUpdate(trackId, response.blocked);
-          this.refreshAudienceReport();
+          this.refreshAudienceAndDashboard();
           const title = this.findTrackTitle(trackId);
           this.notify(
             response.blocked
@@ -643,10 +759,10 @@ export class AdminStateService implements OnDestroy {
       );
   }
 
-  /** Requests review deletion via DELETE /api/reviews/{id}. */
+  /** Requests review deletion via DELETE /api/admin/reviews/{id}. */
   deleteReview(reviewId: number): Observable<ActionSuccessApiDto> {
     return this.http
-      .delete<ActionSuccessApiDto>(`/api/reviews/${reviewId}`, {
+      .delete<ActionSuccessApiDto>(`/api/admin/reviews/${reviewId}`, {
         context: createAdminHttpContext(),
       })
       .pipe(
@@ -654,7 +770,7 @@ export class AdminStateService implements OnDestroy {
           if (response.success) {
             this.reviewsSignal.update((reviews) =>
               reviews.map((item) =>
-                item.review_id === reviewId ? { ...item, is_deleted: true } : item,
+                item.reviewId === reviewId ? { ...item, isDeleted: true } : item,
               ),
             );
             this.notify(`Avaliação #${reviewId} removida pela moderação.`);
@@ -697,6 +813,7 @@ export class AdminStateService implements OnDestroy {
     this.sessionSignal.set(null);
     this.plansSignal.set([]);
     this.usersSignal.set([]);
+    this.accessHistorySignal.set([]);
     this.administratorsSignal.set([]);
     this.activeTracksSignal.set([]);
     this.blockedTracksSignal.set([]);
@@ -713,14 +830,18 @@ export class AdminStateService implements OnDestroy {
   private mapReviews(
     reviewDtos: readonly ReviewApiDto[],
     users: readonly AdminUserPlanSummary[],
-    tracks: readonly TrackApiDto[],
+    tracks: readonly AdminTrackItem[],
   ): AdminModerationReview[] {
     const userById = new Map<number, AdminUserPlanSummary>(
-      users.map((user) => [user.user_id, user]),
+      users.map((user) => [user.userId, user]),
     );
-    const trackById = new Map<number, TrackApiDto>(tracks.map((track) => [track.track_id, track]));
+    const trackById = new Map<number, AdminTrackItem>(
+      tracks.map((track) => [track.trackId, track]),
+    );
 
-    return reviewDtos.map((dto, index) => mapModerationReview(dto, index, userById, trackById));
+    return reviewDtos.map((dto, index) =>
+      mapAdminModerationReviewDto(dto, index, userById, trackById),
+    );
   }
 
   private runBackgroundRefresh<T>(source$: Observable<T>, apply: (payload: T) => void): void {
@@ -738,12 +859,70 @@ export class AdminStateService implements OnDestroy {
     });
   }
 
+  loadAccessHistory(filters?: {
+    readonly userId?: number | null;
+    readonly onlyDeleted?: boolean;
+    readonly limit?: number;
+  }): void {
+    let params = new HttpParams().set('limit', String(filters?.limit ?? 100));
+    if (filters?.userId !== undefined && filters.userId !== null) {
+      params = params.set('user_id', String(filters.userId));
+    }
+    if (filters?.onlyDeleted) {
+      params = params.set('only_deleted', 'true');
+    }
+    this.runBackgroundRefresh(
+      this.http
+        .get<readonly AdminTrackAccessEntryApiDto[]>('/api/admin/access-history', { params })
+        .pipe(map((entries) => entries.map((entry) => mapAdminTrackAccessEntryDto(entry)))),
+      (entries) => {
+        this.accessHistorySignal.set(entries);
+      },
+    );
+  }
+
+  updatePlatformCosts(payload: UpdatePlatformCostsPayload): Observable<PlatformCostSettings> {
+    if (
+      !Number.isFinite(payload.content_cost_per_track) ||
+      payload.content_cost_per_track < 0 ||
+      !Number.isFinite(payload.infrastructure_fixed_cost) ||
+      payload.infrastructure_fixed_cost < 0 ||
+      !Number.isFinite(payload.infrastructure_cost_per_user) ||
+      payload.infrastructure_cost_per_user < 0
+    ) {
+      return throwError(
+        () => new AdminDomainError('Os custos operacionais não podem ser negativos.', 'RULE'),
+      );
+    }
+    return this.http.put<PlatformCostSettingsApiDto>('/api/admin/costs', payload).pipe(
+      map((dto) => mapPlatformCostSettingsDto(dto)),
+      tap(() => {
+        this.notify('Custos operacionais atualizados com sucesso.');
+        this.runBackgroundRefresh(
+          this.http
+            .get<ExecutiveDashboardApiDto>('/api/admin/dashboard')
+            .pipe(map((dto) => mapExecutiveDashboardDto(dto))),
+          (dashboard) => {
+            this.dashboardSignal.set(dashboard);
+          },
+        );
+      }),
+      catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+    );
+  }
+
   private refreshUsersAndMetrics(): void {
     this.runBackgroundRefresh(
       forkJoin({
-        users: this.http.get<readonly AdminUserPlanSummary[]>('/api/admin/users'),
-        dashboard: this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
-        audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
+        users: this.http
+          .get<readonly AdminUserPlanSummaryApiDto[]>('/api/admin/users')
+          .pipe(map((items) => items.map((item) => mapAdminUserPlanSummaryDto(item)))),
+        dashboard: this.http
+          .get<ExecutiveDashboardApiDto>('/api/admin/dashboard')
+          .pipe(map((dto) => mapExecutiveDashboardDto(dto))),
+        audience: this.http
+          .get<AudienceReportApiDto>('/api/admin/audience')
+          .pipe(map((dto) => mapAudienceReportDto(dto))),
       }),
       (payload) => {
         this.usersSignal.set(payload.users);
@@ -756,8 +935,12 @@ export class AdminStateService implements OnDestroy {
   private refreshDashboardAndUsers(): void {
     this.runBackgroundRefresh(
       forkJoin({
-        dashboard: this.http.get<ExecutiveDashboardApiDto>('/api/admin/dashboard'),
-        users: this.http.get<readonly AdminUserPlanSummary[]>('/api/admin/users'),
+        dashboard: this.http
+          .get<ExecutiveDashboardApiDto>('/api/admin/dashboard')
+          .pipe(map((dto) => mapExecutiveDashboardDto(dto))),
+        users: this.http
+          .get<readonly AdminUserPlanSummaryApiDto[]>('/api/admin/users')
+          .pipe(map((items) => items.map((item) => mapAdminUserPlanSummaryDto(item)))),
       }),
       (payload) => {
         this.dashboardSignal.set(payload.dashboard);
@@ -766,11 +949,19 @@ export class AdminStateService implements OnDestroy {
     );
   }
 
-  private refreshAudienceReport(): void {
+  private refreshAudienceAndDashboard(): void {
     this.runBackgroundRefresh(
-      this.http.get<AudienceReportApiDto>('/api/admin/audience'),
-      (audience) => {
-        this.audienceSignal.set(audience);
+      forkJoin({
+        audience: this.http
+          .get<AudienceReportApiDto>('/api/admin/audience')
+          .pipe(map((dto) => mapAudienceReportDto(dto))),
+        dashboard: this.http
+          .get<ExecutiveDashboardApiDto>('/api/admin/dashboard')
+          .pipe(map((dto) => mapExecutiveDashboardDto(dto))),
+      }),
+      (payload) => {
+        this.audienceSignal.set(payload.audience);
+        this.dashboardSignal.set(payload.dashboard);
       },
     );
   }
@@ -778,12 +969,17 @@ export class AdminStateService implements OnDestroy {
   private refreshTracksAndAudience(): void {
     this.runBackgroundRefresh(
       forkJoin({
-        activeTracks: this.http.get<readonly TrackApiDto[]>('/api/tracks/search', {
-          params: new HttpParams().set('limit', '100'),
-          context: createAdminHttpContext(),
-        }),
-        blockedTracks: this.http.get<readonly TrackApiDto[]>('/api/admin/blocked-tracks'),
-        audience: this.http.get<AudienceReportApiDto>('/api/admin/audience'),
+        activeTracks: this.http
+          .get<readonly AdminTrackApiDto[]>('/api/admin/tracks', {
+            params: new HttpParams().set('limit', '100'),
+          })
+          .pipe(map((items) => items.map((item) => mapAdminTrackDto(item)))),
+        blockedTracks: this.http
+          .get<readonly AdminTrackApiDto[]>('/api/admin/blocked-tracks')
+          .pipe(map((items) => items.map((item) => mapAdminTrackDto(item)))),
+        audience: this.http
+          .get<AudienceReportApiDto>('/api/admin/audience')
+          .pipe(map((dto) => mapAudienceReportDto(dto))),
       }),
       (payload) => {
         this.activeTracksSignal.set(payload.activeTracks);
@@ -796,44 +992,47 @@ export class AdminStateService implements OnDestroy {
 
   private applyTrackBlockUpdate(trackId: number, blocked: boolean): void {
     if (blocked) {
-      const target = this.activeTracksSignal().find((track) => track.track_id === trackId);
+      const target = this.activeTracksSignal().find((track) => track.trackId === trackId);
       this.activeTracksSignal.update((tracks) =>
-        tracks.filter((track) => track.track_id !== trackId),
+        tracks.filter((track) => track.trackId !== trackId),
       );
       if (target) {
         this.blockedTracksSignal.update((tracks) => [
-          ...tracks.filter((track) => track.track_id !== trackId),
-          { ...target, is_deleted: true },
+          ...tracks.filter((track) => track.trackId !== trackId),
+          { ...target, isDeleted: true },
         ]);
       }
       return;
     }
 
-    const target = this.blockedTracksSignal().find((track) => track.track_id === trackId);
+    const target = this.blockedTracksSignal().find((track) => track.trackId === trackId);
     this.blockedTracksSignal.update((tracks) =>
-      tracks.filter((track) => track.track_id !== trackId),
+      tracks.filter((track) => track.trackId !== trackId),
     );
     if (target) {
       this.activeTracksSignal.update((tracks) => [
-        ...tracks.filter((track) => track.track_id !== trackId),
-        { ...target, is_deleted: false },
+        ...tracks.filter((track) => track.trackId !== trackId),
+        { ...target, isDeleted: false },
       ]);
     }
   }
 
-  private patchTrackInLists(trackId: number, updater: (track: TrackApiDto) => TrackApiDto): void {
+  private patchTrackInLists(
+    trackId: number,
+    updater: (track: AdminTrackItem) => AdminTrackItem,
+  ): void {
     this.activeTracksSignal.update((tracks) =>
-      tracks.map((track) => (track.track_id === trackId ? updater(track) : track)),
+      tracks.map((track) => (track.trackId === trackId ? updater(track) : track)),
     );
     this.blockedTracksSignal.update((tracks) =>
-      tracks.map((track) => (track.track_id === trackId ? updater(track) : track)),
+      tracks.map((track) => (track.trackId === trackId ? updater(track) : track)),
     );
   }
 
   private findTrackTitle(trackId: number): string {
     const found =
-      this.activeTracksSignal().find((track) => track.track_id === trackId) ??
-      this.blockedTracksSignal().find((track) => track.track_id === trackId);
+      this.activeTracksSignal().find((track) => track.trackId === trackId) ??
+      this.blockedTracksSignal().find((track) => track.trackId === trackId);
     return found?.title ?? `#${trackId}`;
   }
 
@@ -843,7 +1042,7 @@ export class AdminStateService implements OnDestroy {
       throw new AdminDomainError('O nome do plano é obrigatório.', 'RULE');
     }
     const duplicate = this.plansSignal().some(
-      (plan) => plan.plan_id !== planId && plan.name.toLowerCase() === cleaned.toLowerCase(),
+      (plan) => plan.planId !== planId && plan.name.toLowerCase() === cleaned.toLowerCase(),
     );
     if (duplicate) {
       throw new AdminDomainError('Já existe um plano com esse nome.', 'DUPLICATE');

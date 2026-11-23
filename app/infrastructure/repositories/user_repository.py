@@ -1,7 +1,6 @@
 """SQLite implementation of the user persistence port."""
 
 from datetime import UTC, datetime
-from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -73,11 +72,8 @@ def _row_to_user(row: sqlite3.Row) -> User:
 class SQLiteUserRepository(UserRepositoryPort):
     """SQLite adapter implementing UserRepositoryPort."""
 
-    def __init__(
-        self, conn: sqlite3.Connection, sync_service: Any | None = None
-    ) -> None:
+    def __init__(self, conn: sqlite3.Connection) -> None:
         self.conn = conn
-        self._sync = sync_service
 
     def _find_by_id_local(self, user_id: int) -> User | None:
         cursor = self.conn.execute(
@@ -88,13 +84,9 @@ class SQLiteUserRepository(UserRepositoryPort):
         return _row_to_user(row) if row else None
 
     def find_by_id(self, user_id: int) -> User | None:
-        if self._sync is not None:
-            self._sync.pull_deltas()
         return self._find_by_id_local(user_id)
 
     def find_by_email(self, email: str) -> User | None:
-        if self._sync is not None:
-            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM users WHERE lower(email) = ?",
             (email.lower().strip(),),
@@ -103,8 +95,6 @@ class SQLiteUserRepository(UserRepositoryPort):
         return _row_to_user(row) if row else None
 
     def find_by_spotify_id(self, spotify_id: str) -> User | None:
-        if self._sync is not None:
-            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM users WHERE spotify_id = ?",
             (spotify_id.strip(),),
@@ -179,8 +169,6 @@ class SQLiteUserRepository(UserRepositoryPort):
                         user.user_id,
                     ),
                 )
-            if self._sync is not None:
-                self._sync.push_user_by_id(user.user_id)
             return self._find_by_id_local(user.user_id) or user
 
         created_at_str = (user.created_at or datetime.now(UTC)).isoformat()
@@ -221,43 +209,18 @@ class SQLiteUserRepository(UserRepositoryPort):
             )
             new_id = cursor.lastrowid
         if new_id is not None:
-            if self._sync is not None:
-                self._sync.push_user_by_id(new_id)
             return self._find_by_id_local(new_id) or user
         return user
 
     def delete(self, user_id: int) -> bool:
-        child_docs: list[tuple[str, str]] = []
-        dep_ids: list[int] = []
         with transaction(self.conn) as cursor:
-            row = cursor.execute(
-                "SELECT email FROM users WHERE user_id = ?",
-                (user_id,),
-            ).fetchone()
-            email = str(row["email"]) if row and row["email"] else None
-            dep_ids = [
-                int(r["user_id"])
-                for r in cursor.execute(
-                    "SELECT user_id FROM users WHERE primary_account_id = ?",
-                    (user_id,),
-                ).fetchall()
-            ]
-            if email and self._sync is not None:
-                child_docs = self._sync.prepare_user_delete(cursor, user_id, email)
             cursor.execute(
                 "DELETE FROM users WHERE user_id = ?",
                 (user_id,),
             )
-            deleted = cursor.rowcount > 0
-        if deleted and email and self._sync is not None:
-            for dep_id in dep_ids:
-                self._sync.push_user_by_id(dep_id)
-            self._sync.push_user_deleted(email, child_docs)
-        return deleted
+            return cursor.rowcount > 0
 
     def list_dependents(self, primary_account_id: int) -> list[User]:
-        if self._sync is not None:
-            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM users WHERE primary_account_id = ?",
             (primary_account_id,),
@@ -266,8 +229,6 @@ class SQLiteUserRepository(UserRepositoryPort):
         return [_row_to_user(r) for r in rows]
 
     def list_all(self) -> list[User]:
-        if self._sync is not None:
-            self._sync.pull_deltas()
         cursor = self.conn.execute("SELECT * FROM users ORDER BY user_id ASC")
         rows = cursor.fetchall()
         return [_row_to_user(r) for r in rows]

@@ -80,7 +80,7 @@ describe('ProfileApiService', () => {
     service
       .addFamilyMember({ email: 'newdep@ribbit.app', display_name: 'New Dep' })
       .subscribe((res) => {
-        expect(res.user_id).toBe(21);
+        expect(res.userId).toBe(21);
       });
 
     const addReq = httpMock.expectOne('/api/profile/family/members');
@@ -99,7 +99,7 @@ describe('ProfileApiService', () => {
     });
 
     service.removeFamilyMember(21).subscribe((res) => {
-      expect(res.user_id).toBe(21);
+      expect(res.userId).toBe(21);
     });
 
     const deleteReq = httpMock.expectOne('/api/profile/family/members/21');
@@ -119,8 +119,8 @@ describe('ProfileApiService', () => {
         blocked_artists: ['Eminem'],
       })
       .subscribe((res) => {
-        expect(res.blocked_genres).toEqual(['metal']);
-        expect(res.blocked_artists).toEqual(['eminem']);
+        expect(res.blockedGenres).toEqual(['metal']);
+        expect(res.blockedArtists).toEqual(['eminem']);
       });
 
     const controlsReq = httpMock.expectOne('/api/profile/family/members/21/parental-controls');

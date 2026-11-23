@@ -33,6 +33,11 @@ class ChangeSubscriptionPlanUseCase:
         if not new_plan:
             raise EntityNotFoundError(f"Plan with ID {new_plan_id} not found.")
 
+        if user.is_minor() and new_plan.is_paid:
+            raise BusinessRuleViolationError(
+                "Only adult users (18+) can subscribe to paid plans."
+            )
+
         dependents = self.user_repo.list_dependents(user_id)
         if dependents and new_plan.max_profiles < len(dependents) + 1:
             raise BusinessRuleViolationError(

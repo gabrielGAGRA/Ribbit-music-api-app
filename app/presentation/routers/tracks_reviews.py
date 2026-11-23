@@ -1,13 +1,14 @@
 """Track catalog search and community reviews router."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.application.dtos import (
     PublishReviewCommand,
     SearchTracksCommand,
 )
+from app.application.use_cases.discovery import RecordTrackAccessUseCase
 from app.application.use_cases.review import (
     DeleteReviewUseCase,
     GetCommunityFeedUseCase,
@@ -20,7 +21,6 @@ from app.application.use_cases.review import (
     SearchTracksUseCase,
 )
 from app.presentation.dependencies import (
-    get_container,
     provide,
     require_user,
 )
@@ -32,49 +32,14 @@ from app.presentation.schemas.tracks_reviews import (
     CatalogTrackResponse,
     PublishReviewRequest,
     RecentInteractedTrackResponse,
+    RecordTrackAccessRequest,
+    RecordTrackAccessResponse,
     ReviewActionResponse,
     ReviewResponse,
     SaveSearchTrackLikeRequest,
 )
 
 router = APIRouter(tags=["Tracks & Reviews"])
-
-
-def _get_delete_review_use_case(request: Request) -> DeleteReviewUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(DeleteReviewUseCase)
-    except KeyError:
-        return DeleteReviewUseCase(review_repo=container.review_repo)
-
-
-def _get_recently_interacted_tracks_use_case(
-    request: Request,
-) -> GetRecentlyInteractedTracksUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(GetRecentlyInteractedTracksUseCase)
-    except KeyError:
-        return GetRecentlyInteractedTracksUseCase(
-            user_repo=container.user_repo,
-            interaction_repo=container.interaction_repo,
-            track_repo=container.track_repo,
-        )
-
-
-def _get_save_search_track_like_use_case(
-    request: Request,
-) -> SaveSearchTrackLikeUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(SaveSearchTrackLikeUseCase)
-    except KeyError:
-        return SaveSearchTrackLikeUseCase(
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            interaction_repo=container.interaction_repo,
-            playlist_repo=container.playlist_repo,
-        )
 
 
 @router.get("/api/tracks/search", response_model=list[CatalogTrackResponse])
@@ -95,6 +60,8 @@ def search_tracks(
             year=query.year,
             start_year=query.start_year,
             end_year=query.end_year,
+            min_rating=query.min_rating,
+            sort_by=query.sort_by,
             limit=query.limit,
             offset=query.offset,
         )
@@ -127,7 +94,7 @@ def publish_review(
 def delete_review(
     review_id: int,
     user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[DeleteReviewUseCase, Depends(_get_delete_review_use_case)],
+    use_case: Annotated[DeleteReviewUseCase, Depends(provide(DeleteReviewUseCase))],
 ) -> ReviewActionResponse:
     success = use_case.execute(review_id=review_id, user_id=user_id)
     return ReviewActionResponse(success=success, sucesso=success)
@@ -153,7 +120,7 @@ def get_recently_interacted_tracks(
     user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         GetRecentlyInteractedTracksUseCase,
-        Depends(_get_recently_interacted_tracks_use_case),
+        Depends(provide(GetRecentlyInteractedTracksUseCase)),
     ],
     limit: Annotated[int, Query(ge=1, le=5000)] = 20,
 ) -> list[RecentInteractedTrackResponse]:
@@ -175,7 +142,7 @@ def save_search_track_like(
     user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         SaveSearchTrackLikeUseCase,
-        Depends(_get_save_search_track_like_use_case),
+        Depends(provide(SaveSearchTrackLikeUseCase)),
     ],
     req: SaveSearchTrackLikeRequest | None = None,
 ) -> ReviewActionResponse:
@@ -193,10 +160,24 @@ def get_community_feed(
     use_case: Annotated[
         GetCommunityFeedUseCase, Depends(provide(GetCommunityFeedUseCase))
     ],
-    days: Annotated[int, Query(ge=1)] = 5,
+    days: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    sort_by: Annotated[
+        Literal["recent", "oldest", "likes", "rating_desc", "rating_asc"],
+        Query(),
+    ] = "likes",
 ) -> list[ReviewResponse]:
-    reviews = use_case.execute(days=days, limit=limit)
+    reviews = use_case.execute(days=days, limit=limit, sort_by=sort_by)
+    return [ReviewResponse.model_validate(r) for r in reviews]
+
+
+@router.get("/api/reviews/me", response_model=list[ReviewResponse])
+def get_my_reviews(
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[GetUserReviewsUseCase, Depends(provide(GetUserReviewsUseCase))],
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> list[ReviewResponse]:
+    reviews = use_case.execute(user_id=user_id, limit=limit)
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 
@@ -214,13 +195,38 @@ def get_my_reviews(
 def get_track_reviews(
     track_id: int,
     use_case: Annotated[
-        GetTrackReviewsUseCase, Depends(provide(GetTrackReviewsUseCase))
+        GetTrackReviewsUseCase,
+        Depends(provide(GetTrackReviewsUseCase)),
     ],
-    *args: object,
-    **kwargs: object,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    sort_by: Annotated[
+        Literal["recent", "oldest", "likes", "rating_desc", "rating_asc"],
+        Query(),
+    ] = "recent",
 ) -> list[ReviewResponse]:
-    reviews = use_case.execute(track_id=track_id)
+    reviews = use_case.execute(track_id=track_id, limit=limit, sort_by=sort_by)
     return [ReviewResponse.model_validate(r) for r in reviews]
+
+
+@router.post(
+    "/api/tracks/{track_id}/access",
+    response_model=RecordTrackAccessResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def record_track_access(
+    track_id: int,
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        RecordTrackAccessUseCase, Depends(provide(RecordTrackAccessUseCase))
+    ],
+    req: RecordTrackAccessRequest | None = None,
+) -> RecordTrackAccessResponse:
+    access = use_case.execute(
+        user_id=user_id,
+        track_id=track_id,
+        source=req.source if req is not None else "play",
+    )
+    return RecordTrackAccessResponse.model_validate(access)
 
 
 __all__ = ["router"]

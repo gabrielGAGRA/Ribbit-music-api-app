@@ -1,10 +1,5 @@
 <svg
-  [class]="
-    (small() ? 'frog small' : size() === 64 ? 'frog size-64' : 'frog') +
-    ' mood-' +
-    mood() +
-    (speaking() ? ' is-speaking' : '')
-  "
+  [class]="svgClass()"
   [attr.width]="size()"
   [attr.height]="size() ? (size()! * 56) / 64 : null"
   viewBox="0 0 64 56"
@@ -33,7 +28,7 @@
     <ellipse cx="17" cy="33" rx="3.5" ry="2" fill="#ff7eb6" opacity="0.55" />
     <ellipse cx="47" cy="33" rx="3.5" ry="2" fill="#ff7eb6" opacity="0.55" />
   }
-  @if (speaking() || mood() === 'talk' || mood() === 'celebrate') {
+  @if (isMouthOpen()) {
     <path class="frog-mouth-open" d="M24 37C24 37 28 45 32 45C36 45 40 37 40 37Z" fill="#091326" />
     <path
       d="M28 42C29.5 40.5 34.5 40.5 36 42"

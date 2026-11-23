@@ -5,19 +5,23 @@ from dataclasses import dataclass
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
-    ForbiddenError,
+    PermissionDeniedError,
 )
 from app.domain.models.interaction import (
     Interaction,
     InteractionAction,
     InteractionSource,
 )
+from app.domain.models.track_access import TrackAccess
 lazy from app.application.dtos.review_dtos import SaveSearchTrackLikeCommand
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
 lazy from app.application.ports.repositories.playlist_repository import (
     PlaylistRepositoryPort,
+)
+lazy from app.application.ports.repositories.track_access_repository import (
+    TrackAccessRepositoryPort,
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -32,6 +36,7 @@ class SaveSearchTrackLikeUseCase:
     track_repo: TrackRepositoryPort
     interaction_repo: InteractionRepositoryPort
     playlist_repo: PlaylistRepositoryPort | None = None
+    track_access_repo: TrackAccessRepositoryPort | None = None
 
     def _resolve_args(
         self,
@@ -56,7 +61,7 @@ class SaveSearchTrackLikeUseCase:
         if not playlist:
             raise EntityNotFoundError("Playlist not found.")
         if not playlist.is_owned_by(user_id):
-            raise ForbiddenError("Playlist does not belong to this user.")
+            raise PermissionDeniedError("Playlist does not belong to this user.")
         if track.track_id is None or all(
             existing.track_id != track.track_id for existing in playlist.tracks
         ):
@@ -92,6 +97,10 @@ class SaveSearchTrackLikeUseCase:
             source=InteractionSource.SEARCH,
         )
         self.interaction_repo.save(interaction)
+        if self.track_access_repo is not None:
+            self.track_access_repo.record(
+                TrackAccess(user_id=uid, track_id=tid, source="search")
+            )
         return True
 
 

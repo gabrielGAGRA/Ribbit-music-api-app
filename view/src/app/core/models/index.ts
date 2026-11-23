@@ -1,0 +1,89 @@
+export type {
+  AdminModerationReview,
+  AdminSession,
+  AdminTrackAccessEntry,
+  AdminUserPlanSummary,
+  AudienceReportApiDto,
+  BlockedGenreEntry,
+  CompactCatalogApiResponse,
+  ExecutiveDashboardApiDto,
+  GenreAccessCountApiDto,
+  PlanBreakdownEntry,
+  PlatformCostSettingsApiDto,
+  RegisterAdminApiRequest,
+  SyncCatalogVersionApiResponse,
+  TrackBlockApiResponse,
+  TrackExplicitApiResponse,
+  TrackGenreApiResponse,
+  TrackAccessRankApiDto,
+  UpdateAdminPlanPayload,
+  UpdatePlatformCostsPayload,
+  UpdateTrackGenreApiRequest,
+} from './admin.model';
+
+export type {
+  AddFamilyMemberApiRequest,
+  AuthApiResponse,
+  CadastroUsuarioRequest,
+  FamilyMember,
+  GoogleAuthorizeUrlApiResponse,
+  GoogleClientIdApiResponse,
+  GoogleLoginApiRequest,
+  LoginApiRequest,
+  LoginRequest,
+  PlanApiDto,
+  RegisterUserApiRequest,
+  SpotifyAuthorizeUrlApiResponse,
+  SpotifyConnectCallbackApiRequest,
+  SubscriptionPlan,
+  UpdateMemberParentalControlsApiRequest,
+  UserApiDto,
+  UserProfileApiDto,
+  UsuarioResponse,
+} from './auth.model';
+
+export type {
+  CreateJamApiRequest,
+  JamApiDto,
+  JamQueueItemApiDto,
+  JamQueueTrack,
+  JamState,
+  JamStateApiDto,
+  SkipVoteApiDto,
+} from './jam.model';
+
+export type {
+  DeckPlaylistApiRequest,
+  Playlist,
+  PlaylistApiDto,
+  PlaylistSwipeAddApiRequest,
+  ReferenceSource,
+} from './playlist.model';
+
+export type {
+  CommunityReview,
+  Decision,
+  DecisionKind,
+  InteractionApiDto,
+  PaginatedTracksApiDto,
+  RecentInteractedTrackApiDto,
+  RecordTrackAccessApiDto,
+  ReviewApiDto,
+  Song,
+  SwipeApiAction,
+  TrackAccessHistoryItem,
+  TrackAccessSource,
+  TrackApiDto,
+  UndoInteractionApiDto,
+  UserAccessHistoryApiDto,
+} from './track.model';
+
+export type {
+  ActionSuccessApiDto,
+  AnnualStatsApiDto,
+  IconName,
+  MetricItem,
+  NavigationItem,
+  RankedArtist,
+  RankedGenre,
+} from './ui.model';

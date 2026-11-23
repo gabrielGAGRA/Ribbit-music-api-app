@@ -5,12 +5,10 @@ from typing import Annotated
 from fastapi import Depends, Header, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.config import load_settings
 from app.domain.exceptions import (
     AuthenticationRequiredError,
     PermissionDeniedError,
 )
-from app.infrastructure.security.token_service import HMACTokenService
 lazy from app.domain.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -18,22 +16,15 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 def _decode_token_user_id(raw_val: str, request: Request | None) -> int:
     if (
-        request is not None
-        and hasattr(request, "app")
-        and hasattr(request.app.state, "container")
-        and hasattr(request.app.state.container, "token_service")
+        request is None
+        or not hasattr(request, "app")
+        or not hasattr(request.app.state, "container")
+        or not hasattr(request.app.state.container, "token_service")
     ):
-        token_service = request.app.state.container.token_service
-    elif (
-        request is not None
-        and hasattr(request, "app")
-        and hasattr(request.app.state, "settings")
-    ):
-        token_service = HMACTokenService(
-            secret_key=request.app.state.settings.secret_key
+        raise RuntimeError(
+            "Application container with token_service is not configured."
         )
-    else:
-        token_service = HMACTokenService(secret_key=load_settings().secret_key)
+    token_service = request.app.state.container.token_service
 
     payload = token_service.decode_access_token(raw_val)
     sub = payload.get("sub")

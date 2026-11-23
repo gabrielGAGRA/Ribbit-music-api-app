@@ -16,23 +16,23 @@ import { IconComponent } from '../../shared/icon.component';
 })
 export class CollectionComponent {
   protected readonly state = inject(RibbitStateService);
-  protected readonly player = inject(AudioPlayerService);
+  private readonly player = inject(AudioPlayerService);
   private readonly router = inject(Router, { optional: true });
 
   readonly kind = input<'like' | 'love' | 'reject'>('like');
-  readonly query = signal<string>('');
+  protected readonly query = signal<string>('');
 
-  readonly accentClass = computed<string>(() => {
+  protected readonly accentClass = computed<string>(() => {
     const k = this.kind();
     return k === 'like' ? 'green' : k === 'love' ? 'pink' : 'red';
   });
 
-  readonly iconName = computed<IconName>(() => {
+  protected readonly iconName = computed<IconName>(() => {
     const k = this.kind();
     return k === 'like' ? 'heart' : k === 'love' ? 'star' : 'close';
   });
 
-  readonly subtitle = computed<string>(() => {
+  protected readonly subtitle = computed<string>(() => {
     const k = this.kind();
     return k === 'like'
       ? 'músicas curtidas'
@@ -41,27 +41,28 @@ export class CollectionComponent {
         : 'músicas rejeitadas';
   });
 
-  readonly songsList = computed<readonly Song[]>(() => {
+  private readonly songsList = computed<readonly Song[]>(() => {
     const k = this.kind();
     if (k === 'like') return this.state.likedSongs();
     if (k === 'love') return this.state.lovedSongs();
     return this.state.rejectedSongs();
   });
 
-  readonly totalCount = computed<number>(() => this.songsList().length);
+  protected readonly totalCount = computed<number>(() => this.songsList().length);
 
-  readonly filteredItems = computed<readonly Song[]>(() => {
+  protected readonly filteredItems = computed<readonly Song[]>(() => {
     const q = this.query().toLowerCase().trim();
     const list = this.songsList();
     if (!q) return list;
     return list.filter((item) => `${item.title} ${item.artist}`.toLowerCase().includes(q));
   });
 
-  onSearchInput(event: Event): void {
-    this.query.set((event.target as HTMLInputElement).value);
+  protected updateSearchQuery(event: Event): void {
+    const value = event.target instanceof HTMLInputElement ? event.target.value : '';
+    this.query.set(value);
   }
 
-  onSummaryAction(): void {
+  protected runSummaryAction(): void {
     const list = this.songsList();
     if (this.kind() === 'reject') {
       const firstRejected = list[0];
@@ -76,6 +77,7 @@ export class CollectionComponent {
     const firstSong = list[0];
     if (firstSong) {
       this.state.discoverySong.set(firstSong);
+      this.state.recordTrackAccess(firstSong, 'profile');
       this.player.loadTrack(firstSong.previewUrl);
       this.player.play();
       this.state.notify(`Reproduzindo "${firstSong.title}".`);
@@ -84,15 +86,16 @@ export class CollectionComponent {
     }
   }
 
-  onSongClick(song: Song): void {
+  protected openSongInDiscovery(song: Song): void {
     this.state.discoverySong.set(song);
+    this.state.recordTrackAccess(song, 'profile');
     this.player.loadTrack(song.previewUrl);
     this.player.resetProgress();
     this.state.setPage('discover');
     void this.router?.navigate(['/discover']).catch(() => false);
   }
 
-  onItemAction(song: Song): void {
+  protected runItemAction(song: Song): void {
     this.state.reviseCollectionItem(song, this.kind());
   }
 }

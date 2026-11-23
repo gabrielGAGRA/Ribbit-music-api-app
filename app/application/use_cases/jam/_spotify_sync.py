@@ -4,7 +4,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from app.application.use_cases.spotify.premium_guard import execute_with_spotify_premium
-from app.domain.exceptions import SpotifyError, SpotifyPremiumRequiredError
+from app.domain.exceptions import ExternalServiceError, PermissionDeniedError
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
@@ -48,13 +48,18 @@ def _run_for_host(
             host_user,
             lambda: action(host_user),
         )
-    except SpotifyPremiumRequiredError:
+    except PermissionDeniedError:
         raise
-    except SpotifyError as exc:
+    except ExternalServiceError as exc:
         _logger.warning(
             "Spotify pond queue sync skipped for jam_id=%s: %s",
             jam.jam_id,
             exc,
+            extra={
+                "event": "spotify.queue_sync.skipped",
+                "status": "warning",
+                "jam_id": jam.jam_id,
+            },
         )
 
 

@@ -1,5 +1,7 @@
 services:
   gcs-emulator:
+    # fsouza/fake-gcs-server is scratch-based (no shell/curl/wget for a container healthcheck),
+    # so backend startup relies on bounded client-side retry in scripts.bootstrap_local_gcs.
     image: fsouza/fake-gcs-server:latest
     container_name: ribbit-gcs-emulator
     command: ["-scheme", "http", "-port", "4443"]
@@ -25,15 +27,17 @@ services:
       - GCS_TRACKS_FILE_PATH=Songs/songs_final.parquet
       - STORAGE_EMULATOR_HOST=http://gcs-emulator:4443
     command: >
-      sh -c "python scripts/bootstrap_local_gcs.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "python -m scripts.init_db && python -m scripts.bootstrap_local_gcs && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     volumes:
       - sqlite-data:/data
       - ./scripts:/workspace/scripts
+      - ./database:/workspace/database
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      target: dev
     container_name: ribbit-frontend
     restart: unless-stopped
     depends_on:

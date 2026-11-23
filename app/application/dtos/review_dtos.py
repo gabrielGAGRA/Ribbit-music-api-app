@@ -16,6 +16,8 @@ class SearchTracksCommand:
     start_year: int | None = None
     end_year: int | None = None
     query: str | None = None
+    min_rating: float | None = None
+    sort_by: str | None = None
     limit: int = 50
     offset: int = 0
 

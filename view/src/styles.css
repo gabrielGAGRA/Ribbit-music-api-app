@@ -3808,7 +3808,7 @@ h1 span {
 
 .profile-collection-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
   padding: 5px;
   border: 1px solid var(--border);
@@ -4601,6 +4601,10 @@ h1 span {
     padding: 1px 5px;
   }
 
+  .profile-collection-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .profile-collection-tabs > button {
     flex-direction: column;
     text-align: center;
@@ -4878,4 +4882,18 @@ h1 span {
   .ribby-tutorial-btn {
     padding: 5px 8px;
   }
+}
+
+.seen-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  white-space: nowrap;
 }

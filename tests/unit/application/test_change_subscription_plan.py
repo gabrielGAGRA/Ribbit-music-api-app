@@ -194,3 +194,62 @@ def test_change_subscription_plan_updates_titular_and_all_dependents() -> None:
     assert res.plan_id == 4
     assert dep1.plan_id == 4
     assert user_repo.save.call_count == 2
+
+
+def test_change_subscription_plan_blocks_minor_from_paid_individual_or_family() -> None:
+    minor = User(
+        user_id=10,
+        email="minor@test.com",
+        password_hash="hash",
+        display_name="Minor",
+        age=16,
+        plan_id=1,
+    )
+    individual_plan = Plan(
+        plan_id=2,
+        name="Individual",
+        initial_monthly_price=14.90,
+        initial_max_profiles=1,
+    )
+    family_plan = Plan(
+        plan_id=3, name="Família", initial_monthly_price=27.90, initial_max_profiles=4
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = minor
+
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
+
+    for paid_plan in (individual_plan, family_plan):
+        plan_repo.find_by_id.return_value = paid_plan
+        with pytest.raises(
+            BusinessRuleViolationError,
+            match="Only adult users",
+        ):
+            use_case.execute(user_id=10, new_plan_id=paid_plan.plan_id or 2)
+
+
+def test_change_subscription_plan_allows_minor_to_switch_to_free() -> None:
+    minor = User(
+        user_id=10,
+        email="minor@test.com",
+        password_hash="hash",
+        display_name="Minor",
+        age=16,
+        plan_id=2,
+    )
+    free_plan = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = minor
+    user_repo.list_dependents.return_value = []
+    user_repo.save.side_effect = lambda u: u
+
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = free_plan
+
+    use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
+    res = use_case.execute(user_id=10, new_plan_id=1)
+
+    assert res.plan_id == 1

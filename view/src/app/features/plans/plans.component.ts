@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@a
 import type { IconName, SubscriptionPlan } from '@ribbit/shared-types';
 import { mapPlanDtoToSubscriptionPlan } from '../../core/api-mappers';
 import { RibbitStateService } from '../../core/ribbit-state.service';
-import { PlanService } from '../../core/services/plan.service';
+import { PlanService } from '../../core/plan.service';
 import { IconComponent } from '../../shared/icon.component';
 
 /** Displays subscription tiers from /api/plans and opens simulated payment checkout for upgrades. */
@@ -19,10 +19,10 @@ export class PlansComponent implements OnInit {
   protected readonly state = inject(RibbitStateService);
   private readonly planService = inject(PlanService);
 
-  readonly annualPlans = signal<boolean>(true);
-  readonly activeSlide = signal<number>(0);
+  protected readonly annualPlans = signal<boolean>(true);
+  protected readonly activeSlide = signal<number>(0);
 
-  readonly computedPlans = computed<readonly SubscriptionPlan[]>(() => {
+  protected readonly computedPlans = computed<readonly SubscriptionPlan[]>(() => {
     const annual = this.annualPlans();
     return this.planService.rawPlans().map((dto) => mapPlanDtoToSubscriptionPlan(dto, annual));
   });
@@ -35,21 +35,21 @@ export class PlansComponent implements OnInit {
     });
   }
 
-  setAnnual(annual: boolean): void {
+  protected setAnnual(annual: boolean): void {
     this.annualPlans.set(annual);
   }
 
-  setSlide(slide: number): void {
+  protected setSlide(slide: number): void {
     this.activeSlide.set(slide);
   }
 
-  getPlanIcon(name: string): IconName {
+  protected getPlanIcon(name: string): IconName {
     if (name === 'Free') return 'pond';
     if (name === 'Individual') return 'star';
     return 'users';
   }
 
-  selectPlan(plan: SubscriptionPlan): void {
+  protected selectPlan(plan: SubscriptionPlan): void {
     this.state.initiatePlanSelection(plan);
   }
 }

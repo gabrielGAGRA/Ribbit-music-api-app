@@ -24,6 +24,8 @@ class Track:
     explicit: bool = False
     is_deleted: bool = False
     created_at: datetime | None = None
+    average_rating: float | None = None
+    review_count: int = 0
 
     def __post_init__(self) -> None:
         if self.duration_seconds <= 0:
