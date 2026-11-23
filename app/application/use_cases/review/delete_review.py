@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from app.domain.exceptions import EntityNotFoundError, ForbiddenError
+from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 lazy from app.application.ports.repositories.review_repository import (
     ReviewRepositoryPort,
 )
@@ -26,7 +26,7 @@ class DeleteReviewUseCase:
             raise EntityNotFoundError(f"Review with ID {review_id} not found.")
 
         if user_id is not None and review.user_id != user_id:
-            raise ForbiddenError("Only the author can delete this review.")
+            raise PermissionDeniedError("Only the author can delete this review.")
 
         return self.review_repo.delete(review_id)
 

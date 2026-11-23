@@ -11,20 +11,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configurando o Python
-        uses: actions/setup-python@v5
+      - name: Configurando uv e Python 3.15
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.15'
-          architecture: 'x64'
-          cache: 'pip'
+          enable-cache: true
 
       - name: Instalando dependências Python
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          uv python install 3.15
+          uv venv --python 3.15 .venv
+          uv pip install --python .venv/bin/python -r requirements.txt
 
       - name: Rodando testes e validando cobertura >= 85%
-        run: python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+        run: .venv/bin/python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85
 
   frontend-tests:
     name: Frontend Unit Tests (Vitest)
@@ -45,17 +44,15 @@ jobs:
         run: npm test
 
   e2e-browser-tests:
-    name: Browser E2E Tests & Video Recording (Playwright)
+    name: Browser E2E Tests (Playwright)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configurando o Python
-        uses: actions/setup-python@v5
+      - name: Configurando uv e Python 3.15
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.15'
-          architecture: 'x64'
-          cache: 'pip'
+          enable-cache: true
 
       - name: Configurando o Node.js
         uses: actions/setup-node@v4
@@ -65,25 +62,18 @@ jobs:
 
       - name: Instalando dependências Python e Node
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          uv python install 3.15
+          uv venv --python 3.15 .venv
+          uv pip install --python .venv/bin/python -r requirements.txt
           npm ci
 
       - name: Instalando navegador Chromium do Playwright
         run: npx playwright install --with-deps chromium
 
-      - name: Rodando testes E2E no navegador e gravando 5 vídeos
+      - name: Rodando testes E2E no navegador
         env:
-          PYTHON_BIN: python
-        run: npm run record:e2e
-
-      - name: Publicando vídeos E2E como artifact
-        if: success()
-        uses: actions/upload-artifact@v4
-        with:
-          name: e2e-videos
-          path: docs/testing/videos/*.webm
-          if-no-files-found: error
+          PYTHON_BIN: .venv/bin/python
+        run: npm run test:e2e
 
       - name: Publicando traces/screenshots em caso de falha
         if: failure()

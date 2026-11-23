@@ -1,12 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
 
-interface FastApiErrorPayload {
-  readonly error?: string;
-  readonly message?: string;
-  readonly details?: unknown;
-  readonly detail?: unknown;
-}
-
 interface ExtractedErrorInfo {
   readonly code: string;
   readonly message: string;
@@ -35,15 +28,16 @@ function extractPayloadMessage(payload: unknown, status: number): ExtractedError
   if (!isRecord(payload)) {
     return null;
   }
-  const typed = payload as FastApiErrorPayload;
-  if (typeof typed.message === 'string' && typed.message.trim().length > 0) {
+  const message = payload['message'];
+  if (typeof message === 'string' && message.trim().length > 0) {
+    const errorCode = payload['error'];
     return {
-      code: typeof typed.error === 'string' ? typed.error : `HTTP_${status}`,
-      message: typed.message,
-      details: typed.details,
+      code: typeof errorCode === 'string' ? errorCode : `HTTP_${status}`,
+      message,
+      details: payload['details'],
     };
   }
-  return extractValidationDetail(typed.detail);
+  return extractValidationDetail(payload['detail']);
 }
 
 function fallbackStatusMessage(status: number): ExtractedErrorInfo {
@@ -120,16 +114,9 @@ export function toApiError(err: unknown): ApiError {
   });
 }
 
-const SPOTIFY_CONNECTION_ERROR_CODES = new Set([
-  'SpotifyConnectionRequiredError',
-  'SpotifyAuthError',
-  'SpotifyForbiddenError',
-]);
-
 /** Checks whether an error is due to Spotify account not being connected or lacking a valid user OAuth token. */
 export function isSpotifyConnectionRequiredError(err: unknown): boolean {
   const apiErr = toApiError(err);
-  if (SPOTIFY_CONNECTION_ERROR_CODES.has(apiErr.errorCode)) return true;
   if (isRecord(apiErr.details) && apiErr.details['rule_name'] === 'spotify_connection_required') {
     return true;
   }
@@ -139,7 +126,6 @@ export function isSpotifyConnectionRequiredError(err: unknown): boolean {
 /** Checks whether an error is due to Spotify Premium requirement. */
 export function isSpotifyPremiumRequiredError(err: unknown): boolean {
   const apiErr = toApiError(err);
-  if (apiErr.errorCode === 'SpotifyPremiumRequiredError') return true;
   if (isRecord(apiErr.details) && apiErr.details['rule_name'] === 'spotify_premium_required') {
     return true;
   }

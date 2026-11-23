@@ -173,25 +173,27 @@ def log_operational_event(
 
 
 def configure_logging(level: str | int = "INFO") -> logging.Logger:
-    """Configures structured JSON logging on sys.stdout for application loggers."""
+    """Configures structured JSON logging on sys.stdout for application and server loggers."""
     numeric_level = (
         getattr(logging, level.upper(), logging.INFO)
         if isinstance(level, str)
         else level
     )
-    app_logger = logging.getLogger("app")
-    app_logger.setLevel(numeric_level)
+    formatter = JSONLogFormatter()
+    for logger_name in ("app", "uvicorn", "uvicorn.error", "uvicorn.access"):
+        target_logger = logging.getLogger(logger_name)
+        target_logger.setLevel(numeric_level)
 
-    for handler in list(app_logger.handlers):
-        app_logger.removeHandler(handler)
+        for handler in list(target_logger.handlers):
+            target_logger.removeHandler(handler)
 
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setLevel(numeric_level)
-    stream_handler.setFormatter(JSONLogFormatter())
-    app_logger.addHandler(stream_handler)
-    app_logger.propagate = False
+        stream_handler = logging.StreamHandler(sys.stdout)
+        stream_handler.setLevel(numeric_level)
+        stream_handler.setFormatter(formatter)
+        target_logger.addHandler(stream_handler)
+        target_logger.propagate = False
 
-    return app_logger
+    return logging.getLogger("app")
 
 
 __all__ = [

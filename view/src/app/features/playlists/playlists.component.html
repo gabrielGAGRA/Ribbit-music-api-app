@@ -56,7 +56,7 @@
                 type="file"
                 accept="image/*"
                 class="hidden-file-input"
-                (change)="onCoverFileSelected($event)"
+                (change)="uploadPlaylistCover($event)"
               />
               <app-icon name="filter" [size]="15" />
               {{ isUploadingCover() ? 'Enviando...' : 'Alterar Capa' }}
@@ -84,13 +84,14 @@
 
                 <article
                   class="discovery-card playlist-swipe-card"
+                  [class.is-dragging]="isDragging()"
                   [class.is-liking]="activeDeckDragAction() === 'like'"
                   [class.is-rejecting]="activeDeckDragAction() === 'dislike'"
                   [appTransform]="deckCardTransform()"
-                  (pointerdown)="onDeckPointerDown($event)"
-                  (pointermove)="onDeckPointerMove($event)"
-                  (pointerup)="onDeckPointerUp()"
-                  (pointercancel)="onDeckPointerCancel()"
+                  (pointerdown)="startDeckCardDrag($event)"
+                  (pointermove)="moveDeckCardDrag($event)"
+                  (pointerup)="finishDeckCardDrag()"
+                  (pointercancel)="cancelDeckCardDrag()"
                 >
                   <img
                     class="album-art"
@@ -144,7 +145,6 @@
 
                     <div class="track-tags">
                       <span>{{ deckTrack.genre }}</span>
-                      <span>Acústico</span>
                       @if (state.isTrackSeen(deckTrack.trackId)) {
                         <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
                       }
@@ -211,10 +211,14 @@
             </div>
           } @else {
             <div class="panel empty-deck-panel">
-              <p>Carregando sugestões ou você já revisou todas as opções deste lote!</p>
-              <button class="primary-button" (click)="loadMoreRecommendations()">
-                Buscar mais recomendações
-              </button>
+              @if (isLoadingDeck()) {
+                <p>Carregando sugestões para esta playlist...</p>
+              } @else {
+                <p>Nenhuma música encontrada para os filtros desta playlist.</p>
+                <button class="primary-button" (click)="loadMoreRecommendations()">
+                  Buscar novamente
+                </button>
+              }
             </div>
           }
         </div>
@@ -226,7 +230,11 @@
           </div>
 
           <div class="panel tracks-table">
-            @for (track of selectedPlaylistTracks(); track track.title; let i = $index) {
+            @for (
+              track of selectedPlaylistTracks();
+              track track.trackId ?? track.title;
+              let i = $index
+            ) {
               <div class="track-row">
                 <span class="track-index">0{{ i + 1 }}</span>
                 <div class="song-cover">

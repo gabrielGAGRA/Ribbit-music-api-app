@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi import APIRouter, Depends, Query, status
 
 from app.application.dtos import (
     PublishReviewCommand,
@@ -21,7 +21,6 @@ from app.application.use_cases.review import (
     SearchTracksUseCase,
 )
 from app.presentation.dependencies import (
-    get_container,
     provide,
     require_user,
 )
@@ -41,44 +40,6 @@ from app.presentation.schemas.tracks_reviews import (
 )
 
 router = APIRouter(tags=["Tracks & Reviews"])
-
-
-def _get_delete_review_use_case(request: Request) -> DeleteReviewUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(DeleteReviewUseCase)
-    except KeyError:
-        return DeleteReviewUseCase(review_repo=container.review_repo)
-
-
-def _get_recently_interacted_tracks_use_case(
-    request: Request,
-) -> GetRecentlyInteractedTracksUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(GetRecentlyInteractedTracksUseCase)
-    except KeyError:
-        return GetRecentlyInteractedTracksUseCase(
-            user_repo=container.user_repo,
-            interaction_repo=container.interaction_repo,
-            track_repo=container.track_repo,
-        )
-
-
-def _get_save_search_track_like_use_case(
-    request: Request,
-) -> SaveSearchTrackLikeUseCase:
-    container = get_container(request)
-    try:
-        return container.resolve(SaveSearchTrackLikeUseCase)
-    except KeyError:
-        return SaveSearchTrackLikeUseCase(
-            user_repo=container.user_repo,
-            track_repo=container.track_repo,
-            interaction_repo=container.interaction_repo,
-            playlist_repo=container.playlist_repo,
-            track_access_repo=container.track_access_repo,
-        )
 
 
 @router.get("/api/tracks/search", response_model=list[CatalogTrackResponse])
@@ -133,7 +94,7 @@ def publish_review(
 def delete_review(
     review_id: int,
     user_id: Annotated[int, Depends(require_user)],
-    use_case: Annotated[DeleteReviewUseCase, Depends(_get_delete_review_use_case)],
+    use_case: Annotated[DeleteReviewUseCase, Depends(provide(DeleteReviewUseCase))],
 ) -> ReviewActionResponse:
     success = use_case.execute(review_id=review_id, user_id=user_id)
     return ReviewActionResponse(success=success, sucesso=success)
@@ -159,9 +120,9 @@ def get_recently_interacted_tracks(
     user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         GetRecentlyInteractedTracksUseCase,
-        Depends(_get_recently_interacted_tracks_use_case),
+        Depends(provide(GetRecentlyInteractedTracksUseCase)),
     ],
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    limit: Annotated[int, Query(ge=1, le=5000)] = 20,
 ) -> list[RecentInteractedTrackResponse]:
     items = use_case.execute(user_id=user_id, limit=limit)
     return [
@@ -181,7 +142,7 @@ def save_search_track_like(
     user_id: Annotated[int, Depends(require_user)],
     use_case: Annotated[
         SaveSearchTrackLikeUseCase,
-        Depends(_get_save_search_track_like_use_case),
+        Depends(provide(SaveSearchTrackLikeUseCase)),
     ],
     req: SaveSearchTrackLikeRequest | None = None,
 ) -> ReviewActionResponse:

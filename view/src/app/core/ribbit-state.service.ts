@@ -36,17 +36,26 @@ import {
   writeAuthToken,
   writeStoredUser,
 } from './auth-token.storage';
-import { MOCK_REVIEWS } from './mocks/reviews.mock';
-import { MOCK_SONGS } from './mocks/songs.mock';
-import { PlanService } from './services/plan.service';
-import { PlaylistService } from './services/playlist.service';
-import { SongService } from './services/song.service';
-import type { ReviewSortOption } from './services/song.service';
+import { PlanService } from './plan.service';
+import { PlaylistService } from './playlist.service';
+import { SongService } from './song.service';
+import type { ReviewSortOption } from './song.service';
 import { JamService } from '../features/jams/jam.service';
 import { ProfileApiService } from '../features/profile/profile-api.service';
 
-export const INITIAL_SONGS: readonly Song[] = MOCK_SONGS;
-export const INITIAL_REVIEWS: readonly CommunityReview[] = MOCK_REVIEWS;
+export const INITIAL_SONGS: readonly Song[] = [];
+export const INITIAL_REVIEWS: readonly CommunityReview[] = [];
+
+const EMPTY_SONG: Song = {
+  title: '',
+  artist: '',
+  genre: '',
+  time: '0:00',
+  image: '',
+  album: '',
+  year: '',
+  match: 0,
+};
 
 function getStoredGenres(key: string, fallback: readonly string[]): readonly string[] {
   try {
@@ -128,6 +137,9 @@ export class RibbitStateService implements OnDestroy {
   readonly accessHistory = signal<readonly TrackAccessHistoryItem[]>([]);
   readonly seenTrackIds = signal<ReadonlySet<number>>(new Set());
   readonly discoverySong = signal<Song | null>(null);
+  private readonly discoveryQueue: Song[] = [];
+  private discoveryPrefetchInFlight = false;
+  private readonly discoveryQueueTarget = 3;
   readonly isDeckEmpty = signal<boolean>(false);
   readonly isLoadingDiscovery = signal<boolean>(false);
   private readonly swipeUndoStack = signal<
@@ -159,8 +171,6 @@ export class RibbitStateService implements OnDestroy {
   readonly userEmail = signal<string>(this.initialUser?.email ?? '');
   readonly userName = signal<string>(this.initialUser?.display_name ?? 'Visitante');
   readonly userAge = signal<number | null>(this.initialUser?.age ?? null);
-  readonly guardianName = signal<string | null>(this.initialUser?.guardian_name ?? null);
-  readonly guardianEmail = signal<string | null>(this.initialUser?.guardian_email ?? null);
   readonly isMinorUser = computed<boolean>(() => {
     const age = this.userAge();
     return age !== null && age < 18;
@@ -234,7 +244,7 @@ export class RibbitStateService implements OnDestroy {
     }
     const list = this.songs();
     const idx = this.currentIndex();
-    return list[idx % list.length] ?? INITIAL_SONGS[0]!;
+    return list.length > 0 ? (list[idx % list.length] ?? EMPTY_SONG) : EMPTY_SONG;
   });
 
   readonly detailsTargetSong = computed<Song>(
@@ -423,11 +433,11 @@ export class RibbitStateService implements OnDestroy {
     forkJoin({
       blocked: this.profileApi
         .listBlockedGenres()
-        .pipe(catchError(() => of(null as readonly string[] | null))),
+        .pipe(catchError(() => of<readonly string[] | null>(null))),
       favorites: this.profileApi
         .getFavoriteGenres()
-        .pipe(catchError(() => of(null as readonly string[] | null))),
-      theme: this.profileApi.getTheme().pipe(catchError(() => of(null as string | null))),
+        .pipe(catchError(() => of<readonly string[] | null>(null))),
+      theme: this.profileApi.getTheme().pipe(catchError(() => of<string | null>(null))),
     }).subscribe(({ blocked, favorites, theme }) => {
       if (blocked !== null) {
         this.blockedGenres.set([...blocked]);
@@ -445,33 +455,85 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
-  /** Fetches the next candidate song for the Discovery deck. */
-  loadNextDiscoveryTrack(): void {
+  private preloadCoverImage(url: string | undefined): void {
+    if (!url || typeof Image === 'undefined') return;
+    const img = new Image();
+    img.src = url;
+  }
+
+  private refillDiscoveryQueue(): void {
+    if (
+      !readAuthToken() ||
+      this.discoveryPrefetchInFlight ||
+      this.discoveryQueue.length >= this.discoveryQueueTarget
+    ) {
+      return;
+    }
+    this.discoveryPrefetchInFlight = true;
+    this.songService.getNextDiscoverySong().subscribe({
+      next: (song) => {
+        this.discoveryPrefetchInFlight = false;
+        if (!song) return;
+        const currentId = this.discoverySong()?.trackId;
+        const alreadyQueued = this.discoveryQueue.some(
+          (queued) => queued.trackId !== undefined && queued.trackId === song.trackId,
+        );
+        if (
+          song.trackId !== undefined &&
+          song.trackId !== currentId &&
+          !alreadyQueued
+        ) {
+          this.discoveryQueue.push(song);
+          this.preloadCoverImage(song.image);
+        }
+        if (this.discoveryQueue.length < this.discoveryQueueTarget) {
+          setTimeout(() => {
+            this.refillDiscoveryQueue();
+          }, 0);
+        }
+      },
+      error: () => {
+        this.discoveryPrefetchInFlight = false;
+      },
+    });
+  }
+
+  /** Fetches the next candidate song for the Discovery deck (using prefetched queue when ready). */
+  loadNextDiscoveryTrack(resetQueue = false): void {
     if (!readAuthToken()) return;
-    this.isLoadingDiscovery.set(true);
-    this.songService
-      .getNextDiscoverySong()
-      .pipe(
-        finalize(() => {
-          this.isLoadingDiscovery.set(false);
-        }),
-      )
-      .subscribe({
-        next: (song) => {
-          if (song) {
-            this.discoverySong.set(song);
-            this.isDeckEmpty.set(false);
-    this.isLoadingDiscovery.set(false);
-            this.audioPlayer.loadTrack(song.previewUrl);
-          } else {
-            this.discoverySong.set(null);
-            this.isDeckEmpty.set(true);
-          }
-        },
-        error: (err: unknown) => {
-          this.notify(toApiError(err).message);
-        },
-      });
+    if (resetQueue) {
+      this.discoveryQueue.length = 0;
+    }
+    const nextSong = this.discoveryQueue.shift();
+    if (nextSong) {
+      this.discoverySong.set(nextSong);
+      this.isDeckEmpty.set(false);
+      this.audioPlayer.loadTrack(nextSong.previewUrl);
+      setTimeout(() => {
+        this.refillDiscoveryQueue();
+      }, 0);
+      return;
+    }
+    this.songService.getNextDiscoverySong().subscribe({
+      next: (song) => {
+        if (song) {
+          this.discoverySong.set(song);
+          this.isDeckEmpty.set(false);
+          this.preloadCoverImage(song.image);
+          this.audioPlayer.loadTrack(song.previewUrl);
+          setTimeout(() => {
+            this.refillDiscoveryQueue();
+          }, 0);
+        } else {
+          this.discoveryQueue.length = 0;
+          this.discoverySong.set(null);
+          this.isDeckEmpty.set(true);
+        }
+      },
+      error: (err: unknown) => {
+        this.notify(toApiError(err).message);
+      },
+    });
   }
 
   /** Reloads the user's playlists from /api/playlists. */
@@ -492,8 +554,8 @@ export class RibbitStateService implements OnDestroy {
     if (!readAuthToken()) return;
     forkJoin({
       recent: this.songService
-        .getRecentInteractedTracks(100)
-        .pipe(catchError(() => of([] as readonly RecentInteractedTrackApiDto[]))),
+        .getRecentInteractedTracks(1000)
+        .pipe(catchError(() => of<readonly RecentInteractedTrackApiDto[]>([]))),
       allHistory: this.profileApi.listHistory().pipe(catchError(() => of([]))),
     }).subscribe(({ recent, allHistory }) => {
       this.applyInteractedHistory(recent, allHistory.length);
@@ -576,7 +638,7 @@ export class RibbitStateService implements OnDestroy {
     if (readAuthToken()) {
       this.profileApi.updateFavoriteGenres(limited).subscribe({
         next: () => {
-          this.loadNextDiscoveryTrack();
+          this.loadNextDiscoveryTrack(true);
           this.notify('Gêneros favoritos atualizados com sucesso!');
         },
         error: (err: unknown) => {
@@ -595,8 +657,8 @@ export class RibbitStateService implements OnDestroy {
       this.notify(`Você já está no plano ${plan.displayName}.`);
       return;
     }
-    if (this.isMinorUser() && (plan.maxProfiles ?? 1) > 1) {
-      this.notify('Menores de 18 anos não podem assinar o Plano Família como titular.');
+    if (this.isMinorUser() && plan.name !== 'Free') {
+      this.notify('Somente usuários maiores de 18 anos podem assinar planos pagos.');
       return;
     }
     if (plan.name === 'Free') {
@@ -608,21 +670,14 @@ export class RibbitStateService implements OnDestroy {
   }
 
   /** Completes simulated payment and persists the new subscription tier on the backend. */
-  confirmMockPlanCheckout(
-    paymentMethod: 'card' | 'pix',
-    guardian?: {
-      readonly guardianName?: string;
-      readonly guardianEmail?: string;
-      readonly guardianConfirmedAdult?: boolean;
-    },
-  ): void {
+  confirmMockPlanCheckout(paymentMethod: 'card' | 'pix'): void {
     const targetPlan = this.pendingCheckoutPlan();
     if (!targetPlan) return;
 
     const resolvedPlanId =
       targetPlan.planId ?? this.planService.resolvePlanIdByName(targetPlan.name);
 
-    this.planService.changePlan(resolvedPlanId, guardian).subscribe({
+    this.planService.changePlan(resolvedPlanId).subscribe({
       next: (updatedUser) => {
         this.applyUserDto(updatedUser);
         this.currentPlan.set(targetPlan.name);
@@ -733,10 +788,17 @@ export class RibbitStateService implements OnDestroy {
     }
 
     if (song.trackId !== undefined && readAuthToken()) {
-      this.isLoadingDiscovery.set(true);
+      const hadQueued = this.discoveryQueue.length > 0;
+      if (hadQueued) {
+        this.loadNextDiscoveryTrack();
+      }
       this.songService.recordSwipe(song.trackId, kind).subscribe({
         next: () => {
-          this.loadNextDiscoveryTrack();
+          if (!hadQueued) {
+            this.loadNextDiscoveryTrack();
+          } else {
+            this.refillDiscoveryQueue();
+          }
           this.refreshInteractedCollections();
           this.refreshAccessHistory();
         },
@@ -936,10 +998,11 @@ export class RibbitStateService implements OnDestroy {
       );
     }
 
-    if (playlist.playlistId && song.trackId !== undefined && readAuthToken()) {
-      this.playlistService.addTrackToPlaylist(playlist.playlistId, song.trackId).subscribe({
+    const playlistId = playlist.playlistId;
+    if (playlistId && song.trackId !== undefined && readAuthToken()) {
+      this.playlistService.addTrackToPlaylist(playlistId, song.trackId).subscribe({
         next: () => {
-          this.refreshSinglePlaylist(playlist.playlistId!);
+          this.refreshSinglePlaylist(playlistId);
           this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
         },
         error: (err: unknown) => {
@@ -1087,13 +1150,14 @@ export class RibbitStateService implements OnDestroy {
   /** Registers a skip vote on the active Jam track via POST /api/jams/{id}/skip-vote. */
   voteSkipJam(): void {
     const jam = this.jamState();
-    if (!jam.jamId) {
+    const jamId = jam.jamId;
+    if (!jamId) {
       this.jamState.set({ ...jam, votes: jam.votes + 1 });
       this.notify('Seu voto para pular foi registrado.');
       return;
     }
     const activeTrackId = jam.currentTrack?.trackId;
-    this.jamService.voteSkip(jam.jamId, activeTrackId).subscribe({
+    this.jamService.voteSkip(jamId, activeTrackId).subscribe({
       next: (res) => {
         this.jamState.update((cur) => ({
           ...cur,
@@ -1101,7 +1165,7 @@ export class RibbitStateService implements OnDestroy {
           voteThreshold: res.threshold,
           active: res.is_active,
         }));
-        this.syncJamState(jam.jamId!);
+        this.syncJamState(jamId);
         this.notify(
           res.advanced
             ? 'Votação atingida! Pulando para a próxima faixa da Jam.'
@@ -1329,8 +1393,6 @@ export class RibbitStateService implements OnDestroy {
     this.userEmail.set(user.email);
     this.userName.set(user.display_name);
     this.userAge.set(user.age ?? null);
-    this.guardianName.set(user.guardian_name ?? null);
-    this.guardianEmail.set(user.guardian_email ?? null);
     this.currentPlanId.set(user.plan_id);
     this.spotifyId.set(user.spotify_id ?? null);
     this.spotifyPremium.set(Boolean(user.spotify_premium));
@@ -1381,9 +1443,9 @@ export class RibbitStateService implements OnDestroy {
     const notSame = (item: Song): boolean =>
       song.trackId !== undefined ? item.trackId !== song.trackId : item.title !== song.title;
 
-    this.likedSongs.update((list) => list.filter(notSame));
-    this.lovedSongs.update((list) => list.filter(notSame));
-    this.rejectedSongs.update((list) => list.filter(notSame));
+    this.likedSongs.update((list) => list.filter((item) => notSame(item)));
+    this.lovedSongs.update((list) => list.filter((item) => notSame(item)));
+    this.rejectedSongs.update((list) => list.filter((item) => notSame(item)));
   }
 
   private applyLocalSwipeCollectionUpdate(song: Song, kind: DecisionKind): void {
@@ -1391,13 +1453,19 @@ export class RibbitStateService implements OnDestroy {
       song.trackId !== undefined ? item.trackId !== song.trackId : item.title !== song.title;
 
     this.likedSongs.update((list) =>
-      kind === 'reject' ? list.filter(notSame) : [song, ...list.filter(notSame)],
+      kind === 'reject'
+        ? list.filter((item) => notSame(item))
+        : [song, ...list.filter((item) => notSame(item))],
     );
     this.lovedSongs.update((list) =>
-      kind === 'love' ? [song, ...list.filter(notSame)] : list.filter(notSame),
+      kind === 'love'
+        ? [song, ...list.filter((item) => notSame(item))]
+        : list.filter((item) => notSame(item)),
     );
     this.rejectedSongs.update((list) =>
-      kind === 'reject' ? [song, ...list.filter(notSame)] : list.filter(notSame),
+      kind === 'reject'
+        ? [song, ...list.filter((item) => notSame(item))]
+        : list.filter((item) => notSame(item)),
     );
   }
 
@@ -1475,7 +1543,10 @@ export class RibbitStateService implements OnDestroy {
       accumulatedMinutes: Math.round(jamDto.accumulated_duration_seconds / 60),
       superlikesCount: jamDto.superlikes_used,
       superlikesLimit: jamDto.max_superlikes,
-      deckSource: (jamDto.deck_source as 'livre' | 'curtidas' | 'playlist') || 'livre',
+      deckSource:
+        jamDto.deck_source === 'curtidas' || jamDto.deck_source === 'playlist'
+          ? jamDto.deck_source
+          : 'livre',
       ...(jamDto.source_playlist_id != null ? { sourcePlaylistId: jamDto.source_playlist_id } : {}),
       queueItems: [],
     });
@@ -1569,6 +1640,7 @@ export class RibbitStateService implements OnDestroy {
     this.recentAccessTimestamps.clear();
     this.playlists.set([]);
     this.activeTrackReviews.set([]);
+    this.discoveryQueue.length = 0;
     this.discoverySong.set(null);
     this.swipeUndoStack.set([]);
     this.isDeckEmpty.set(false);
@@ -1578,8 +1650,6 @@ export class RibbitStateService implements OnDestroy {
     this.userEmail.set('');
     this.userName.set('Visitante');
     this.userAge.set(null);
-    this.guardianName.set(null);
-    this.guardianEmail.set(null);
     this.currentPlan.set('Free');
     this.currentPlanId.set(1);
     this.spotifyId.set(null);

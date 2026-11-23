@@ -10,7 +10,7 @@ from app.application.ports.repositories.review_repository import (
 from app.application.use_cases.review.delete_review import (
     DeleteReviewUseCase,
 )
-from app.domain.exceptions import EntityNotFoundError, ForbiddenError
+from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
 from app.domain.models import ReviewComment
 
 
@@ -47,7 +47,7 @@ def test_delete_review_by_non_author_raises_forbidden() -> None:
 
     use_case = DeleteReviewUseCase(review_repo=repo)
 
-    with pytest.raises(ForbiddenError, match="Only the author"):
+    with pytest.raises(PermissionDeniedError, match="Only the author"):
         use_case.execute(review_id=1, user_id=99)
 
     repo.delete.assert_not_called()

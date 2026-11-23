@@ -14,6 +14,7 @@ lazy from app.application.ports.services.music_service import (
     CatalogTrack,
     TrackCatalogPort,
     TrackPreviewPort,
+    lookup_matching_preview,
 )
 lazy from app.domain.models.track import Track
 
@@ -54,8 +55,8 @@ class SearchTracksUseCase:
         ):
             preview = None
             with contextlib.suppress(ExternalServiceError):
-                preview = self.track_preview_port.find_preview(
-                    f"{track.artist} {track.title}"
+                preview = lookup_matching_preview(
+                    self.track_preview_port, title=track.title, artist=track.artist
                 )
             if preview is not None:
                 track.merge_missing_metadata(
@@ -101,6 +102,11 @@ class SearchTracksUseCase:
                 "Failed to write track delta for track %s: %s",
                 saved.track_id,
                 exc,
+                extra={
+                    "event": "catalog.delta_write.failed",
+                    "status": "warning",
+                    "track_id": saved.track_id,
+                },
             )
 
     @staticmethod

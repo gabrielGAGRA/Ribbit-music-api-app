@@ -1,18 +1,24 @@
 """Unit tests verifying SQLite concurrency, pragmas, and lazy app import."""
 
+import sqlite3
 import threading
+lazy from pathlib import Path
+
+import pytest
 
 from app.infrastructure.repositories.connection import (
-    ThreadSafeConnection,
+    ThreadLocalConnection,
     create_connection,
 )
 
 
-def test_create_connection_applies_pragmas_and_thread_safe_wrapper(tmp_path) -> None:
+def test_create_connection_applies_pragmas_and_thread_local_wrapper(
+    tmp_path: Path,
+) -> None:
     db_file = tmp_path / "test_concurrency.db"
     conn = create_connection(str(db_file), thread_safe=True)
 
-    assert isinstance(conn, ThreadSafeConnection)
+    assert isinstance(conn, ThreadLocalConnection)
     row_fk = conn.execute("PRAGMA foreign_keys;").fetchone()
     assert row_fk[0] == 1
 
@@ -25,7 +31,73 @@ def test_create_connection_applies_pragmas_and_thread_safe_wrapper(tmp_path) -> 
     conn.close()
 
 
-def test_thread_safe_connection_concurrent_writes(tmp_path) -> None:
+def test_thread_local_connection_uses_distinct_connections_per_thread(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "distinct_connections.db"
+    conn = create_connection(str(db_file), thread_safe=True)
+    assert isinstance(conn, ThreadLocalConnection)
+
+    main_raw = conn.current_connection
+    seen_ids: set[int] = {id(main_raw)}
+    lock = threading.Lock()
+    errors: list[Exception] = []
+
+    def worker() -> None:
+        try:
+            raw = conn.current_connection
+            assert isinstance(raw, sqlite3.Connection)
+            with lock:
+                seen_ids.add(id(raw))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"Worker threads failed: {errors}"
+    assert len(seen_ids) == 5
+    conn.close()
+
+
+def test_thread_local_connection_propagates_create_function_across_threads(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "udf_threads.db"
+    conn = create_connection(str(db_file), thread_safe=True)
+
+    def _double_val(val: int) -> int:
+        return val * 2
+
+    conn.create_function("DOUBLE_VAL", 1, _double_val)
+
+    results: list[int] = []
+    lock = threading.Lock()
+    errors: list[Exception] = []
+
+    def worker(val: int) -> None:
+        try:
+            row = conn.execute("SELECT DOUBLE_VAL(?);", (val,)).fetchone()
+            with lock:
+                results.append(row[0])
+        except Exception as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(1, 5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert not errors, f"UDF worker threads failed: {errors}"
+    assert sorted(results) == [2, 4, 6, 8]
+    conn.close()
+
+
+def test_thread_local_connection_concurrent_writes(tmp_path: Path) -> None:
     db_file = tmp_path / "concurrent_writes.db"
     conn = create_connection(str(db_file), thread_safe=True)
 
@@ -59,7 +131,7 @@ def test_thread_safe_connection_concurrent_writes(tmp_path) -> None:
     conn.close()
 
 
-def test_transaction_context_manager_concurrency(tmp_path) -> None:
+def test_transaction_context_manager_concurrency(tmp_path: Path) -> None:
     import time
 
     from app.infrastructure.repositories.connection import transaction
@@ -107,3 +179,48 @@ def test_app_main_attribute_access() -> None:
 
     assert main_mod.app is not None
     assert main_mod.app.title == "Ribbit Platform API"
+
+
+def test_thread_local_connection_propagates_sql_operational_error(
+    tmp_path: Path,
+) -> None:
+    mem_conn = create_connection(":memory:", thread_safe=True)
+    try:
+        with pytest.raises(sqlite3.OperationalError):
+            mem_conn.execute("SELECT * FROM nonexistent_table_xyz;")
+    finally:
+        mem_conn.close()
+
+    file_conn = create_connection(str(tmp_path / "err.db"), thread_safe=True)
+    try:
+        with pytest.raises(sqlite3.OperationalError):
+            file_conn.execute("SELECT * FROM nonexistent_table_xyz;")
+    finally:
+        file_conn.close()
+
+
+def test_thread_local_connection_raises_programming_error_after_close(
+    tmp_path: Path,
+) -> None:
+    db_file = tmp_path / "closed.db"
+    conn = create_connection(str(db_file), thread_safe=True)
+    conn.execute("SELECT 1;")
+    conn.close()
+
+    with pytest.raises(sqlite3.ProgrammingError):
+        conn.execute("SELECT 1;")
+
+    worker_errors: list[Exception] = []
+
+    def worker() -> None:
+        try:
+            conn.execute("SELECT 1;")
+        except Exception as exc:  # noqa: BLE001
+            worker_errors.append(exc)
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join()
+
+    assert len(worker_errors) == 1
+    assert isinstance(worker_errors[0], sqlite3.ProgrammingError)

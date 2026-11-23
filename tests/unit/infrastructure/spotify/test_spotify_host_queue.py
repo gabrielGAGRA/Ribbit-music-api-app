@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.domain.exceptions import SpotifyPremiumRequiredError
+from app.domain.exceptions import PermissionDeniedError
 from app.domain.models.user import User
 from app.infrastructure.adapters.spotify.credentials import SpotifyCredentials
 from app.infrastructure.adapters.spotify.host_queue import SpotifyHostQueueAdapter
@@ -117,8 +117,9 @@ def test_expired_token_refreshes_and_403_premium_required_propagates() -> None:
     )
     owner = _make_owner(access_token="expired", expires_delta=timedelta(minutes=-5))
 
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         adapter.enqueue_track(owner, "spotify:track:abc123")
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
 
     assert session.request.call_args_list[0][0] == (
         "POST",

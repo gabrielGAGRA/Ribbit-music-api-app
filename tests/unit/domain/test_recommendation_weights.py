@@ -130,3 +130,18 @@ def test_order_tracks_by_weighted_seed_is_deterministic_and_prioritizes_favorite
     # In the top 10 of 40 tracks, Rock (weight 3.0) should outnumber Pop (weight 1.0)
     top_10_rock = sum(1 for t in first_run[:10] if t.genre == "Rock")
     assert top_10_rock >= 6
+
+
+def test_genre_alias_matching_handles_portuguese_and_subgenres() -> None:
+    user = _make_user(
+        favorite_genres=frozenset({"eletrônica", "rock"}),
+        blocked_genres=frozenset({"metal"}),
+    )
+
+    assert user.is_favorite_genre(_make_track(1, "Electronic")) is True
+    assert user.is_favorite_genre(_make_track(2, "drum and bass")) is True
+    assert user.is_favorite_genre(_make_track(3, "hard rock")) is True
+    assert user.is_favorite_genre(_make_track(4, "roc")) is True
+    assert user.can_listen(_make_track(5, "black metal")) is False
+    assert user.can_listen(_make_track(6, "death metal")) is False
+    assert user.can_listen(_make_track(7, "Electronic")) is True

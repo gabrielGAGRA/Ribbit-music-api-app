@@ -2,7 +2,7 @@
   <div
     class="ribby-stage-overlay"
     tabindex="-1"
-    (click)="onBackdropClick($event)"
+    (click)="closeOnBackdrop($event)"
     (keydown.escape)="closeModal()"
     role="dialog"
     aria-modal="true"
@@ -263,7 +263,7 @@
   <div
     class="modal-backdrop"
     tabindex="-1"
-    (click)="onBackdropClick($event)"
+    (click)="closeOnBackdrop($event)"
     (keydown.escape)="closeModal()"
   >
     <section
@@ -285,7 +285,7 @@
         </span>
         <h2>Transformar fila em playlist</h2>
         <p>Salve a sequência da última fila para ouvir quando quiser.</p>
-        <form (submit)="onSaveQueueSubmit($event)">
+        <form (submit)="saveQueueAsPlaylist($event)">
           <label>
             Nome
             <input name="queueName" required defaultValue="Fim de tarde sem pressa" />
@@ -331,7 +331,7 @@
             name="searchArtist"
             placeholder="Ex.: Queen, Lorde, Kendrick Lamar..."
             [value]="searchArtistDraft()"
-            (input)="onSearchArtistInput($event)"
+            (input)="updateSearchArtistDraft($event)"
           />
         </label>
         <div class="date-range-row">
@@ -341,7 +341,7 @@
               name="searchStartDate"
               type="date"
               [value]="searchStartDateDraft()"
-              (input)="onSearchStartDateInput($event)"
+              (input)="updateSearchStartDateDraft($event)"
             />
           </label>
           <label>
@@ -350,7 +350,7 @@
               name="searchEndDate"
               type="date"
               [value]="searchEndDateDraft()"
-              (input)="onSearchEndDateInput($event)"
+              (input)="updateSearchEndDateDraft($event)"
             />
           </label>
         </div>
@@ -359,7 +359,7 @@
           <select
             name="searchMinRating"
             [value]="searchMinRatingDraft() ?? ''"
-            (change)="onSearchMinRatingChange($event)"
+            (change)="updateSearchMinRating($event)"
           >
             <option value="">Qualquer</option>
             <option value="1">1★+</option>
@@ -436,7 +436,7 @@
             </button>
           }
         </div>
-        <form (submit)="onCreatePlaylistSubmit($event)">
+        <form (submit)="createPlaylistFromForm($event)">
           <label>
             Nome da playlist
             <input name="name" required placeholder="Minha nova frequência" />
@@ -561,7 +561,7 @@
         </span>
         <h2>O som fica melhor junto.</h2>
         <p>Crie sua Jam no servidor e compartilhe o código com seus amigos.</p>
-        <form (submit)="onCreateJamSubmit($event)">
+        <form (submit)="createJamFromForm($event)">
           <label>
             Nome da sala
             <input name="roomName" required [defaultValue]="state.jamState().roomName" />
@@ -603,7 +603,7 @@
             <select
               name="deck_source"
               [value]="jamDeckSource()"
-              (change)="onJamDeckSourceChange($event)"
+              (change)="updateJamDeckSource($event)"
             >
               <option value="livre">Descoberta Livre (Catálogo geral)</option>
               <option value="curtidas">Minhas Curtidas</option>
@@ -651,6 +651,9 @@
             <h2>{{ detailsSong().title }}</h2>
             <p>{{ detailsSong().artist }} · {{ detailsSong().year }}</p>
             <span>{{ detailsSong().genre }} · {{ detailsSong().time }}</span>
+            @if (state.isTrackSeen(detailsSong().trackId)) {
+              <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+            }
           </div>
         </div>
         <h3>O que esse som te faz sentir?</h3>
@@ -667,7 +670,7 @@
           }
         </div>
         <p class="small-copy">Sua avaliação: {{ rating() }}/5 estrelas</p>
-        <form class="comment-form" (submit)="onCommentSubmit($event)">
+        <form class="comment-form" (submit)="submitTrackComment($event)">
           <input name="commentText" placeholder="Compartilhe sua impressão (opcional)..." />
           <button class="primary-button" aria-label="Publicar avaliação" type="submit">
             <app-icon name="send" [size]="17" />
@@ -680,7 +683,7 @@
           </div>
           <select
             [value]="state.trackReviewsSort()"
-            (change)="onTrackReviewSortChange($event)"
+            (change)="updateTrackReviewSort($event)"
             aria-label="Ordenar reviews da faixa"
           >
             <option value="recent">Mais recentes</option>
@@ -765,7 +768,7 @@
           </button>
         </div>
 
-        <form (submit)="onCheckoutSubmit($event)">
+        <form (submit)="submitCheckout($event)">
           @if (paymentMethod() === 'card') {
             <label>
               Nome impresso no cartão (fictício)
@@ -787,37 +790,6 @@
               <code>00020126580014BR.GOV.BCB.PIX0114RIBBIT-PRO-DEMO52040000</code>
               <small>Clique abaixo para simular a confirmação imediata do PIX.</small>
             </div>
-          }
-
-          @if (state.isMinorUser()) {
-            <div class="info-note">
-              Conta de menor de 18 anos: para ativar o Plano Individual, informe e confirme a
-              autorização de um responsável maior de idade.
-            </div>
-            <label>
-              Nome do responsável (18+) *
-              <input
-                name="guardianName"
-                required
-                minlength="2"
-                placeholder="Nome completo do responsável"
-                [defaultValue]="state.guardianName() ?? ''"
-              />
-            </label>
-            <label>
-              E-mail do responsável *
-              <input
-                name="guardianEmail"
-                type="email"
-                required
-                placeholder="responsavel@email.com"
-                [defaultValue]="state.guardianEmail() ?? ''"
-              />
-            </label>
-            <label class="checkbox-label">
-              <input name="guardianConfirmed" type="checkbox" required />
-              Confirmo que o responsável é maior de 18 anos e autoriza a assinatura Individual.
-            </label>
           }
 
           <div class="info-note">
@@ -889,7 +861,7 @@
         </span>
         <h2>{{ playlistViewName() }}</h2>
         <p>Faixas salvas nesta playlist.</p>
-        @for (s of playlistViewSongs(); track s.title) {
+        @for (s of playlistViewSongs(); track s.trackId ?? s.title) {
           <div class="song-row">
             <div class="song-cover">
               <img [src]="s.image" alt="" />
@@ -898,6 +870,9 @@
               <strong>{{ s.title }}</strong>
               <span>{{ s.artist }}</span>
             </div>
+            @if (state.isTrackSeen(s.trackId)) {
+              <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+            }
             <span class="song-time">{{ s.time }}</span>
           </div>
         }

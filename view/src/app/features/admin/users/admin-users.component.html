@@ -1,0 +1,428 @@
+<div class="admin-users-page">
+  <section class="admin-card toolbar-card">
+    <div class="tabs-row" role="tablist" aria-label="Visões de contas">
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'all'"
+        [class.active]="activeTab() === 'all'"
+        (click)="selectTab('all')"
+      >
+        <app-icon name="users" [size]="16" />
+        Todos os Usuários ({{ adminState.usersWithPlans().length }})
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'admins'"
+        [class.active]="activeTab() === 'admins'"
+        (click)="selectTab('admins')"
+      >
+        <app-icon name="shield" [size]="16" />
+        Administradores ({{ adminState.administrators().length }})
+      </button>
+
+      <button
+        type="button"
+        role="tab"
+        class="tab-pill"
+        [attr.aria-selected]="activeTab() === 'access-history'"
+        [class.active]="activeTab() === 'access-history'"
+        (click)="selectTab('access-history')"
+      >
+        <app-icon name="clock" [size]="16" />
+        Histórico de Acessos
+      </button>
+    </div>
+
+    <div class="filters-row">
+      <div class="filter-field grow-field">
+        <label for="admin-users-search">Buscar por nome ou e-mail</label>
+        <span id="admin-users-search-hint" class="field-hint">
+          Filtra instantaneamente a listagem ativa
+        </span>
+        <div class="search-input-box">
+          <app-icon name="search" [size]="16" />
+          <input
+            id="admin-users-search"
+            type="search"
+            placeholder="Ex.: Carolina, admin@ribbit..."
+            aria-describedby="admin-users-search-hint"
+            [value]="searchQuery()"
+            (input)="updateSearch($event)"
+          />
+        </div>
+      </div>
+
+      @if (activeTab() === 'all') {
+        <div class="filter-field">
+          <label for="admin-users-plan-filter">Filtrar por plano</label>
+          <span class="field-hint">Tier atribuído</span>
+          <select
+            id="admin-users-plan-filter"
+            class="admin-select"
+            [value]="selectedPlanFilter()"
+            (change)="updatePlanFilter($event)"
+          >
+            <option value="all">Todos os planos</option>
+            @for (planName of planFilterOptions(); track planName) {
+              <option [value]="planName">{{ planName }}</option>
+            }
+          </select>
+        </div>
+      }
+
+      @if (activeTab() === 'access-history') {
+        <div class="filter-field">
+          <label for="admin-access-user-filter">Filtrar por usuário</label>
+          <span class="field-hint">Ouvinte ou admin</span>
+          <select
+            id="admin-access-user-filter"
+            class="admin-select"
+            [value]="accessUserFilter() === null ? 'all' : accessUserFilter()"
+            (change)="updateAccessUserFilter($event)"
+          >
+            <option value="all">Todos os usuários</option>
+            @for (user of adminState.usersWithPlans(); track user.userId) {
+              @if (user.userId !== null) {
+                <option [value]="user.userId">{{ user.displayName }} ({{ user.email }})</option>
+              }
+            }
+          </select>
+        </div>
+
+        <label class="toggle-pill" for="admin-access-only-deleted">
+          <input
+            id="admin-access-only-deleted"
+            type="checkbox"
+            [checked]="accessOnlyDeleted()"
+            (change)="toggleAccessOnlyDeleted($event)"
+          />
+          <span>Somente removidas (Soft Delete)</span>
+        </label>
+      }
+    </div>
+
+    @if (actionError()) {
+      <div class="admin-error-banner" role="alert">
+        <app-icon name="close" [size]="15" />
+        <span>{{ actionError() }}</span>
+      </div>
+    }
+  </section>
+
+  @if (activeTab() === 'all') {
+    <section class="admin-card">
+      <div class="section-header-row">
+        <div>
+          <span class="eyebrow blue">CONTAS REGISTRADAS</span>
+          <h2>Base de Assinantes e Contas</h2>
+        </div>
+      </div>
+
+      <div tabindex="0" role="region" aria-labelledby="all-users-caption" class="table-wrapper">
+        <table class="admin-table users-table">
+          <caption id="all-users-caption" class="sr-only">
+            Lista de usuários registrados com plano de assinatura e status administrativo
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Usuário</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Idade</th>
+              <th scope="col">Plano</th>
+              <th scope="col">Permissão</th>
+              <th scope="col">Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (user of filteredUsers(); track user.userId) {
+              <tr>
+                <th scope="row">
+                  <div class="user-cell">
+                    <strong>{{ user.displayName }}</strong>
+                    <small>#{{ user.userId }}</small>
+                  </div>
+                </th>
+                <td>{{ user.email }}</td>
+                <td>
+                  @if (user.age !== null) {
+                    {{ user.age }} anos
+                  } @else {
+                    Não informada
+                  }
+                </td>
+                <td>
+                  <span class="plan-chip" [class.paid]="user.planName !== 'Free'">
+                    {{ user.planName }}
+                  </span>
+                </td>
+                <td>
+                  @if (user.isAdmin) {
+                    <span class="role-badge admin-role">Administrador</span>
+                  } @else {
+                    <span class="role-badge listener-role">Ouvinte</span>
+                  }
+                </td>
+                <td>
+                  @if (!user.isAdmin) {
+                    <button
+                      type="button"
+                      class="outline-button small-btn"
+                      [disabled]="updatingUserId() === user.userId"
+                      (click)="promoteUser(user.userId)"
+                    >
+                      {{ updatingUserId() === user.userId ? 'Promovendo...' : 'Promover a Admin' }}
+                    </button>
+                  } @else {
+                    <span class="muted">Acesso ativo</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="empty-cell">
+                  Nenhum usuário encontrado para os filtros aplicados.
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  } @else if (activeTab() === 'admins') {
+    <section class="admin-card">
+      <div class="section-header-row section-header-actions">
+        <div>
+          <span class="eyebrow blue">ADMINISTRADORES</span>
+          <h2>Equipe com Privilégio Administrativo</h2>
+        </div>
+
+        <button type="button" class="primary-button small-btn" (click)="toggleRegisterForm()">
+          <app-icon [name]="showRegisterForm() ? 'close' : 'plus'" [size]="15" />
+          {{ showRegisterForm() ? 'Fechar cadastro' : 'Cadastrar Administrador' }}
+        </button>
+      </div>
+
+      @if (showRegisterForm()) {
+        <form class="admin-register-form" (submit)="submitRegisterAdmin($event)">
+          <h3>Novo Administrador Elegível</h3>
+
+          @if (registerError()) {
+            <div class="admin-error-banner" role="alert">
+              <app-icon name="close" [size]="15" />
+              <span>{{ registerError() }}</span>
+            </div>
+          }
+
+          <div class="register-grid">
+            <div class="filter-field">
+              <label for="new-admin-name">Nome de exibição *</label>
+              <span class="field-hint">Entre 2 e 50 caracteres</span>
+              <input
+                id="new-admin-name"
+                type="text"
+                class="admin-input"
+                required
+                minlength="2"
+                maxlength="50"
+                [value]="newAdminName()"
+                (input)="updateNewAdminName($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-email">E-mail elegível *</label>
+              <span class="field-hint">Precisa constar na lista de e-mails elegíveis</span>
+              <input
+                id="new-admin-email"
+                type="email"
+                class="admin-input"
+                required
+                [value]="newAdminEmail()"
+                (input)="updateNewAdminEmail($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-password">Senha *</label>
+              <span class="field-hint">Mínimo de 6 caracteres</span>
+              <input
+                id="new-admin-password"
+                type="password"
+                class="admin-input"
+                required
+                minlength="6"
+                [value]="newAdminPassword()"
+                (input)="updateNewAdminPassword($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-age">Idade *</label>
+              <span class="field-hint">Mínimo 18 anos</span>
+              <input
+                id="new-admin-age"
+                type="number"
+                class="admin-input"
+                required
+                min="18"
+                step="1"
+                [value]="newAdminAge()"
+                (input)="updateNewAdminAge($event)"
+              />
+            </div>
+
+            <div class="filter-field">
+              <label for="new-admin-birth-date">Data de nascimento</label>
+              <span class="field-hint">Opcional (YYYY-MM-DD)</span>
+              <input
+                id="new-admin-birth-date"
+                type="date"
+                class="admin-input"
+                [value]="newAdminBirthDate()"
+                (input)="updateNewAdminBirthDate($event)"
+              />
+            </div>
+          </div>
+
+          <div class="register-form-actions">
+            <button type="submit" class="primary-button small-btn" [disabled]="isRegistering()">
+              <app-icon name="check" [size]="15" />
+              {{ isRegistering() ? 'Cadastrando...' : 'Criar conta admin' }}
+            </button>
+            <button type="button" class="outline-button small-btn" (click)="toggleRegisterForm()">
+              Cancelar
+            </button>
+          </div>
+        </form>
+      }
+
+      <div tabindex="0" role="region" aria-labelledby="admins-table-caption" class="table-wrapper">
+        <table class="admin-table admins-table">
+          <caption id="admins-table-caption" class="sr-only">
+            Lista de administradores ativos da plataforma Ribbit
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Administrador</th>
+              <th scope="col">E-mail</th>
+              <th scope="col">Idade</th>
+              <th scope="col">Status da Sessão</th>
+              <th scope="col">Governança</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (admin of filteredAdministrators(); track admin.userId) {
+              <tr>
+                <th scope="row">
+                  <div class="user-cell">
+                    <strong>{{ admin.displayName }}</strong>
+                    <small>#{{ admin.userId }}</small>
+                  </div>
+                </th>
+                <td>{{ admin.email }}</td>
+                <td>
+                  @if (admin.age !== null && admin.age !== undefined) {
+                    {{ admin.age }} anos
+                  } @else {
+                    Não informada
+                  }
+                </td>
+                <td>
+                  @if (isCurrentSessionUser(admin.userId)) {
+                    <span class="role-badge self-badge">Você (sessão atual)</span>
+                  } @else {
+                    <span class="role-badge admin-role">Credencial ativa</span>
+                  }
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    class="revoke-btn"
+                    [disabled]="updatingUserId() === admin.userId"
+                    (click)="revokeAdmin(admin.userId)"
+                  >
+                    {{ updatingUserId() === admin.userId ? 'Revogando...' : 'Revogar acesso' }}
+                  </button>
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="empty-cell">Nenhum administrador corresponde à busca.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  } @else if (activeTab() === 'access-history') {
+    <section class="admin-card">
+      <div class="section-header-row">
+        <div>
+          <h2>Histórico Global de Acessos</h2>
+        </div>
+      </div>
+
+      <div
+        tabindex="0"
+        role="region"
+        aria-labelledby="access-history-caption"
+        class="table-wrapper"
+      >
+        <table class="admin-table access-history-table">
+          <caption id="access-history-caption" class="sr-only">
+            Registro global de acessos às faixas incluindo faixas removidas via soft delete
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Timestamp</th>
+              <th scope="col">Usuário</th>
+              <th scope="col">Faixa</th>
+              <th scope="col">Origem</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entry of filteredAccessHistory(); track entry.accessId) {
+              <tr>
+                <td>{{ formatAccessTimestamp(entry.accessedAt) }}</td>
+                <td>
+                  <div class="user-cell">
+                    <strong>{{ entry.userDisplayName }}</strong>
+                    <small>{{ entry.userEmail }}</small>
+                  </div>
+                </td>
+                <td>
+                  <div class="user-cell">
+                    <strong>{{ entry.trackTitle }}</strong>
+                    <small>{{ entry.trackArtist }} · {{ entry.trackGenre }}</small>
+                  </div>
+                </td>
+                <td>
+                  <span class="plan-chip">{{ entry.source }}</span>
+                </td>
+                <td>
+                  @if (entry.trackIsDeleted) {
+                    <span class="status-badge deleted-track">Removida (Soft Delete)</span>
+                  } @else {
+                    <span class="status-badge active-track">Ativa</span>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5" class="empty-cell">
+                  Nenhum acesso encontrado para os filtros selecionados.
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+</div>

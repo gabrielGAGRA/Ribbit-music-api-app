@@ -196,97 +196,60 @@ def test_change_subscription_plan_updates_titular_and_all_dependents() -> None:
     assert user_repo.save.call_count == 2
 
 
-def test_change_subscription_plan_minor_to_individual_requires_guardian() -> None:
+def test_change_subscription_plan_blocks_minor_from_paid_individual_or_family() -> None:
     minor = User(
         user_id=10,
         email="minor@test.com",
         password_hash="hash",
         display_name="Minor",
-        age=15,
+        age=16,
         plan_id=1,
     )
-    individual = Plan(
+    individual_plan = Plan(
         plan_id=2,
         name="Individual",
         initial_monthly_price=14.90,
         initial_max_profiles=1,
+    )
+    family_plan = Plan(
+        plan_id=3, name="Família", initial_monthly_price=27.90, initial_max_profiles=4
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = minor
-    plan_repo = MagicMock(spec=PlanRepositoryPort)
-    plan_repo.find_by_id.return_value = individual
 
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
     use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
 
-    with pytest.raises(BusinessRuleViolationError, match="guardian authorization"):
-        use_case.execute(user_id=10, new_plan_id=2)
+    for paid_plan in (individual_plan, family_plan):
+        plan_repo.find_by_id.return_value = paid_plan
+        with pytest.raises(
+            BusinessRuleViolationError,
+            match="Only adult users",
+        ):
+            use_case.execute(user_id=10, new_plan_id=paid_plan.plan_id or 2)
 
 
-def test_change_subscription_plan_minor_to_individual_with_guardian_succeeds() -> None:
+def test_change_subscription_plan_allows_minor_to_switch_to_free() -> None:
     minor = User(
         user_id=10,
         email="minor@test.com",
         password_hash="hash",
         display_name="Minor",
-        age=15,
-        plan_id=1,
-    )
-    individual = Plan(
+        age=16,
         plan_id=2,
-        name="Individual",
-        initial_monthly_price=14.90,
-        initial_max_profiles=1,
+    )
+    free_plan = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = minor
     user_repo.list_dependents.return_value = []
     user_repo.save.side_effect = lambda u: u
+
     plan_repo = MagicMock(spec=PlanRepositoryPort)
-    plan_repo.find_by_id.return_value = individual
+    plan_repo.find_by_id.return_value = free_plan
 
     use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
-    updated = use_case.execute(
-        user_id=10,
-        new_plan_id=2,
-        guardian_name="Carlos Responsavel",
-        guardian_email="carlos@responsavel.com",
-        guardian_confirmed_adult=True,
-    )
+    res = use_case.execute(user_id=10, new_plan_id=1)
 
-    assert updated.plan_id == 2
-    assert updated.guardian_name == "Carlos Responsavel"
-    assert updated.guardian_email == "carlos@responsavel.com"
-
-
-def test_change_subscription_plan_minor_to_family_raises_violation() -> None:
-    minor = User(
-        user_id=10,
-        email="minor@test.com",
-        password_hash="hash",
-        display_name="Minor",
-        age=15,
-        plan_id=1,
-        guardian_name="Carlos",
-        guardian_email="carlos@responsavel.com",
-    )
-    family = Plan(
-        plan_id=3,
-        name="Família",
-        initial_monthly_price=27.90,
-        initial_max_profiles=6,
-    )
-    user_repo = MagicMock(spec=UserRepositoryPort)
-    user_repo.find_by_id.return_value = minor
-    plan_repo = MagicMock(spec=PlanRepositoryPort)
-    plan_repo.find_by_id.return_value = family
-
-    use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
-
-    with pytest.raises(
-        BusinessRuleViolationError, match="primary holder of a Family plan"
-    ):
-        use_case.execute(
-            user_id=10,
-            new_plan_id=3,
-            guardian_confirmed_adult=True,
-        )
+    assert res.plan_id == 1

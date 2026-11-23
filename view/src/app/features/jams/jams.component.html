@@ -70,10 +70,10 @@
           <div
             class="jam-swipe-card"
             [appTransform]="jamCardTransform()"
-            (pointerdown)="onJamPointerDown($event)"
-            (pointermove)="onJamPointerMove($event)"
-            (pointerup)="onJamPointerUp()"
-            (pointercancel)="onJamPointerCancel()"
+            (pointerdown)="startJamCardDrag($event)"
+            (pointermove)="moveJamCardDrag($event)"
+            (pointerup)="finishJamCardDrag()"
+            (pointercancel)="cancelJamCardDrag()"
           >
             <img
               [src]="currentJamDeckSong().image"
@@ -86,6 +86,9 @@
                 >{{ currentJamDeckSong().artist }} ·
                 <small>{{ currentJamDeckSong().genre }}</small></span
               >
+              @if (state.isTrackSeen(currentJamDeckSong().trackId)) {
+                <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+              }
             </div>
           </div>
         </div>
@@ -176,6 +179,9 @@
             <strong>{{ currentSong().title }}</strong>
             <span>{{ currentSong().artist }}</span>
           </div>
+          @if (state.isTrackSeen(currentSong().trackId)) {
+            <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+          }
           <span class="song-time">{{ currentSong().time }}</span>
         </div>
 
@@ -201,7 +207,7 @@
           <h3>Próximas na fila</h3>
           <span>Ordenadas por pontuação de swipe</span>
         </div>
-        @for (entry of upcomingQueueItems(); track entry.song.title) {
+        @for (entry of upcomingQueueItems(); track entry.song.trackId ?? entry.song.title) {
           <div class="song-row">
             <div class="song-cover">
               <img [src]="entry.song.image" alt="" />
@@ -210,6 +216,9 @@
               <strong>{{ entry.song.title }}</strong>
               <span>{{ entry.song.artist }}</span>
             </div>
+            @if (state.isTrackSeen(entry.song.trackId)) {
+              <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+            }
             <div class="jam-track-actions">
               <span>
                 <app-icon name="star" [size]="14" />
@@ -242,7 +251,7 @@
       <app-icon name="headphones" [size]="32" />
       <h2>Já tem uma Jam rolando?</h2>
       <p>Entre usando o código compartilhado por um amigo para começar a deslizar músicas.</p>
-      <form (submit)="onJoinSubmit($event)">
+      <form (submit)="submitJoinRoom($event)">
         <input
           required
           name="jamCode"

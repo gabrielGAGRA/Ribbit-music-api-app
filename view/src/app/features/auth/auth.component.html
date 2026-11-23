@@ -72,7 +72,7 @@
           </button>
         </div>
       } @else if (authView() === 'forgot-password') {
-        <form (submit)="onSubmit($event)">
+        <form (submit)="submitAuthForm($event)">
           <label>
             E-mail *
             <input
@@ -82,7 +82,7 @@
               placeholder="voce@email.com"
               autocomplete="email"
               [value]="emailDraft()"
-              (input)="onEmailChange($event)"
+              (input)="updateEmailDraft($event)"
             />
           </label>
 
@@ -104,7 +104,7 @@
           </button>
         </p>
       } @else {
-        <form (submit)="onSubmit($event)">
+        <form (submit)="submitAuthForm($event)">
           @if (isRegister()) {
             <label>
               Nome de exibição *
@@ -115,7 +115,7 @@
                 placeholder="Ex: João Lucas"
                 autocomplete="name"
                 [value]="nameDraft()"
-                (input)="onNameChange($event)"
+                (input)="updateNameDraft($event)"
               />
             </label>
           }
@@ -129,7 +129,7 @@
               placeholder="voce@email.com"
               autocomplete="email"
               [value]="emailDraft()"
-              (input)="onEmailChange($event)"
+              (input)="updateEmailDraft($event)"
             />
           </label>
 
@@ -142,7 +142,7 @@
                 required
                 [max]="maxBirthDate()"
                 [value]="birthDateDraft()"
-                (input)="onBirthDateChange($event)"
+                (input)="updateBirthDateDraft($event)"
               />
               @if (underageWarning()) {
                 <small class="auth-field-error">{{ underageWarning() }}</small>
@@ -151,54 +151,12 @@
 
             <label>
               Plano inicial *
-              <select name="planId" [value]="selectedPlanId()" (change)="onPlanChange($event)">
+              <select name="planId" [value]="selectedPlanId()" (change)="selectPlanOption($event)">
                 @for (plan of planOptions(); track plan.id) {
-                  <option [value]="plan.id" [disabled]="isUnderage() && isFamilyPlanOption(plan)">
-                    {{ plan.label }}
-                    {{ isUnderage() && isFamilyPlanOption(plan) ? '(Apenas 18+)' : '' }}
-                  </option>
+                  <option [value]="plan.id">{{ plan.label }}</option>
                 }
               </select>
             </label>
-
-            @if (isUnderage()) {
-              <div class="guardian-box">
-                <label>
-                  Nome do responsável (18+) *
-                  <input
-                    name="guardianName"
-                    required
-                    minlength="2"
-                    placeholder="Nome completo do responsável"
-                    [value]="guardianNameDraft()"
-                    (input)="onGuardianNameChange($event)"
-                  />
-                </label>
-
-                <label>
-                  E-mail do responsável *
-                  <input
-                    name="guardianEmail"
-                    type="email"
-                    required
-                    placeholder="responsavel@email.com"
-                    [value]="guardianEmailDraft()"
-                    (input)="onGuardianEmailChange($event)"
-                  />
-                </label>
-
-                <label class="checkbox-label auth-check">
-                  <input
-                    name="guardianConfirmed"
-                    type="checkbox"
-                    [checked]="guardianConfirmedDraft()"
-                    (change)="onGuardianConfirmedChange($event)"
-                  />
-                  Confirmo que o responsável informado é maior de 18 anos e autoriza o uso da conta
-                  (conteúdo explícito permanece bloqueado para menores).
-                </label>
-              </div>
-            }
           }
 
           <label>
@@ -211,7 +169,7 @@
               placeholder="Mínimo de 6 caracteres"
               [attr.autocomplete]="isRegister() ? 'new-password' : 'current-password'"
               [value]="passwordDraft()"
-              (input)="onPasswordChange($event)"
+              (input)="updatePasswordDraft($event)"
             />
             @if (isRegister()) {
               <small
@@ -235,7 +193,7 @@
                 placeholder="Digite a senha novamente"
                 autocomplete="new-password"
                 [value]="confirmPasswordDraft()"
-                (input)="onConfirmPasswordChange($event)"
+                (input)="updateConfirmPasswordDraft($event)"
               />
               @if (passwordMismatch()) {
                 <small class="auth-field-error">As senhas digitadas não coincidem.</small>
@@ -243,15 +201,11 @@
             </label>
 
             <label class="checkbox-label auth-check">
-              <input type="checkbox" required />
-              {{
-                isUnderage()
-                  ? 'Concordo com os Termos de uso e Política de privacidade do Ribbit sob supervisão do responsável.'
-                  : 'Declaro que tenho mais de 18 anos e concordo com os Termos de uso e Política de privacidade do Ribbit.'
-              }}
+              <input type="checkbox" required /> Declaro que tenho mais de 18 anos e concordo com os
+              Termos de uso e Política de privacidade do Ribbit.
             </label>
           } @else {
-            <button type="button" class="forgot-button" (click)="onForgot()">
+            <button type="button" class="forgot-button" (click)="openForgotPassword()">
               Esqueceu sua senha?
             </button>
           }
@@ -279,7 +233,7 @@
           class="outline-button full-width google-login-btn"
           [class.hidden]="showGoogleFallbackButton()"
           [disabled]="isSubmitting() || isLoadingGoogleConfig()"
-          (click)="onGoogleLogin()"
+          (click)="loginWithGoogle()"
         >
           <span class="google-icon-badge" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="18" height="18" focusable="false">

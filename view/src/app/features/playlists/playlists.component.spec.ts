@@ -28,47 +28,43 @@ describe('PlaylistsComponent', () => {
   });
 
   it('should trigger modal to create playlist', () => {
-    component.openCreateModal();
+    component['openCreateModal']();
     expect(state.activeModal()).toBe('playlist');
   });
 
   it('should toggle swipe mode and handle deck candidates', () => {
-    expect(component.isSwipeMode()).toBe(false);
-    component.toggleSwipeMode();
-    expect(component.isSwipeMode()).toBe(true);
-    expect(component.deckCandidates().length).toBeGreaterThan(0);
-  });
-
-  it('should play playlist and individual tracks', () => {
-    component.openPlaylistView({
-      id: '1',
-      name: 'Chill',
-      count: 1,
-      duration: '3 min',
-      songs: [
-        {
-          ...state.songs()[0]!,
-          title: 'Song 1',
-        },
-      ],
-    });
-    component.playPlaylist();
-    expect(state.toast()).toContain('Reproduzindo "Song 1"');
+    state.songs.set([
+      {
+        trackId: 1,
+        title: 'Bloom',
+        artist: 'Odesza',
+        genre: 'Electronic',
+        time: '3:15',
+        image: '',
+        album: 'In Return',
+        year: '2014',
+        match: 95,
+      },
+    ]);
+    expect(component['isSwipeMode']()).toBe(false);
+    component['toggleSwipeMode']();
+    expect(component['isSwipeMode']()).toBe(true);
+    expect(component['deckCandidates']().length).toBeGreaterThan(0);
   });
 
   it('should open and close dedicated playlist view', () => {
-    expect(component.selectedPlaylist()).toBeNull();
-    component.openPlaylistView('Dias de sol');
-    expect(component.selectedPlaylist()?.name).toBe('Dias de sol');
+    expect(component['selectedPlaylist']()).toBeNull();
+    component['openPlaylistView']('Dias de sol');
+    expect(component['selectedPlaylist']()?.name).toBe('Dias de sol');
 
-    component.closePlaylistView();
-    expect(component.selectedPlaylist()).toBeNull();
+    component['closePlaylistView']();
+    expect(component['selectedPlaylist']()).toBeNull();
   });
 
   it('should trigger spotify export via POST /api/playlists/{id}/export-spotify', () => {
     writeAuthToken('jwt-token');
     state.spotifyId.set('spotify_user_test');
-    component.openPlaylistView({
+    component['openPlaylistView']({
       id: '10',
       playlistId: 10,
       name: 'Dias de sol',
@@ -89,8 +85,8 @@ describe('PlaylistsComponent', () => {
       tracks: [],
     });
 
-    component.exportCurrentToSpotify();
-    expect(component.isExportingSpotify()).toBe(true);
+    component['exportCurrentToSpotify']();
+    expect(component['isExportingSpotify']()).toBe(true);
 
     const exportReq = httpMock.expectOne('/api/playlists/10/export-spotify');
     expect(exportReq.request.method).toBe('POST');
@@ -105,14 +101,14 @@ describe('PlaylistsComponent', () => {
       total_duration_seconds: 0,
       tracks: [],
     });
-    expect(component.isExportingSpotify()).toBe(false);
+    expect(component['isExportingSpotify']()).toBe(false);
     expect(state.toast()).toContain('Spotify');
   });
 
   it('prompts spotify connection modal when unlinked user tries to export playlist', () => {
     writeAuthToken('jwt-token');
     state.spotifyId.set(null);
-    component.openPlaylistView({
+    component['openPlaylistView']({
       id: '10',
       playlistId: 10,
       name: 'Dias de sol',
@@ -132,8 +128,8 @@ describe('PlaylistsComponent', () => {
       tracks: [],
     });
 
-    component.exportCurrentToSpotify();
-    expect(component.isExportingSpotify()).toBe(false);
+    component['exportCurrentToSpotify']();
+    expect(component['isExportingSpotify']()).toBe(false);
     expect(state.activeModal()).toBe('spotify-connect');
     expect(state.spotifyPromptReason()).toContain('Conecte sua conta do Spotify');
     httpMock.expectNone('/api/playlists/10/export-spotify');
@@ -143,7 +139,7 @@ describe('PlaylistsComponent', () => {
     writeAuthToken('jwt-token');
     state.spotifyId.set('spotify_free_user');
     state.spotifyPremium.set(false);
-    component.openPlaylistView({
+    component['openPlaylistView']({
       id: '10',
       playlistId: 10,
       name: 'Dias de sol',
@@ -163,7 +159,7 @@ describe('PlaylistsComponent', () => {
       tracks: [],
     });
 
-    component.exportCurrentToSpotify();
+    component['exportCurrentToSpotify']();
     const exportReq = httpMock.expectOne('/api/playlists/10/export-spotify');
     exportReq.flush({
       playlist_id: 10,
@@ -176,14 +172,14 @@ describe('PlaylistsComponent', () => {
       total_duration_seconds: 0,
       tracks: [],
     });
-    expect(component.isExportingSpotify()).toBe(false);
+    expect(component['isExportingSpotify']()).toBe(false);
     expect(state.toast()).toContain('Spotify');
   });
 
   it('prompts spotify connection modal when export API returns SpotifyConnectionRequiredError', () => {
     writeAuthToken('jwt-token');
     state.spotifyId.set('spotify_stale_user');
-    component.openPlaylistView({
+    component['openPlaylistView']({
       id: '10',
       playlistId: 10,
       name: 'Dias de sol',
@@ -203,7 +199,7 @@ describe('PlaylistsComponent', () => {
       tracks: [],
     });
 
-    component.exportCurrentToSpotify();
+    component['exportCurrentToSpotify']();
     const exportReq = httpMock.expectOne('/api/playlists/10/export-spotify');
     exportReq.flush(
       {
@@ -213,7 +209,7 @@ describe('PlaylistsComponent', () => {
       },
       { status: 403, statusText: 'Forbidden' },
     );
-    expect(component.isExportingSpotify()).toBe(false);
+    expect(component['isExportingSpotify']()).toBe(false);
     expect(state.activeModal()).toBe('spotify-connect');
     expect(state.spotifyPromptReason()).toBe(
       'Conecte sua conta do Spotify para exportar playlists.',
@@ -244,7 +240,7 @@ describe('PlaylistsComponent', () => {
 
   it('should respect empty tracks when backend deck returns empty list', () => {
     writeAuthToken('jwt-token');
-    component.selectedPlaylist.set({
+    component['selectedPlaylist'].set({
       id: '20',
       playlistId: 20,
       name: 'Vazia',
@@ -253,17 +249,17 @@ describe('PlaylistsComponent', () => {
       songs: [],
     });
 
-    component.loadPlaylistDeck();
+    component['loadPlaylistDeck']();
     const req = httpMock.expectOne('/api/playlists/20/deck?limit=25');
     req.flush({ items: [], next_cursor: null, has_more: false });
 
-    expect(component.deckCandidates().length).toBe(0);
-    expect(component.activeTrack()).toBeNull();
+    expect(component['deckCandidates']().length).toBe(0);
+    expect(component['activeTrack']()).toBeNull();
   });
 
   it('should upload playlist cover image on file select', () => {
     writeAuthToken('jwt-token');
-    component.selectedPlaylist.set({
+    component['selectedPlaylist'].set({
       id: '20',
       playlistId: 20,
       name: 'Vazia',
@@ -279,8 +275,8 @@ describe('PlaylistsComponent', () => {
       },
     } as unknown as Event;
 
-    component.onCoverFileSelected(dummyEvent);
-    expect(component.isUploadingCover()).toBe(true);
+    component['uploadPlaylistCover'](dummyEvent);
+    expect(component['isUploadingCover']()).toBe(true);
 
     const uploadReq = httpMock.expectOne('/api/playlists/20/image');
     expect(uploadReq.request.method).toBe('PUT');
@@ -297,14 +293,14 @@ describe('PlaylistsComponent', () => {
       tracks: [],
     });
 
-    expect(component.isUploadingCover()).toBe(false);
-    expect(component.selectedPlaylist()?.coverImageUrl).toBe('/api/playlists/20/image');
+    expect(component['isUploadingCover']()).toBe(false);
+    expect(component['selectedPlaylist']()?.coverImageUrl).toBe('/api/playlists/20/image');
     expect(state.toast()).toContain('Capa da playlist atualizada');
   });
 
   it('should add track to playlist via swipe-add and advance deck cursor in swipe mode', () => {
     writeAuthToken('jwt-token');
-    component.selectedPlaylist.set({
+    component['selectedPlaylist'].set({
       id: '25',
       playlistId: 25,
       name: 'Vibes',
@@ -313,7 +309,7 @@ describe('PlaylistsComponent', () => {
       coverImageUrl: '/api/playlists/25/image',
       songs: [],
     });
-    component.deckCandidates.set([
+    component['deckCandidates'].set([
       {
         trackId: 101,
         title: 'Song A',
@@ -337,30 +333,28 @@ describe('PlaylistsComponent', () => {
         match: 90,
       },
     ]);
-    component.deckCursor.set(0);
+    component['deckCursor'].set(0);
 
-    expect(component.currentDeckTrack()?.title).toBe('Song A');
-    expect(component.selectedPlaylist()?.coverImageUrl).toBe('/api/playlists/25/image');
+    expect(component['currentDeckTrack']()?.title).toBe('Song A');
+    expect(component['selectedPlaylist']()?.coverImageUrl).toBe('/api/playlists/25/image');
 
     // Swipe right (like)
-    component.swipeDeckTrack('like');
+    component['swipeDeckTrack']('like');
 
     const addReq = httpMock.expectOne('/api/playlists/25/swipe-add');
     expect(addReq.request.method).toBe('POST');
     expect(addReq.request.body).toEqual({ track_id: 101, action: 'like' });
     addReq.flush({ success: true, message: 'Track added' });
 
-    httpMock.expectOne('/api/playlists').flush([]);
-
-    expect(component.deckCursor()).toBe(1);
-    expect(component.currentDeckTrack()?.title).toBe('Song B');
-    expect(component.selectedPlaylist()?.count).toBe(1);
-    expect(component.selectedPlaylist()?.songs?.[0]?.trackId).toBe(101);
+    expect(component['deckCursor']()).toBe(1);
+    expect(component['currentDeckTrack']()?.title).toBe('Song B');
+    expect(component['selectedPlaylist']()?.count).toBe(1);
+    expect(component['selectedPlaylist']()?.songs?.[0]?.trackId).toBe(101);
   });
 
   it('should advance deck cursor on swipe dislike without adding track to playlist', () => {
     writeAuthToken('jwt-token');
-    component.selectedPlaylist.set({
+    component['selectedPlaylist'].set({
       id: '25',
       playlistId: 25,
       name: 'Vibes',
@@ -368,7 +362,7 @@ describe('PlaylistsComponent', () => {
       duration: '0 min',
       songs: [],
     });
-    component.deckCandidates.set([
+    component['deckCandidates'].set([
       {
         trackId: 101,
         title: 'Song A',
@@ -381,20 +375,20 @@ describe('PlaylistsComponent', () => {
         match: 95,
       },
     ]);
-    component.deckCursor.set(0);
+    component['deckCursor'].set(0);
 
-    component.swipeDeckTrack('dislike');
+    component['swipeDeckTrack']('dislike');
 
     httpMock.expectNone('/api/playlists/25/swipe-add');
-    expect(component.deckCursor()).toBe(1);
-    expect(component.currentDeckTrack()).toBeNull();
+    expect(component['deckCursor']()).toBe(1);
+    expect(component['currentDeckTrack']()).toBeNull();
   });
 
   it('should export playlist to Spotify using exportPlaylist method', () => {
     writeAuthToken('jwt-token');
     state.spotifyId.set('spotify_user_test');
-    component.exportPlaylist(50, 'Minha Playlist Especial');
-    expect(component.isExportingSpotify()).toBe(true);
+    component['exportPlaylist'](50, 'Minha Playlist Especial');
+    expect(component['isExportingSpotify']()).toBe(true);
 
     const exportReq = httpMock.expectOne('/api/playlists/50/export-spotify');
     expect(exportReq.request.method).toBe('POST');
@@ -410,19 +404,19 @@ describe('PlaylistsComponent', () => {
       tracks: [],
     });
 
-    expect(component.isExportingSpotify()).toBe(false);
+    expect(component['isExportingSpotify']()).toBe(false);
     expect(state.toast()).toContain('exportada com sucesso');
   });
 
   it('should reset selected playlist back to all playlists when state.resetPlaylistsView is triggered', () => {
-    component.openPlaylistView('Dias de sol');
-    expect(component.selectedPlaylist()?.name).toBe('Dias de sol');
+    component['openPlaylistView']('Dias de sol');
+    expect(component['selectedPlaylist']()?.name).toBe('Dias de sol');
 
     state.resetPlaylistsView();
     TestBed.flushEffects();
 
-    expect(component.selectedPlaylist()).toBeNull();
-    expect(component.isSwipeMode()).toBe(false);
+    expect(component['selectedPlaylist']()).toBeNull();
+    expect(component['isSwipeMode']()).toBe(false);
   });
 
   it('should render Discover-style swipe card without green action buttons below library playlist cards', () => {

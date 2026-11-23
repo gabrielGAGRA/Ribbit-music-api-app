@@ -76,7 +76,7 @@ describe('ModalsComponent', () => {
       <input name="max_superlikes" value="8" />
     `;
 
-    component.onCreateJamSubmit({
+    component['createJamFromForm']({
       preventDefault: () => {},
       target: form,
     } as unknown as Event);
@@ -100,7 +100,7 @@ describe('ModalsComponent', () => {
     });
 
     const component = TestBed.runInInjectionContext(() => new ModalsComponent());
-    expect(component.jamDeckSource()).toBe('livre');
+    expect(component['jamDeckSource']()).toBe('livre');
 
     const select = document.createElement('select');
     const option = document.createElement('option');
@@ -109,8 +109,8 @@ describe('ModalsComponent', () => {
     option.selected = true;
     select.appendChild(option);
     select.value = 'curtidas';
-    component.onJamDeckSourceChange({ target: select } as unknown as Event);
-    expect(component.jamDeckSource()).toBe('curtidas');
+    component['updateJamDeckSource']({ target: select } as unknown as Event);
+    expect(component['jamDeckSource']()).toBe('curtidas');
   });
 
   describe('Ribbit Onboarding & Word Cloud', () => {
@@ -123,16 +123,16 @@ describe('ModalsComponent', () => {
       });
 
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
-      expect(component.onboardingStep()).toBe(1);
+      expect(component['onboardingStep']()).toBe(1);
 
-      component.nextOnboardingStep();
-      expect(component.onboardingStep()).toBe(2);
+      component['nextOnboardingStep']();
+      expect(component['onboardingStep']()).toBe(2);
 
-      component.prevOnboardingStep();
-      expect(component.onboardingStep()).toBe(1);
+      component['prevOnboardingStep']();
+      expect(component['onboardingStep']()).toBe(1);
 
-      component.prevOnboardingStep();
-      expect(component.onboardingStep()).toBe(1);
+      component['prevOnboardingStep']();
+      expect(component['onboardingStep']()).toBe(1);
     });
 
     it('should toggle word cloud genres and enforce a maximum of 3 selected genres', () => {
@@ -144,30 +144,30 @@ describe('ModalsComponent', () => {
       });
 
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
-      expect(component.selectedWordCloudGenres()).toEqual([]);
+      expect(component['selectedWordCloudGenres']()).toEqual([]);
       expect(BACKEND_GENRES).toContain('Rock');
       expect(BACKEND_GENRES).toContain('Pop');
       expect(BACKEND_GENRES).toContain('Hip Hop');
       expect(BACKEND_GENRES).toContain('Grunge');
 
-      component.toggleWordCloudGenre('Rock');
-      component.toggleWordCloudGenre('Pop');
-      component.toggleWordCloudGenre('Hip Hop');
-      expect(component.selectedWordCloudGenres()).toEqual(['Rock', 'Pop', 'Hip Hop']);
-      expect(component.selectedWordCloudGenres().length).toBe(MAX_FAVORITE_GENRES);
+      component['toggleWordCloudGenre']('Rock');
+      component['toggleWordCloudGenre']('Pop');
+      component['toggleWordCloudGenre']('Hip Hop');
+      expect(component['selectedWordCloudGenres']()).toEqual(['Rock', 'Pop', 'Hip Hop']);
+      expect(component['selectedWordCloudGenres']().length).toBe(MAX_FAVORITE_GENRES);
 
       // Attempting to select a 4th genre should not exceed 3
-      component.toggleWordCloudGenre('Grunge');
-      expect(component.isWordCloudSelected('Grunge')).toBe(false);
-      expect(component.selectedWordCloudGenres()).toEqual(['Rock', 'Pop', 'Hip Hop']);
-      expect(component.ribbySpeech()).toContain('máximo 3 gêneros');
+      component['toggleWordCloudGenre']('Grunge');
+      expect(component['isWordCloudSelected']('Grunge')).toBe(false);
+      expect(component['selectedWordCloudGenres']()).toEqual(['Rock', 'Pop', 'Hip Hop']);
+      expect(component['ribbySpeech']()).toContain('máximo 3 gêneros');
 
       // Deselecting one allows selecting another
-      component.toggleWordCloudGenre('Pop');
-      expect(component.isWordCloudSelected('Pop')).toBe(false);
-      component.toggleWordCloudGenre('Grunge');
-      expect(component.isWordCloudSelected('Grunge')).toBe(true);
-      expect(component.selectedWordCloudGenres()).toEqual(['Rock', 'Hip Hop', 'Grunge']);
+      component['toggleWordCloudGenre']('Pop');
+      expect(component['isWordCloudSelected']('Pop')).toBe(false);
+      component['toggleWordCloudGenre']('Grunge');
+      expect(component['isWordCloudSelected']('Grunge')).toBe(true);
+      expect(component['selectedWordCloudGenres']()).toEqual(['Rock', 'Hip Hop', 'Grunge']);
     });
 
     it('should allow advancing to step 3 without selecting any genre', () => {
@@ -182,12 +182,12 @@ describe('ModalsComponent', () => {
       const state = TestBed.inject(RibbitStateService);
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
 
-      expect(component.selectedWordCloudGenres()).toEqual([]);
-      component.savePreferencesAndNext();
+      expect(component['selectedWordCloudGenres']()).toEqual([]);
+      component['savePreferencesAndNext']();
 
-      expect(component.onboardingStep()).toBe(3);
+      expect(component['onboardingStep']()).toBe(3);
       expect(state.favoriteGenres()).toEqual([]);
-      expect(component.ribbySpeech()).toContain('todos os gêneros');
+      expect(component['ribbySpeech']()).toContain('todos os gêneros');
       localStorage.clear();
     });
 
@@ -203,10 +203,10 @@ describe('ModalsComponent', () => {
       const state = TestBed.inject(RibbitStateService);
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
 
-      component.selectedWordCloudGenres.set(['Indie', 'Jazz', 'Rock']);
-      component.savePreferencesAndNext();
+      component['selectedWordCloudGenres'].set(['Indie', 'Jazz', 'Rock']);
+      component['savePreferencesAndNext']();
 
-      expect(component.onboardingStep()).toBe(3);
+      expect(component['onboardingStep']()).toBe(3);
       expect(state.favoriteGenres()).toEqual(['Indie', 'Jazz', 'Rock']);
       const email = state.userEmail() || 'user';
       expect(localStorage.getItem(`ribbit:onboarding_done:${email}`)).toBe('true');
@@ -226,12 +226,12 @@ describe('ModalsComponent', () => {
       state.setModal('onboarding');
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
 
-      component.selectedWordCloudGenres.set(['Rock', 'Eletrônica']);
-      component.finishOnboarding();
+      component['selectedWordCloudGenres'].set(['Rock', 'Eletrônica']);
+      component['finishOnboarding']();
 
       expect(state.favoriteGenres()).toEqual(['Rock', 'Eletrônica']);
       expect(state.activeModal()).toBeNull();
-      expect(component.onboardingStep()).toBe(1);
+      expect(component['onboardingStep']()).toBe(1);
       const email = state.userEmail() || 'user';
       expect(localStorage.getItem(`ribbit:onboarding_done:${email}`)).toBe('true');
       localStorage.clear();
@@ -246,15 +246,15 @@ describe('ModalsComponent', () => {
       });
 
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
-      expect(component.ribbyMood()).toBe('wave');
+      expect(component['ribbyMood']()).toBe('wave');
 
-      component.selectTutorialTopic('family');
-      expect(component.ribbySpeech()).toContain('Conta Pai');
+      component['selectTutorialTopic']('family');
+      expect(component['ribbySpeech']()).toContain('Conta Pai');
 
-      component.triggerDemoSwipe('love');
-      expect(component.tutorialDemoAction()).toBe('love');
-      expect(component.ribbyMood()).toBe('excited');
-      expect(component.ribbySpeech()).toContain('Superlike');
+      component['triggerDemoSwipe']('love');
+      expect(component['tutorialDemoAction']()).toBe('love');
+      expect(component['ribbyMood']()).toBe('excited');
+      expect(component['ribbySpeech']()).toContain('Superlike');
     });
 
     it('extracts explicit startDate, endDate and reference playlist in playlist creation', () => {
@@ -360,20 +360,20 @@ describe('ModalsComponent', () => {
       const state = TestBed.inject(RibbitStateService);
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
 
-      component.selectSearchGenre('Rock');
-      component.onSearchArtistInput({
+      component['selectSearchGenre']('Rock');
+      component['updateSearchArtistDraft']({
         target: { value: '  Queen  ' },
       } as unknown as Event);
-      component.onSearchStartDateInput({
+      component['updateSearchStartDateDraft']({
         target: { value: '2015-01-01' },
       } as unknown as Event);
-      component.onSearchEndDateInput({
+      component['updateSearchEndDateDraft']({
         target: { value: '2020-12-31' },
       } as unknown as Event);
-      component.onSearchMinRatingChange({
+      component['updateSearchMinRating']({
         target: { value: '4' },
       } as unknown as Event);
-      component.applyFilters();
+      component['applyFilters']();
 
       expect(state.searchFilterGenre()).toBe('Rock');
       expect(state.searchFilterArtist()).toBe('Queen');
@@ -394,13 +394,13 @@ describe('ModalsComponent', () => {
       const publishSpy = vi.spyOn(state, 'publishTrackReview').mockImplementation(() => undefined);
       const component = TestBed.runInInjectionContext(() => new ModalsComponent());
 
-      component.rateSong(4);
+      component['rateSong'](4);
       const input: { value: string } = { value: '   ' };
       const form = {
         elements: { namedItem: () => input },
       } as unknown as HTMLFormElement;
 
-      component.onCommentSubmit({
+      component['submitTrackComment']({
         preventDefault: () => undefined,
         target: form,
       } as unknown as Event);

@@ -26,6 +26,10 @@
       "error",
       "never"
     ],
+    "max-classes-per-file": [
+      "error",
+      1
+    ],
     "default-case": "error",
     "guard-for-in": "error",
     "no-console": [
@@ -136,6 +140,9 @@
     "import/no-default-export": "error",
     "import/no-mutable-exports": "error",
     "import/no-duplicates": "error",
+    "unicorn/no-array-callback-reference": "error",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-non-null-assertion": "error",
     "jsdoc/check-tag-names": [
       "error",
       {
@@ -149,6 +156,7 @@
         "**/*.spec.ts"
       ],
       "rules": {
+        "max-classes-per-file": "off",
         "typescript/no-non-null-assertion": "off",
         "typescript/no-explicit-any": "off"
       }

@@ -1,9 +1,11 @@
 ---
 name: interview-plan
-description: Grill the user while planning.
+description: Fast interactive alignment before coding small or medium ambiguous changes. For major features or architectural designs, use the EGM plugin instead.
 ---
 
-# Grill Me
+# Interview Plan (Small/Medium Scope)
+
+Use for bounded changes where a full Elephant-Goldfish design doc is overkill, yet key requirements or trade-offs still need human judgment.
 
 The plan is where human taste does the most work, because the plan is what produces the code.
 
@@ -12,15 +14,13 @@ Where taste decides:
 - **Risks** — Did it surface the data leak before any code?
 - **Rollout** — Is the blast radius small enough to ship?
 
-## How to run the interview
+## How to Run the Interview
 
 1. **One question at a time, each with a recommended answer.**
-
 2. **Every question must be able to change the build.** Know what you would do differently for each plausible answer. If every answer leads to the same outcome, cut the question.
-
 3. **Adapt depth to stakes.** Stop asking once the critical unknowns, risks, and boundaries are resolved.
 
-## Question coverage
+## Question Coverage
 
 Draw questions from these areas to shape the plan:
 - **Goal**: What triggered this request; what problem it solves; whether this is the right feature to build at all.

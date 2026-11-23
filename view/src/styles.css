@@ -849,6 +849,11 @@ h1 span {
   cursor: grabbing;
 }
 
+.discovery-card.is-dragging {
+  transition: none !important;
+  will-change: transform;
+}
+
 .discovery-card.like {
   transform: translateX(160px) rotate(15deg) !important;
   opacity: 0;
@@ -3852,7 +3857,7 @@ h1 span {
 
 .profile-collection-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 7px;
   padding: 5px;
   border: 1px solid var(--border);
@@ -4643,6 +4648,10 @@ h1 span {
   .playlist-hub-tabs .queue-count {
     flex-shrink: 0;
     padding: 1px 5px;
+  }
+
+  .profile-collection-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .profile-collection-tabs > button {

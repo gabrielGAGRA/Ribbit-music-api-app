@@ -8,7 +8,7 @@ from app.application.dtos.spotify_dtos import (
     SpotifyTokens,
 )
 from app.application.ports.services.music_service import CatalogTrack, ProviderPlaylist
-from app.domain.exceptions import SpotifyError
+from app.domain.exceptions import ExternalServiceError
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -33,8 +33,9 @@ def map_tokens(data: Any) -> SpotifyTokens:
             scope=data.get("scope"),
         )
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
-        raise SpotifyError(
-            "Spotify token endpoint returned an unexpected payload"
+        raise ExternalServiceError(
+            "Spotify token endpoint returned an unexpected payload",
+            service_name="Spotify",
         ) from exc
 
 
@@ -56,7 +57,10 @@ def map_track(data: Mapping[str, Any]) -> CatalogTrack:
             explicit=bool(data.get("explicit", False)),
         )
     except (KeyError, TypeError, AttributeError) as exc:
-        raise SpotifyError("Spotify returned an unexpected track payload") from exc
+        raise ExternalServiceError(
+            "Spotify returned an unexpected track payload",
+            service_name="Spotify",
+        ) from exc
 
 
 def map_tracks(items: Iterable[Any]) -> list[CatalogTrack]:
@@ -74,7 +78,10 @@ def map_playlist(data: Mapping[str, Any]) -> ProviderPlaylist:
             snapshot_id=data.get("snapshot_id"),
         )
     except (KeyError, TypeError, AttributeError) as exc:
-        raise SpotifyError("Spotify returned an unexpected playlist payload") from exc
+        raise ExternalServiceError(
+            "Spotify returned an unexpected playlist payload",
+            service_name="Spotify",
+        ) from exc
 
 
 def map_queue(data: Mapping[str, Any]) -> SpotifyQueue:
@@ -91,7 +98,10 @@ def map_playback_state(data: Mapping[str, Any]) -> SpotifyPlaybackState:
     try:
         is_playing = data["is_playing"]
     except KeyError as exc:
-        raise SpotifyError("Spotify returned an unexpected playback payload") from exc
+        raise ExternalServiceError(
+            "Spotify returned an unexpected playback payload",
+            service_name="Spotify",
+        ) from exc
     return SpotifyPlaybackState(
         is_playing=is_playing,
         progress_ms=data.get("progress_ms"),
@@ -103,5 +113,8 @@ def map_playback_state(data: Mapping[str, Any]) -> SpotifyPlaybackState:
 
 def read_snapshot_id(data: Mapping[str, Any] | None) -> str:
     if not data or "snapshot_id" not in data:
-        raise SpotifyError("Spotify response did not include a snapshot_id")
+        raise ExternalServiceError(
+            "Spotify response did not include a snapshot_id",
+            service_name="Spotify",
+        )
     return str(data["snapshot_id"])

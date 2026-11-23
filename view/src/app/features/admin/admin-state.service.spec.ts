@@ -4,7 +4,8 @@ import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AuthSessionNotifier } from '../../core/auth-session.notifier';
 import { readAdminAuthToken, writeAdminAuthToken } from '../../core/auth-token.storage';
-import { AdminDomainError, AdminStateService } from './admin-state.service';
+import { AdminDomainError } from './admin-domain-error';
+import { AdminStateService } from './admin-state.service';
 
 describe('AdminStateService', () => {
   let service: AdminStateService;
@@ -151,14 +152,14 @@ describe('AdminStateService', () => {
     flushHydration();
 
     expect(service.hasHydrated()).toBe(true);
-    expect(service.executiveDashboard().total_users).toBe(42);
-    expect(service.executiveDashboard().estimated_net_revenue).toBe(228.9);
-    expect(service.audienceReport().total_tracks).toBe(120);
+    expect(service.executiveDashboard().totalUsers).toBe(42);
+    expect(service.executiveDashboard().estimatedNetRevenue).toBe(228.9);
+    expect(service.audienceReport().totalTracks).toBe(120);
     expect(service.blockedGenreRanking()[0]?.genre).toBe('Sertanejo');
     expect(service.usersWithPlans().length).toBe(2);
     expect(service.activeTracks().length).toBe(1);
     expect(service.blockedTracks().length).toBe(1);
-    expect(service.topModerationReviews()[0]?.author_name).toBe('Ouvinte Pro');
+    expect(service.topModerationReviews()[0]?.authorName).toBe('Ouvinte Pro');
   });
 
   it('surfaces backend authentication errors without falling back to local mocks', () => {
@@ -258,7 +259,7 @@ describe('AdminStateService', () => {
     });
 
     expect(createdEmail).toBe('novo@usp.br');
-    expect(service.administrators().some((a) => a.user_id === 9)).toBe(true);
+    expect(service.administrators().some((a) => a.userId === 9)).toBe(true);
 
     httpMock.expectOne('/api/admin/users').flush([]);
     httpMock.expectOne('/api/admin/dashboard').flush({
@@ -312,8 +313,8 @@ describe('AdminStateService', () => {
       plan_id: 2,
       is_admin: true,
     });
-    expect(service.administrators().some((a) => a.user_id === 2)).toBe(true);
-    expect(service.usersWithPlans().find((u) => u.user_id === 2)?.is_admin).toBe(true);
+    expect(service.administrators().some((a) => a.userId === 2)).toBe(true);
+    expect(service.usersWithPlans().find((u) => u.userId === 2)?.isAdmin).toBe(true);
   });
 
   it('updates plans via PUT /api/admin/plans/{id} and refreshes dashboard metrics', () => {
@@ -341,8 +342,8 @@ describe('AdminStateService', () => {
     });
     httpMock.expectOne('/api/admin/users').flush([]);
 
-    expect(service.plans().find((p) => p.plan_id === 2)?.name).toBe('Ribbit Pro+');
-    expect(service.executiveDashboard().estimated_net_revenue).toBe(248.9);
+    expect(service.plans().find((p) => p.planId === 2)?.name).toBe('Ribbit Pro+');
+    expect(service.executiveDashboard().estimatedNetRevenue).toBe(248.9);
   });
 
   it('handles track search, block/restore, explicit, genre, compact, sync, and review delete errors', () => {
@@ -385,7 +386,7 @@ describe('AdminStateService', () => {
       revenue_by_plan: {},
     });
     expect(service.activeTracks().length).toBe(0);
-    expect(service.blockedTracks().some((t) => t.track_id === 500)).toBe(true);
+    expect(service.blockedTracks().some((t) => t.trackId === 500)).toBe(true);
 
     let compactError: unknown;
     service.compactCatalog().subscribe({
@@ -468,8 +469,8 @@ describe('AdminStateService', () => {
       })
       .subscribe((tracks) => {
         expect(tracks.length).toBe(1);
-        expect(tracks[0]?.dislikes_count).toBe(5);
-        expect(tracks[0]?.likes_count).toBe(0);
+        expect(tracks[0]?.dislikesCount).toBe(5);
+        expect(tracks[0]?.likesCount).toBe(0);
       });
 
     const req = httpMock.expectOne(
@@ -518,7 +519,7 @@ describe('AdminStateService', () => {
     ]);
 
     expect(service.accessHistory().length).toBe(1);
-    expect(service.accessHistory()[0]?.track_is_deleted).toBe(true);
+    expect(service.accessHistory()[0]?.trackIsDeleted).toBe(true);
   });
 
   it('computes plan revenuePercent against gross_revenue even when net revenue is negative, and updates costs', () => {
@@ -588,6 +589,6 @@ describe('AdminStateService', () => {
       users_by_plan: { Free: 2, Individual: 1, Família: 1 },
       revenue_by_plan: { Free: 0, Individual: 20, Família: 30 },
     });
-    expect(service.executiveDashboard().estimated_net_revenue).toBe(35.5);
+    expect(service.executiveDashboard().estimatedNetRevenue).toBe(35.5);
   });
 });

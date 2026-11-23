@@ -15,8 +15,7 @@ from app.application.use_cases.jam.vote_jam_track import VoteJamTrackUseCase
 from app.domain.exceptions import (
     BusinessRuleViolationError,
     EntityNotFoundError,
-    SpotifyConnectionRequiredError,
-    SpotifyPremiumRequiredError,
+    PermissionDeniedError,
 )
 from app.domain.models.interaction import Interaction, InteractionAction
 from app.domain.models.jam import Jam, JamQueueItem
@@ -648,8 +647,9 @@ def test_vote_jam_track_requires_spotify_premium() -> None:
         user_repo=user_repo,
         track_repo=MagicMock(spec=TrackRepositoryPort),
     )
-    with pytest.raises(SpotifyPremiumRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(VoteJamTrackCommand(jam_id=10, track_id=100, user_id=1))
+    assert exc_info.value.details.get("rule_name") == "spotify_premium_required"
 
     user_repo.find_by_id.return_value = User(
         user_id=1,
@@ -661,5 +661,6 @@ def test_vote_jam_track_requires_spotify_premium() -> None:
         spotify_id=None,
         spotify_premium=False,
     )
-    with pytest.raises(SpotifyConnectionRequiredError):
+    with pytest.raises(PermissionDeniedError) as exc_info:
         use_case.execute(VoteJamTrackCommand(jam_id=10, track_id=100, user_id=1))
+    assert exc_info.value.details.get("rule_name") == "spotify_connection_required"
