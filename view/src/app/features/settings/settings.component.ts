@@ -5,6 +5,7 @@ import { toApiError } from '../../core/api-error';
 import { computeInitials } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+import { recordSpotifyOAuthInitiatorOrigin } from '../../core/spotify-oauth-origin';
 import { IconComponent } from '../../shared/icon.component';
 import { ProfileApiService } from '../profile/profile-api.service';
 
@@ -83,6 +84,7 @@ export class SettingsComponent implements OnInit {
           this.reportSpotifyClientError('URL de autorização do Spotify inválida.');
           return;
         }
+        recordSpotifyOAuthInitiatorOrigin(rawUrl.trim());
         this.navigateToExternalUrl(rawUrl.trim());
       },
       error: (err: unknown) => {
