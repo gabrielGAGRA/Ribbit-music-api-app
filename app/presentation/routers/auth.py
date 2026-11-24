@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 from typing import Annotated, Any
@@ -289,6 +290,10 @@ def google_callback(
             )
         return _err_redirect("exchange_failed")
     except Exception:  # noqa: BLE001
+        logging.getLogger("app.presentation.routers.auth").warning(
+            "Google OAuth callback exchange failed",
+            exc_info=True,
+        )
         return _err_redirect("exchange_failed")
 
     user_id = result.user.user_id
