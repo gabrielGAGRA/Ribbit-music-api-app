@@ -552,6 +552,27 @@ button svg {
   gap: 24px;
 }
 
+.topbar-theme-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-tint);
+}
+
+.theme-header-btn {
+  padding: 5px;
+  border-radius: 999px;
+}
+
+.theme-header-btn.active {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
 .live-status {
   font-size: 10px;
   color: var(--muted);
@@ -794,6 +815,34 @@ h1 span {
   color: var(--muted);
   max-width: 280px;
   line-height: 1.6;
+}
+
+.vinyl-spinner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: vinyl-spin 1.6s linear infinite;
+
+  @media (prefers-reduced-motion: reduce) {
+    animation-duration: 6s;
+  }
+}
+
+@keyframes vinyl-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px 16px;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .discovery-card:active {

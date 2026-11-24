@@ -67,68 +67,86 @@
         </div>
 
         <div class="jam-deck-stage">
-          <div
-            class="jam-swipe-card"
-            [appTransform]="jamCardTransform()"
-            (pointerdown)="startJamCardDrag($event)"
-            (pointermove)="moveJamCardDrag($event)"
-            (pointerup)="finishJamCardDrag()"
-            (pointercancel)="cancelJamCardDrag()"
-          >
-            <img
-              [src]="currentJamDeckSong().image"
-              [alt]="'Capa de ' + currentJamDeckSong().title"
-            />
-            <div class="jam-card-shade"></div>
-            <div class="jam-card-info">
-              <strong>{{ currentJamDeckSong().title }}</strong>
-              <span
-                >{{ currentJamDeckSong().artist }} ·
-                <small>{{ currentJamDeckSong().genre }}</small></span
-              >
-              @if (state.isTrackSeen(currentJamDeckSong().trackId)) {
-                <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
-              }
+          @if (currentJamDeckSong(); as deckSong) {
+            <div
+              class="jam-swipe-card"
+              [appTransform]="jamCardTransform()"
+              (pointerdown)="startJamCardDrag($event)"
+              (pointermove)="moveJamCardDrag($event)"
+              (pointerup)="finishJamCardDrag()"
+              (pointercancel)="cancelJamCardDrag()"
+            >
+              <img [src]="deckSong.image" [alt]="'Capa de ' + deckSong.title" />
+              <div class="jam-card-shade"></div>
+              <div class="jam-card-info">
+                <strong>{{ deckSong.title }}</strong>
+                <span
+                  >{{ deckSong.artist }} · <small>{{ deckSong.genre }}</small></span
+                >
+                @if (state.isTrackSeen(deckSong.trackId)) {
+                  <span class="seen-badge"><app-icon name="check" [size]="12" /> Ouvido</span>
+                }
+              </div>
             </div>
-          </div>
+          } @else {
+            <div class="jam-empty-deck">
+              <app-icon name="music" [size]="28" />
+              <strong>
+                {{
+                  state.jamDeckLoading()
+                    ? 'Carregando próximas sugestões...'
+                    : 'Você já viu todas as sugestões'
+                }}
+              </strong>
+              <span>
+                {{
+                  state.jamDeckLoading()
+                    ? 'Buscando novas faixas para esta sala.'
+                    : 'Não há novas faixas disponíveis para deslizar nesta Jam no momento.'
+                }}
+              </span>
+            </div>
+          }
         </div>
 
-        <div class="jam-swipe-actions">
-          <div class="jam-action-item">
-            <button
-              class="swipe-button reject"
-              (click)="decideJamCard('reject')"
-              aria-label="Pular música"
-              title="Pular música (0 votos)"
-            >
-              <app-icon name="close" [size]="24" />
-            </button>
-            <span>Pular</span>
+        @if (currentJamDeckSong()) {
+          <div class="jam-swipe-actions">
+            <div class="jam-action-item">
+              <button
+                class="swipe-button reject"
+                (click)="decideJamCard('reject')"
+                aria-label="Pular música"
+                title="Pular música (0 votos)"
+              >
+                <app-icon name="close" [size]="24" />
+              </button>
+              <span>Pular</span>
+            </div>
+            <div class="jam-action-item">
+              <button
+                class="swipe-button love"
+                [disabled]="jamSuperlikesCount() >= jamSuperlikesLimit()"
+                (click)="decideJamCard('superlike')"
+                aria-label="Supercurtir música"
+                title="Supercurtir (+2 votos)"
+              >
+                <app-icon name="star" [size]="22" />
+              </button>
+              <span>Superlike</span>
+            </div>
+            <div class="jam-action-item">
+              <button
+                class="swipe-button like"
+                (click)="decideJamCard('like')"
+                aria-label="Curtir música"
+                title="Curtir (+1 voto)"
+              >
+                <app-icon name="heart" [size]="24" />
+              </button>
+              <span>Curtir</span>
+            </div>
           </div>
-          <div class="jam-action-item">
-            <button
-              class="swipe-button love"
-              [disabled]="jamSuperlikesCount() >= jamSuperlikesLimit()"
-              (click)="decideJamCard('superlike')"
-              aria-label="Supercurtir música"
-              title="Supercurtir (+2 votos)"
-            >
-              <app-icon name="star" [size]="22" />
-            </button>
-            <span>Superlike</span>
-          </div>
-          <div class="jam-action-item">
-            <button
-              class="swipe-button like"
-              (click)="decideJamCard('like')"
-              aria-label="Curtir música"
-              title="Curtir (+1 voto)"
-            >
-              <app-icon name="heart" [size]="24" />
-            </button>
-            <span>Curtir</span>
-          </div>
-        </div>
+        }
 
         <div class="jam-swipe-footer">
           <button class="outline-button full-width" (click)="selectJamView('room')">

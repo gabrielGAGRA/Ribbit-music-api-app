@@ -644,6 +644,98 @@ describe('AuthComponent', () => {
     }
   });
 
+  it('should consume eagerly captured google_auth=register after initial router redirect strips query params', () => {
+    window.history.pushState({}, '', '/?google_auth=register');
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+      ],
+    });
+    const freshState = TestBed.inject(RibbitStateService);
+    const freshHttpMock = TestBed.inject(HttpTestingController);
+    window.history.replaceState({}, '', '/discover');
+    const freshComponent = TestBed.runInInjectionContext(() => new AuthComponent());
+
+    try {
+      freshComponent.ngOnInit();
+      freshHttpMock.expectOne('/api/plans').flush([]);
+      freshHttpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
+
+      const sessionReq = freshHttpMock.expectOne('/api/auth/google/session');
+      expect(sessionReq.request.method).toBe('POST');
+      sessionReq.flush(
+        {
+          error: 'EntityNotFoundError',
+          message: 'Nenhuma conta Ribbit encontrada para este e-mail Google.',
+          details: {
+            entity_name: 'User',
+            registration_required: true,
+            email: 'early.capture@gmail.com',
+            display_name: 'Early Capture User',
+          },
+        },
+        { status: 404, statusText: 'Not Found' },
+      );
+
+      expect(freshState['authView']()).toBe('register');
+      expect(freshComponent['emailDraft']()).toBe('early.capture@gmail.com');
+      expect(freshComponent['nameDraft']()).toBe('Early Capture User');
+      expect(freshComponent['infoMessage']()).toContain('Complete seu cadastro');
+    } finally {
+      freshHttpMock.verify();
+      window.history.pushState({}, '', '/');
+    }
+  });
+
+  it('should hop to callback loopback origin with google_oauth_start=1 before redirecting to Google', () => {
+    const navSpy = vi
+      .spyOn(
+        component as unknown as { navigateToExternalUrl: (url: string) => void },
+        'navigateToExternalUrl',
+      )
+      .mockImplementation(() => {});
+    const targetHost = window.location.hostname === 'localhost' ? '127.0.0.1' : 'localhost';
+    const portSuffix = window.location.port ? `:${window.location.port}` : '';
+    const targetOrigin = `${window.location.protocol}//${targetHost}${portSuffix}`;
+    const redirectUri = encodeURIComponent(`${targetOrigin}/api/auth/google/callback`);
+
+    component['loginWithGoogle']();
+    httpMock.expectOne('/api/auth/google/authorize').flush({
+      authorization_url: `https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=${redirectUri}&state=xyz`,
+    });
+
+    expect(navSpy).toHaveBeenCalledWith(`${targetOrigin}/?google_oauth_start=1`);
+  });
+
+  it('should auto-start Google authorize flow when google_oauth_start=1 query param is present', () => {
+    const navSpy = vi
+      .spyOn(
+        component as unknown as { navigateToExternalUrl: (url: string) => void },
+        'navigateToExternalUrl',
+      )
+      .mockImplementation(() => {});
+    window.history.pushState({}, '', '/?google_oauth_start=1');
+
+    try {
+      component.ngOnInit();
+      httpMock.expectOne('/api/plans').flush([]);
+      httpMock.expectOne('/api/auth/google/client-id').flush({ client_id: null });
+
+      const authReq = httpMock.expectOne('/api/auth/google/authorize');
+      authReq.flush({
+        authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth?client_id=cid&state=xyz',
+      });
+
+      expect(navSpy).toHaveBeenCalledWith(
+        'https://accounts.google.com/o/oauth2/v2/auth?client_id=cid&state=xyz',
+      );
+    } finally {
+      window.history.pushState({}, '', '/');
+    }
+  });
+
   it('should forward to pre-filled register view when POST /api/auth/google returns 404 registration_required', () => {
     component['authenticateWithGoogleIdToken']('valid-unregistered-google-jwt');
     const req = httpMock.expectOne('/api/auth/google');

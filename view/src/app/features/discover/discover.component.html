@@ -4,7 +4,57 @@
       <div class="deck-back back-one"></div>
       <div class="deck-back back-two"></div>
 
-      @if (state.isDeckEmpty()) {
+      @if (state.isLoadingDiscovery()) {
+        <div class="empty-card loading-card" aria-busy="true" aria-live="polite">
+          <span class="vinyl-spinner" role="status" aria-label="Carregando músicas">
+            <svg viewBox="0 0 64 64" width="56" height="56" aria-hidden="true">
+              <circle
+                cx="32"
+                cy="32"
+                r="30"
+                fill="#111622"
+                stroke="var(--border-strong)"
+                stroke-width="1.5"
+              />
+              <circle
+                cx="32"
+                cy="32"
+                r="24"
+                fill="none"
+                stroke="rgba(255,255,255,0.14)"
+                stroke-width="1"
+              />
+              <circle
+                cx="32"
+                cy="32"
+                r="19"
+                fill="none"
+                stroke="rgba(255,255,255,0.1)"
+                stroke-width="1"
+              />
+              <circle
+                cx="32"
+                cy="32"
+                r="14"
+                fill="none"
+                stroke="rgba(255,255,255,0.14)"
+                stroke-width="1"
+              />
+              <path
+                d="M12 20 A24 24 0 0 1 44 12"
+                fill="none"
+                stroke="rgba(255,255,255,0.32)"
+                stroke-width="2.2"
+                stroke-linecap="round"
+              />
+              <circle cx="32" cy="32" r="10" fill="var(--green)" />
+              <circle cx="32" cy="32" r="3" fill="#111622" />
+            </svg>
+          </span>
+          <h2>Carregando...</h2>
+          <p>Buscando a próxima faixa para você.</p>
+        </div>
+      } @else if (state.isDeckEmpty()) {
         <div class="empty-card">
           <app-frog />
           <h2>Você explorou o lago inteiro.</h2>

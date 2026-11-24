@@ -52,6 +52,9 @@
               type="search"
               placeholder="Ex.: Bohemian Rhapsody, Queen..."
               aria-describedby="moderation-search-hint"
+              autocorrect="off"
+              autocapitalize="off"
+              spellcheck="false"
               [value]="trackQuery()"
               (input)="updateTrackQuery($event)"
               (search)="searchTracks()"
@@ -187,6 +190,7 @@
       <section class="admin-card">
         <div class="section-head catalog-header-row">
           <div>
+            <span class="eyebrow blue">MODERAÇÃO DE FAIXAS</span>
             <h2>Catálogo Musical Disponível</h2>
           </div>
           <div class="catalog-actions-group">
@@ -348,6 +352,7 @@
     @case ('blocked') {
       <section class="admin-card">
         <div class="section-head">
+          <span class="eyebrow blue">FAIXAS BLOQUEADAS</span>
           <h2>Faixas Bloqueadas (Soft-Delete)</h2>
         </div>
 
@@ -435,6 +440,7 @@
     @case ('reviews') {
       <section class="admin-card">
         <div class="section-head">
+          <span class="eyebrow blue">MODERAÇÃO DE AVALIAÇÕES</span>
           <h2>Avaliações Mais Curtidas (Últimos 30 Dias)</h2>
         </div>
 

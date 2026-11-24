@@ -144,6 +144,30 @@
             <app-frog [small]="true" mood="wave" />
             <span>Tutorial Ribby</span>
           </button>
+          <div class="topbar-theme-group" role="group" aria-label="Alternar tema">
+            <button
+              type="button"
+              class="icon-button theme-header-btn"
+              [class.active]="state.preferredTheme() === 'light'"
+              [attr.aria-pressed]="state.preferredTheme() === 'light'"
+              (click)="setTheme('light')"
+              title="Modo claro"
+              aria-label="Ativar modo claro"
+            >
+              <app-icon name="sun" [size]="18" />
+            </button>
+            <button
+              type="button"
+              class="icon-button theme-header-btn"
+              [class.active]="state.preferredTheme() === 'dark'"
+              [attr.aria-pressed]="state.preferredTheme() === 'dark'"
+              (click)="setTheme('dark')"
+              title="Modo escuro"
+              aria-label="Ativar modo escuro"
+            >
+              <app-icon name="moon" [size]="18" />
+            </button>
+          </div>
           <button
             class="icon-button notification-button"
             aria-label="Notificações"

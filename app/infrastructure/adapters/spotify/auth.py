@@ -65,7 +65,9 @@ class SpotifyAuth(SpotifyAuthPort):
         self._granted_scopes: frozenset[str] | None = None
         self._code_verifier: str | None = None
 
-    def get_authorize_url(self, scopes: Sequence[str], state: str) -> str:
+    def get_authorize_url(
+        self, scopes: Sequence[str], state: str, *, show_dialog: bool = True
+    ) -> str:
         params = {
             "client_id": self._credentials.client_id,
             "response_type": "code",
@@ -73,9 +75,12 @@ class SpotifyAuth(SpotifyAuthPort):
             "scope": " ".join(scopes),
             "state": state,
         }
+        if show_dialog:
+            params["show_dialog"] = "true"
         if self.mode is SpotifyAuthMode.PKCE:
-            self._code_verifier = secrets.token_urlsafe(64)
-            digest = hashlib.sha256(self._code_verifier.encode()).digest()
+            with self._lock:
+                self._code_verifier = secrets.token_urlsafe(64)
+                digest = hashlib.sha256(self._code_verifier.encode()).digest()
             params["code_challenge_method"] = "S256"
             params["code_challenge"] = (
                 base64.urlsafe_b64encode(digest).rstrip(b"=").decode()

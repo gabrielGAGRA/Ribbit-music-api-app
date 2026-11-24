@@ -13,7 +13,7 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
     "users": {
         "birth_date": "TEXT",
         "favorite_genres": "TEXT",
-        "preferred_theme": "TEXT NOT NULL DEFAULT 'light'",
+        "preferred_theme": "TEXT NOT NULL DEFAULT 'dark'",
         "spotify_premium": "INTEGER NOT NULL DEFAULT 0",
         "spotify_access_token": "TEXT",
         "spotify_refresh_token": "TEXT",

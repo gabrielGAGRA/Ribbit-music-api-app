@@ -579,7 +579,11 @@ def build_container(
         ),
         delete_playlist_use_case=DeletePlaylistUseCase(user_repo, playlist_repo),
         export_playlist_to_spotify_use_case=ExportPlaylistToSpotifyUseCase(
-            user_repo, playlist_repo, music_service
+            user_repo,
+            playlist_repo,
+            music_service,
+            track_catalog=music_service,
+            track_repo=track_repo,
         ),
         list_user_playlists_use_case=ListUserPlaylistsUseCase(user_repo, playlist_repo),
         upload_playlist_cover_use_case=UploadPlaylistCoverUseCase(

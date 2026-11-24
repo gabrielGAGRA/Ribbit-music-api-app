@@ -34,6 +34,7 @@ def test_get_spotify_authorize_url_calls_auth_port() -> None:
     mock_auth.get_authorize_url.assert_called_once()
     called_scopes, called_state = mock_auth.get_authorize_url.call_args[0]
     assert "user-read-private" in called_scopes
+    assert "ugc-image-upload" in called_scopes
     assert "user-modify-playback-state" in called_scopes
     assert "user-read-currently-playing" in called_scopes
     assert called_state == "random_state"

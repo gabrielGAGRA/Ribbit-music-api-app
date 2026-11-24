@@ -31,7 +31,9 @@ export type IconName =
   | 'repeat'
   | 'sliders'
   | 'shield'
-  | 'chart';
+  | 'chart'
+  | 'sun'
+  | 'moon';
 
 export interface NavigationItem {
   readonly id: string;

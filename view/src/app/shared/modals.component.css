@@ -233,7 +233,7 @@
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
 }
 
-[data-theme='dark'] .cloud-tag.chosen {
+:host-context([data-theme='dark']) .cloud-tag.chosen {
   background: var(--blue);
   color: #091326;
   border-color: var(--blue);
@@ -282,9 +282,10 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  background: var(--surface-tint);
-  border: 1px solid var(--border);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
   color: var(--ink);
+  box-shadow: var(--shadow-sm);
 }
 
 @media (max-width: 500px) {
@@ -329,7 +330,7 @@
   animation: stage-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-[data-theme='light'] .ribby-stage-overlay {
+:host-context([data-theme='light']) .ribby-stage-overlay {
   background: radial-gradient(
     circle at 30% 25%,
     color-mix(in srgb, var(--blue) 18%, rgba(242, 246, 255, 0.92)),
