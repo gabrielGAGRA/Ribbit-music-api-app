@@ -51,47 +51,98 @@
       </div>
     </div>
     <div class="panel search-results">
-      @for (item of filteredSongs(); track item.trackId ?? item.title) {
-        <div class="song-row">
-          <button
-            class="song-cover"
-            (click)="selectSong(item)"
-            [attr.aria-label]="'Descobrir ' + item.title"
-          >
-            <img [src]="item.image" [alt]="'Capa de ' + item.title" />
-          </button>
-          <div class="song-description">
-            <strong>{{ item.title }}</strong>
-            <span>
-              {{ item.artist }}
-              @if (hasTrackRating(item)) {
-                <span class="track-rating-badge">
-                  ★ {{ item.averageRating!.toFixed(1) }} ({{ item.reviewCount }})
-                </span>
-              }
-            </span>
-          </div>
-          @if (state.isTrackSeen(item.trackId)) {
-            <span class="seen-badge"> <app-icon name="check" [size]="12" /> Ouvido </span>
-          }
-          <button
-            class="icon-button like-track-btn"
-            (click)="likeAndSaveTrack(item)"
-            [attr.aria-label]="'Curtir e salvar ' + item.title"
-            title="Curtir e salvar nas minhas músicas"
-          >
-            <app-icon name="heart" [size]="17" />
-          </button>
-          <button
-            class="icon-button"
-            (click)="openSongDetails(item)"
-            [attr.aria-label]="'Ver detalhes de ' + item.title"
-          >
-            <app-icon name="chevron" [size]="18" />
-          </button>
+      @if (isSearching()) {
+        <div class="loading-state" aria-busy="true" aria-live="polite">
+          <span class="vinyl-spinner" role="status" aria-label="Carregando músicas">
+            <svg viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
+              <circle
+                cx="32"
+                cy="32"
+                r="30"
+                fill="#111622"
+                stroke="var(--border-strong)"
+                stroke-width="1.5"
+              />
+              <circle
+                cx="32"
+                cy="32"
+                r="24"
+                fill="none"
+                stroke="rgba(255,255,255,0.14)"
+                stroke-width="1"
+              />
+              <circle
+                cx="32"
+                cy="32"
+                r="19"
+                fill="none"
+                stroke="rgba(255,255,255,0.1)"
+                stroke-width="1"
+              />
+              <circle
+                cx="32"
+                cy="32"
+                r="14"
+                fill="none"
+                stroke="rgba(255,255,255,0.14)"
+                stroke-width="1"
+              />
+              <path
+                d="M12 20 A24 24 0 0 1 44 12"
+                fill="none"
+                stroke="rgba(255,255,255,0.32)"
+                stroke-width="2.2"
+                stroke-linecap="round"
+              />
+              <circle cx="32" cy="32" r="10" fill="var(--green)" />
+              <circle cx="32" cy="32" r="3" fill="#111622" />
+            </svg>
+          </span>
+          <span>Carregando...</span>
         </div>
-      } @empty {
-        <p class="muted">Nenhum resultado. Tente outro artista ou gênero.</p>
+      } @else {
+        @for (item of filteredSongs(); track item.title) {
+          <div class="song-row">
+            <button
+              class="song-cover"
+              (click)="selectSong(item)"
+              [attr.aria-label]="'Descobrir ' + item.title"
+            >
+              <img [src]="item.image" [alt]="'Capa de ' + item.title" />
+            </button>
+            <div class="song-description">
+              <strong>{{ item.title }}</strong>
+              <span>
+                {{ item.artist }}
+                @if (getVisibleRating(item); as visibleRating) {
+                  <span class="track-rating-badge">
+                    ★ {{ visibleRating }} ({{ item.reviewCount }})
+                  </span>
+                }
+              </span>
+            </div>
+            @if (state.isTrackSeen(item.trackId)) {
+              <span class="seen-badge"> <app-icon name="check" [size]="12" /> Ouvido </span>
+            }
+            <button
+              class="icon-button like-track-btn"
+              (click)="likeAndSaveTrack(item)"
+              [attr.aria-label]="'Curtir e salvar ' + item.title"
+              title="Curtir e salvar nas minhas músicas"
+            >
+              <app-icon name="heart" [size]="17" />
+            </button>
+            <button
+              class="icon-button"
+              (click)="openSongDetails(item)"
+              [attr.aria-label]="'Ver detalhes de ' + item.title"
+            >
+              <app-icon name="chevron" [size]="18" />
+            </button>
+          </div>
+        } @empty {
+          <p class="muted">Nenhum resultado. Tente outro artista ou gênero.</p>
+        }
       }
     </div>
   } @else {

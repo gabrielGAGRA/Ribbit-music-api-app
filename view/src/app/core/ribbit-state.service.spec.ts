@@ -140,6 +140,7 @@ describe('RibbitStateService', () => {
       },
     ]);
     httpMock.expectOne('/api/profile/interactions').flush([]);
+    expect(service.isLoadingDiscovery()).toBe(false);
     httpMock.expectOne('/api/profile/access-history?limit=100&offset=0').flush({
       items: [],
       seen_track_ids: [101],
@@ -168,6 +169,7 @@ describe('RibbitStateService', () => {
     flushInitialHydration(httpMock);
 
     service.decide('love');
+    expect(service.isLoadingDiscovery()).toBe(true);
     const interactReq = httpMock.expectOne('/api/discovery/interact');
     interactReq.flush({
       interaction_id: 1,

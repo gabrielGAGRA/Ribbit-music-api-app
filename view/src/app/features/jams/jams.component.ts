@@ -18,20 +18,15 @@ export class JamsComponent {
   protected readonly state = inject(RibbitStateService);
 
   protected readonly jamView = signal<'swipe' | 'room'>('swipe');
-  private readonly jamDeckCursor = signal<number>(0);
-  private readonly jamDrag = signal<number>(0);
+  readonly jamDeckCursor = this.state.jamDeckCursor;
+  protected readonly jamDrag = signal<number>(0);
   private jamPointerStart: number | null = null;
 
   protected readonly currentSong = computed<Song>(
     () => this.state.jamState().currentTrack ?? this.state.currentSong(),
   );
 
-  protected readonly currentJamDeckSong = computed<Song>(() => {
-    const jamDeck = this.state.jamDeckSongs();
-    const list = jamDeck.length > 0 ? jamDeck : this.state.songs();
-    const cursor = this.jamDeckCursor();
-    return list[cursor % list.length] ?? this.state.currentSong();
-  });
+  readonly currentJamDeckSong = this.state.currentJamDeckSong;
 
   protected readonly upcomingQueueItems = computed<readonly JamQueueTrack[]>(() => {
     const liveQueue = this.state.jamState().queueItems ?? [];
@@ -127,8 +122,8 @@ export class JamsComponent {
   private fetchMoreJamDeck(): void {
     const jamId = this.state.jamState().jamId;
     const nextCursor = this.state.jamDeckNextCursor();
-    if (jamId && nextCursor) {
-      this.state.loadJamDeck(jamId, nextCursor);
+    if (jamId && nextCursor !== null && !this.state.jamDeckLoading()) {
+      this.state.loadJamDeck(jamId, nextCursor, true);
     }
   }
 
@@ -150,39 +145,34 @@ export class JamsComponent {
 
   protected decideJamCard(action: 'reject' | 'like' | 'superlike'): void {
     const song = this.currentJamDeckSong();
-    const currentJam = this.state.jamState();
-
-    if (action === 'superlike') {
-      const currentCount = currentJam.superlikesCount || 0;
-      const limit = currentJam.superlikesLimit || 5;
-      if (currentCount >= limit) {
-        this.state.notify(`Limite de superlikes da sala atingido (${limit}/${limit}).`);
-        return;
-      }
-      this.state.jamState.set({
-        ...currentJam,
-        superlikesCount: currentCount + 1,
-      });
+    if (!song) return;
+    if (action === 'superlike' && !this.state.tryConsumeJamSuperlike()) {
+      return;
     }
 
-    if (currentJam.jamId !== undefined && readAuthToken()) {
+    const hasAuthJam = this.state.jamState().jamId !== undefined && Boolean(readAuthToken());
+    if (hasAuthJam) {
       this.state.voteJamTrack(song, action);
-    } else if (action === 'superlike') {
-      this.state.notify(`Superlike em "${song.title}"! +2 pontos na fila da Jam.`);
-    } else if (action === 'like') {
-      this.state.notify(`Like em "${song.title}"! +1 ponto na fila da Jam.`);
     } else {
-      this.state.notify(`"${song.title}" pulada.`);
+      this.notifyLocalDecision(song.title, action);
     }
 
-    const nextCursor = this.jamDeckCursor() + 1;
-    this.jamDeckCursor.set(nextCursor);
+    this.state.advanceJamDeckCursor(song, !(hasAuthJam && action !== 'reject'));
     this.jamDrag.set(0);
 
     const deckSongs = this.state.jamDeckSongs();
-    if (nextCursor >= deckSongs.length - 3) {
+    if (this.jamDeckCursor() >= deckSongs.length - 3) {
       this.fetchMoreJamDeck();
     }
+  }
+
+  private notifyLocalDecision(title: string, action: 'reject' | 'like' | 'superlike'): void {
+    const messages: Record<'reject' | 'like' | 'superlike', string> = {
+      superlike: `Superlike em "${title}"! +2 pontos na fila da Jam.`,
+      like: `Like em "${title}"! +1 ponto na fila da Jam.`,
+      reject: `"${title}" pulada.`,
+    };
+    this.state.notify(messages[action]);
   }
 
   protected startJamCardDrag(event: PointerEvent): void {

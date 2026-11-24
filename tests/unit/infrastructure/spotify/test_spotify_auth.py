@@ -176,7 +176,13 @@ class TestAuthorizationCode:
         assert query["scope"] == ["a b"]
         assert query["state"] == ["xyz"]
         assert query["redirect_uri"] == [REDIRECT]
+        assert query["show_dialog"] == ["true"]
         assert "code_challenge" not in query
+
+    def test_authorize_url_can_omit_show_dialog_when_disabled(self) -> None:
+        url = self._auth().get_authorize_url(["a"], state="xyz", show_dialog=False)
+        query = parse_qs(urlparse(url).query)
+        assert "show_dialog" not in query
 
     def test_exchange_code_stores_tokens_and_scopes(self) -> None:
         auth = self._auth(_token("AT", "RT", "user-top-read playlist-read-private"))

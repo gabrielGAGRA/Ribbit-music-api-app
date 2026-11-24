@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { Router } from '@angular/router';
 import type { Subscription } from 'rxjs';
+import { finalize } from 'rxjs/operators';
 import type { CommunityReview, Song } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
 import { readAuthToken } from '../../core/auth-token.storage';
@@ -68,13 +69,22 @@ export class ExploreComponent implements OnInit {
   private readonly songService = inject(SongService);
   private readonly router = inject(Router, { optional: true });
 
-  protected readonly query = this.state.searchQuery;
+  readonly query = this.state.searchQuery;
+  protected readonly historyExpanded = signal<boolean>(false);
+  protected readonly isSearching = signal<boolean>(false);
   protected readonly reviewSort = signal<string>('likes');
   protected readonly reviewLikes = signal<Record<number, boolean>>({});
   protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
   private readonly serverSearchResults = signal<readonly Song[] | null>(null);
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSearchSub: Subscription | null = null;
+
+  protected getVisibleRating(item: Song): string | null {
+    const rating = item.averageRating;
+    return (item.reviewCount ?? 0) > 0 && rating !== null && rating !== undefined
+      ? rating.toFixed(1)
+      : null;
+  }
 
   protected readonly hasActiveSearch = computed<boolean>(() => {
     const q = this.query().trim();
@@ -202,6 +212,7 @@ export class ExploreComponent implements OnInit {
       this.activeSearchSub.unsubscribe();
       this.activeSearchSub = null;
     }
+    this.isSearching.set(false);
   }
 
   private runServerSearch(): void {
@@ -214,6 +225,7 @@ export class ExploreComponent implements OnInit {
     const minRating = this.state.searchFilterMinRating();
     const sortBy = this.state.searchSortBy();
 
+    this.isSearching.set(true);
     this.activeSearchSub = this.songService
       .searchSongs({
         ...(q ? { query: q } : {}),
@@ -226,6 +238,11 @@ export class ExploreComponent implements OnInit {
         ...(sortBy !== 'default' ? { sortBy } : {}),
         limit: 30,
       })
+      .pipe(
+        finalize(() => {
+          this.isSearching.set(false);
+        }),
+      )
       .subscribe({
         next: (items) => {
           this.serverSearchResults.set(items);

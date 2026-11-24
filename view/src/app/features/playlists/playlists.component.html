@@ -76,14 +76,6 @@
       @if (isSwipeMode() || selectedPlaylistTracks().length === 0) {
         <!-- Swipe-Add Deck for Playlist -->
         <div class="playlist-swipe-deck-section tab-enter">
-          @if (selectedPlaylistTracks().length > 0) {
-            <div class="section-title">
-              <button class="text-button" (click)="toggleSwipeMode()">
-                Ver faixas salvas ({{ selectedPlaylistTracks().length }})
-              </button>
-            </div>
-          }
-
           @if (activeTrack(); as deckTrack) {
             <div class="deck-stage-wrapper">
               <div class="discovery-stage">

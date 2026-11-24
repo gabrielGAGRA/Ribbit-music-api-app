@@ -167,6 +167,7 @@ describe('ExploreComponent', () => {
     component['query'].set('Bloom');
 
     component['submitSearch'](new Event('submit'));
+    expect(component.isSearching()).toBe(true);
 
     const req = httpMock.expectOne(
       (r) => r.url === '/api/tracks/search' && r.params.get('query') === 'Bloom',
@@ -182,6 +183,7 @@ describe('ExploreComponent', () => {
       },
     ]);
 
+    expect(component.isSearching()).toBe(false);
     expect(component['filteredSongs']().length).toBe(1);
     expect(component['filteredSongs']()[0]?.title).toBe('Bloom');
   });
