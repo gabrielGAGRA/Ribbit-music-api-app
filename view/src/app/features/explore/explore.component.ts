@@ -70,14 +70,21 @@ export class ExploreComponent implements OnInit {
   private readonly router = inject(Router, { optional: true });
 
   readonly query = this.state.searchQuery;
-  readonly historyExpanded = signal<boolean>(false);
-  readonly isSearching = signal<boolean>(false);
-  readonly reviewSort = signal<string>('likes');
-  readonly reviewLikes = signal<Record<number, boolean>>({});
+  protected readonly historyExpanded = signal<boolean>(false);
+  protected readonly isSearching = signal<boolean>(false);
+  protected readonly reviewSort = signal<string>('likes');
+  protected readonly reviewLikes = signal<Record<number, boolean>>({});
   protected readonly starScale: readonly number[] = [1, 2, 3, 4, 5];
   private readonly serverSearchResults = signal<readonly Song[] | null>(null);
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private activeSearchSub: Subscription | null = null;
+
+  protected getVisibleRating(item: Song): string | null {
+    const rating = item.averageRating;
+    return (item.reviewCount ?? 0) > 0 && rating !== null && rating !== undefined
+      ? rating.toFixed(1)
+      : null;
+  }
 
   protected readonly hasActiveSearch = computed<boolean>(() => {
     const q = this.query().trim();
