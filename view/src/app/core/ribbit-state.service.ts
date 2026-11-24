@@ -1,7 +1,8 @@
 import type { OnDestroy } from '@angular/core';
 import { Injectable, computed, inject, signal } from '@angular/core';
+import type { Subscription } from 'rxjs';
 import { forkJoin, of } from 'rxjs';
-import { catchError, finalize } from 'rxjs/operators';
+import { catchError } from 'rxjs/operators';
 import type {
   AuthApiResponse,
   CommunityReview,
@@ -102,6 +103,11 @@ function setStoredTheme(theme: 'light' | 'dark'): void {
   }
 }
 
+interface JamDeckProgress {
+  readonly cursorTrackId?: number;
+  readonly seenTrackIds: readonly number[];
+}
+
 export interface GoogleOAuthQueryParams {
   readonly googleAuth: string | null;
   readonly googleAuthError: string | null;
@@ -120,6 +126,51 @@ function readGoogleOAuthQueryParams(): GoogleOAuthQueryParams | null {
     return null;
   }
   return { googleAuth, googleAuthError, googleOAuthStart };
+}
+
+function getJamDeckStorageKey(userId: number | null, jamId: number): string {
+  return `ribbit:jam_deck:${userId ?? 'anon'}:${jamId}`;
+}
+
+function readStoredJamDeckProgress(userId: number | null, jamId: number): JamDeckProgress {
+  try {
+    if (typeof localStorage === 'undefined') return { seenTrackIds: [] };
+    const raw = localStorage.getItem(getJamDeckStorageKey(userId, jamId));
+    if (!raw) return { seenTrackIds: [] };
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) {
+      return { seenTrackIds: [] };
+    }
+    const record = parsed as Record<string, unknown>;
+    const rawCursor = record['cursorTrackId'];
+    const cursorTrackId =
+      typeof rawCursor === 'number' && Number.isFinite(rawCursor) ? rawCursor : undefined;
+    const rawSeen = Array.isArray(record['seenTrackIds']) ? record['seenTrackIds'] : [];
+    const seenTrackIds = rawSeen.filter(
+      (id): id is number => typeof id === 'number' && Number.isFinite(id),
+    );
+    return {
+      ...(cursorTrackId !== undefined ? { cursorTrackId } : {}),
+      seenTrackIds,
+    };
+  } catch {
+    // Ignore malformed localStorage Jam deck progress
+    return { seenTrackIds: [] };
+  }
+}
+
+function writeStoredJamDeckProgress(
+  userId: number | null,
+  jamId: number,
+  progress: JamDeckProgress,
+): void {
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(getJamDeckStorageKey(userId, jamId), JSON.stringify(progress));
+    }
+  } catch {
+    // Ignore storage quota errors
+  }
 }
 
 const DEFAULT_JAM_STATE: JamState = {
@@ -150,6 +201,13 @@ export class RibbitStateService implements OnDestroy {
   private readonly initialUser = readStoredUser();
   private readonly hasInitialToken = readAuthToken() !== null;
   private jamPollTimer: ReturnType<typeof setInterval> | null = null;
+  private jamDeckLoadSub: Subscription | null = null;
+  private jamStateSyncSub: Subscription | null = null;
+  private jamSessionEpoch = 0;
+  private jamStateSyncSeq = 0;
+  private readonly jamConfirmedSeenTrackIds = new Set<number>();
+  private serverJamSuperlikes = 0;
+  private pendingJamSuperlikes = 0;
   private readonly unsubscribeUnauthorized: () => void;
   private readonly recentAccessTimestamps = new Map<string, number>();
 
@@ -252,8 +310,24 @@ export class RibbitStateService implements OnDestroy {
 
   readonly jamState = signal<JamState>(DEFAULT_JAM_STATE);
   readonly jamDeckSongs = signal<readonly Song[]>([]);
+  readonly jamDeckCursor = signal<number>(0);
   readonly jamDeckNextCursor = signal<number | null>(null);
+  readonly jamDeckLoaded = signal<boolean>(false);
+  readonly jamDeckLoading = signal<boolean>(false);
+  readonly jamSeenTrackIds = signal<ReadonlySet<number>>(new Set());
+  readonly jamSeenFallbackKeys = signal<ReadonlySet<string>>(new Set());
   readonly jamVotes = computed<number>(() => this.jamState().votes);
+  readonly currentJamDeckSong = computed<Song | null>(() => {
+    const jamDeck = this.jamDeckSongs();
+    const cursor = this.jamDeckCursor();
+    if (cursor < jamDeck.length) {
+      return jamDeck[cursor] ?? null;
+    }
+    if (this.jamDeckLoading() || this.jamDeckNextCursor() !== null) {
+      return null;
+    }
+    return this.findNextJamFallbackSong(jamDeck);
+  });
 
   readonly currentIndex = signal<number>(0);
 
@@ -506,11 +580,7 @@ export class RibbitStateService implements OnDestroy {
         const alreadyQueued = this.discoveryQueue.some(
           (queued) => queued.trackId !== undefined && queued.trackId === song.trackId,
         );
-        if (
-          song.trackId !== undefined &&
-          song.trackId !== currentId &&
-          !alreadyQueued
-        ) {
+        if (song.trackId !== undefined && song.trackId !== currentId && !alreadyQueued) {
           this.discoveryQueue.push(song);
           this.preloadCoverImage(song.image);
         }
@@ -923,7 +993,7 @@ export class RibbitStateService implements OnDestroy {
           if (currentKind === 'reject') {
             this.discoverySong.set(song);
             this.isDeckEmpty.set(false);
-    this.isLoadingDiscovery.set(false);
+            this.isLoadingDiscovery.set(false);
             this.notify(`"${song.title}" ganhou uma segunda chance!`);
           } else {
             this.notify(`"${song.title}" foi atualizada na sua coleção.`);
@@ -1152,6 +1222,27 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
+  /** Attempts to reserve one room superlike optimistically before voting. */
+  tryConsumeJamSuperlike(): boolean {
+    const currentJam = this.jamState();
+    const currentCount = currentJam.superlikesCount || 0;
+    const limit = currentJam.superlikesLimit || 5;
+    if (currentCount >= limit) {
+      this.notify(`Limite de superlikes da sala atingido (${limit}/${limit}).`);
+      return false;
+    }
+    if (currentJam.jamId !== undefined && readAuthToken()) {
+      this.pendingJamSuperlikes += 1;
+      this.recomputeJamSuperlikesCount();
+    } else {
+      this.jamState.set({
+        ...currentJam,
+        superlikesCount: currentCount + 1,
+      });
+    }
+    return true;
+  }
+
   /** Votes on a Jam deck card (like +1 or superlike +2) and syncs room state. */
   voteJamTrack(song: Song, action: 'reject' | 'like' | 'superlike'): void {
     const jamId = this.jamState().jamId;
@@ -1160,9 +1251,21 @@ export class RibbitStateService implements OnDestroy {
       return;
     }
     if (!jamId || song.trackId === undefined) return;
+    const trackId = song.trackId;
+    const requestEpoch = this.jamSessionEpoch;
+    const cursorBeforeAdvance = this.jamDeckCursor();
 
-    this.jamService.voteTrack({ jamId, trackId: song.trackId, action }).subscribe({
+    this.jamService.voteTrack({ jamId, trackId, action }).subscribe({
       next: () => {
+        if (this.jamSessionEpoch !== requestEpoch || this.jamState().jamId !== jamId) {
+          return;
+        }
+        if (action === 'superlike') {
+          this.serverJamSuperlikes += 1;
+          this.pendingJamSuperlikes = Math.max(0, this.pendingJamSuperlikes - 1);
+          this.recomputeJamSuperlikesCount();
+        }
+        this.persistJamTrackSeen(jamId, trackId);
         const pts = action === 'superlike' ? '+2 pontos' : '+1 ponto';
         this.notify(
           `${action === 'superlike' ? 'Superlike' : 'Like'} em "${song.title}"! ${pts} na fila.`,
@@ -1170,6 +1273,10 @@ export class RibbitStateService implements OnDestroy {
         this.syncJamState(jamId);
       },
       error: (err: unknown) => {
+        if (this.jamSessionEpoch !== requestEpoch || this.jamState().jamId !== jamId) {
+          return;
+        }
+        this.rollbackFailedJamVote(jamId, trackId, action === 'superlike', cursorBeforeAdvance);
         this.notify(toApiError(err).message);
       },
     });
@@ -1236,24 +1343,124 @@ export class RibbitStateService implements OnDestroy {
     });
   }
 
+  /** Records a Jam card decision locally and advances the persistent deck cursor. */
+  advanceJamDeckCursor(song: Song, persist = true): void {
+    const currentCursor = this.jamDeckCursor();
+    const jamDeck = this.jamDeckSongs();
+    const jamId = this.jamState().jamId;
+
+    if (song.trackId !== undefined) {
+      const updatedSeen = new Set(this.jamSeenTrackIds());
+      updatedSeen.add(song.trackId);
+      this.jamSeenTrackIds.set(updatedSeen);
+
+      if (persist) {
+        this.jamConfirmedSeenTrackIds.add(song.trackId);
+        if (jamId !== undefined) {
+          this.persistJamTrackSeen(jamId, song.trackId);
+        }
+      }
+    } else {
+      const updatedFallback = new Set(this.jamSeenFallbackKeys());
+      updatedFallback.add(song.title);
+      this.jamSeenFallbackKeys.set(updatedFallback);
+    }
+
+    this.jamDeckCursor.set(this.findNextJamDeckCursor(currentCursor + 1, jamDeck));
+  }
+
+  private findNextJamDeckCursor(startIndex: number, jamDeck: readonly Song[]): number {
+    const seenIds = this.jamSeenTrackIds();
+    let idx = startIndex;
+    while (idx < jamDeck.length) {
+      const candidateId = jamDeck[idx]?.trackId;
+      if (candidateId === undefined || !seenIds.has(candidateId)) {
+        return idx;
+      }
+      idx += 1;
+    }
+    return idx;
+  }
+
+  private persistJamTrackSeen(jamId: number, trackId: number): void {
+    this.jamConfirmedSeenTrackIds.add(trackId);
+
+    const updatedSeen = new Set(this.jamSeenTrackIds());
+    updatedSeen.add(trackId);
+    this.jamSeenTrackIds.set(updatedSeen);
+
+    const prev = readStoredJamDeckProgress(this.userId(), jamId);
+    const cursorTrackId = this.resolveContiguousBackendCursor(prev.cursorTrackId);
+    writeStoredJamDeckProgress(this.userId(), jamId, {
+      ...(cursorTrackId !== undefined ? { cursorTrackId } : {}),
+      seenTrackIds: Array.from(this.jamConfirmedSeenTrackIds),
+    });
+  }
+
+  private resolveContiguousBackendCursor(
+    prevCursorTrackId: number | undefined,
+  ): number | undefined {
+    let contiguousCursor = prevCursorTrackId;
+    for (const song of this.jamDeckSongs()) {
+      if (song.trackId === undefined || !this.jamConfirmedSeenTrackIds.has(song.trackId)) {
+        break;
+      }
+      contiguousCursor = song.trackId;
+    }
+    return contiguousCursor;
+  }
+
+  private recomputeJamSuperlikesCount(): void {
+    const currentJam = this.jamState();
+    const limit = currentJam.superlikesLimit ?? 5;
+    const effectiveSuperlikes = Math.min(
+      limit,
+      this.serverJamSuperlikes + this.pendingJamSuperlikes,
+    );
+    this.jamState.set({
+      ...currentJam,
+      superlikesCount: effectiveSuperlikes,
+    });
+  }
+
+  private rollbackFailedJamVote(
+    jamId: number,
+    trackId: number,
+    wasSuperlike: boolean,
+    cursorBeforeAdvance: number,
+  ): void {
+    if (wasSuperlike) {
+      this.pendingJamSuperlikes = Math.max(0, this.pendingJamSuperlikes - 1);
+      this.recomputeJamSuperlikesCount();
+      this.syncJamState(jamId);
+    }
+    const updatedSeen = new Set(this.jamSeenTrackIds());
+    updatedSeen.delete(trackId);
+    this.jamSeenTrackIds.set(updatedSeen);
+    if (this.jamDeckCursor() > cursorBeforeAdvance) {
+      this.jamDeckCursor.set(cursorBeforeAdvance);
+    }
+  }
+
   /** Closes the active Jam room (for hosts) or leaves the room locally. */
   closeOrLeaveJam(): void {
     const jam = this.jamState();
     this.stopJamPolling();
     const jamId = jam.jamId ?? jam.roomId;
-    if (jamId && jam.hostUserId === this.userId()) {
+    const isHost = Boolean(jamId && jam.hostUserId === this.userId());
+    this.jamState.set(DEFAULT_JAM_STATE);
+    this.resetJamDeckState();
+    if (isHost && jamId !== undefined) {
       this.jamService.closeJam(jamId).subscribe({
         next: () => {
-          this.jamState.set(DEFAULT_JAM_STATE);
           this.notify('Jam encerrada para todos os participantes.');
         },
         error: () => {
-          this.jamState.set(DEFAULT_JAM_STATE);
+          // Room state already cleared locally
         },
       });
       return;
     }
-    this.jamState.set(DEFAULT_JAM_STATE);
     this.notify('Você saiu da Jam.');
   }
 
@@ -1579,42 +1786,168 @@ export class RibbitStateService implements OnDestroy {
       queueItems: [],
     });
 
+    this.resetJamDeckState();
+    this.serverJamSuperlikes = jamDto.superlikes_used ?? 0;
+
     if (jamId != null) {
-      this.loadJamDeck(jamId);
+      const saved = readStoredJamDeckProgress(this.userId(), jamId);
+      this.jamSeenTrackIds.set(new Set(saved.seenTrackIds));
+      for (const id of saved.seenTrackIds) {
+        this.jamConfirmedSeenTrackIds.add(id);
+      }
+      this.loadJamDeck(jamId, saved.cursorTrackId, false);
       this.syncJamState(jamId);
       this.startJamPolling(jamId);
     }
   }
 
-  loadJamDeck(jamId: number, cursorId?: number): void {
-    this.jamService.getJamDeck(jamId, 30, cursorId).subscribe({
+  loadJamDeck(jamId: number, cursorId?: number, append = Boolean(cursorId)): void {
+    if (append && this.jamDeckLoading()) {
+      return;
+    }
+    if (!append) {
+      this.jamDeckLoadSub?.unsubscribe();
+      this.jamDeckLoadSub = null;
+    }
+    const requestEpoch = this.jamSessionEpoch;
+    this.jamDeckLoading.set(true);
+    this.jamDeckLoadSub = this.jamService.getJamDeck(jamId, 30, cursorId).subscribe({
       next: (page) => {
-        const songs = page.items.map((dto) => mapTrackDtoToSong(dto));
-        if (cursorId) {
-          this.jamDeckSongs.update((cur) => [...cur, ...songs]);
-        } else {
-          this.jamDeckSongs.set(songs);
+        if (this.jamSessionEpoch !== requestEpoch || this.jamState().jamId !== jamId) {
+          return;
         }
-        this.jamDeckNextCursor.set(page.next_cursor ?? null);
+        this.jamDeckLoading.set(false);
+        this.jamDeckLoaded.set(true);
+        const songs = this.filterUnseenJamSongs(page.items.map((dto) => mapTrackDtoToSong(dto)));
+        this.applyJamDeckPage(songs, append);
+        const nextCursor = page.next_cursor ?? null;
+        this.jamDeckNextCursor.set(nextCursor);
+        if (songs.length === 0 && nextCursor !== null && nextCursor !== cursorId) {
+          this.loadJamDeck(jamId, nextCursor, append);
+        }
       },
       error: () => {
-        if (!cursorId) {
-          this.jamDeckSongs.set(this.songs());
+        if (this.jamSessionEpoch !== requestEpoch || this.jamState().jamId !== jamId) {
+          return;
+        }
+        this.jamDeckLoading.set(false);
+        this.jamDeckNextCursor.set(null);
+        if (!append) {
+          this.jamDeckLoaded.set(true);
+          this.jamDeckSongs.set([]);
+          this.jamDeckCursor.set(0);
         }
       },
     });
   }
 
+  private filterUnseenJamSongs(songs: readonly Song[]): Song[] {
+    const seenIds = this.jamSeenTrackIds();
+    return songs.filter((song) => song.trackId === undefined || !seenIds.has(song.trackId));
+  }
+
+  private applyJamDeckPage(songs: readonly Song[], append: boolean): void {
+    if (!append) {
+      this.jamDeckSongs.set(songs);
+      this.jamDeckCursor.set(0);
+      return;
+    }
+    this.jamDeckSongs.update((cur) => {
+      const existingIds = new Set(
+        cur.map((item) => item.trackId).filter((id): id is number => id !== undefined),
+      );
+      const uniqueNew = songs.filter(
+        (song) => song.trackId === undefined || !existingIds.has(song.trackId),
+      );
+      return [...cur, ...uniqueNew];
+    });
+  }
+
+  private findNextJamFallbackSong(jamDeck: readonly Song[]): Song | null {
+    const jam = this.jamState();
+    const excludedIds = this.buildJamExcludedTrackIds(jam, jamDeck);
+    const blockedGenres = new Set(this.blockedGenres().map((g) => g.trim().toLowerCase()));
+    const requireTrackId = jam.jamId !== undefined && Boolean(readAuthToken());
+    const seenKeys = this.jamSeenFallbackKeys();
+
+    return (
+      this.songs().find((song) => {
+        if (blockedGenres.has(song.genre.trim().toLowerCase())) {
+          return false;
+        }
+        if (song.trackId !== undefined) {
+          return !excludedIds.has(song.trackId);
+        }
+        return !requireTrackId && !seenKeys.has(song.title);
+      }) ?? null
+    );
+  }
+
+  private buildJamExcludedTrackIds(jam: JamState, jamDeck: readonly Song[]): Set<number> {
+    const excludedIds = new Set<number>(this.jamSeenTrackIds());
+    if (jam.currentTrack?.trackId !== undefined) {
+      excludedIds.add(jam.currentTrack.trackId);
+    }
+    for (const item of jam.queueItems ?? []) {
+      if (item.song.trackId !== undefined) {
+        excludedIds.add(item.song.trackId);
+      }
+    }
+    for (const deckSong of jamDeck) {
+      if (deckSong.trackId !== undefined) {
+        excludedIds.add(deckSong.trackId);
+      }
+    }
+    return excludedIds;
+  }
+
+  private resetJamDeckState(): void {
+    this.jamSessionEpoch += 1;
+    this.jamStateSyncSeq += 1;
+    this.jamDeckLoadSub?.unsubscribe();
+    this.jamDeckLoadSub = null;
+    this.jamStateSyncSub?.unsubscribe();
+    this.jamStateSyncSub = null;
+    this.jamConfirmedSeenTrackIds.clear();
+    this.serverJamSuperlikes = 0;
+    this.pendingJamSuperlikes = 0;
+    this.jamDeckSongs.set([]);
+    this.jamDeckCursor.set(0);
+    this.jamDeckNextCursor.set(null);
+    this.jamDeckLoaded.set(false);
+    this.jamDeckLoading.set(false);
+    this.jamSeenTrackIds.set(new Set());
+    this.jamSeenFallbackKeys.set(new Set());
+  }
+
   private syncJamState(jamId: number): void {
-    this.jamService.getJamState(jamId).subscribe({
+    this.jamStateSyncSub?.unsubscribe();
+    this.jamStateSyncSeq += 1;
+    const requestEpoch = this.jamSessionEpoch;
+    const syncSeq = this.jamStateSyncSeq;
+    this.jamStateSyncSub = this.jamService.getJamState(jamId).subscribe({
       next: (stateDto) => {
+        if (
+          this.jamSessionEpoch !== requestEpoch ||
+          this.jamStateSyncSeq !== syncSeq ||
+          this.jamState().jamId !== jamId
+        ) {
+          return;
+        }
         const lookup = this.buildTrackLookup([...this.songs(), ...this.jamDeckSongs()]);
         const mapped = mapJamStateDto({
           dto: stateDto,
           trackLookup: lookup,
           fallbackSong: this.currentSong(),
         });
-        this.jamState.set(mapped);
+        this.serverJamSuperlikes = mapped.superlikesCount ?? 0;
+        const limit =
+          mapped.superlikesLimit ?? this.serverJamSuperlikes + this.pendingJamSuperlikes;
+        const effectiveSuperlikes = Math.min(
+          limit,
+          this.serverJamSuperlikes + this.pendingJamSuperlikes,
+        );
+        this.jamState.set({ ...mapped, superlikesCount: effectiveSuperlikes });
         if (!mapped.active) {
           this.stopJamPolling();
         }
@@ -1674,6 +2007,7 @@ export class RibbitStateService implements OnDestroy {
     this.isDeckEmpty.set(false);
     this.isLoadingDiscovery.set(false);
     this.jamState.set(DEFAULT_JAM_STATE);
+    this.resetJamDeckState();
     this.userId.set(null);
     this.userEmail.set('');
     this.userName.set('Visitante');
