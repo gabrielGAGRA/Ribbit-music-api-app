@@ -17,7 +17,7 @@ import { IconComponent } from '../../shared/icon.component';
 export class JamsComponent {
   protected readonly state = inject(RibbitStateService);
 
-  readonly jamView = signal<'swipe' | 'room'>('swipe');
+  protected readonly jamView = signal<'swipe' | 'room'>('swipe');
   readonly jamDeckCursor = this.state.jamDeckCursor;
   protected readonly jamDrag = signal<number>(0);
   private jamPointerStart: number | null = null;

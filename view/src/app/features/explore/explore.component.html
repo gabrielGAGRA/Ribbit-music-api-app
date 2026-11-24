@@ -114,13 +114,9 @@
               <strong>{{ item.title }}</strong>
               <span>
                 {{ item.artist }}
-                @if (
-                  (item.reviewCount ?? 0) > 0 &&
-                  item.averageRating !== null &&
-                  item.averageRating !== undefined
-                ) {
+                @if (getVisibleRating(item); as visibleRating) {
                   <span class="track-rating-badge">
-                    ★ {{ item.averageRating.toFixed(1) }} ({{ item.reviewCount }})
+                    ★ {{ visibleRating }} ({{ item.reviewCount }})
                   </span>
                 }
               </span>

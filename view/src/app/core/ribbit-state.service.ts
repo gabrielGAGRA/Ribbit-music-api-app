@@ -141,6 +141,7 @@ function readStoredJamDeckProgress(userId: number | null, jamId: number): JamDec
     if (typeof parsed !== 'object' || parsed === null) {
       return { seenTrackIds: [] };
     }
+    // The parsed value is an object, so this cast is safe for reading optional known keys.
     const record = parsed as Record<string, unknown>;
     const rawCursor = record['cursorTrackId'];
     const cursorTrackId =
@@ -887,11 +888,13 @@ export class RibbitStateService implements OnDestroy {
 
     if (song.trackId !== undefined && readAuthToken()) {
       const hadQueued = this.discoveryQueue.length > 0;
+      this.isLoadingDiscovery.set(true);
       if (hadQueued) {
         this.loadNextDiscoveryTrack();
       }
       this.songService.recordSwipe(song.trackId, kind).subscribe({
         next: () => {
+          this.isLoadingDiscovery.set(false);
           if (!hadQueued) {
             this.loadNextDiscoveryTrack();
           } else {
