@@ -16,6 +16,7 @@ class GetSpotifyAuthorizeUrlUseCase:
         "playlist-read-private",
         "playlist-modify-public",
         "playlist-modify-private",
+        "ugc-image-upload",
         "user-read-playback-state",
         "user-modify-playback-state",
         "user-read-currently-playing",

@@ -155,6 +155,8 @@ class PlaylistExportPort(Protocol):
         *,
         access_token: str | None = None,
         refresh_token: str | None = None,
+        cover_image: tuple[str, bytes] | None = None,
+        cover_image_base64: str | None = None,
     ) -> str:
         """Returns the identifier of the playlist created at the provider.
 
