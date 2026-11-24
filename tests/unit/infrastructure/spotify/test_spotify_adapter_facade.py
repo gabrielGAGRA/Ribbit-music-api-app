@@ -171,3 +171,93 @@ class TestExportPlaylist:
 
         assert adapter.export_playlist("acc", "Mix", ["1", "2"]) == "new"
         assert len(session.calls) == 2
+
+    def test_normalizes_spotify_uris_and_urls(self) -> None:
+        adapter, session = _user_adapter(
+            FakeResponse(201, {"id": "new", "name": "Mix"}),
+            FakeResponse(201, {"snapshot_id": "snap1"}),
+        )
+
+        adapter.export_playlist(
+            "acc",
+            "Mix",
+            [
+                f"spotify:track:{SPOTIFY_ID_A}",
+                f"https://open.spotify.com/track/{SPOTIFY_ID_B}?si=123",
+            ],
+        )
+
+        assert session.calls[2]["json"] == {
+            "uris": [f"spotify:track:{SPOTIFY_ID_A}", f"spotify:track:{SPOTIFY_ID_B}"]
+        }
+
+    def test_uploads_cover_image_when_provided(self) -> None:
+        adapter, session = _user_adapter(
+            FakeResponse(201, {"id": "new", "name": "Mix"}),
+            FakeResponse(202, None),
+        )
+
+        assert (
+            adapter.export_playlist(
+                "acc", "Mix", [], cover_image_base64="base64jpegdata"
+            )
+            == "new"
+        )
+        assert session.calls[2]["method"] == "PUT"
+        assert session.calls[2]["url"].endswith("/playlists/new/images")
+        assert session.calls[2]["data"] == "base64jpegdata"
+
+    def test_cover_upload_failure_does_not_fail_playlist_export(self) -> None:
+        adapter, session = _user_adapter(
+            FakeResponse(201, {"id": "new", "name": "Mix"}),
+            FakeResponse(403, {"error": {"status": 403, "message": "Forbidden"}}),
+        )
+
+        assert (
+            adapter.export_playlist(
+                "acc", "Mix", [], cover_image_base64="base64jpegdata"
+            )
+            == "new"
+        )
+        assert len(session.calls) == 3
+
+    def test_encodes_and_uploads_png_cover_image(self) -> None:
+        import base64
+        from io import BytesIO
+
+        from PIL import Image
+
+        buf = BytesIO()
+        Image.new("RGBA", (600, 400), (10, 120, 220, 255)).save(buf, format="PNG")
+        png_bytes = buf.getvalue()
+
+        adapter, session = _user_adapter(
+            FakeResponse(201, {"id": "new", "name": "Mix"}),
+            FakeResponse(202, None),
+        )
+
+        assert (
+            adapter.export_playlist(
+                "acc", "Mix", [], cover_image=("image/png", png_bytes)
+            )
+            == "new"
+        )
+        assert session.calls[2]["method"] == "PUT"
+        assert session.calls[2]["url"].endswith("/playlists/new/images")
+        uploaded = base64.b64decode(session.calls[2]["data"])
+        with Image.open(BytesIO(uploaded)) as result_img:
+            assert result_img.format == "JPEG"
+            assert result_img.size == (300, 300)
+
+    def test_invalid_cover_image_does_not_fail_playlist_export(self) -> None:
+        adapter, session = _user_adapter(
+            FakeResponse(201, {"id": "new", "name": "Mix"}),
+        )
+
+        assert (
+            adapter.export_playlist(
+                "acc", "Mix", [], cover_image=("image/gif", b"GIF89a")
+            )
+            == "new"
+        )
+        assert len(session.calls) == 2

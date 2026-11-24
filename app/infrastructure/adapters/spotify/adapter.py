@@ -1,9 +1,13 @@
 """Spotify adapter implementing the catalog, playlist source, and export ports."""
 
+import base64
+import logging
 import re
+from io import BytesIO
 lazy from collections.abc import Sequence
 
 import niquests
+from PIL import Image, ImageOps
 
 from app.application.ports.services.music_service import (
     CatalogTrack,
@@ -23,7 +27,66 @@ from app.infrastructure.adapters.spotify.playlists import SpotifyPlaylists
 lazy from app.domain.models.track import ExternalTrackId
 
 _ADD_ITEMS_BATCH_SIZE = 100
+_SPOTIFY_COVER_SIZE = (300, 300)
+_SPOTIFY_COVER_MAX_BYTES = 256 * 1024
+_MAX_COVER_PIXELS = 20_000_000
 _SPOTIFY_ID_PATTERN = re.compile(r"[0-9A-Za-z]{22}")
+_SPOTIFY_TRACK_REF_PATTERN = re.compile(
+    r"(?:spotify:track:|open\.spotify\.com/track/)([0-9A-Za-z]{22})"
+)
+_logger = logging.getLogger(__name__)
+
+
+def _encode_spotify_cover(content_type: str, image_data: bytes) -> str:
+    normalized_type = content_type.strip().casefold()
+    if normalized_type not in {"image/jpeg", "image/png", "image/webp"}:
+        raise ExternalServiceError(
+            "The playlist cover format is not supported by Spotify.",
+            service_name="Spotify",
+            details={"error_kind": "invalid_cover"},
+        )
+
+    try:
+        with Image.open(BytesIO(image_data)) as source:
+            if source.width * source.height > _MAX_COVER_PIXELS:
+                raise ExternalServiceError(
+                    "The playlist cover image is too large to export.",
+                    service_name="Spotify",
+                    details={"error_kind": "invalid_cover"},
+                )
+            transposed = ImageOps.exif_transpose(source)
+            cover = ImageOps.fit(
+                (transposed if transposed is not None else source).convert("RGB"),
+                _SPOTIFY_COVER_SIZE,
+            )
+    except (Image.DecompressionBombError, OSError, ValueError) as exc:
+        raise ExternalServiceError(
+            "The playlist cover could not be processed for Spotify.",
+            service_name="Spotify",
+            details={"error_kind": "invalid_cover"},
+        ) from exc
+
+    for quality in range(90, 9, -10):
+        output = BytesIO()
+        cover.save(output, format="JPEG", quality=quality, optimize=True)
+        jpeg_data = output.getvalue()
+        encoded = base64.b64encode(jpeg_data).decode("ascii")
+        if len(encoded) <= _SPOTIFY_COVER_MAX_BYTES:
+            return encoded
+
+    raise ExternalServiceError(
+        "The playlist cover could not be compressed to Spotify's size limit.",
+        service_name="Spotify",
+        details={"error_kind": "invalid_cover"},
+    )
+
+
+def _extract_spotify_track_id(value: str) -> str | None:
+    cleaned = value.strip()
+    if _SPOTIFY_ID_PATTERN.fullmatch(cleaned):
+        return cleaned
+    match = _SPOTIFY_TRACK_REF_PATTERN.search(cleaned)
+    return match.group(1) if match else None
 
 
 class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
@@ -99,6 +162,8 @@ class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
         *,
         access_token: str | None = None,
         refresh_token: str | None = None,
+        cover_image: tuple[str, bytes] | None = None,
+        cover_image_base64: str | None = None,
     ) -> str:
         """Creates a private playlist in the authorized Spotify account.
 
@@ -107,16 +172,49 @@ class SpotifyAdapter(TrackCatalogPort, PlaylistExportPort, PlaylistSourcePort):
         """
         playlists = self._playlists_for_tokens(access_token, refresh_token)
         created = playlists.create_playlist(name)
-        uris = [
-            f"spotify:track:{track_id}"
-            for track_id in track_ids
-            if _SPOTIFY_ID_PATTERN.fullmatch(track_id)
-        ]
+        uris: list[str] = []
+        for track_id in track_ids:
+            normalized = _extract_spotify_track_id(str(track_id))
+            if normalized is not None:
+                uris.append(f"spotify:track:{normalized}")
         for start in range(0, len(uris), _ADD_ITEMS_BATCH_SIZE):
             playlists.add_playlist_items(
                 created.external_id, uris[start : start + _ADD_ITEMS_BATCH_SIZE]
             )
+        self._upload_cover_if_present(
+            playlists,
+            created.external_id,
+            cover_image=cover_image,
+            cover_image_base64=cover_image_base64,
+        )
         return created.external_id
+
+    @staticmethod
+    def _upload_cover_if_present(
+        playlists: SpotifyPlaylists,
+        playlist_id: str,
+        *,
+        cover_image: tuple[str, bytes] | None = None,
+        cover_image_base64: str | None = None,
+    ) -> None:
+        try:
+            encoded_cover: str | None = None
+            if cover_image is not None:
+                encoded_cover = _encode_spotify_cover(cover_image[0], cover_image[1])
+            elif (
+                cover_image_base64
+                and len(cover_image_base64.encode("ascii", errors="ignore"))
+                <= _SPOTIFY_COVER_MAX_BYTES
+            ):
+                encoded_cover = cover_image_base64
+            if encoded_cover:
+                playlists.upload_playlist_cover(playlist_id, encoded_cover)
+        except ExternalServiceError:
+            _logger.warning(
+                "Failed to upload cover image for Spotify playlist %s",
+                playlist_id,
+                exc_info=True,
+            )
 
     def _require_catalog(self) -> SpotifyCatalog:
         if self.catalog is None:
