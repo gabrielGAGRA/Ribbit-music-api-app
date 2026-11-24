@@ -14,7 +14,7 @@ import type { AuthApiResponse, PlanApiDto } from '@ribbit/shared-types';
 import { AuthApiService } from './auth-api.service';
 import { GoogleIdentityService } from './google-identity.service';
 import { toApiError } from '../../core/api-error';
-import { RibbitStateService } from '../../core/ribbit-state.service';
+import { type GoogleOAuthQueryParams, RibbitStateService } from '../../core/ribbit-state.service';
 import { PlanService } from '../../core/plan.service';
 import { readInputValue, readSelectValue } from '../../shared/dom-event-values';
 import { FrogComponent } from '../../shared/frog.component';
@@ -31,6 +31,44 @@ export const PLAN_OPTIONS: readonly PlanOption[] = [
   { id: 2, name: 'Individual', label: 'Ribbit Pro — Individual (R$ 14,90/mês)' },
   { id: 3, name: 'Família', label: 'Plano Família (R$ 27,90/mês)' },
 ];
+
+function isLoopbackHostname(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1';
+}
+
+function resolveLoopbackOAuthStartUrl(rawAuthorizeUrl: string): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    const redirectUri = new URL(rawAuthorizeUrl).searchParams.get('redirect_uri');
+    if (!redirectUri) {
+      return null;
+    }
+    const redirectOrigin = new URL(redirectUri);
+    const sameLoopbackMismatch =
+      isLoopbackHostname(window.location.hostname) &&
+      isLoopbackHostname(redirectOrigin.hostname) &&
+      redirectOrigin.origin !== window.location.origin;
+    return sameLoopbackMismatch ? `${redirectOrigin.origin}/?google_oauth_start=1` : null;
+  } catch {
+    return null;
+  }
+}
+
+function readGoogleOAuthParamsFromWindow(): GoogleOAuthQueryParams | null {
+  if (typeof window === 'undefined' || !window.location.search) {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const googleAuth = params.get('google_auth');
+  const googleAuthError = params.get('google_auth_error');
+  const googleOAuthStart = params.get('google_oauth_start') === '1';
+  if (!googleAuth && googleAuthError === null && !googleOAuthStart) {
+    return null;
+  }
+  return { googleAuth, googleAuthError, googleOAuthStart };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -286,7 +324,8 @@ export class AuthComponent implements OnInit {
           if (this.isSubmitting() || this.isForgot()) return;
           const rawUrl = res.authorization_url?.trim();
           if (this.googleIdentity.isValidAuthorizeUrl(rawUrl)) {
-            this.navigateToExternalUrl(rawUrl);
+            const loopbackStartUrl = resolveLoopbackOAuthStartUrl(rawUrl);
+            this.navigateToExternalUrl(loopbackStartUrl ?? rawUrl);
             return;
           }
           this.triggerGoogleIdentityServicesPrompt();
@@ -309,39 +348,48 @@ export class AuthComponent implements OnInit {
   }
 
   private handleGoogleOAuthReturn(): void {
-    if (typeof window === 'undefined' || !window.location.search) {
+    const liveParams = readGoogleOAuthParamsFromWindow();
+    const oauthParams = liveParams ?? this.state.consumePendingGoogleOAuthParams();
+    if (!oauthParams) {
       return;
     }
-    const params = new URLSearchParams(window.location.search);
-    const googleAuthStatus = params.get('google_auth');
-    if (googleAuthStatus === 'complete' || googleAuthStatus === 'register') {
+    this.state.consumePendingGoogleOAuthParams();
+    if (liveParams && typeof window !== 'undefined') {
       window.history.replaceState({}, '', window.location.pathname);
-      this.isSubmitting.set(true);
-      this.errorMessage.set('');
-      this.infoMessage.set('');
-      this.authApi
-        .completeGoogleOAuthSession()
-        .pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: (response) => {
-            this.finishGoogleAuthSuccess(response);
-          },
-          error: (err: unknown) => {
-            this.handleGoogleAuthError(err);
-          },
-        });
-      return;
     }
 
-    if (params.has('google_auth_error')) {
-      window.history.replaceState({}, '', window.location.pathname);
-      const rawError = params.get('google_auth_error');
+    if (oauthParams.googleOAuthStart) {
+      this.loginWithGoogle();
+      return;
+    }
+    if (oauthParams.googleAuth === 'complete' || oauthParams.googleAuth === 'register') {
+      this.submitGoogleOAuthSession();
+      return;
+    }
+    if (oauthParams.googleAuthError !== null) {
       const msg =
-        rawError === 'access_denied'
+        oauthParams.googleAuthError === 'access_denied'
           ? 'Autorização com o Google cancelada pelo usuário.'
           : 'Não foi possível autenticar com o Google. Tente novamente.';
       this.errorMessage.set(msg);
     }
+  }
+
+  private submitGoogleOAuthSession(): void {
+    this.isSubmitting.set(true);
+    this.errorMessage.set('');
+    this.infoMessage.set('');
+    this.authApi
+      .completeGoogleOAuthSession()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (response) => {
+          this.finishGoogleAuthSuccess(response);
+        },
+        error: (err: unknown) => {
+          this.handleGoogleAuthError(err);
+        },
+      });
   }
 
   private navigateToExternalUrl(url: string): void {

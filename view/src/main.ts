@@ -5,13 +5,16 @@ import { provideRouter, withComponentInputBinding } from '@angular/router';
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
 import { authInterceptor } from './app/core/auth.interceptor';
+import { redirectSpotifyCallbackIfNeeded } from './app/core/spotify-oauth-origin';
 
-bootstrapApplication(AppComponent, {
-  providers: [
-    provideZonelessChangeDetection(),
-    provideRouter(routes, withComponentInputBinding()),
-    provideHttpClient(withInterceptors([authInterceptor])),
-  ],
-}).catch((err: unknown) => {
-  console.error(err);
-});
+if (!redirectSpotifyCallbackIfNeeded()) {
+  bootstrapApplication(AppComponent, {
+    providers: [
+      provideZonelessChangeDetection(),
+      provideRouter(routes, withComponentInputBinding()),
+      provideHttpClient(withInterceptors([authInterceptor])),
+    ],
+  }).catch((err: unknown) => {
+    console.error(err);
+  });
+}

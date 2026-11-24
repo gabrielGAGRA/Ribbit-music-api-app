@@ -12,6 +12,10 @@ import { SettingsComponent } from './settings.component';
 import { authInterceptor } from '../../core/auth.interceptor';
 import { clearAuthStorage, readAuthToken, writeAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+import {
+  recordSpotifyOAuthInitiatorOrigin,
+  resolveSpotifyCallbackOriginRedirect,
+} from '../../core/spotify-oauth-origin';
 import { IconComponent } from '../../shared/icon.component';
 
 describe('SettingsComponent', () => {
@@ -375,5 +379,46 @@ describe('SettingsComponent DOM', () => {
     expect(errorEl).not.toBeNull();
     expect(errorEl?.textContent).toContain('ausentes ou inválidos');
     httpMock.expectNone('/api/spotify/callback');
+  });
+
+  it('redirects mismatched loopback /callback loads back to the initiating localhost origin', () => {
+    const loc127 = {
+      origin: 'http://127.0.0.1:4200',
+      protocol: 'http:',
+      hostname: '127.0.0.1',
+      port: '4200',
+      pathname: '/callback',
+      search: '?code=c1&state=s1',
+    };
+
+    expect(resolveSpotifyCallbackOriginRedirect(loc127, '', null)).toBe(
+      'http://localhost:4200/callback?code=c1&state=s1',
+    );
+    expect(
+      resolveSpotifyCallbackOriginRedirect(
+        loc127,
+        'ribbit-oauth-origin:http://localhost:4200',
+        'stale-token',
+      ),
+    ).toBe('http://localhost:4200/callback?code=c1&state=s1');
+    expect(resolveSpotifyCallbackOriginRedirect(loc127, '', 'active-token')).toBeNull();
+    expect(
+      resolveSpotifyCallbackOriginRedirect(
+        loc127,
+        'ribbit-oauth-origin:https://evil.example',
+        'active-token',
+      ),
+    ).toBeNull();
+  });
+
+  it('records initiator loopback origin in window.name when Spotify redirect_uri uses another loopback host', () => {
+    window.name = '';
+    recordSpotifyOAuthInitiatorOrigin(
+      'https://accounts.spotify.com/authorize?client_id=test&redirect_uri=http%3A%2F%2F127.0.0.1%3A4200%2Fcallback',
+    );
+    if (window.location.hostname === 'localhost') {
+      expect(window.name).toBe(`ribbit-oauth-origin:${window.location.origin}`);
+    }
+    window.name = '';
   });
 });

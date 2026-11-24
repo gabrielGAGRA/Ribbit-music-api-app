@@ -102,6 +102,26 @@ function setStoredTheme(theme: 'light' | 'dark'): void {
   }
 }
 
+export interface GoogleOAuthQueryParams {
+  readonly googleAuth: string | null;
+  readonly googleAuthError: string | null;
+  readonly googleOAuthStart: boolean;
+}
+
+function readGoogleOAuthQueryParams(): GoogleOAuthQueryParams | null {
+  if (typeof window === 'undefined' || !window.location.search) {
+    return null;
+  }
+  const params = new URLSearchParams(window.location.search);
+  const googleAuth = params.get('google_auth');
+  const googleAuthError = params.get('google_auth_error');
+  const googleOAuthStart = params.get('google_oauth_start') === '1';
+  if (!googleAuth && googleAuthError === null && !googleOAuthStart) {
+    return null;
+  }
+  return { googleAuth, googleAuthError, googleOAuthStart };
+}
+
 const DEFAULT_JAM_STATE: JamState = {
   active: false,
   code: '',
@@ -252,6 +272,7 @@ export class RibbitStateService implements OnDestroy {
   );
 
   readonly isSpotifyLinked = computed<boolean>(() => Boolean(this.spotifyId()));
+  private pendingGoogleOAuthParams: GoogleOAuthQueryParams | null = readGoogleOAuthQueryParams();
 
   constructor() {
     this.applyTheme(this.preferredTheme());
@@ -293,6 +314,13 @@ export class RibbitStateService implements OnDestroy {
   /** Updates the currently active navigation page identifier. */
   setPage(page: string): void {
     this.activePage.set(page);
+  }
+
+  /** Returns and clears any Google OAuth callback query parameters captured on boot. */
+  consumePendingGoogleOAuthParams(): GoogleOAuthQueryParams | null {
+    const pending = this.pendingGoogleOAuthParams;
+    this.pendingGoogleOAuthParams = null;
+    return pending;
   }
 
   /** Opens or closes a modal dialog, loading track reviews when opening details. */
