@@ -468,14 +468,35 @@ def test_flow_4_playlists_and_deck(client: TestClient) -> None:
     detail = client.get(f"/api/playlists/{playlist_id}", headers=headers).json()
     assert detail["total_duration_seconds"] == first_track["duration_seconds"]
 
-    # Trying to add another track that exceeds the remaining duration -> 400
-    # Remaining duration is 300 - first_track["duration_seconds"]
-    # Seed track "Shape of You" is 233s, "Blinding Lights" is 200s -> 233 + 200 = 433 > 300
+    # Adding a second track may cross the 300s cap once -> 200
+    # Seed track "Shape of You" is 233s, "Blinding Lights" is 200s -> 233 + 200 = 433 >= 300
     candidate = next(t for t in deck_items if t["track_id"] != first_track["track_id"])
-    over_res = client.post(
+    crossing_res = client.post(
         f"/api/playlists/{playlist_id}/swipe-add",
         headers=headers,
         json={"track_id": candidate["track_id"], "action": "like"},
+    )
+    assert crossing_res.status_code == 200, crossing_res.text
+
+    # Deck is now exhausted and any further addition after exceeding duration -> 400
+    exhausted_deck = client.get(
+        f"/api/playlists/{playlist_id}/deck?limit=20",
+        headers=headers,
+    )
+    assert exhausted_deck.status_code == 200
+    assert exhausted_deck.json()["items"] == []
+
+    catalog_tracks = client.get("/api/tracks/search?limit=10", headers=headers).json()
+    extra_track = next(
+        t
+        for t in catalog_tracks
+        if t["track_id"] not in {first_track["track_id"], candidate["track_id"]}
+        and not t.get("explicit")
+    )
+    over_res = client.post(
+        f"/api/playlists/{playlist_id}/swipe-add",
+        headers=headers,
+        json={"track_id": extra_track["track_id"], "action": "like"},
     )
     assert over_res.status_code == 400
 
@@ -1108,15 +1129,37 @@ def test_playlist_deck_and_owner_only_writes(client: TestClient) -> None:
         for candidate in first_page.json()["items"]
         if candidate["track_id"] != track["track_id"]
     )
-    over_duration = client.post(
+    crossing_res = client.post(
         f"/api/playlists/{playlist_id}/swipe-add",
         headers=headers,
         json={"track_id": other_suggestion["track_id"], "action": "like"},
     )
+    assert crossing_res.status_code == 200, crossing_res.text
+
+    exhausted_deck = client.get(f"/api/playlists/{playlist_id}/deck", headers=headers)
+    assert exhausted_deck.status_code == 200
+    assert exhausted_deck.json()["items"] == []
+
+    catalog_tracks = client.get("/api/tracks/search?limit=10", headers=headers).json()
+    extra_track = next(
+        candidate
+        for candidate in catalog_tracks
+        if candidate["track_id"]
+        not in {track["track_id"], other_suggestion["track_id"]}
+        and not candidate.get("explicit")
+    )
+    over_duration = client.post(
+        f"/api/playlists/{playlist_id}/swipe-add",
+        headers=headers,
+        json={"track_id": extra_track["track_id"], "action": "like"},
+    )
     assert over_duration.status_code == 400
     detail = client.get(f"/api/playlists/{playlist_id}", headers=headers)
     assert detail.status_code == 200
-    assert detail.json()["total_duration_seconds"] == track["duration_seconds"]
+    assert (
+        detail.json()["total_duration_seconds"]
+        == track["duration_seconds"] + other_suggestion["duration_seconds"]
+    )
 
     other, other_headers = _cadastrar(
         client, "playlist-other@ribbit.com", "1985-03-02", individual_id
