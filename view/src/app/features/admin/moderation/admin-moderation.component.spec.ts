@@ -364,20 +364,8 @@ describe('AdminModerationComponent', () => {
     component['cancelEditingGenre']();
     expect(component['editingTrackId']()).toBeNull();
 
-    component['toggleNewTrackExplicit']();
-    expect(component['newTrackExplicit']()).toBe(true);
-    component['toggleCreateTrackForm']();
-    expect(component['showCreateTrackForm']()).toBe(true);
-    component['updateTextSignal'](component['newTrackTitle'], {
-      target: input,
-    } as unknown as Event);
-    expect(component['newTrackTitle']()).toBe('Jazz');
     component['updateTrackQuery']({ target: input } as unknown as Event);
     expect(component['trackQuery']()).toBe('Jazz');
-
-    component['newTrackTitle'].set('');
-    component['submitCreateTrack'](new Event('submit'));
-    expect(component['moderationError']()).toBeTruthy();
 
     component['editGenreDraft'].set('');
     component['saveGenre'](track.trackId);

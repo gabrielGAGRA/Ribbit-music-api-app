@@ -954,5 +954,8 @@ describe('RibbitStateService', () => {
     httpMock
       .expectOne('/api/reviews/track/101?sort_by=likes')
       .flush({}, { status: 500, statusText: 'Err' });
+    httpMock.match('/api/playlists').forEach((r) => {
+      if (!r.cancelled) r.flush([]);
+    });
   });
 });

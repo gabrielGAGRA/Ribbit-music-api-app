@@ -106,8 +106,8 @@ describe('AdminDashboardComponent', () => {
     expect(component['costToRevenuePercent']()).toBe(27.4);
     expect(component['paidPlansProfit']()).toBe(79.45);
     expect(component['firestoreQuotaRows']()).toHaveLength(5);
-    expect(component['firestoreQuotaRows']()[0].percent).toBe(50);
-    expect(component['firestoreQuotaRows']()[3].usedLabel).toBe('256.00 MiB');
+    expect(component['firestoreQuotaRows']()[0]?.percent).toBe(50);
+    expect(component['firestoreQuotaRows']()[3]?.usedLabel).toBe('256.00 MiB');
     expect(state.planBreakdown().find((p) => p.planName === 'Individual')?.profit).toBe(34.43);
     expect(state.planBreakdown().find((p) => p.planName === 'Free')?.isPaid).toBe(false);
   });
@@ -175,10 +175,10 @@ describe('AdminDashboardComponent', () => {
     expect(component['isNetNegative']()).toBe(true);
     expect(state.executiveDashboard().totalCosts).toBe(103);
     const refreshedRows = component['firestoreQuotaRows']();
-    expect(refreshedRows[0].percentLabel).toBe('< 0.01%');
-    expect(refreshedRows[3].usedLabel).toBe('512.00 KiB');
-    expect(refreshedRows[4].usedLabel).toBe('2.00 KiB');
-    expect(refreshedRows[4].percentLabel).toBe('< 0.01%');
+    expect(refreshedRows[0]?.percentLabel).toBe('< 0.01%');
+    expect(refreshedRows[3]?.usedLabel).toBe('512.00 KiB');
+    expect(refreshedRows[4]?.usedLabel).toBe('2.00 KiB');
+    expect(refreshedRows[4]?.percentLabel).toBe('< 0.01%');
     expect(component['financialBarItems']().map((i) => i.variant)).toEqual([
       'revenue',
       'content',

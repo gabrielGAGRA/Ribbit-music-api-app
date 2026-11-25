@@ -36,11 +36,11 @@ def test_init_database_from_dump_and_app_startup(tmp_path: Path) -> None:
     finally:
         conn.close()
 
-    assert tracks_count == 0
-    assert users_count == 0
+    assert tracks_count >= 500
+    assert users_count >= 6
     assert plans_count == 3
-    assert reviews_count == 0
-    assert jams_count == 0
+    assert reviews_count >= 3
+    assert jams_count >= 1
 
     # Verify FastAPI composition + seed_database boots cleanly on top of dump.sql
     settings = Settings(database_path=str(db_path))

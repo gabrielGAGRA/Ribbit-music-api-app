@@ -166,10 +166,7 @@
                     "
                     (click)="addCandidateToDelta(candidate)"
                   >
-                    <app-icon
-                      [name]="candidate.alreadyInCatalog ? 'check' : 'plus'"
-                      [size]="14"
-                    />
+                    <app-icon [name]="candidate.alreadyInCatalog ? 'check' : 'plus'" [size]="14" />
                     {{
                       candidate.alreadyInCatalog
                         ? 'Já no catálogo'

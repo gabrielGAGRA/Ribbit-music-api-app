@@ -98,7 +98,9 @@
                 bloqueado até que você remova uma faixa.
               </p>
               @if (selectedPlaylistTracks().length > 0) {
-                <button class="outline-button" (click)="toggleSwipeMode()">Ver Faixas Salvas</button>
+                <button class="outline-button" (click)="toggleSwipeMode()">
+                  Ver Faixas Salvas
+                </button>
               }
             </div>
           } @else if (referenceExhausted()) {
@@ -110,7 +112,9 @@
                 para esta playlist.
               </p>
               @if (selectedPlaylistTracks().length > 0) {
-                <button class="outline-button" (click)="toggleSwipeMode()">Ver Faixas Salvas</button>
+                <button class="outline-button" (click)="toggleSwipeMode()">
+                  Ver Faixas Salvas
+                </button>
               }
             </div>
           } @else if (activeTrack(); as deckTrack) {

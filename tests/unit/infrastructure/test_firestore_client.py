@@ -105,6 +105,7 @@ def test_firestore_auth_refreshes_and_reuses_application_credentials(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("FIRESTORE_EMULATOR_HOST", raising=False)
+    monkeypatch.delenv("GOOGLE_APPLICATION_CREDENTIALS", raising=False)
     credentials = SimpleNamespace(valid=False, token=None)
     refresh_calls: list[object] = []
     credentials.refresh = lambda request: (

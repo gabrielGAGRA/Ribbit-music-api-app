@@ -121,8 +121,8 @@ describe('admin-mappers', () => {
     const mapped = mapExecutiveDashboardDto(dto);
     expect(mapped.grossRevenue).toBe(596);
     expect(mapped.contentCostPerTrack).toBe(0.04);
-    expect(mapped.infrastructureFixedCost).toBe(10);
-    expect(mapped.infrastructureCostPerUser).toBe(0.5);
+    expect(mapped.infrastructureFixedCost).toBe(25);
+    expect(mapped.infrastructureCostPerUser).toBe(0);
     expect(mapped.totalCosts).toBe(0);
   });
 

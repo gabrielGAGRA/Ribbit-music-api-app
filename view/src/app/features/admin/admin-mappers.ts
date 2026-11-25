@@ -323,8 +323,7 @@ export function mapExecutiveDashboardDto(dto: ExecutiveDashboardApiDto): Executi
     revenueByPlan: dto.revenue_by_plan,
     profitByPlan: dto.profit_by_plan ?? {},
     paidPlansRevenue: dto.paid_plans_revenue ?? grossRevenue,
-    paidPlansProfit:
-      dto.paid_plans_profit ?? Math.round((grossRevenue - totalCosts) * 100) / 100,
+    paidPlansProfit: dto.paid_plans_profit ?? Math.round((grossRevenue - totalCosts) * 100) / 100,
     grossRevenue,
     ...mapDashboardCostFields(dto, grossRevenue, totalCosts),
     firestoreUsage: mapFirestoreQuotaSummaryDto(dto.firestore_usage),

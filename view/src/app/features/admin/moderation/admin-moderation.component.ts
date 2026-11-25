@@ -316,25 +316,23 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
     const key = this.candidateKey(candidate);
     this.moderationError.set('');
     this.addingCandidateKey.set(key);
-    this.adminState
-      .createTrack(buildCandidateCreatePayload(candidate))
-      .subscribe({
-        next: () => {
-          this.addingCandidateKey.set(null);
-          this.externalCandidates.update((list) =>
-            list.map((item) =>
-              this.candidateKey(item) === key ? { ...item, alreadyInCatalog: true } : item,
-            ),
-          );
-          this.setTransientCatalogStatus(
-            `Faixa "${candidate.title}" adicionada ao catálogo e à Delta Table.`,
-          );
-        },
-        error: (err: Error) => {
-          this.addingCandidateKey.set(null);
-          this.moderationError.set(err.message);
-        },
-      });
+    this.adminState.createTrack(buildCandidateCreatePayload(candidate)).subscribe({
+      next: () => {
+        this.addingCandidateKey.set(null);
+        this.externalCandidates.update((list) =>
+          list.map((item) =>
+            this.candidateKey(item) === key ? { ...item, alreadyInCatalog: true } : item,
+          ),
+        );
+        this.setTransientCatalogStatus(
+          `Faixa "${candidate.title}" adicionada ao catálogo e à Delta Table.`,
+        );
+      },
+      error: (err: Error) => {
+        this.addingCandidateKey.set(null);
+        this.moderationError.set(err.message);
+      },
+    });
   }
 
   protected starArray(rating: number): readonly number[] {

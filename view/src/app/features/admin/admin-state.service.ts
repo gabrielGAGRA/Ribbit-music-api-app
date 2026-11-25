@@ -266,8 +266,7 @@ function buildBreakdownFromDashboard(
     const isPaid = plan.monthlyPrice > 0;
     const allocatedFallback =
       isPaid && totalUsers > 0 ? dashboard.totalCosts * (count / totalUsers) : 0;
-    const rawProfit =
-      dashboard.profitByPlan[plan.name] ?? (isPaid ? rev - allocatedFallback : 0);
+    const rawProfit = dashboard.profitByPlan[plan.name] ?? (isPaid ? rev - allocatedFallback : 0);
     const profit = isPaid ? Math.round(rawProfit * 100) / 100 : 0;
     const marginPercent = isPaid && rev > 0 ? Math.round((profit / rev) * 100) : 0;
     return {
