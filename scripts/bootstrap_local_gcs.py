@@ -40,14 +40,14 @@ def bootstrap_gcs_emulator() -> int:
     for attempt in range(15):
         try:
             bucket = client.bucket(bucket_name)
-            if not bucket.exists():
-                bucket = client.create_bucket(bucket_name)
+            if not bucket.exists(retry=None, timeout=5):
+                bucket = client.create_bucket(bucket_name, retry=None, timeout=5)
                 logger.info("Bucket '%s' created successfully.", bucket_name)
             else:
                 logger.info("Bucket '%s' already exists.", bucket_name)
 
             blob = bucket.blob(tracks_file_path)
-            if not blob.exists():
+            if not blob.exists(retry=None, timeout=5):
                 logger.info("Initializing '%s' in bucket...", tracks_file_path)
                 initial_data = {
                     "title": [
@@ -95,6 +95,8 @@ def bootstrap_gcs_emulator() -> int:
                 blob.upload_from_string(
                     sink.getvalue(),
                     content_type="application/octet-stream",
+                    retry=None,
+                    timeout=5,
                 )
                 logger.info(
                     "Uploaded baseline catalog Parquet to '%s'.", tracks_file_path

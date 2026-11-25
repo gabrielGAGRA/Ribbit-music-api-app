@@ -7,6 +7,8 @@ import pytest
 
 from app.composition import create_app
 from app.config import Settings
+from app.infrastructure.repositories.connection import create_connection
+from app.infrastructure.repositories.seed import seed_database
 from scripts.init_db import DEFAULT_DUMP_PATH, init_database
 from scripts.prepare_e2e_db import E2E_DUMP_PATH
 
@@ -74,3 +76,36 @@ def test_e2e_dump_fixture_populates_demo_data(tmp_path: Path) -> None:
     assert reviews_count >= 3
     assert jams_count >= 1
     assert example_urls == 0
+
+    # Verify FastAPI composition + seed_database boots cleanly on top of dump.sql
+    settings = Settings(database_path=str(db_path))
+    app = create_app(settings=settings)
+    assert app is not None
+
+
+@pytest.mark.integration
+def test_init_database_loads_dump_after_partial_seed(tmp_path: Path) -> None:
+    """Minimal seed_database() (5 tracks) must not prevent init_database() from loading dump.sql."""
+    db_path = tmp_path / "partial_seed.db"
+    conn = create_connection(str(db_path))
+    try:
+        seed_database(conn, settings=Settings(database_path=str(db_path)))
+        initial_tracks = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+        assert initial_tracks == 5
+    finally:
+        conn.close()
+
+    rc = init_database(db_path=str(db_path), dump_path=DEFAULT_DUMP_PATH)
+    assert rc == 0
+
+    conn = sqlite3.connect(db_path)
+    try:
+        tracks_count = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+        demo_user = conn.execute(
+            "SELECT 1 FROM users WHERE lower(email) = 'usuario@ribbit.example.com'"
+        ).fetchone()
+    finally:
+        conn.close()
+
+    assert tracks_count >= 500
+    assert demo_user is not None

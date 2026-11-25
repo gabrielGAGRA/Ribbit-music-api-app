@@ -22,13 +22,25 @@ DEFAULT_DUMP_PATH = Path(__file__).resolve().parent.parent / "database" / "dump.
 
 
 def _has_existing_data(conn: sqlite3.Connection) -> bool:
-    row = conn.execute(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'plans'"
+    tracks_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tracks'"
     ).fetchone()
-    if not row:
-        return False
-    count_row = conn.execute("SELECT COUNT(*) FROM plans").fetchone()
-    return bool(count_row and count_row[0] > 0)
+    if tracks_table:
+        count_row = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()
+        if count_row and count_row[0] > 5:
+            return True
+
+    users_table = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+    ).fetchone()
+    if users_table:
+        demo_user = conn.execute(
+            "SELECT 1 FROM users WHERE lower(email) = 'usuario@ribbit.example.com'"
+        ).fetchone()
+        if demo_user:
+            return True
+
+    return False
 
 
 def init_database(

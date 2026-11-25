@@ -1,0 +1,2 @@
+*.sh text eol=lf
+database/dump.sql text eol=lf
