@@ -58,6 +58,42 @@ def test_transaction_context_manager_rolls_back_on_error() -> None:
         conn.close()
 
 
+def test_nested_transaction_rollback_preserves_outer_transaction() -> None:
+    conn = create_connection(":memory:")
+    try:
+        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        with transaction(conn) as cursor:
+            cursor.execute(
+                "INSERT INTO plans (name, monthly_price, max_profiles) VALUES (?, ?, ?)",
+                ("OuterPlan", 1.0, 1),
+            )
+            with pytest.raises(RuntimeError, match="Nested failure"):
+                with transaction(conn) as nested_cursor:
+                    nested_cursor.execute(
+                        "INSERT INTO plans (name, monthly_price, max_profiles) VALUES (?, ?, ?)",
+                        ("NestedPlan", 2.0, 1),
+                    )
+                    raise RuntimeError("Nested failure")
+            cursor.execute(
+                "INSERT INTO plans (name, monthly_price, max_profiles) VALUES (?, ?, ?)",
+                ("OuterPlanTwo", 3.0, 1),
+            )
+
+        names = [
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM plans WHERE name LIKE 'OuterPlan%' ORDER BY name"
+            ).fetchall()
+        ]
+        assert names == ["OuterPlan", "OuterPlanTwo"]
+        assert (
+            conn.execute("SELECT 1 FROM plans WHERE name = 'NestedPlan'").fetchone()
+            is None
+        )
+    finally:
+        conn.close()
+
+
 def test_load_settings_defaults_and_env_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

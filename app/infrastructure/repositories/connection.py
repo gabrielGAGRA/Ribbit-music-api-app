@@ -142,13 +142,24 @@ def create_connection(
 def transaction(conn: sqlite3.Connection) -> Generator[sqlite3.Cursor]:
     """Context manager executing block inside an explicit immediate transaction."""
     cursor = conn.cursor()
+    nested = conn.in_transaction
+    savepoint = f"sp_tx_{id(cursor)}"
     try:
-        if not conn.in_transaction:
+        if nested:
+            cursor.execute(f"SAVEPOINT {savepoint}")
+        else:
             conn.execute("BEGIN IMMEDIATE;")
         yield cursor
-        conn.commit()
+        if nested:
+            cursor.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            conn.commit()
     except Exception:
-        conn.rollback()
+        if nested:
+            cursor.execute(f"ROLLBACK TO SAVEPOINT {savepoint}")
+            cursor.execute(f"RELEASE SAVEPOINT {savepoint}")
+        else:
+            conn.rollback()
         raise
     finally:
         cursor.close()
