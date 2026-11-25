@@ -354,7 +354,7 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
         headers=headers,
         json={"email": existing_email, "password": existing_password},
     )
-    assert existing_link.status_code == 200, existing_link.text
+    assert existing_link.status_code == 201, existing_link.text
     assert existing_link.json()["user_id"] == existing_profile["user"]["user_id"]
     assert existing_link.json()["primary_account_id"] == titular["user"]["user_id"]
 
@@ -1187,7 +1187,7 @@ def test_family_minor_is_filtered_and_jam_votes_advance_automatically(
             "birth_date": "2012-02-01",
         },
     )
-    assert member.status_code == 200, member.text
+    assert member.status_code == 201, member.text
     child_login = client.post(
         "/api/auth/login",
         json={"email": "family-child@ribbit.com", "password": "password123"},

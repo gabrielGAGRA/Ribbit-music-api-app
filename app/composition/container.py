@@ -580,6 +580,7 @@ def build_container(
             user_repo,
             track_repo,
             interaction_repo,
+            track_access_repo=track_access_repo,
             track_preview_port=preview_service,
             catalog_file_port=catalog_adapter,
         ),
@@ -677,7 +678,9 @@ def build_container(
         get_track_reviews_use_case=GetTrackReviewsUseCase(track_repo, review_repo),
         get_user_reviews_use_case=GetUserReviewsUseCase(review_repo),
         get_community_feed_use_case=GetCommunityFeedUseCase(review_repo),
-        like_review_comment_use_case=LikeReviewCommentUseCase(review_repo),
+        like_review_comment_use_case=LikeReviewCommentUseCase(
+            review_repo, user_repo=user_repo, track_repo=track_repo
+        ),
         get_recently_interacted_tracks_use_case=GetRecentlyInteractedTracksUseCase(
             user_repo, interaction_repo, track_repo
         ),

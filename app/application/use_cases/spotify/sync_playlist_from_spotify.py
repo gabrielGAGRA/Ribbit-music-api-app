@@ -13,6 +13,7 @@ lazy from app.application.ports.repositories.user_repository import UserReposito
 lazy from app.application.ports.services.music_service import PlaylistSourcePort
 lazy from app.domain.models.playlist import Playlist
 lazy from app.domain.models.track import Track
+lazy from app.domain.models.user import User
 
 _PAGE_SIZE = 50
 
@@ -32,7 +33,7 @@ class SyncPlaylistFromSpotifyUseCase:
             raise EntityNotFoundError(f"User with ID {command.user_id} not found.")
 
         remote = self.source.get_playlist(command.spotify_playlist_id)
-        tracks = self._import_tracks(command)
+        tracks = self._import_tracks(command, user)
 
         existing = next(
             (
@@ -54,7 +55,9 @@ class SyncPlaylistFromSpotifyUseCase:
             playlist = existing.replace_tracks(tracks)
         return self.playlist_repo.save(playlist)
 
-    def _import_tracks(self, command: SyncPlaylistFromSpotifyCommand) -> list[Track]:
+    def _import_tracks(
+        self, command: SyncPlaylistFromSpotifyCommand, user: User
+    ) -> list[Track]:
         tracks: dict[int, Track] = {}
         offset = 0
         while offset < command.max_items:
@@ -66,7 +69,12 @@ class SyncPlaylistFromSpotifyUseCase:
                 track = upsert_catalog_track(
                     self.track_repo, catalog_track, command.genre
                 )
-                if track is not None and track.track_id is not None:
+                if (
+                    track is not None
+                    and track.track_id is not None
+                    and not track.is_deleted
+                    and not user.is_track_restricted_for_minor(track)
+                ):
                     tracks.setdefault(track.track_id, track)
             if page.raw_item_count == 0 or page.raw_item_count < limit:
                 break

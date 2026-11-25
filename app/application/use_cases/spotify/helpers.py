@@ -32,7 +32,16 @@ def upsert_catalog_track(
     }
     track = track_repo.find_by_spotify_id(spotify_id)
     if track is None:
-        track = Track(spotify_id=spotify_id, genre=genre, **metadata)
+        track = Track(
+            spotify_id=spotify_id,
+            genre=genre,
+            explicit=catalog_track.explicit,
+            **metadata,
+        )
     else:
+        if track.is_deleted:
+            return track
         track.refresh_catalog_metadata(**metadata)
+        if catalog_track.explicit:
+            track.explicit = True
     return track_repo.save(track)

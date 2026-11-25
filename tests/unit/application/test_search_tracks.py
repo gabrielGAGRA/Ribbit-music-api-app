@@ -63,6 +63,8 @@ def test_search_tracks_passes_pagination_to_repository(mock_user: User) -> None:
         min_rating=None,
         sort_by=None,
         include_deleted=False,
+        block_explicit=user_repo.find_by_id.return_value.is_minor.return_value,
+        excluded_genre_terms=user_repo.find_by_id.return_value.restricted_genre_terms.return_value,
         limit=25,
         offset=10,
     )
@@ -339,6 +341,8 @@ def test_search_tracks_expands_start_year_and_end_year_range() -> None:
         min_rating=None,
         sort_by=None,
         include_deleted=False,
+        block_explicit=False,
+        excluded_genre_terms=(),
         limit=50,
         offset=0,
     )
@@ -524,6 +528,8 @@ def test_search_tracks_skips_spotify_fallback_and_resort_when_rating_controls_us
         min_rating=3.0,
         sort_by="rating_desc",
         include_deleted=False,
+        block_explicit=False,
+        excluded_genre_terms=(),
         limit=50,
         offset=0,
     )
@@ -580,6 +586,8 @@ def test_search_tracks_includes_deleted_tracks_when_requested_without_fallback()
         min_rating=None,
         sort_by=None,
         include_deleted=True,
+        block_explicit=False,
+        excluded_genre_terms=(),
         limit=50,
         offset=0,
     )

@@ -12,7 +12,8 @@ from app.application.use_cases.discovery import (
     UndoLatestDiscoveryInteractionUseCase,
 )
 from app.domain.models.interaction import InteractionAction
-from app.presentation.dependencies import provide, require_user
+from app.domain.models.user import User
+from app.presentation.dependencies import get_current_user, provide, require_user
 from app.presentation.schemas import (
     InteractionRequest,
     InteractionResponse,
@@ -62,20 +63,24 @@ def record_interaction(
 
 @router.post("/api/discovery/undo", response_model=UndoInteractionResponse)
 def undo_latest_discovery_interaction(
-    user_id: Annotated[int, Depends(require_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     use_case: Annotated[
         UndoLatestDiscoveryInteractionUseCase,
         Depends(provide(UndoLatestDiscoveryInteractionUseCase)),
     ],
     track_repo: Annotated[TrackRepositoryPort, Depends(provide(TrackRepositoryPort))],
 ) -> UndoInteractionResponse:
-    interaction = use_case.execute(user_id=user_id)
+    if current_user.user_id is None:
+        raise RuntimeError("Authenticated user is missing its persisted ID.")
+    interaction = use_case.execute(user_id=current_user.user_id)
     if interaction.interaction_id is None:
         raise RuntimeError("Undone discovery interaction is missing its persisted ID.")
     track = track_repo.find_by_id(interaction.track_id)
     track_payload = (
         TrackResponse.model_validate(track)
-        if track is not None and not track.is_deleted
+        if track is not None
+        and not track.is_deleted
+        and not current_user.is_track_restricted_for_minor(track)
         else None
     )
     return UndoInteractionResponse(

@@ -8,6 +8,7 @@ from app.application.dtos import (
     PublishReviewCommand,
     SearchTracksCommand,
 )
+from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.application.use_cases.discovery import RecordTrackAccessUseCase
 from app.application.use_cases.review import (
     DeleteReviewUseCase,
@@ -20,7 +21,10 @@ from app.application.use_cases.review import (
     SaveSearchTrackLikeUseCase,
     SearchTracksUseCase,
 )
+from app.domain.models.user import User
 from app.presentation.dependencies import (
+    get_current_user,
+    get_optional_current_user,
     provide,
     require_user,
 )
@@ -161,6 +165,10 @@ def get_community_feed(
     use_case: Annotated[
         GetCommunityFeedUseCase, Depends(provide(GetCommunityFeedUseCase))
     ],
+    track_repo: Annotated[
+        TrackRepositoryPort | None, Depends(provide(TrackRepositoryPort))
+    ] = None,
+    current_user: Annotated[User | None, Depends(get_optional_current_user)] = None,
     days: Annotated[int | None, Query(ge=1)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
     sort_by: Annotated[
@@ -168,17 +176,44 @@ def get_community_feed(
         Query(),
     ] = "likes",
 ) -> list[ReviewResponse]:
+    if current_user is not None and current_user.is_minor() and track_repo is not None:
+        reviews = use_case.execute(
+            days=days, limit=min(100, limit * 5), sort_by=sort_by
+        )
+        tracks_by_id = track_repo.find_by_ids([r.track_id for r in reviews])
+        filtered = [
+            r
+            for r in reviews
+            if (track := tracks_by_id.get(r.track_id)) is not None
+            and not track.is_deleted
+            and not current_user.is_track_restricted_for_minor(track)
+        ][:limit]
+        return [ReviewResponse.model_validate(r) for r in filtered]
     reviews = use_case.execute(days=days, limit=limit, sort_by=sort_by)
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 
 @router.get("/api/reviews/me", response_model=list[ReviewResponse])
 def get_my_reviews(
-    user_id: Annotated[int, Depends(require_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
     use_case: Annotated[GetUserReviewsUseCase, Depends(provide(GetUserReviewsUseCase))],
+    track_repo: Annotated[
+        TrackRepositoryPort | None, Depends(provide(TrackRepositoryPort))
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
 ) -> list[ReviewResponse]:
-    reviews = use_case.execute(user_id=user_id, limit=limit)
+    if current_user.user_id is None:
+        raise RuntimeError("Authenticated user is missing its persisted ID.")
+    reviews = use_case.execute(user_id=current_user.user_id, limit=limit)
+    if current_user.is_minor() and track_repo is not None:
+        tracks_by_id = track_repo.find_by_ids([r.track_id for r in reviews])
+        reviews = [
+            r
+            for r in reviews
+            if (track := tracks_by_id.get(r.track_id)) is not None
+            and not track.is_deleted
+            and not current_user.is_track_restricted_for_minor(track)
+        ]
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 
@@ -189,6 +224,10 @@ def get_track_reviews(
         GetTrackReviewsUseCase,
         Depends(provide(GetTrackReviewsUseCase)),
     ],
+    track_repo: Annotated[
+        TrackRepositoryPort | None, Depends(provide(TrackRepositoryPort))
+    ] = None,
+    current_user: Annotated[User | None, Depends(get_optional_current_user)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     sort_by: Annotated[
         Literal["recent", "oldest", "likes", "rating_desc", "rating_asc"],
@@ -196,6 +235,10 @@ def get_track_reviews(
     ] = "recent",
 ) -> list[ReviewResponse]:
     reviews = use_case.execute(track_id=track_id, limit=limit, sort_by=sort_by)
+    if current_user is not None and current_user.is_minor() and track_repo is not None:
+        track = track_repo.find_by_id(track_id)
+        if track is not None and current_user.is_track_restricted_for_minor(track):
+            return []
     return [ReviewResponse.model_validate(r) for r in reviews]
 
 

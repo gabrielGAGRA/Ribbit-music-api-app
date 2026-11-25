@@ -56,7 +56,7 @@ class ListUserAccessHistoryUseCase:
             filtered_items.append(entry)
 
         seen_ids = self.track_access_repo.list_seen_track_ids(user_id)
-        if user.is_minor:
+        if user.is_minor():
             allowed_seen: list[int] = []
             for tid in seen_ids:
                 track = self.track_repo.find_by_id(tid)

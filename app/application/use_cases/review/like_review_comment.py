@@ -6,6 +6,7 @@ from app.domain.exceptions import EntityNotFoundError
 lazy from app.application.ports.repositories.review_repository import (
     ReviewRepositoryPort,
 )
+lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
 lazy from app.domain.models.review import ReviewComment
 
@@ -16,6 +17,7 @@ class LikeReviewCommentUseCase:
 
     review_repo: ReviewRepositoryPort
     user_repo: UserRepositoryPort | None = None
+    track_repo: TrackRepositoryPort | None = None
 
     def execute(self, review_id: int, user_id: int) -> ReviewComment:
         if self.user_repo is not None:
@@ -26,6 +28,11 @@ class LikeReviewCommentUseCase:
         review = self.review_repo.find_by_id(review_id)
         if not review or review.is_deleted:
             raise EntityNotFoundError("Review not found or deleted.")
+
+        if self.track_repo is not None:
+            track = self.track_repo.find_by_id(review.track_id)
+            if not track or track.is_deleted:
+                raise EntityNotFoundError("Track not found or deleted.")
 
         if self.review_repo.has_user_liked(review_id, user_id):
             return review

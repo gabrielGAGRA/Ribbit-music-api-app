@@ -75,12 +75,14 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
             """
             SELECT
                 COUNT(*) AS total_interactions,
-                COALESCE(SUM(CASE WHEN action = 'like' THEN 1 ELSE 0 END), 0) AS total_likes,
-                COALESCE(SUM(CASE WHEN action = 'superlike' THEN 1 ELSE 0 END), 0) AS total_superlikes,
-                COALESCE(SUM(CASE WHEN action = 'dislike' THEN 1 ELSE 0 END), 0) AS total_dislikes
-            FROM interactions
-            WHERE user_id = ?
-              AND (? IS NULL OR CAST(strftime('%Y', created_at) AS INTEGER) = ?)
+                COALESCE(SUM(CASE WHEN i.action = 'like' THEN 1 ELSE 0 END), 0) AS total_likes,
+                COALESCE(SUM(CASE WHEN i.action = 'superlike' THEN 1 ELSE 0 END), 0) AS total_superlikes,
+                COALESCE(SUM(CASE WHEN i.action = 'dislike' THEN 1 ELSE 0 END), 0) AS total_dislikes
+            FROM interactions i
+            JOIN tracks t ON t.track_id = i.track_id
+            WHERE i.user_id = ?
+              AND t.is_deleted = 0
+              AND (? IS NULL OR CAST(strftime('%Y', i.created_at) AS INTEGER) = ?)
             """,
             (user_id, year, year),
         ).fetchone()
@@ -180,13 +182,16 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
         rows = self.conn.execute(
             """
             SELECT
-                CAST(strftime('%Y', created_at) AS INTEGER) AS year,
-                COALESCE(SUM(CASE WHEN action = 'like' THEN 1 ELSE 0 END), 0) AS likes,
-                COALESCE(SUM(CASE WHEN action = 'superlike' THEN 1 ELSE 0 END), 0) AS superlikes,
-                COALESCE(SUM(CASE WHEN action = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
+                CAST(strftime('%Y', i.created_at) AS INTEGER) AS year,
+                COALESCE(SUM(CASE WHEN i.action = 'like' THEN 1 ELSE 0 END), 0) AS likes,
+                COALESCE(SUM(CASE WHEN i.action = 'superlike' THEN 1 ELSE 0 END), 0) AS superlikes,
+                COALESCE(SUM(CASE WHEN i.action = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
                 COUNT(*) AS total
-            FROM interactions
-            WHERE user_id = ? AND created_at IS NOT NULL
+            FROM interactions i
+            JOIN tracks t ON t.track_id = i.track_id
+            WHERE i.user_id = ?
+              AND t.is_deleted = 0
+              AND i.created_at IS NOT NULL
             GROUP BY year
             HAVING year IS NOT NULL
             ORDER BY year DESC
@@ -210,15 +215,17 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
         rows = self.conn.execute(
             """
             SELECT
-                CAST(strftime('%m', created_at) AS INTEGER) AS month,
-                COALESCE(SUM(CASE WHEN action = 'like' THEN 1 ELSE 0 END), 0) AS likes,
-                COALESCE(SUM(CASE WHEN action = 'superlike' THEN 1 ELSE 0 END), 0) AS superlikes,
-                COALESCE(SUM(CASE WHEN action = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
+                CAST(strftime('%m', i.created_at) AS INTEGER) AS month,
+                COALESCE(SUM(CASE WHEN i.action = 'like' THEN 1 ELSE 0 END), 0) AS likes,
+                COALESCE(SUM(CASE WHEN i.action = 'superlike' THEN 1 ELSE 0 END), 0) AS superlikes,
+                COALESCE(SUM(CASE WHEN i.action = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
                 COUNT(*) AS total
-            FROM interactions
-            WHERE user_id = ?
-              AND created_at IS NOT NULL
-              AND (? IS NULL OR CAST(strftime('%Y', created_at) AS INTEGER) = ?)
+            FROM interactions i
+            JOIN tracks t ON t.track_id = i.track_id
+            WHERE i.user_id = ?
+              AND t.is_deleted = 0
+              AND i.created_at IS NOT NULL
+              AND (? IS NULL OR CAST(strftime('%Y', i.created_at) AS INTEGER) = ?)
             GROUP BY month
             HAVING month IS NOT NULL
             ORDER BY month ASC
@@ -272,15 +279,17 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
         rows = self.conn.execute(
             """
             SELECT
-                COALESCE(NULLIF(TRIM(source), ''), 'unknown') AS source,
-                COALESCE(SUM(CASE WHEN action = 'like' THEN 1 ELSE 0 END), 0) AS likes,
-                COALESCE(SUM(CASE WHEN action = 'superlike' THEN 1 ELSE 0 END), 0) AS superlikes,
-                COALESCE(SUM(CASE WHEN action = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
+                COALESCE(NULLIF(TRIM(i.source), ''), 'unknown') AS source,
+                COALESCE(SUM(CASE WHEN i.action = 'like' THEN 1 ELSE 0 END), 0) AS likes,
+                COALESCE(SUM(CASE WHEN i.action = 'superlike' THEN 1 ELSE 0 END), 0) AS superlikes,
+                COALESCE(SUM(CASE WHEN i.action = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
                 COUNT(*) AS total
-            FROM interactions
-            WHERE user_id = ?
-              AND (? IS NULL OR CAST(strftime('%Y', created_at) AS INTEGER) = ?)
-            GROUP BY COALESCE(NULLIF(TRIM(source), ''), 'unknown')
+            FROM interactions i
+            JOIN tracks t ON t.track_id = i.track_id
+            WHERE i.user_id = ?
+              AND t.is_deleted = 0
+              AND (? IS NULL OR CAST(strftime('%Y', i.created_at) AS INTEGER) = ?)
+            GROUP BY COALESCE(NULLIF(TRIM(i.source), ''), 'unknown')
             ORDER BY total DESC, source ASC
             """,
             (user_id, year, year),
@@ -303,11 +312,13 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
             """
             SELECT
                 COUNT(*) AS total_reviews,
-                COALESCE(ROUND(AVG(rating), 2), 0.0) AS average_rating
-            FROM reviews
-            WHERE user_id = ?
-              AND is_deleted = 0
-              AND (? IS NULL OR CAST(strftime('%Y', created_at) AS INTEGER) = ?)
+                COALESCE(ROUND(AVG(r.rating), 2), 0.0) AS average_rating
+            FROM reviews r
+            JOIN tracks t ON t.track_id = r.track_id
+            WHERE r.user_id = ?
+              AND r.is_deleted = 0
+              AND t.is_deleted = 0
+              AND (? IS NULL OR CAST(strftime('%Y', r.created_at) AS INTEGER) = ?)
             """,
             (user_id, year, year),
         ).fetchone()

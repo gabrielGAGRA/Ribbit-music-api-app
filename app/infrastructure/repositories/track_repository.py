@@ -230,9 +230,23 @@ def _build_filter_conditions(
     year: int | Sequence[int] | None,
     query: str | None,
     include_deleted: bool = False,
+    block_explicit: bool = False,
+    excluded_genre_terms: Sequence[str] = (),
 ) -> tuple[list[str], list[object]]:
     conditions: list[str] = [] if include_deleted else ["t.is_deleted = 0"]
     params: list[object] = []
+
+    if block_explicit:
+        conditions.append("t.explicit = 0")
+    if excluded_genre_terms:
+        normalized_col = _normalized_genre_sql("t.genre")
+        for term in excluded_genre_terms:
+            cleaned_term = " ".join(term.casefold().split())
+            if cleaned_term:
+                conditions.append(
+                    f"(t.genre IS NULL OR instr({normalized_col}, ?) = 0)"
+                )
+                params.append(f" {cleaned_term} ")
 
     if query:
         exact_like = f"%{query.lower()}%"
@@ -390,12 +404,14 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         if not track.spotify_id:
             return None
         row = cursor.execute(
-            "SELECT track_id FROM tracks WHERE spotify_id = ?",
+            "SELECT track_id, is_deleted FROM tracks WHERE spotify_id = ?",
             (track.spotify_id,),
         ).fetchone()
         if row is None:
             return None
         existing_id = int(row["track_id"])
+        preserved_deleted = bool(row["is_deleted"]) or track.is_deleted
+        track.is_deleted = preserved_deleted
         cursor.execute(
             """
             UPDATE tracks
@@ -421,7 +437,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
                 track.cover_url,
                 track.itunes_preview_url,
                 1 if track.explicit else 0,
-                1 if track.is_deleted else 0,
+                1 if preserved_deleted else 0,
                 existing_id,
             ),
         )
@@ -739,6 +755,8 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         min_rating: float | None = None,
         sort_by: str | None = None,
         include_deleted: bool = False,
+        block_explicit: bool = False,
+        excluded_genre_terms: Sequence[str] = (),
         limit: int = 50,
         offset: int = 0,
     ) -> list[Track]:
@@ -750,6 +768,8 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             year=year,
             query=query,
             include_deleted=include_deleted,
+            block_explicit=block_explicit,
+            excluded_genre_terms=excluded_genre_terms,
         )
         if min_rating is not None:
             conditions.append("r_agg.avg_rating >= ?")

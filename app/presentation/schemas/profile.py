@@ -41,6 +41,15 @@ class BlockedGenresRequest(BaseModel):
     blocked_genres: str | list[str]
 
 
+class ParentalControlsRequest(BaseModel):
+    """Payload to update parental controls for a family dependent."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    blocked_genres: str | list[str]
+    blocked_artists: list[str] = Field(default_factory=list)
+
+
 class FavoriteGenresRequest(BaseModel):
     """Payload to update favorite music genres."""
 

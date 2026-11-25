@@ -139,6 +139,47 @@ class SearchTracksUseCase:
             )
         return True
 
+    def _is_soft_deleted_catalog_track(self, ct: CatalogTrack) -> bool:
+        existing = (
+            self.track_repo.find_by_spotify_id(str(ct.external_id))
+            if ct.external_id
+            else None
+        )
+        if existing is None and ct.title and ct.artist:
+            existing = self.track_repo.find_by_title_and_artist(ct.title, ct.artist)
+        return existing is not None and existing.is_deleted is True
+
+    def _fetch_spotify_fallback_tracks(
+        self,
+        command: SearchTracksCommand,
+        user: object,
+        query_term: str,
+        artist_filter: str,
+        title_filter: str,
+    ) -> list[Track]:
+        if self.music_service is None:
+            return []
+        catalog_tracks: list[CatalogTrack] = []
+        with contextlib.suppress(ExternalServiceError, ValueError):
+            catalog_tracks = self.music_service.search_tracks(
+                query_term, limit=command.limit
+            )
+        added: list[Track] = []
+        for ct in catalog_tracks:
+            if self._is_soft_deleted_catalog_track(ct):
+                continue
+            candidate = self._build_track_from_catalog(ct, query_term)
+            if not self._matches_search_filters(candidate, artist_filter, title_filter):
+                continue
+            if user.is_track_restricted_for_minor(candidate):  # type: ignore[attr-defined]
+                continue
+            saved = self.track_repo.save(candidate)
+            if saved.is_deleted:
+                continue
+            self._write_new_track_delta(saved)
+            added.append(saved)
+        return added
+
     def execute(self, command: SearchTracksCommand) -> list[Track]:
         user = self.user_repo.find_by_id(command.user_id)
         if not user:
@@ -164,6 +205,8 @@ class SearchTracksUseCase:
             min_rating=command.min_rating,
             sort_by=command.sort_by,
             include_deleted=command.include_deleted,
+            block_explicit=user.is_minor(),
+            excluded_genre_terms=user.restricted_genre_terms(),
             limit=command.limit,
             offset=command.offset,
         )
@@ -191,22 +234,11 @@ class SearchTracksUseCase:
             and self.music_service is not None
             and user.is_adult
         ):
-            catalog_tracks: list[CatalogTrack] = []
-            with contextlib.suppress(ExternalServiceError, ValueError):
-                catalog_tracks = self.music_service.search_tracks(
-                    query_term, limit=command.limit
+            tracks.extend(
+                self._fetch_spotify_fallback_tracks(
+                    command, user, query_term, artist_filter, title_filter
                 )
-            for ct in catalog_tracks:
-                candidate = self._build_track_from_catalog(ct, query_term)
-                if not self._matches_search_filters(
-                    candidate, artist_filter, title_filter
-                ):
-                    continue
-                if user.is_track_restricted_for_minor(candidate):
-                    continue
-                saved = self.track_repo.save(candidate)
-                self._write_new_track_delta(saved)
-                tracks.append(saved)
+            )
 
         results = [
             track

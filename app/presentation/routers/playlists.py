@@ -27,7 +27,8 @@ from app.application.use_cases.playlist import (
     UploadPlaylistCoverUseCase,
 )
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
-from app.presentation.dependencies.auth import require_user
+from app.domain.models.user import User
+from app.presentation.dependencies.auth import get_current_user, require_user
 from app.presentation.dependencies.container import provide
 from app.presentation.schemas.common import ActionSuccessResponse
 from app.presentation.schemas.playlists import (
@@ -227,15 +228,24 @@ def get_playlist(
     playlist_repo: Annotated[
         PlaylistRepositoryPort, Depends(provide(PlaylistRepositoryPort))
     ],
-    current_user_id: Annotated[int, Depends(require_user)],
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> PlaylistResponse:
     playlist = playlist_repo.find_by_id(playlist_id)
     if not playlist:
         raise EntityNotFoundError(f"Playlist with ID {playlist_id} not found.")
-    if not playlist.is_owned_by(current_user_id):
+    if current_user.user_id is None or not playlist.is_owned_by(current_user.user_id):
         raise PermissionDeniedError(
             "Access denied: playlist does not belong to this user."
         )
+    if current_user.is_minor():
+        allowed_tracks = [
+            track
+            for track in playlist.tracks
+            if not track.is_deleted
+            and not current_user.is_track_restricted_for_minor(track)
+        ]
+        if len(allowed_tracks) != len(playlist.tracks):
+            playlist.replace_tracks(allowed_tracks)
     return _build_playlist_response(playlist)
 
 

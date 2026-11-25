@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 
 from app.application.dtos import UpdateProfileCommand
 from app.application.use_cases.user import (
@@ -39,6 +39,7 @@ from app.presentation.schemas import (
     FavoriteGenresRequest,
     InteractionResponse,
     LinkSpotifyRequest,
+    ParentalControlsRequest,
     PlanResponse,
     ThemePreferenceRequest,
     UpdateProfileRequest,
@@ -196,6 +197,12 @@ def list_blocked_genres(
     return use_case.execute(user_id=user_id)
 
 
+def _parse_genre_list(raw: str | list[str]) -> list[str]:
+    if isinstance(raw, str):
+        return [g.strip() for g in raw.split(",") if g.strip()]
+    return [str(g).strip() for g in raw if str(g).strip()]
+
+
 @router.put("/api/profile/blocked-genres", response_model=UserResponse)
 def update_blocked_genres(
     req: BlockedGenresRequest,
@@ -204,14 +211,9 @@ def update_blocked_genres(
         UpdateBlockedGenresUseCase, Depends(provide(UpdateBlockedGenresUseCase))
     ],
 ) -> UserResponse:
-    if isinstance(req.blocked_genres, str):
-        blocked_list = [g.strip() for g in req.blocked_genres.split(",") if g.strip()]
-    else:
-        blocked_list = [str(g).strip() for g in req.blocked_genres if str(g).strip()]
-
     user = use_case.execute(
         user_id=user_id,
-        blocked_genres=blocked_list,
+        blocked_genres=_parse_genre_list(req.blocked_genres),
     )
     return UserResponse.model_validate(user)
 
@@ -228,15 +230,30 @@ def update_dependent_blocked_genres(
         UpdateBlockedGenresUseCase, Depends(provide(UpdateBlockedGenresUseCase))
     ],
 ) -> UserResponse:
-    if isinstance(req.blocked_genres, str):
-        blocked_list = [g.strip() for g in req.blocked_genres.split(",") if g.strip()]
-    else:
-        blocked_list = [str(g).strip() for g in req.blocked_genres if str(g).strip()]
-
     dependent = use_case.execute_for_dependent(
         primary_user_id=user_id,
         dependent_user_id=member_id,
-        blocked_genres=blocked_list,
+        blocked_genres=_parse_genre_list(req.blocked_genres),
+    )
+    return UserResponse.model_validate(dependent)
+
+
+@router.put(
+    "/api/profile/family/members/{member_id}/parental-controls",
+    response_model=UserResponse,
+)
+def update_dependent_parental_controls(
+    member_id: int,
+    req: ParentalControlsRequest,
+    user_id: Annotated[int, Depends(require_user)],
+    use_case: Annotated[
+        UpdateBlockedGenresUseCase, Depends(provide(UpdateBlockedGenresUseCase))
+    ],
+) -> UserResponse:
+    dependent = use_case.execute_for_dependent(
+        primary_user_id=user_id,
+        dependent_user_id=member_id,
+        blocked_genres=_parse_genre_list(req.blocked_genres),
     )
     return UserResponse.model_validate(dependent)
 
@@ -309,7 +326,11 @@ def list_family_members(
     return [UserResponse.model_validate(m) for m in members]
 
 
-@router.post("/api/profile/family/members", response_model=UserResponse)
+@router.post(
+    "/api/profile/family/members",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def add_family_member(
     req: AddFamilyMemberRequest,
     user_id: Annotated[int, Depends(require_user)],

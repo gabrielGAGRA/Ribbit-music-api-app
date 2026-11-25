@@ -105,9 +105,32 @@ def get_current_user(
     return found_user
 
 
+def get_optional_current_user(
+    request: Request,
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(bearer_scheme)
+    ] = None,
+    authorization: Annotated[str | None, Header(include_in_schema=False)] = None,
+) -> User | None:
+    """Returns the authenticated User when a Bearer token is provided, else None."""
+    if credentials is None and authorization is None:
+        return None
+    user_id = get_current_user_id(
+        request=request,
+        credentials=credentials,
+        authorization=authorization,
+    )
+    user = request.app.state.container.user_repo.find_by_id(user_id)
+    if not user:
+        raise AuthenticationRequiredError("User not found.")
+    request.state.user = user
+    return user
+
+
 __all__ = [
     "get_current_user",
     "get_current_user_id",
+    "get_optional_current_user",
     "require_admin",
     "require_user",
 ]

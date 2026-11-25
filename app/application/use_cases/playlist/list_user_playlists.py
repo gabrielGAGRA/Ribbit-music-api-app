@@ -22,4 +22,17 @@ class ListUserPlaylistsUseCase:
         if not user:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
-        return self.playlist_repo.list_by_user(user_id)
+        playlists = self.playlist_repo.list_by_user(user_id)
+        if not user.is_minor():
+            return playlists
+
+        for playlist in playlists:
+            allowed_tracks = [
+                track
+                for track in playlist.tracks
+                if not track.is_deleted
+                and not user.is_track_restricted_for_minor(track)
+            ]
+            if len(allowed_tracks) != len(playlist.tracks):
+                playlist.replace_tracks(allowed_tracks)
+        return playlists

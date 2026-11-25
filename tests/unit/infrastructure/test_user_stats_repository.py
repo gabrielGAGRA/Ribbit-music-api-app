@@ -137,11 +137,11 @@ def test_user_stats_all_years_aggregations(conn: sqlite3.Connection) -> None:
 
     assert stats.year is None
     assert stats.available_years == [2026, 2025]
-    assert stats.total_interactions == 6
+    assert stats.total_interactions == 5
     assert stats.total_likes == 2
-    assert stats.total_superlikes == 3
+    assert stats.total_superlikes == 2
     assert stats.total_dislikes == 1
-    assert stats.positive_rate == round(5 / 6, 4)
+    assert stats.positive_rate == round(4 / 5, 4)
 
     # Top genres excludes 'unknown' and deleted track 'Jazz'
     assert [g.genre for g in stats.top_genres] == ["rock", "pop", "indie"]
@@ -153,9 +153,9 @@ def test_user_stats_all_years_aggregations(conn: sqlite3.Connection) -> None:
     assert stats.top_artists[0].artist == "Artist A"
     assert stats.top_artists[0].total_positive == 2
 
-    # Yearly breakdown
+    # Yearly breakdown (excludes soft-deleted track)
     assert [(y.year, y.total, y.superlikes) for y in stats.by_interaction_year] == [
-        (2026, 5, 2),
+        (2026, 4, 1),
         (2025, 1, 1),
     ]
 
@@ -184,11 +184,11 @@ def test_user_stats_filtered_by_year(conn: sqlite3.Connection) -> None:
 
     assert stats.year == 2026
     assert stats.available_years == [2026, 2025]
-    assert stats.total_interactions == 5
+    assert stats.total_interactions == 4
     assert stats.total_likes == 2
-    assert stats.total_superlikes == 2
+    assert stats.total_superlikes == 1
     assert stats.total_dislikes == 1
-    assert [(m.month, m.total) for m in stats.by_month] == [(3, 2), (5, 3)]
+    assert [(m.month, m.total) for m in stats.by_month] == [(3, 2), (5, 2)]
     assert [g.genre for g in stats.top_genres] == ["rock", "indie"]
     assert stats.total_reviews == 1
     assert stats.average_rating == 5.0
