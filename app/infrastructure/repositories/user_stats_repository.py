@@ -1,5 +1,6 @@
 """SQLite implementation of the read-only user statistics query port."""
 
+from typing import Any
 lazy import sqlite3
 
 from app.application.dtos.user_dtos import (
@@ -21,12 +22,17 @@ _TOP_RANKING_LIMIT = 10
 class SQLiteUserStatsRepository(UserStatsRepositoryPort):
     """SQLite adapter executing analytical aggregations for user dashboards."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
 
     def get_user_stats(
         self, user_id: int, year: int | None = None
     ) -> AnnualStatsResult:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         total_interactions, total_likes, total_superlikes, total_dislikes = (
             self._fetch_action_counts(user_id, year)
         )

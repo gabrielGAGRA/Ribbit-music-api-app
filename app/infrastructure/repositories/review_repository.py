@@ -1,6 +1,7 @@
 """SQLite implementation of the review and comment persistence port."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.review_repository import ReviewRepositoryPort
@@ -45,8 +46,19 @@ def _row_to_review(row: sqlite3.Row) -> ReviewComment:
 class SQLiteReviewRepository(ReviewRepositoryPort):
     """SQLite adapter implementing ReviewRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
+
+    def _pull_deltas(self) -> None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
+
+    def _push_review(self, review_id: int) -> None:
+        if self._sync is not None:
+            self._sync.push_review_by_id(review_id)
 
     def _find_by_id_local(self, review_id: int) -> ReviewComment | None:
         cursor = self.conn.execute(
@@ -68,9 +80,11 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return _row_to_review(row) if row else None
 
     def find_by_id(self, review_id: int) -> ReviewComment | None:
+        self._pull_deltas()
         return self._find_by_id_local(review_id)
 
     def save(self, review: ReviewComment) -> ReviewComment:
+        self._pull_deltas()
         if review.review_id is not None:
             with transaction(self.conn) as cursor:
                 cursor.execute(
@@ -98,6 +112,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
                         review.review_id,
                     ),
                 )
+                self._push_review(review.review_id)
             return self._find_by_id_local(review.review_id) or review
 
         created_at_str = (review.created_at or datetime.now(UTC)).isoformat()
@@ -119,6 +134,8 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
                 ),
             )
             new_id = cursor.lastrowid
+            if new_id is not None:
+                self._push_review(new_id)
         if new_id is not None:
             return self._find_by_id_local(new_id) or review
         return review
@@ -126,6 +143,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
     def list_by_track(
         self, track_id: int, limit: int, sort_by: str = "recent"
     ) -> list[ReviewComment]:
+        self._pull_deltas()
         order_by = _REVIEW_SORT_ORDERS.get(sort_by, _REVIEW_SORT_ORDERS["recent"])
         cursor = self.conn.execute(
             f"""
@@ -152,6 +170,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
     def list_top_recent(
         self, days: int | None = None, limit: int = 10, sort_by: str = "likes"
     ) -> list[ReviewComment]:
+        self._pull_deltas()
         order_by = _REVIEW_SORT_ORDERS.get(sort_by, _REVIEW_SORT_ORDERS["likes"])
         conditions = ["r.is_deleted = 0", "COALESCE(t.is_deleted, 0) = 0"]
         params: list[object] = []
@@ -182,6 +201,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return [_row_to_review(r) for r in rows]
 
     def list_by_user(self, user_id: int, limit: int = 50) -> list[ReviewComment]:
+        self._pull_deltas()
         cursor = self.conn.execute(
             """
             SELECT
@@ -205,6 +225,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return [_row_to_review(r) for r in rows]
 
     def has_user_liked(self, review_id: int, user_id: int) -> bool:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT 1 FROM review_likes WHERE review_id = ? AND user_id = ?",
             (review_id, user_id),
@@ -212,6 +233,7 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return cursor.fetchone() is not None
 
     def record_like(self, review_id: int, user_id: int) -> None:
+        self._pull_deltas()
         created_at_str = datetime.now(UTC).isoformat()
         with transaction(self.conn) as cursor:
             cursor.execute(
@@ -221,10 +243,13 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
                 """,
                 (review_id, user_id, created_at_str),
             )
+            if self._sync is not None:
+                self._sync.push_review_like(review_id, user_id)
 
     def find_active_by_user_and_track(
         self, user_id: int, track_id: int
     ) -> ReviewComment | None:
+        self._pull_deltas()
         cursor = self.conn.execute(
             """
             SELECT
@@ -244,12 +269,16 @@ class SQLiteReviewRepository(ReviewRepositoryPort):
         return _row_to_review(row) if row else None
 
     def delete(self, review_id: int) -> bool:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             cursor.execute(
                 "UPDATE reviews SET is_deleted = 1 WHERE review_id = ?",
                 (review_id,),
             )
-            return cursor.rowcount > 0
+            deleted = cursor.rowcount > 0
+            if deleted:
+                self._push_review(review_id)
+        return deleted
 
 
 __all__ = ["SQLiteReviewRepository"]

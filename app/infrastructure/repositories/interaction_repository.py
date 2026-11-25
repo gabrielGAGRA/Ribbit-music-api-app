@@ -1,6 +1,7 @@
 """SQLite implementation of the interaction persistence port."""
 
 from datetime import UTC, datetime
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.interaction_repository import (
@@ -29,8 +30,15 @@ def _row_to_interaction(row: sqlite3.Row) -> Interaction:
 class SQLiteInteractionRepository(InteractionRepositoryPort):
     """SQLite adapter implementing InteractionRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
+
+    def _pull_deltas(self) -> None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
 
     def _find_local(self, user_id: int, track_id: int) -> Interaction | None:
         cursor = self.conn.execute(
@@ -44,9 +52,11 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
         return _row_to_interaction(row) if row else None
 
     def find_by_user_and_track(self, user_id: int, track_id: int) -> Interaction | None:
+        self._pull_deltas()
         return self._find_local(user_id, track_id)
 
     def save(self, interaction: Interaction) -> Interaction:
+        self._pull_deltas()
         created_at_str = (interaction.created_at or datetime.now(UTC)).isoformat()
         with transaction(self.conn) as cursor:
             cursor.execute(
@@ -70,6 +80,8 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
                     interaction.jam_id,
                 ),
             )
+            if self._sync is not None:
+                self._sync.push_interaction(interaction.user_id, interaction.track_id)
         return (
             self._find_local(interaction.user_id, interaction.track_id) or interaction
         )
@@ -77,6 +89,7 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
     def list_by_user(
         self, user_id: int, action: InteractionAction | None = None
     ) -> list[Interaction]:
+        self._pull_deltas()
         if action is not None:
             cursor = self.conn.execute(
                 """
@@ -99,6 +112,7 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
         return [_row_to_interaction(r) for r in rows]
 
     def list_interacted_track_ids(self, user_id: int) -> list[int]:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT track_id FROM interactions WHERE user_id = ?",
             (user_id,),
@@ -107,6 +121,7 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
         return [int(r["track_id"]) for r in rows]
 
     def delete_latest_discovery(self, user_id: int) -> Interaction | None:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             cursor.execute(
                 """
@@ -125,6 +140,10 @@ class SQLiteInteractionRepository(InteractionRepositoryPort):
                 "DELETE FROM interactions WHERE interaction_id = ?",
                 (interaction.interaction_id,),
             )
+            if self._sync is not None:
+                self._sync.push_interaction(
+                    interaction.user_id, interaction.track_id, is_deleted=True
+                )
         return interaction
 
 

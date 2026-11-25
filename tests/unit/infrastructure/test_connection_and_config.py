@@ -58,6 +58,42 @@ def test_transaction_context_manager_rolls_back_on_error() -> None:
         conn.close()
 
 
+def test_nested_transaction_rollback_preserves_outer_transaction() -> None:
+    conn = create_connection(":memory:")
+    try:
+        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+        with transaction(conn) as cursor:
+            cursor.execute(
+                "INSERT INTO plans (name, monthly_price, max_profiles) VALUES (?, ?, ?)",
+                ("OuterPlan", 1.0, 1),
+            )
+            with pytest.raises(RuntimeError, match="Nested failure"):
+                with transaction(conn) as nested_cursor:
+                    nested_cursor.execute(
+                        "INSERT INTO plans (name, monthly_price, max_profiles) VALUES (?, ?, ?)",
+                        ("NestedPlan", 2.0, 1),
+                    )
+                    raise RuntimeError("Nested failure")
+            cursor.execute(
+                "INSERT INTO plans (name, monthly_price, max_profiles) VALUES (?, ?, ?)",
+                ("OuterPlanTwo", 3.0, 1),
+            )
+
+        names = [
+            row["name"]
+            for row in conn.execute(
+                "SELECT name FROM plans WHERE name LIKE 'OuterPlan%' ORDER BY name"
+            ).fetchall()
+        ]
+        assert names == ["OuterPlan", "OuterPlanTwo"]
+        assert (
+            conn.execute("SELECT 1 FROM plans WHERE name = 'NestedPlan'").fetchone()
+            is None
+        )
+    finally:
+        conn.close()
+
+
 def test_load_settings_defaults_and_env_overrides(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -71,6 +107,9 @@ def test_load_settings_defaults_and_env_overrides(
         "ENVIRONMENT",
         "LOG_LEVEL",
         "GOOGLE_APPLICATION_CREDENTIALS",
+        "FIRESTORE_ENABLED",
+        "GCP_PROJECT_ID",
+        "GOOGLE_CLOUD_PROJECT",
     ):
         monkeypatch.delenv(key, raising=False)
 
@@ -80,6 +119,7 @@ def test_load_settings_defaults_and_env_overrides(
     assert default_settings.spotify_client_id is None
     assert default_settings.app_title == "Ribbit Platform API"
     assert default_settings.environment == "development"
+    assert default_settings.firestore_enabled is False
 
     monkeypatch.setenv("DATABASE_PATH", "custom_test.db")
     monkeypatch.setenv("PASSWORD_HASH_ITERATIONS", "15000")
@@ -95,6 +135,37 @@ def test_load_settings_defaults_and_env_overrides(
     assert custom_settings.app_title == "Custom Ribbit"
     assert custom_settings.environment == "staging"
     assert custom_settings.log_level == "DEBUG"
+
+
+def test_load_settings_enables_firestore_only_when_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FIRESTORE_ENABLED", "true")
+    monkeypatch.setenv("GCP_PROJECT_ID", "ribbit-test-project")
+
+    settings = load_settings()
+
+    assert settings.firestore_enabled is True
+    assert settings.gcp_project_id == "ribbit-test-project"
+    assert settings.firestore_database == "(default)"
+
+
+def test_production_settings_require_firestore_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    monkeypatch.setenv("RIBBIT_SECRET_KEY", "p" * 40)
+    monkeypatch.delenv("FIRESTORE_ENABLED", raising=False)
+    monkeypatch.delenv("GCP_PROJECT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+
+    with pytest.raises(RuntimeError, match="FIRESTORE_ENABLED"):
+        load_settings()
+
+
+def test_firestore_enabled_requires_project_id() -> None:
+    with pytest.raises(RuntimeError, match="GCP_PROJECT_ID"):
+        Settings(firestore_enabled=True)
 
 
 def test_load_settings_invalid_iterations_falls_back_to_default(
