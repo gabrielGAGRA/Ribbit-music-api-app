@@ -776,7 +776,7 @@ h1 span {
   overflow: hidden;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
-  touch-action: pan-y;
+  touch-action: none;
   user-select: none;
   transition:
     opacity 0.2s,
@@ -3662,7 +3662,7 @@ h1 span {
   border-radius: 20px;
   position: relative;
   overflow: hidden;
-  touch-action: pan-y;
+  touch-action: none;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
   transition:

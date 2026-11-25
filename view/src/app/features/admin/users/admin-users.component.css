@@ -340,6 +340,14 @@
     --a-col-5: 'Governança';
   }
 
+  .access-history-table {
+    --h-col-1: 'Timestamp';
+    --h-col-2: 'Usuário';
+    --h-col-3: 'Faixa';
+    --h-col-4: 'Origem';
+    --h-col-5: 'Status';
+  }
+
   .admin-table tbody tr {
     border-bottom: 1px solid var(--line);
     padding-bottom: 8px;
@@ -387,6 +395,27 @@
   }
   .admins-table td:nth-child(5)::before {
     content: var(--a-col-5) ': ';
+    color: var(--muted);
+  }
+
+  .access-history-table td:nth-child(1)::before {
+    content: var(--h-col-1) ': ';
+    color: var(--muted);
+  }
+  .access-history-table td:nth-child(2)::before {
+    content: var(--h-col-2) ': ';
+    color: var(--muted);
+  }
+  .access-history-table td:nth-child(3)::before {
+    content: var(--h-col-3) ': ';
+    color: var(--muted);
+  }
+  .access-history-table td:nth-child(4)::before {
+    content: var(--h-col-4) ': ';
+    color: var(--muted);
+  }
+  .access-history-table td:nth-child(5)::before {
+    content: var(--h-col-5) ': ';
     color: var(--muted);
   }
 }

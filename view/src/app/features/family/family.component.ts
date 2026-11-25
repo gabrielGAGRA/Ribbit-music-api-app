@@ -189,14 +189,14 @@ export class FamilyComponent {
   }
 
   protected isMemberMinor(member: FamilyMember): boolean {
-    if (member.age !== null && member.age > 0 && member.age < 18) {
+    if (member.age !== null && member.age < 18) {
       return true;
     }
     if (member.birthDate) {
       const age = calculateAgeFromBirthDate(member.birthDate);
       return age !== null && age < 18;
     }
-    return false;
+    return member.age === null;
   }
 
   protected getMemberAgeLabel(member: FamilyMember): string {

@@ -23,7 +23,10 @@ export class DashboardService {
   }
 
   /** Maps backend annual stats into Dashboard cards, rankings, and chart series. */
-  getDashboardData(knownSongs: readonly Song[], year?: number | null): Observable<DashboardViewData> {
+  getDashboardData(
+    knownSongs: readonly Song[],
+    year?: number | null,
+  ): Observable<DashboardViewData> {
     return this.getAnnualStats(year).pipe(map((dto) => mapAnnualStatsToDashboard(dto, knownSongs)));
   }
 }

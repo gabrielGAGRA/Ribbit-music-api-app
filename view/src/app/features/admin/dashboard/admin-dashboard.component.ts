@@ -147,6 +147,53 @@ export class AdminDashboardComponent {
     ];
   });
 
+  protected readonly financialBarItems = computed<
+    readonly {
+      readonly label: string;
+      readonly amount: number;
+      readonly percent: number;
+      readonly variant: 'revenue' | 'content' | 'infra' | 'net' | 'net-negative';
+    }[]
+  >(() => {
+    const dash = this.adminState.executiveDashboard();
+    const maxVal = Math.max(
+      dash.grossRevenue,
+      dash.contentCost,
+      dash.infrastructureCost,
+      Math.abs(dash.estimatedNetRevenue),
+      1,
+    );
+    const toPercent = (value: number): number =>
+      Math.min(100, Math.round((Math.abs(value) / maxVal) * 100));
+
+    return [
+      {
+        label: 'Receita Bruta',
+        amount: dash.grossRevenue,
+        percent: toPercent(dash.grossRevenue),
+        variant: 'revenue',
+      },
+      {
+        label: 'Custo de Conteúdos',
+        amount: dash.contentCost,
+        percent: toPercent(dash.contentCost),
+        variant: 'content',
+      },
+      {
+        label: 'Custo de Infraestrutura',
+        amount: dash.infrastructureCost,
+        percent: toPercent(dash.infrastructureCost),
+        variant: 'infra',
+      },
+      {
+        label: 'Receita Líquida',
+        amount: dash.estimatedNetRevenue,
+        percent: toPercent(dash.estimatedNetRevenue),
+        variant: dash.estimatedNetRevenue < 0 ? 'net-negative' : 'net',
+      },
+    ];
+  });
+
   protected readonly totalAccesses = computed<number>(
     () => this.adminState.audienceReport().totalAccesses,
   );

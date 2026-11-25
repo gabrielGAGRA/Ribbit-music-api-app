@@ -477,8 +477,9 @@
     --t-col-2: 'Artista / Álbum';
     --t-col-3: 'Gênero';
     --t-col-4: 'Duração';
-    --t-col-5: 'Classificação';
-    --t-col-6: 'Ação';
+    --t-col-5: 'Métricas';
+    --t-col-6: 'Classificação +18';
+    --t-col-7: 'Ação';
   }
 
   .tracks-table tbody tr {
@@ -511,6 +512,10 @@
   }
   .tracks-table td:nth-child(6)::before {
     content: var(--t-col-6) ': ';
+    color: var(--muted);
+  }
+  .tracks-table td:nth-child(7)::before {
+    content: var(--t-col-7) ': ';
     color: var(--muted);
   }
 }

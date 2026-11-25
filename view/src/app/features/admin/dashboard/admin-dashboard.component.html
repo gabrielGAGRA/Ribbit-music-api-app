@@ -150,6 +150,29 @@
       </div>
     </div>
 
+    <div class="financial-bars-chart" aria-label="Comparativo proporcional financeiro">
+      @for (item of financialBarItems(); track item.label) {
+        <div class="fin-bar-row">
+          <div class="fin-bar-meta">
+            <span>{{ item.label }}</span>
+            <strong [class.negative-value]="item.variant === 'net-negative'">
+              {{ formatCurrency(item.amount) }}
+            </strong>
+          </div>
+          <div class="bar-track">
+            <i
+              class="bar-fill"
+              [class.green-fill]="item.variant === 'revenue' || item.variant === 'net'"
+              [class.blue-fill]="item.variant === 'content'"
+              [class.pink-fill]="item.variant === 'infra'"
+              [class.red-fill]="item.variant === 'net-negative'"
+              [appWidthPercent]="item.percent"
+            ></i>
+          </div>
+        </div>
+      }
+    </div>
+
     @if (editingCosts()) {
       <form class="cost-editor-form" (submit)="savePlatformCosts($event)">
         <div class="cost-inputs-row">
@@ -249,7 +272,14 @@
             @for (row of adminState.planBreakdown(); track row.planName) {
               <tr>
                 <th scope="row">{{ row.planName }}</th>
-                <td>{{ row.userCount }} ({{ row.userPercent }}%)</td>
+                <td>
+                  <div class="bar-cell">
+                    <div class="bar-track">
+                      <i class="bar-fill green-fill" [appWidthPercent]="row.userPercent"></i>
+                    </div>
+                    <span>{{ row.userCount }} ({{ row.userPercent }}%)</span>
+                  </div>
+                </td>
                 <td>{{ formatCurrency(row.revenue) }}</td>
                 <td>
                   <div class="bar-cell">

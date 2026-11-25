@@ -85,7 +85,7 @@
   overflow: hidden;
   box-shadow: var(--shadow-md);
   user-select: none;
-  touch-action: pan-y;
+  touch-action: none;
   cursor: grab;
   background: var(--panel);
   border: 1px solid var(--border);

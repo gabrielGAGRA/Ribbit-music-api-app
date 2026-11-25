@@ -420,7 +420,7 @@
 }
 
 .playlist-swipe-card {
-  touch-action: pan-y;
+  touch-action: none;
 }
 
 .empty-deck-panel {
