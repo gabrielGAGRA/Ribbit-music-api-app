@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS tracks (
     spotify_id TEXT,
     title TEXT NOT NULL,
     artist TEXT NOT NULL,
-    album TEXT,
     duration_seconds INTEGER NOT NULL,
     genre TEXT NOT NULL,
     country TEXT,
@@ -16,8 +15,7 @@ CREATE TABLE IF NOT EXISTS tracks (
     itunes_preview_url TEXT,
     explicit INTEGER NOT NULL DEFAULT 0,
     is_deleted INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    CONSTRAINT ck_tracks_duration CHECK (duration_seconds > 0)
+    created_at TEXT NOT NULL
 );
 
 -- Índices para busca, filtros e ordenação rápida no catálogo

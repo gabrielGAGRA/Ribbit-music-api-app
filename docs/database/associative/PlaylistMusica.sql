@@ -9,5 +9,3 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
     added_at TEXT NOT NULL,
     CONSTRAINT uq_playlist_tracks_playlist_track UNIQUE (playlist_id, track_id)
 );
-
-CREATE INDEX IF NOT EXISTS idx_playlist_tracks_track_id ON playlist_tracks(track_id);

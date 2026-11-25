@@ -10,9 +10,7 @@ CREATE TABLE IF NOT EXISTS reviews (
     text TEXT,
     likes_count INTEGER NOT NULL DEFAULT 0,
     is_deleted INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    CONSTRAINT ck_reviews_rating CHECK (rating BETWEEN 1 AND 5),
-    CONSTRAINT ck_reviews_likes_count CHECK (likes_count >= 0)
+    created_at TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_reviews_track_id ON reviews(track_id);

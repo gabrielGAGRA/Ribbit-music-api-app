@@ -12,6 +12,3 @@ CREATE TABLE IF NOT EXISTS interactions (
     jam_id INTEGER REFERENCES jams(jam_id) ON DELETE SET NULL,
     CONSTRAINT uq_interactions_user_track UNIQUE (user_id, track_id)
 );
-
-CREATE INDEX IF NOT EXISTS idx_interactions_user_id ON interactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_interactions_track_id ON interactions(track_id);

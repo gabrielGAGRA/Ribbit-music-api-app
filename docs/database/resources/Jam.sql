@@ -19,9 +19,6 @@ CREATE TABLE IF NOT EXISTS jams (
     source_playlist_id INTEGER
 );
 
-CREATE INDEX IF NOT EXISTS idx_jams_host_user_id ON jams(host_user_id);
-CREATE INDEX IF NOT EXISTS idx_jams_current_track_id ON jams(current_track_id);
-
 CREATE TABLE IF NOT EXISTS jam_participants (
     jam_id INTEGER NOT NULL REFERENCES jams(jam_id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,

@@ -4,8 +4,8 @@
 
 [![Testes](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/tests.yml/badge.svg)](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/tests.yml)
 [![Quality Gate](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/quality-gate.yml/badge.svg)](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/quality-gate.yml)
-![Testes Automatizados](https://img.shields.io/badge/tests-1146%20passed%20(927%20pytest%20%2B%20219%20vitest)-brightgreen)
-![Cobertura de Código](https://img.shields.io/badge/coverage-%E2%89%A585%25%20(pytest--cov)-blue)
+![Testes Automatizados](https://img.shields.io/badge/tests-1307%20passed%20(1007%20pytest%20%2B%20300%20vitest)-brightgreen)
+![Cobertura de Código](https://img.shields.io/badge/coverage-%E2%89%A585%25%20(pytest--cov%2089.21%25%20%7C%20vitest%20v8%2087.27%25)-blue)
 
 ### Time: Crazy Frogs
 - Carolina Britto Haddad
@@ -13,13 +13,21 @@
 - Gabriel Agra de Castro Motta
 - Mateus Silva de Araújo
 
+### Divisão de Responsabilidades da Equipe
+- **Gabriel Agra**: Arquitetura hexagonal e estrutura base (refatoração inicial e revisões de PRs); regras de engenharia, linters e type-checking (Python, Angular e TypeScript: Ruff, Pyrefly, Oxlint, ESLint-Angular); testes (pytest, vitest, cobertura >= 85%, E2E Playwright e vídeos) e CI/CD (quality gate e verificação de cobertura); README, badges, histórico de escuta, filtros/ordenação por avaliações, criação de faixas, métricas de interação, painel de custos e analytics de acessos no Admin.
+- **Carolina Haddad**: *(a completar)*
+- **Fernando Mendes**: *(a completar)*
+- **Mateus Araujo**: *(a completar)*
+
 ## Sumário
 - [Sobre](#sobre)
+- [Divisão de Responsabilidades da Equipe](#divisão-de-responsabilidades-da-equipe)
 - [Funcionalidades](#funcionalidades)
   - [Aplicativo](#aplicativo)
   - [Painel Administrativo](#painel-administrativo-web)
 - [Descrição de Uso do Sistema](#descrição-de-uso-do-sistema)
 - [Histórias de Usuário](#histórias-de-usuário)
+  - [Definição de Done (DoD)](#definição-de-done-dod)
 - [Arquitetura e Tecnologias](#arquitetura-e-tecnologias)
   - [Ferramentas, Bibliotecas, Frameworks e SGBD](#ferramentas-bibliotecas-frameworks-e-sgbd)
   - [Mapeamento MVC e Arquitetura Hexagonal](#mapeamento-mvc-e-arquitetura-hexagonal)
@@ -31,6 +39,8 @@
 - [Fluxo de Execução para o Administrador / Avaliador](#fluxo-de-execução-para-o-administrador--avaliador)
 - [Como Visualizar](#como-visualizar)
 - [Testes Automatizados & Qualidade](#testes-automatizados--qualidade)
+  - [Integração Contínua (CI/CD)](#integração-contínua-cicd)
+- [Uso de IA](#uso-de-ia)
 
 ---
 
@@ -119,7 +129,7 @@ O projeto é composto por duas frentes:
 
 ## Descrição de Uso do Sistema
 
-1. **Cadastro e Login**: Na tela inicial (`/auth`), o usuário maior de 18 anos cria sua conta informando nome, e-mail, data de nascimento, senha e plano inicial (Free, Individual ou Família), ou realiza login com uma conta existente.
+1. **Cadastro e Login**: Na tela inicial (`/auth`), o usuário cria sua conta informando nome, e-mail, data de nascimento, senha e plano inicial (menores de 18 anos podem se cadastrar no plano **Free** ou participar como dependentes no **Plano Família**, enquanto planos pagos exigem maioridade), ou realiza login com uma conta existente.
 2. **Descoberta por Swipe (`/discover`)**: O usuário visualiza um card por vez com capa, metadados, selo **Ouvido** (quando já acessada) e prévia de áudio. Pode arrastar ou usar os botões para **Curtir** (direita), **Amar/Superlike** (cima), **Rejeitar** (esquerda), **Desfazer** (planos pagos, restaurando a faixa diretamente do backend) ou adicionar diretamente a uma playlist (`+`).
 3. **Playlists Inteligentes (`/playlists`)**: Permite criar playlists com filtros de duração, gênero, artista ou época e montá-las via swipe sem afetar as Curtidas globais, além de gerenciar faixas e exportar para o Spotify.
 4. **Jams Colaborativas (`/jams`)**: Usuários com Spotify Premium conectado criam uma sala (recebendo um código de 6 dígitos) ou entram em uma sala ativa para votar nas próximas faixas da fila e votar para pular a faixa atual.
@@ -132,13 +142,21 @@ O projeto é composto por duas frentes:
 
 As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional do projeto, detalhando **tipo de usuário**, **tarefas e subtarefas**, **responsável** e **critérios de aceitação**.
 
+### Definição de Done (DoD)
+
+Uma história de usuário é considerada **Done** apenas quando atende a todos os critérios abaixo:
+- [ ] **Código e Arquitetura:** Implementação aderente à arquitetura hexagonal (`app/`) e standalone/Signals (`view/`), revisada via Pull Request.
+- [ ] **Qualidade Estática:** Aprovado no *Quality Gate* sem erros (`ruff format --check`, `ruff check`, `pyrefly check`, `npm run lint`, `npm run typecheck`).
+- [ ] **Testes e Cobertura:** Testes unitários e/ou de integração cobrindo os critérios de aceitação, mantendo cobertura $\ge 85\%$ (`pytest --cov=app --cov-fail-under=85` e `vitest --coverage`).
+- [ ] **Validação E2E e Documentação:** Fluxos principais validados em navegador (`npm run test:e2e`) e documentação (`README.md`, `docs/database/`) atualizada quando aplicável.
+
 ### Épico 1 — Cadastro e Preferências
 
 | ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **HU01** | Criar conta | Novo Usuário | **Backend:** Endpoint `POST /api/auth/register`, hash PBKDF2 e validação Pydantic.<br>**Frontend:** Tela de cadastro (`AuthComponent`) com validação de e-mail, senha e idade. | Gabriel Agra | • Consegue criar conta com solicitação e validação de dados.<br>• Acessa a conta imediatamente após o cadastro. |
 | **HU02** | Definir preferências musicais | Novo Usuário | **Backend:** Persistência de `favorite_genres` em `users` e endpoint de atualização.<br>**Frontend:** Seleção de gêneros e artistas favoritos no perfil/onboarding. | Carolina Haddad | • Seleciona gêneros e artistas de interesse.<br>• Preferências são salvas no perfil e usadas nas recomendações. |
-| **HU03** | Bloquear gêneros musicais | Usuário Padrão | **Backend:** Campo `blocked_genres` no modelo `User` e filtro em `RecommendationService`.<br>**Frontend:** Gestão de gêneros bloqueados em Configurações/Perfil. | Carolina Haddad | • Adiciona e remove gêneros bloqueados.<br>• Faixas exclusivamente desses gêneros não aparecem em Descobertas nem Playlists. |
+| **HU03** | Bloquear gêneros musicais | Usuário Padrão | **Backend:** Campo `blocked_genres` no modelo `User` e filtro em `recommendation.py` (`select_weighted_track`, `order_tracks_by_weighted_seed`).<br>**Frontend:** Gestão de gêneros bloqueados em Configurações/Perfil. | Carolina Haddad | • Adiciona e remove gêneros bloqueados.<br>• Faixas exclusivamente desses gêneros não aparecem em Descobertas nem Playlists. |
 
 ### Épico 2 — Descoberta de Músicas
 
@@ -148,7 +166,7 @@ As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional 
 | **HU05** | Curtir uma música | Usuário Padrão | **Backend:** `RecordSwipeInteractionUseCase` gravando `action='like'`.<br>**Frontend:** Gesto de swipe para a direita / botão Like e listagem em `/likes`. | Fernando Seraco | • Dá like e salva a faixa em Curtidas.<br>• Faixa não retorna como descoberta inédita e fica visível em Curtidas. |
 | **HU06** | Amar uma música | Usuário Padrão | **Backend:** `RecordSwipeInteractionUseCase` gravando `action='superlike'`.<br>**Frontend:** Gesto de swipe para cima / botão Superlike e listagem em `/loved`. | Fernando Seraco | • Dá superlike e adiciona a faixa às Amadas e Curtidas.<br>• Não reaparece na descoberta; visualizada separadamente em Amadas. |
 | **HU07** | Rejeitar uma música | Usuário Padrão | **Backend:** `RecordSwipeInteractionUseCase` gravando `action='dislike'`.<br>**Frontend:** Gesto de swipe para a esquerda / botão Rejeitar e listagem em `/rejected`. | Mateus Araújo | • Rejeita a faixa e a envia para Rejeitadas.<br>• Não retorna em Descobertas nem sugestões de Playlists.<br>• Listagem consultável pelo usuário. |
-| **HU08** | Descobrir músicas a partir das preferências | Usuário Padrão | **Backend:** Ponderação em `RecommendationService` por artistas/gêneros curtidos e amados.<br>**Frontend:** Atualização dinâmica do feed em `DiscoverComponent`. | Gabriel Agra | • Considera Curtidas, Amadas, artistas e gêneros favoritos.<br>• Exclui Rejeitadas e gêneros bloqueados.<br>• Permite avaliação por swipe. |
+| **HU08** | Descobrir músicas a partir das preferências | Usuário Padrão | **Backend:** Ponderação em `recommendation.py` (`select_weighted_track`, `order_tracks_by_weighted_seed`) por artistas/gêneros curtidos e amados.<br>**Frontend:** Atualização dinâmica do feed em `DiscoverComponent`. | Gabriel Agra | • Considera Curtidas, Amadas, artistas e gêneros favoritos.<br>• Exclui Rejeitadas e gêneros bloqueados.<br>• Permite avaliação por swipe. |
 
 ### Épico 3 — Playlists Inteligentes e Contextuais
 
@@ -218,14 +236,15 @@ As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional 
 #### Backend (Python — `requirements.txt` & `pyproject.toml`)
 | Biblioteca / Framework | Versão Exata | Finalidade |
 | :--- | :--- | :--- |
-| **FastAPI** | `0.162.0` | Framework web REST, roteamento e geração OpenAPI (`/docs`) |
+| **FastAPI** | `0.163.1` | Framework web REST, roteamento e geração OpenAPI (`/docs`) |
 | **Uvicorn** | `0.54.0` | Servidor ASGI para execução da API |
-| **Pydantic** + **email-validator** | `2.14.1` (`pydantic-core==2.50.1`, `email-validator==2.3.0`) | Validação de esquemas de entrada/saída e configurações |
-| **Starlette** + **AnyIO** | `1.10.0` / `4.15.1` | Camada ASGI subjacente e primitivos assíncronos |
-| **Niquests** | `3.21.2` | Cliente HTTP para integrações externas (Spotify, iTunes, Google OAuth) |
+| **Pydantic** + **email-validator** | `2.14.3` (`pydantic-core==2.50.4`, `email-validator==2.4.0`) | Validação de esquemas de entrada/saída e configurações |
+| **Starlette** + **AnyIO** | `1.10.0` / `4.16.0` | Camada ASGI subjacente e primitivos assíncronos |
+| **Niquests** | `3.21.3` | Cliente HTTP para integrações externas (Spotify, iTunes, Google OAuth) |
 | **Google Cloud Storage** | `3.17.1` | Leitura/compactação de catálogo no GCS e emulador local (`fake-gcs-server`) |
-| **PyArrow** | `26.0.0` | Leitura e escrita do catálogo musical em formato Apache Parquet |
-| **python-dotenv** | `1.0.1` | Carregamento de variáveis de ambiente via `.env` |
+| **PyArrow** | `26.0.1` | Leitura e escrita do catálogo musical em formato Apache Parquet |
+| **Pillow** | `13.0.0` | Processamento e validação de imagens de capa de playlists |
+| **python-dotenv** | `1.2.4` | Carregamento de variáveis de ambiente via `.env` |
 
 #### Frontend (TypeScript / Angular — `package.json`)
 | Biblioteca / Framework | Versão Exata | Finalidade |
@@ -244,14 +263,14 @@ As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional 
 #### Infraestrutura, Qualidade, Linting, Tipagem e Testes
 | Ferramenta | Versão Exata | Finalidade |
 | :--- | :--- | :--- |
-| **Docker Engine & Docker Compose** | `docker.io` `24.x+` / `docker-compose-v2` (`v2.x+`) | Orquestração local dos containers (`backend`, `frontend` e `gcs-emulator`) |
-| **Pytest** | `9.1.1` | Suíte de testes unitários e integração da API do backend (927 testes) |
-| **Playwright** | *(configurado em `tests/e2e/`)* | Testes funcionais ponta a ponta no navegador e gravação de vídeos de execução |
-| **Vitest** + **JSDOM** | `^5.1.0` (`package.json`, `v3.2.7` resolvido) / `^26.0.0` | Suíte de testes unitários do frontend Angular (219 testes) |
-| **Ruff** | `0.17.2` | Linter e formatador Python |
-| **Pyrefly** | `1.4.0` | Verificador estático de tipos Python (`preset = "strict"`) |
-| **Oxlint** + **oxlint-tsgolint** + **Oxfmt** | `^1.88.0` / `^7.0.2004` / `^0.73.0` | Linting *type-aware* e formatação TypeScript/HTML/CSS |
-| **ESLint** + **angular-eslint** | `^10.13.0` / `^22.6.0` | Regras de lint específicas para templates e componentes Angular |
+| **Docker Engine & Docker Compose** | `docker.io` `24.x+` / `docker-compose-v2` (`v2.x+`) / `nginx:alpine` | Orquestração local dos containers (`backend`, `frontend` servido via `nginx:alpine` e `gcs-emulator`) |
+| **Pytest** + **pytest-cov** + **coverage** + **Hypothesis** | `9.2.0` / `7.1.0` / `7.17.3` / `6.170.17` | Suíte de testes unitários, propriedade e integração da API do backend (1007 testes, 89.21% de cobertura) |
+| **Playwright** + **ffmpeg** | `1.65.1` (`@playwright/test`) / `ffmpeg` (Ubuntu) | Testes funcionais ponta a ponta no navegador e gravação de vídeos de execução (`npm run record:e2e`) |
+| **Vitest** + **@vitest/coverage-v8** + **JSDOM** | `5.1.2` / `5.1.2` / `26.1.0` | Suíte de testes unitários e cobertura do frontend Angular (300 testes em 45 arquivos, 87.27% de linhas) |
+| **Ruff** | `0.17.5` | Linter e formatador Python |
+| **Pyrefly** | `1.4.1` | Verificador estático de tipos Python (`preset = "strict"`) |
+| **Oxlint** + **oxlint-tsgolint** + **Oxfmt** | `1.88.0` / `7.0.2004` / `0.73.0` | Linting *type-aware* e formatação TypeScript/HTML/CSS |
+| **ESLint** + **angular-eslint** | `10.13.0` / `22.6.0` | Regras de lint específicas para templates e componentes Angular |
 | **uv** | `0.13.1` | Gerenciador de pacotes e ambientes Python |
 
 > **Nota sobre a evolução da especificação:** Os diagramas iniciais do documento de especificação (*Tecnologia-Arquitetura*) previam Redis/DynamoDB e Deezer em nível conceitual. A implementação usa **SQLite 3** como banco local/cache, **Firestore** para sincronização dos dados persistentes em produção, **GCS/Parquet** para o catálogo, **Spotify + iTunes** como APIs externas e **Angular 22 + FastAPI**, documentados nos diagramas atualizados abaixo.
@@ -265,7 +284,7 @@ O projeto combina **MVC (Model-View-Controller)** na divisão macro entre fronte
 | Camada MVC | Diretórios no Repositório | Responsabilidade e Coerência com o Código |
 | :--- | :--- | :--- |
 | **View** | `view/src/app/features/`<br>`view/src/app/shared/` | Interface SPA em Angular (componentes standalone, templates `.html`, estilos `.css`). Inclui as telas de autenticação/ouvinte (`auth`, `discover`, `playlists`, `jams`, `explore`, `profile` + `collection`, `family`, `plans`, `settings`, `dashboard`, `not-found`), os componentes compartilhados (`shared/`) e o painel administrativo (`admin/*`: `admin-login`, `admin-shell`, `admin-dashboard`, `admin-users`, `admin-plans`, `admin-moderation`). |
-| **Controller** | `app/presentation/routers/`<br>`app/presentation/schemas/`<br>`app/presentation/dependencies/`<br>`app/application/use_cases/`<br>`app/application/dtos/`<br>`view/src/app/core/`<br>`view/src/app/features/*/*.service.ts` | **Backend:** Routers FastAPI (`auth.py`, `discovery.py`, `playlists.py`, `jams.py`, `tracks_reviews.py`, `profile.py`, `spotify.py`, `admin.py`) recebem requisições HTTP/REST, validam schemas Pydantic (`schemas/`) e delegam aos *Use Cases* (`use_cases/`).<br>**Frontend:** Serviços Angular com Signals, interceptors e guards (`RibbitStateService`, `SongService`, `PlaylistService`, `PlanService`, `AudioPlayerService`, `AuthSessionNotifier`, `authInterceptor` em `core/`, além de `AdminStateService`, `adminAuthGuard`, `DashboardService`, `JamService`, `AuthApiService`, `ProfileApiService` em `features/`). |
+| **Controller** | `app/presentation/routers/`<br>`app/presentation/schemas/`<br>`app/presentation/dependencies/`<br>`app/application/use_cases/`<br>`app/application/dtos/`<br>`app/composition/`<br>`view/src/app/core/`<br>`view/src/app/features/*/*.service.ts` | **Backend:** Routers FastAPI (`auth.py`, `discovery.py`, `playlists.py`, `jams.py`, `tracks_reviews.py`, `profile.py`, `spotify.py`, `admin.py`) recebem requisições HTTP/REST, validam schemas Pydantic (`schemas/`) e delegam aos *Use Cases* (`use_cases/`), com injeção de dependências centralizada no *Composition Root* (`app/composition/container.py`).<br>**Frontend:** Serviços Angular com Signals, interceptors e guards (`RibbitStateService`, `SongService`, `PlaylistService`, `PlanService`, `AudioPlayerService`, `AuthSessionNotifier`, `authInterceptor` em `core/`, além de `AdminStateService`, `adminAuthGuard`, `DashboardService`, `JamService`, `AuthApiService`, `ProfileApiService` em `features/`). |
 | **Model** | `app/domain/models/`<br>`app/domain/services/`<br>`app/application/ports/`<br>`app/infrastructure/` | **Domínio Puro:** Entidades/modelos (`Plan`, `User`, `Track`, `Playlist`, `Jam`, `JamQueueItem`, `Interaction`, `ReviewComment`, `TrackAccess`, `PlatformCostSettings`) e serviços/funções de domínio (`FamilyPlanService`, `SubscriptionAnalyticsService`, funções de recomendação em `recommendation.py`).<br>**Persistência & Adapters:** Repositórios SQLite (`SQLite*Repository`), adapters externos (`SpotifyAdapter`, `SpotifyUserProfileAdapter`, `ITunesAdapter`, `GoogleIdpVerifierAdapter`, `GoogleOAuthAdapter`, `GCSTrackCatalogAdapter`) e segurança (`PBKDF2PasswordHasher`, `HMACTokenService`) implementam os *ports*. |
 
 ---
@@ -286,11 +305,13 @@ flowchart TB
 
     FEController -->|"HTTP / REST JSON<br/>(Bearer Token)"| Presentation
 
-    subgraph Controller["CONTROLLER — Presentation & Application (app/)"]
+    subgraph Controller["CONTROLLER — Presentation, Application & Composition (app/)"]
         Presentation["Presentation Layer<br/>(app/presentation/routers/*<br/>+ schemas/* + dependencies/*)"]
+        Composition["Composition Root<br/>(app/composition/container.py)"]
         UseCases["Application Use Cases & DTOs<br/>(app/application/use_cases/* + dtos/*)"]
         Ports["Ports / Interfaces<br/>(app/application/ports/repositories &<br/>services)"]
-        Presentation --> UseCases
+        Presentation --> Composition
+        Composition --> UseCases
         UseCases --> Ports
     end
 
@@ -561,7 +582,6 @@ erDiagram
         TEXT spotify_id
         TEXT title
         TEXT artist
-        TEXT album
         INTEGER duration_seconds
         TEXT genre
         TEXT country
@@ -736,14 +756,15 @@ Os protótipos de alta e baixa fidelidade das telas do aplicativo e do fluxo de 
 
 ### Opção 1: Com Docker Compose (Recomendado - 100% Local)
 
-Instale o Docker Engine e o plugin Docker Compose no Ubuntu 26.04 (caso ainda não possua):
+Instale o Docker Engine e o plugin Docker Compose no Ubuntu 26.04 (caso ainda não possua) e adicione seu usuário ao grupo `docker`:
 ```bash
 sudo apt-get update && sudo apt-get install -y ca-certificates curl git
 sudo apt-get install -y docker.io docker-compose-v2
 sudo systemctl enable --now docker
+sudo usermod -aG docker "$USER" && newgrp docker
 ```
 
-Com o Docker e o Docker Compose instalados, suba o frontend, o backend (com carga automática de [`database/dump.sql`](database/dump.sql)) e o emulador de armazenamento em nuvem (GCS local) com persistência em volumes e sem precisar de credenciais de nuvem:
+Com o Docker e o Docker Compose instalados, suba o frontend, o backend (com carga automática de [`database/dump.sql`](database/dump.sql)) e o emulador de armazenamento em nuvem (GCS local) com persistência em volumes e sem precisar de credenciais de nuvem (caso não tenha reiniciado a sessão após `usermod`, use `sudo docker compose up --build`):
 
 ```bash
 docker compose up --build
@@ -772,16 +793,21 @@ sudo apt-get install -y nodejs
 ```
 
 #### 2. Configurar Ambiente Python, Dependências e Banco de Dados
-Na raiz do repositório, crie o ambiente virtual com Python 3.15, ative-o, instale as dependências exatas de [`requirements.txt`](requirements.txt) e [`package.json`](package.json) e aplique o dump SQL inicial ([`database/dump.sql`](database/dump.sql)):
+Na raiz do repositório, sincronize o ambiente Python com [`uv.lock`](uv.lock) via `uv sync --frozen` (recomendado; alternativamente use `uv venv --python 3.15 .venv && uv pip install -r requirements.txt`), instale as dependências Node de [`package.json`](package.json) e inicialize o banco SQLite a partir de [`database/dump.sql`](database/dump.sql):
 
 ```bash
-uv venv --python 3.15 .venv
+uv sync --frozen
 source .venv/bin/activate
-uv pip install -r requirements.txt
 npm ci
 chmod +x scripts/start_local.sh
 python scripts/init_db.py
 ```
+
+Scripts utilitários disponíveis em `scripts/`:
+- `python scripts/init_db.py --force`: recria o banco SQLite local (`local.db`) sobrescrevendo dados existentes.
+- `python scripts/bootstrap_local_gcs.py`: popula o emulador local `fake-gcs-server` com os arquivos `.parquet` do catálogo.
+- `python scripts/sync_tracks.py`: sincroniza o catálogo de faixas com o GCS/Parquet e banco local.
+- `python scripts/prepare_e2e_db.py`: prepara o banco SQLite determinístico para execução dos testes E2E Playwright.
 
 > **Nota sobre execução offline e variáveis de ambiente (opcional):** Na Opção 2 (manual sem Docker), o backend opera 100% localmente usando apenas o banco SQLite inicializado por `database/dump.sql`, sem subir o container `fake-gcs-server`. Caso queira habilitar sincronização com Google Cloud Storage (GCS) ou integração com Spotify e Google OAuth, copie `.env.example` para `.env` e preencha suas credenciais.
 
@@ -822,7 +848,7 @@ Siga o passo a passo abaixo para validar todas as funcionalidades administrativa
 
 1. **Acessar o Login Administrativo:**
    - Abra [http://localhost:4200/admin/login](http://localhost:4200/admin/login) no navegador.
-   - Utilize as credenciais padrão configuradas em [`app/config.py`](app/config.py) (ou clique no botão **"Preencher credenciais demo"** na própria tela):
+   - Insira diretamente as credenciais de administrador configuradas em [`app/config.py`](app/config.py):
      - **E-mail:** `admin@ribbit.example.com`
      - **Senha:** `RibbitLocal2026!`
    - Clique em entrar (requisição `POST /api/admin/login` validada pelo `adminAuthGuard`).
@@ -870,7 +896,7 @@ Abra qualquer navegador moderno (Chrome, Edge, Firefox, Brave) e acesse:
 A suíte de testes é organizada em quatro frentes independentes:
 
 - **`tests/unit/`**: testes unitários do backend (domínio, casos de uso, adaptadores e routers isolados).
-- **`tests/integration/`**: testes de integração da API FastAPI + SQLite em memória (`test_e2e_flow.py` e `test_client.py`).
+- **`tests/integration/`**: testes de integração da API FastAPI + SQLite em memória (`test_e2e_flow.py`, `test_client.py`, `test_admin_analytics_flow.py` e `test_track_access_flow.py`).
 - **`tests/e2e/`**: testes funcionais ponta a ponta no navegador com Playwright (`*.e2e.ts`), exercitando `view/` + `app/` + banco SQLite juntos nos 5 fluxos (incluindo o painel administrativo `/admin/*`), com gravação de vídeo `.mp4` (H.264, 1080p).
 - **`view/src/app/**/*.spec.ts`**: testes unitários do frontend Angular co-localizados com componentes e serviços (Vitest).
 
@@ -892,10 +918,11 @@ A suíte de testes é organizada em quatro frentes independentes:
   ```
 
 ### Testes Funcionais Web (Playwright) & Vídeos
-- **Instalar o navegador Chromium (primeira execução):**
+- **Instalar o navegador Chromium e dependências de sistema no Ubuntu (primeira execução):**
   ```bash
-  npx playwright install chromium
+  npx playwright install --with-deps chromium
   ```
+- **Pré-requisito para gravação de vídeos (`record:e2e`):** instale o `ffmpeg` (`sudo apt-get install -y ffmpeg`).
 - **Executar os testes E2E no navegador (5 fluxos funcionais distintos):**
   ```bash
   npm run test:e2e
@@ -914,19 +941,35 @@ A suíte de testes é organizada em quatro frentes independentes:
 | **5. Painel Administrativo, Planos e Moderação** | [`05-admin-console-governance-and-moderation.e2e.ts`](tests/e2e/05-admin-console-governance-and-moderation.e2e.ts) | [`05-admin-console-governance-and-moderation.mp4`](docs/videos/05-admin-console-governance-and-moderation.mp4) |
 
 ### Frontend (TypeScript / Angular)
-- **Executar testes unitários (219 testes em 38 arquivos com Vitest):**
+- **Executar testes unitários (300 testes em 45 arquivos com Vitest):**
   ```bash
   npm test
+  ```
+- **Verificar cobertura de código (meta mínima de 85% configurada em [`vitest.config.ts`](vitest.config.ts)):**
+  ```bash
+  npm run test:cov
   ```
 - **Checar tipagem estrita com TypeScript 7:**
   ```bash
   npm run typecheck
   ```
-- **Quality Gate Frontend (Oxlint e Angular ESLint):**
+- **Quality Gate Frontend (Oxlint, Angular ESLint e formatação):**
   ```bash
   npm run lint
+  npm run format:check
   ```
 - **Gerar build de produção:**
   ```bash
   npm run build
   ```
+
+### Integração Contínua (CI/CD)
+Os fluxos do GitHub Actions validam automaticamente cada `push` e `pull_request`:
+- **Testes ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)):** executa `pytest` com verificação de cobertura $\ge 85\%$ (`backend-tests`), suíte unitária Angular com `vitest` (`npm run test:cov`, `frontend-tests`) e testes ponta a ponta em navegador com Playwright (`e2e-browser-tests`, publicando traces/screenshots em caso de falha).
+- **Quality Gate ([`.github/workflows/quality-gate.yml`](.github/workflows/quality-gate.yml)):** valida formatação e lint Python (`ruff format --check`, `ruff check`), tipagem estrita Python (`pyrefly check`), formatação/tipagem/build/lint *type-aware* TypeScript (`npm run format:check`, `npm run typecheck`, `npm run build`, `npm run lint:ts`) e lint de templates/componentes Angular (`npm run lint:angular`).
+
+---
+
+## Uso de IA
+
+A documentação completa do uso de ferramentas de Inteligência Artificial generativa neste projeto — incluindo prompts utilizados, modelos (LLMs) e respectivas versões — está registrada em [`docs/llm-use-declaration/`](docs/llm-use-declaration/).

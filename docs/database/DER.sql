@@ -20,7 +20,7 @@ Table users {
   primary_account_id integer [ref: > users.user_id]
   blocked_genres text
   favorite_genres text
-  preferred_theme text [not null, default: 'light']
+  preferred_theme text [not null, default: 'dark']
   is_admin integer [not null, default: 0]
   created_at text [not null]
   birth_date text
@@ -35,7 +35,6 @@ Table tracks {
   spotify_id text
   title text [not null]
   artist text [not null]
-  album text
   duration_seconds integer [not null]
   genre text [not null]
   country text
@@ -80,7 +79,7 @@ Table playlists {
   max_duration_seconds integer
   deck_filters text
   cover_image_url text
-  source_playlist_id integer [ref: > playlists.playlist_id]
+  source_playlist_id integer [note: 'Referência lógica a playlists.playlist_id']
 }
 
 Table playlist_images {
@@ -115,7 +114,7 @@ Table jams {
   skip_votes_threshold integer [not null, default: 3]
   accumulated_duration_seconds integer [not null, default: 0]
   deck_source text [not null, default: 'free']
-  source_playlist_id integer [ref: > playlists.playlist_id, note: 'Referência lógica a playlists.playlist_id']
+  source_playlist_id integer [note: 'Referência lógica a playlists.playlist_id']
 }
 
 Table jam_queue_items {

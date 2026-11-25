@@ -1,6 +1,3 @@
-1. Documentação completa do uso de IA com indicação de LLMs e versões (Requisito obrigatório — pág. 4 e 5)
-"Os grupos devem incluir no repositório do projeto uma pasta contendo os prompts utilizados, indicando LLMs e versões usadas."
-
-2. Padrão de nome do repositório remoto e Kanban
-Repositório no padrão pcs3643-grupoX-nomedoprojeto.
-Quadro Kanban (GitHub Projects) atualizado até a Sprint 7.
+1. Popular `docs/llm-use-declaration/` com a declaração completa do uso de IA (prompts utilizados, LLMs e versões).
+2. Completar a divisão de responsabilidades de Carolina Haddad, Fernando Mendes e Mateus Araujo no `README.md`.
+3. Renomear o repositório remoto para o padrão `pcs3643-grupoX-nomedoprojeto` e atualizar o quadro Kanban (GitHub Projects) até a Sprint 7.

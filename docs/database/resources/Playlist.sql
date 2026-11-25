@@ -16,8 +16,6 @@ CREATE TABLE IF NOT EXISTS playlists (
     source_playlist_id INTEGER
 );
 
-CREATE INDEX IF NOT EXISTS idx_playlists_user_id ON playlists(user_id);
-
 CREATE TABLE IF NOT EXISTS playlist_images (
     playlist_id INTEGER PRIMARY KEY REFERENCES playlists(playlist_id) ON DELETE CASCADE,
     content_type TEXT NOT NULL,
