@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import type { DecisionKind, Playlist, Song } from '@ribbit/shared-types';
 import { AudioPlayerService } from '../../core/audio-player.service';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -21,6 +22,7 @@ export class DiscoverComponent {
   protected readonly state = inject(RibbitStateService);
   protected readonly player = inject(AudioPlayerService);
   private readonly playlistService = inject(PlaylistService);
+  private readonly router = inject(Router, { optional: true });
 
   protected readonly selectedTargetPlaylistId = signal<number | null>(null);
 
@@ -128,9 +130,15 @@ export class DiscoverComponent {
         });
       }
 
-      this.state.decide(kind);
+      const communityReturnSong = this.state.consumeCommunityReturnSong(song);
+      this.state.decide(kind, communityReturnSong === null);
       this.animation.set('');
       this.drag.set({ x: 0, y: 0 });
+      if (communityReturnSong !== null) {
+        this.state.setPage('explore');
+        void this.router?.navigate(['/explore']).catch(() => false);
+        this.state.openTrackDetailsModal(communityReturnSong);
+      }
     }, 260);
   }
 
@@ -161,7 +169,7 @@ export class DiscoverComponent {
   }
 
   protected startCardDrag(event: PointerEvent): void {
-    if (event.target instanceof HTMLElement && event.target.closest('button')) return;
+    if (event.target instanceof Element && event.target.closest('button')) return;
     this.pointerStart = { x: event.clientX, y: event.clientY };
     this.isDragging.set(true);
     if (event.currentTarget instanceof HTMLElement) {

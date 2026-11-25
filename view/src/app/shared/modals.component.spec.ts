@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
@@ -406,6 +408,27 @@ describe('ModalsComponent', () => {
       } as unknown as Event);
 
       expect(publishSpy).toHaveBeenCalledWith(4, '');
+    });
+
+    it('keeps filter genres sorted alphabetically and exposes unavailable-track modal markup', () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+
+      const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+      const expectedSorted = [...BACKEND_GENRES].sort((a, b) =>
+        a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }),
+      );
+      expect(BACKEND_GENRES).toEqual(expectedSorted);
+      expect(component['searchGenreOptions'][0]).toBe('Todos');
+      expect(component['searchGenreOptions'].slice(1)).toEqual(expectedSorted);
+
+      const template = readFileSync(resolve(__dirname, './modals.component.html'), 'utf8');
+      expect(template).toContain("state.activeModal() === 'track-unavailable'");
+      expect(template).toContain('não está mais disponível');
     });
   });
 });

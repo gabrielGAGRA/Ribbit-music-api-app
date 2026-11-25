@@ -565,3 +565,68 @@ def test_add_family_member_provisioning_future_birth_date_raises_violation() -> 
             display_name="Future",
             birth_date="2099-01-01",
         )
+
+
+def test_add_family_member_allows_admin_on_free_plan_to_link_and_provision() -> None:
+    admin_user = User(
+        user_id=1,
+        email="admin@test.com",
+        password_hash="hash",
+        display_name="Admin",
+        age=30,
+        plan_id=1,
+        is_admin=True,
+    )
+    dependent_existing = User(
+        user_id=2,
+        email="child1@test.com",
+        password_hash="hash",
+        display_name="Child One",
+        age=14,
+        plan_id=1,
+    )
+    free_plan = Plan(
+        plan_id=1,
+        name="Free",
+        initial_monthly_price=0.0,
+        initial_max_profiles=1,
+    )
+    family_plan = Plan(
+        plan_id=3,
+        name="Família",
+        initial_monthly_price=27.90,
+        initial_max_profiles=4,
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.side_effect = {1: admin_user, 2: dependent_existing}.get
+    user_repo.find_by_email.return_value = None
+    user_repo.list_dependents.return_value = []
+    user_repo.save.side_effect = lambda user: user
+
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = free_plan
+    plan_repo.list_all.return_value = [free_plan, family_plan]
+
+    hasher = MagicMock(spec=PasswordHasherPort)
+    hasher.hash_password.return_value = "hashed_pw"
+
+    use_case = AddFamilyMemberUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        password_hasher=hasher,
+    )
+
+    linked = use_case.execute(primary_user_id=1, dependent_user_id=2)
+    assert linked.primary_account_id == 1
+    assert linked.plan_id == 3
+
+    provisioned = use_case.execute(
+        primary_user_id=1,
+        email="newchild@test.com",
+        password="secretpassword",
+        display_name="New Child",
+        birth_date="2014-05-01",
+    )
+    assert provisioned.primary_account_id == 1
+    assert provisioned.plan_id == 3

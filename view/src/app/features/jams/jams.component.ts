@@ -176,6 +176,7 @@ export class JamsComponent {
   }
 
   protected startJamCardDrag(event: PointerEvent): void {
+    if (event.target instanceof Element && event.target.closest('button')) return;
     this.jamPointerStart = event.clientX;
     if (event.currentTarget instanceof HTMLElement) {
       event.currentTarget.setPointerCapture(event.pointerId);

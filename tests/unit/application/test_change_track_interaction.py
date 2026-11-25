@@ -162,3 +162,39 @@ def test_change_track_interaction_updates_and_saves_interaction() -> None:
     assert result.action == InteractionAction.SUPERLIKE
     interaction_repo.find_by_user_and_track.assert_called_once_with(1, 10)
     interaction_repo.save.assert_called_once_with(existing_interaction)
+
+
+def test_change_track_interaction_allows_admin_on_free_plan() -> None:
+    admin = User(
+        user_id=1,
+        email="admin@test.com",
+        password_hash="hash",
+        display_name="Admin",
+        age=30,
+        plan_id=1,
+        is_admin=True,
+    )
+    free_plan = Plan(plan_id=1, name="Free", initial_monthly_price=0.0)
+    existing_interaction = Interaction(
+        interaction_id=5,
+        user_id=1,
+        track_id=10,
+        action=InteractionAction.DISLIKE,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = admin
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = free_plan
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.find_by_user_and_track.return_value = existing_interaction
+    interaction_repo.save.side_effect = lambda i: i
+
+    use_case = ChangeTrackInteractionUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        interaction_repo=interaction_repo,
+    )
+    result = use_case.execute(user_id=1, track_id=10, new_action=InteractionAction.LIKE)
+
+    assert result.action == InteractionAction.LIKE
+    interaction_repo.save.assert_called_once_with(existing_interaction)

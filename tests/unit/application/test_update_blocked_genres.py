@@ -239,3 +239,43 @@ def test_update_blocked_genres_for_dependent_rejects_dependent_as_primary() -> N
 
     plan_repo.find_by_id.assert_not_called()
     user_repo.save.assert_not_called()
+
+
+def test_update_blocked_genres_allows_admin_on_free_plan_for_self_and_dependent() -> (
+    None
+):
+    admin = User(
+        user_id=1,
+        email="admin@test.com",
+        password_hash="hash",
+        display_name="Admin",
+        age=30,
+        plan_id=1,
+        is_admin=True,
+    )
+    dependent = User(
+        user_id=2,
+        email="dependent@test.com",
+        password_hash="hash",
+        display_name="Dependent",
+        age=14,
+        plan_id=3,
+        primary_account_id=1,
+    )
+    free_plan = Plan(plan_id=1, name="Free", initial_monthly_price=0.0)
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.side_effect = {1: admin, 2: dependent}.get
+    user_repo.save.side_effect = lambda user: user
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = free_plan
+
+    use_case = UpdateBlockedGenresUseCase(user_repo=user_repo, plan_repo=plan_repo)
+    updated_admin = use_case.execute(user_id=1, blocked_genres=["  Pop "])
+    updated_dep = use_case.execute_for_dependent(
+        primary_user_id=1,
+        dependent_user_id=2,
+        blocked_genres=["Funk"],
+    )
+
+    assert updated_admin.blocked_genres == frozenset({"pop"})
+    assert updated_dep.blocked_genres == frozenset({"funk"})

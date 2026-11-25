@@ -98,6 +98,7 @@ class ArtistStatResponse(BaseModel):
     superlikes: int
     dislikes: int
     total_positive: int
+    cover_url: str | None = None
 
 
 class YearlyInteractionStatResponse(BaseModel):

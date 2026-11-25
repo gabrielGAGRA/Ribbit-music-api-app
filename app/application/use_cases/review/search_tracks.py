@@ -163,6 +163,7 @@ class SearchTracksUseCase:
             query=command.query,
             min_rating=command.min_rating,
             sort_by=command.sort_by,
+            include_deleted=command.include_deleted,
             limit=command.limit,
             offset=command.offset,
         )

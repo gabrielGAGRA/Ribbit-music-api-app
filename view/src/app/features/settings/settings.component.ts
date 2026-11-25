@@ -46,6 +46,18 @@ export class SettingsComponent implements OnInit {
 
   protected readonly userInitials = computed<string>(() => computeInitials(this.state.userName()));
 
+  protected readonly planTagLabel = computed<string>(() => {
+    if (this.state.isAdmin()) return 'Administrador · Família';
+    const plan = this.state.currentPlan();
+    return plan === 'Free' ? 'Plano Free' : `Ribbit ${plan}`;
+  });
+
+  protected readonly planStatusTitle = computed<string>(() => {
+    if (this.state.isAdmin()) return 'Administrador · Plano Família Gratuito';
+    const plan = this.state.currentPlan();
+    return plan === 'Free' ? 'Plano Free' : `Ribbit ${plan}`;
+  });
+
   protected startEditingName(): void {
     this.nameDraft.set(this.state.userName());
     this.isEditingName.set(true);

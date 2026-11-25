@@ -24,8 +24,13 @@ class TrackRepositoryPort(Protocol):
         preferred_genres: Sequence[str] = (),
         block_explicit: bool = False,
         excluded_ids: Sequence[int] = (),
+        artist: str | Sequence[str] | None = None,
+        genre: str | Sequence[str] | None = None,
+        country: str | Sequence[str] | None = None,
+        year: int | Sequence[int] | None = None,
+        max_duration_seconds: int | None = None,
     ) -> list[Track]:
-        """Returns non-deleted tracks eligible for discovery."""
+        """Returns non-deleted tracks eligible for discovery or deck curation."""
         ...
 
     def find_by_filters(
@@ -39,6 +44,7 @@ class TrackRepositoryPort(Protocol):
         query: str | None = None,
         min_rating: float | None = None,
         sort_by: str | None = None,
+        include_deleted: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Track]: ...

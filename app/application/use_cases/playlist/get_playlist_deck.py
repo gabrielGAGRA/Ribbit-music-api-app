@@ -11,6 +11,7 @@ from app.application.use_cases.playlist.deck_filter_helpers import (
     matches_track_filters,
 )
 from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
+from app.domain.services.recommendation import order_tracks_by_weighted_preference
 lazy from app.application.ports.repositories.interaction_repository import (
     InteractionRepositoryPort,
 )
@@ -72,7 +73,6 @@ class GetPlaylistDeckUseCase:
         year_filter: list[int] | None,
         artist_filter: list[str] | None,
         country_filter: list[str] | None,
-        cursor: int | None,
     ) -> bool:
         if track.track_id is None or track.track_id in excluded_ids:
             return False
@@ -83,15 +83,13 @@ class GetPlaylistDeckUseCase:
             and track.duration_seconds > remaining_duration
         ):
             return False
-        if not matches_track_filters(
+        return matches_track_filters(
             track,
             genre=genre_filter,
             year=year_filter,
             artist=artist_filter,
             country=country_filter,
-        ):
-            return False
-        return not (cursor is not None and track.track_id <= cursor)
+        )
 
     def _resolve_excluded_ids(self, playlist: Playlist, eff_user_id: int) -> set[int]:
         excluded_ids = {t.track_id for t in playlist.tracks if t.track_id is not None}
@@ -110,28 +108,59 @@ class GetPlaylistDeckUseCase:
         country_f: list[str] | None,
         user: User,
         excluded_ids: set[int],
+        page_limit: int,
+        remaining_duration: int | None,
     ) -> list[Track]:
         if source_playlist_id is not None:
             source_playlist = self.playlist_repo.find_by_id(source_playlist_id)
             if source_playlist is not None and source_playlist.tracks:
                 return list(source_playlist.tracks)
 
-        if genre_f or artist_f or year_f or country_f:
-            return self.track_repo.find_by_filters(
-                artist=artist_f,
-                genre=genre_f,
-                country=country_f,
-                year=year_f,
-                limit=100,
-            )
-
         return self.track_repo.list_active(
-            limit=100,
+            limit=max(100, page_limit + 1),
             excluded_genres=list(user.blocked_genres),
             excluded_genre_terms=user.restricted_genre_terms(),
+            preferred_genres=tuple(user.favorite_genres),
             block_explicit=user.is_minor(),
             excluded_ids=list(excluded_ids),
+            artist=artist_f,
+            genre=genre_f,
+            country=country_f,
+            year=year_f,
+            max_duration_seconds=remaining_duration,
         )
+
+    def _order_and_slice_cursor(
+        self,
+        *,
+        playlist_id: int,
+        user: User,
+        user_id: int,
+        eligible: list[Track],
+        cursor: int | None,
+    ) -> list[Track]:
+        pool = eligible
+        if cursor is not None and all(t.track_id != cursor for t in eligible):
+            cursor_track = self.track_repo.find_by_id(cursor)
+            if (
+                isinstance(cursor_track, Track)
+                and cursor_track.track_id == cursor
+                and not cursor_track.is_deleted
+                and user.can_listen(cursor_track)
+            ):
+                pool = [*eligible, cursor_track]
+
+        ordered = order_tracks_by_weighted_preference(
+            pool,
+            user,
+            seed_key=f"playlist:{playlist_id}:user:{user_id}",
+        )
+        if cursor is None:
+            return ordered
+        for index, track in enumerate(ordered):
+            if track.track_id == cursor:
+                return ordered[index + 1 :]
+        return [t for t in ordered if t.track_id != cursor]
 
     def execute(
         self,
@@ -177,6 +206,8 @@ class GetPlaylistDeckUseCase:
             country_f=country_f,
             user=user,
             excluded_ids=excluded_ids,
+            page_limit=page_limit,
+            remaining_duration=remaining,
         )
 
         eligible = [
@@ -191,10 +222,15 @@ class GetPlaylistDeckUseCase:
                 year_f,
                 artist_f,
                 country_f,
-                cursor,
             )
         ]
-        eligible.sort(key=lambda t: t.track_id or 0)
+        eligible = self._order_and_slice_cursor(
+            playlist_id=pl_id,
+            user=user,
+            user_id=eff_user_id,
+            eligible=eligible,
+            cursor=cursor,
+        )
 
         has_more = len(eligible) > page_limit
         items = eligible[:page_limit]

@@ -1,105 +1,263 @@
 <div class="secondary-page dashboard-page">
   @if (isPremiumLocked()) {
-    <section class="panel dashboard-upgrade-card">
-      <div class="dashboard-upgrade-copy">
-        <span class="eyebrow blue">EXCLUSIVO RIBBIT PRO &amp; FAMÍLIA</span>
-        <h2>Desbloqueie sua retrospectiva musical completa.</h2>
-        <p>
-          O Dashboard anual com horas ouvidas, artistas favoritos e gêneros dominantes está
-          disponível nos planos pagos do Ribbit. Você pode experimentar agora pelo checkout
-          simulado.
-        </p>
+    <section class="panel dashboard-blocked-screen" aria-labelledby="dashboard-blocked-title">
+      <div class="blocked-lock-badge" aria-hidden="true">
+        <app-icon name="lock" [size]="26" />
       </div>
-      <button class="primary-button" (click)="goToPlans()">Aprimorar meu plano</button>
-    </section>
-  }
-
-  <div class="dashboard-hero">
-    <div>
-      <span class="eyebrow">RETROSPECTIVA ANUAL RIBBIT</span>
-      <h2>
-        Olá, {{ userFirstName() }}.<br />
-        Seu gosto não para de evoluir.
-      </h2>
-      <p>
-        @if (isPremiumLocked()) {
-          Prévia ilustrativa — assine um plano pago para calcular seus números reais.
-        } @else {
-          Estatísticas calculadas em tempo real a partir das suas interações.
-        }
+      <h2 id="dashboard-blocked-title">Dashboard bloqueado no plano Free</h2>
+      <p class="blocked-lead">
+        O painel com sua retrospectiva anual, horas ouvidas, artistas favoritos e gêneros dominantes
+        é exclusivo dos planos Individual e Família.
       </p>
-    </div>
-    <div class="listening-ring">
-      <div>
-        <strong>{{ hoursLabel() }}</strong>
-        <span>ouvindo</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="metric-grid">
-    @for (m of metrics(); track m.label) {
-      <div class="metric-card">
-        <span>
-          <app-icon [name]="m.icon" [size]="18" />
-        </span>
-        <strong>{{ m.value }}</strong>
-        <h3>{{ m.label }}</h3>
-        <small>{{ m.detail }}</small>
+      <ul class="blocked-benefits">
+        <li>
+          <app-icon name="check" [size]="15" />
+          <span>Horas estimadas de escuta e histórico de descobertas</span>
+        </li>
+        <li>
+          <app-icon name="check" [size]="15" />
+          <span>Ranking atualizado dos seus artistas e gêneros mais ouvidos</span>
+        </li>
+        <li>
+          <app-icon name="check" [size]="15" />
+          <span>Acesso liberado imediatamente ao ativar um plano pago</span>
+        </li>
+      </ul>
+      <button type="button" class="primary-button blocked-cta" (click)="goToPlans()">
+        Ver planos disponíveis
+        <app-icon name="arrow" [size]="16" />
+      </button>
+    </section>
+  } @else if (isLoading()) {
+    <section class="panel dashboard-loading-state" role="status" aria-live="polite">
+      <p>Carregando suas estatísticas anuais...</p>
+    </section>
+  } @else {
+    @if (availableYears().length > 0) {
+      <div class="dashboard-year-bar" role="group" aria-label="Filtrar estatísticas por ano">
+        <button
+          type="button"
+          class="year-pill"
+          [class.active]="selectedYear() === null"
+          [attr.aria-pressed]="selectedYear() === null"
+          (click)="selectYear(null)"
+        >
+          Todo o período
+        </button>
+        @for (yr of availableYears(); track yr) {
+          <button
+            type="button"
+            class="year-pill"
+            [class.active]="selectedYear() === yr"
+            [attr.aria-pressed]="selectedYear() === yr"
+            (click)="selectYear(yr)"
+          >
+            {{ yr }}
+          </button>
+        }
       </div>
     }
-  </div>
 
-  <div class="dashboard-columns">
-    <div class="panel favorite-artists">
-      <div class="section-title">
-        <h2>Artistas favoritos</h2>
-        <span>Mais ouvidos</span>
+    <div class="dashboard-hero">
+      <div>
+        <span class="eyebrow">RETROSPECTIVA ANUAL RIBBIT</span>
+        <h2>
+          Olá, {{ userFirstName() }}.<br />
+          Seu gosto não para de evoluir.
+        </h2>
+        <p class="hero-stats-line">
+          {{ totalInteractions() }} interações · {{ totalLikes() }} curtidas ·
+          {{ totalSuperlikes() }} amadas · {{ totalDislikes() }} rejeitadas
+        </p>
       </div>
-      @for (a of favoriteArtists(); track a.rank) {
-        <button (click)="searchArtist(a.song.artist)">
-          <strong>{{ a.rank }}</strong>
-          <img [src]="a.song.image" alt="" />
-          <span>
-            <b>{{ a.song.artist }}</b>
-            <small>{{ a.song.genre }}</small>
-          </span>
-          <small>{{ a.time }}</small>
-        </button>
-      } @empty {
-        <p class="empty-text">Curta músicas na Descoberta para ver seus artistas favoritos aqui.</p>
-      }
-    </div>
-
-    <div class="panel dashboard-genres">
-      <div class="section-title">
-        <h2>Gêneros favoritos</h2>
-      </div>
-      @for (g of favoriteGenres(); track g.genre) {
-        <div class="dashboard-genre">
-          <span>{{ g.rank }}</span>
-          <strong>{{ g.genre }}</strong>
-          <div>
-            <i [appWidthPercent]="g.percentage"></i>
-          </div>
-          <small>{{ g.percentage }}%</small>
+      <div
+        class="approval-ring"
+        role="img"
+        [attr.aria-label]="'Taxa de aprovação de ' + positiveRatePercent() + '%'"
+      >
+        <svg viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="48" />
+          <circle
+            class="ring-progress"
+            cx="60"
+            cy="60"
+            r="48"
+            [attr.stroke-dasharray]="ringCircumference"
+            [attr.stroke-dashoffset]="ringDashOffset()"
+          />
+        </svg>
+        <div class="ring-center">
+          <strong>{{ positiveRatePercent() }}%</strong>
+          <span>aprovação</span>
         </div>
-      } @empty {
-        <p class="empty-text">Nenhum gênero dominante registrado ainda.</p>
+      </div>
+    </div>
+
+    <div class="metric-grid">
+      @for (m of metrics(); track m.label) {
+        <div class="metric-card">
+          <span>
+            <app-icon [name]="m.icon" [size]="18" />
+          </span>
+          <strong>{{ m.value }}</strong>
+          <h3>{{ m.label }}</h3>
+          <small>{{ m.detail }}</small>
+        </div>
       }
     </div>
-  </div>
 
-  <div class="panel mood-card">
-    <div>
-      <span class="eyebrow blue">SEU ESTILO DOMINANTE</span>
-      <h2>Calma que movimenta.</h2>
-      <p>Suas escolhas constroem uma identidade sonora única a cada sessão.</p>
+    <section class="panel dashboard-activity-panel" aria-labelledby="monthly-activity-heading">
+      <div class="section-title activity-header">
+        <div>
+          <h2 id="monthly-activity-heading">Atividade mensal</h2>
+          <span>Distribuição real de interações ao longo dos meses</span>
+        </div>
+        <div class="chart-legend" aria-label="Legenda do gráfico">
+          <span class="legend-item"><i class="legend-swatch is-likes"></i>Curtidas</span>
+          <span class="legend-item"><i class="legend-swatch is-superlikes"></i>Amadas</span>
+          <span class="legend-item"><i class="legend-swatch is-dislikes"></i>Rejeitadas</span>
+        </div>
+      </div>
+
+      @if (maxMonthlyTotal() > 0) {
+        <svg
+          class="monthly-chart-svg"
+          viewBox="0 0 600 184"
+          role="img"
+          aria-label="Gráfico de barras empilhadas de interações por mês"
+        >
+          <line class="chart-grid-line" x1="12" y1="22" x2="588" y2="22" />
+          <line class="chart-grid-line" x1="12" y1="86" x2="588" y2="86" />
+          <line class="chart-grid-line" x1="12" y1="150" x2="588" y2="150" />
+
+          @for (bar of monthlyBars(); track bar.month) {
+            <g>
+              <title>{{ bar.tooltip }}</title>
+              @if (bar.dislikesHeight > 0) {
+                <rect
+                  class="bar-dislikes"
+                  [attr.x]="bar.x"
+                  [attr.y]="bar.dislikesY"
+                  width="28"
+                  [attr.height]="bar.dislikesHeight"
+                  rx="2"
+                />
+              }
+              @if (bar.likesHeight > 0) {
+                <rect
+                  class="bar-likes"
+                  [attr.x]="bar.x"
+                  [attr.y]="bar.likesY"
+                  width="28"
+                  [attr.height]="bar.likesHeight"
+                  rx="2"
+                />
+              }
+              @if (bar.superlikesHeight > 0) {
+                <rect
+                  class="bar-superlikes"
+                  [attr.x]="bar.x"
+                  [attr.y]="bar.superlikesY"
+                  width="28"
+                  [attr.height]="bar.superlikesHeight"
+                  rx="2"
+                />
+              }
+              @if (bar.total > 0) {
+                <text class="chart-value-label" [attr.x]="bar.x + 14" [attr.y]="bar.totalLabelY">
+                  {{ bar.total }}
+                </text>
+              }
+              <text class="chart-axis-label" [attr.x]="bar.x + 14" y="170">
+                {{ bar.label }}
+              </text>
+            </g>
+          }
+        </svg>
+      } @else {
+        <p class="empty-text">Nenhuma interação registrada neste período.</p>
+      }
+    </section>
+
+    <div class="dashboard-columns">
+      <div class="panel favorite-artists">
+        <div class="section-title">
+          <h2>Artistas favoritos</h2>
+          <span>Por curtidas e amadas</span>
+        </div>
+        @for (a of favoriteArtists(); track a.rank) {
+          <button type="button" (click)="searchArtist(a.song.artist)">
+            <strong>{{ a.rank }}</strong>
+            <img [src]="a.song.image" [alt]="a.song.artist" />
+            <span>
+              <b>{{ a.song.artist }}</b>
+              @if (a.song.genre) {
+                <small>{{ a.song.genre }}</small>
+              }
+            </span>
+            <small class="artist-summary">{{ a.summary }}</small>
+          </button>
+        } @empty {
+          <p class="empty-text">Curta músicas na Descoberta para ver seus artistas favoritos aqui.</p>
+        }
+      </div>
+
+      <div class="panel dashboard-genres">
+        <div class="section-title">
+          <h2>Gêneros favoritos</h2>
+          <span>Proporção real</span>
+        </div>
+        @for (g of favoriteGenres(); track g.genre) {
+          <div class="dashboard-genre">
+            <span>{{ g.rank }}</span>
+            <strong>{{ g.genre }}</strong>
+            <div>
+              <i [appWidthPercent]="g.percentage"></i>
+            </div>
+            <small>{{ g.totalPositive }} · {{ g.percentage }}%</small>
+          </div>
+        } @empty {
+          <p class="empty-text">Nenhum gênero dominante registrado ainda.</p>
+        }
+      </div>
     </div>
-    <div class="mood-tags">
-      <span>Contemplativo</span>
-      <span>Solar</span>
-      <span>Fora da bolha</span>
+
+    <div class="dashboard-columns dashboard-secondary-columns">
+      <div class="panel">
+        <div class="section-title">
+          <h2>Décadas mais curtidas</h2>
+          <span>Ano de lançamento</span>
+        </div>
+        @for (era of releaseEras(); track era.decade) {
+          <div class="dashboard-bar-row">
+            <strong class="bar-row-label">{{ era.label }}</strong>
+            <div class="dashboard-bar-track">
+              <i class="dashboard-bar-fill" [appWidthPercent]="era.percentage"></i>
+            </div>
+            <small class="bar-row-value">{{ era.totalPositive }} ({{ era.percentage }}%)</small>
+          </div>
+        } @empty {
+          <p class="empty-text">Ainda não há dados de ano de lançamento nas curtidas.</p>
+        }
+      </div>
+
+      <div class="panel">
+        <div class="section-title">
+          <h2>Origem das interações</h2>
+          <span>Onde você descobre</span>
+        </div>
+        @for (src of sources(); track src.source) {
+          <div class="dashboard-bar-row">
+            <strong class="bar-row-label">{{ src.label }}</strong>
+            <div class="dashboard-bar-track">
+              <i class="dashboard-bar-fill is-source" [appWidthPercent]="src.percentage"></i>
+            </div>
+            <small class="bar-row-value">{{ src.total }} ({{ src.percentage }}%)</small>
+          </div>
+        } @empty {
+          <p class="empty-text">Nenhuma origem de interação registrada ainda.</p>
+        }
+      </div>
     </div>
-  </div>
+  }
 </div>

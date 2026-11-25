@@ -62,6 +62,7 @@ def test_search_tracks_passes_pagination_to_repository(mock_user: User) -> None:
         query="Queen",
         min_rating=None,
         sort_by=None,
+        include_deleted=False,
         limit=25,
         offset=10,
     )
@@ -337,6 +338,7 @@ def test_search_tracks_expands_start_year_and_end_year_range() -> None:
         query=None,
         min_rating=None,
         sort_by=None,
+        include_deleted=False,
         limit=50,
         offset=0,
     )
@@ -521,6 +523,63 @@ def test_search_tracks_skips_spotify_fallback_and_resort_when_rating_controls_us
         query="Queen",
         min_rating=3.0,
         sort_by="rating_desc",
+        include_deleted=False,
+        limit=50,
+        offset=0,
+    )
+    music_service.search_tracks.assert_not_called()
+
+
+def test_search_tracks_includes_deleted_tracks_when_requested_without_fallback() -> (
+    None
+):
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="hash",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    removed_track = Track(
+        track_id=88,
+        title="Removed Song",
+        artist="Ghost Artist",
+        duration_seconds=200,
+        genre="Rock",
+        is_deleted=True,
+    )
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_filters.return_value = [removed_track]
+
+    music_service = MagicMock()
+    use_case = SearchTracksUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        music_service=music_service,
+    )
+
+    res = use_case.execute(
+        SearchTracksCommand(
+            user_id=1,
+            query="Removed Song",
+            include_deleted=True,
+        )
+    )
+
+    assert res == [removed_track]
+    track_repo.find_by_filters.assert_called_once_with(
+        artist=None,
+        album=None,
+        genre=None,
+        year=None,
+        query="Removed Song",
+        min_rating=None,
+        sort_by=None,
+        include_deleted=True,
         limit=50,
         offset=0,
     )

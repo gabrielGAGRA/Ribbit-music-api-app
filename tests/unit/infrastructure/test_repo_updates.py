@@ -64,7 +64,7 @@ def test_track_deduplication_by_spotify_id(conn: sqlite3.Connection) -> None:
     # It must update existing record and retain original track_id
     assert deduped.track_id == original_id
     assert deduped.title == "Updated Title"
-    assert deduped.album == "Album Remastered"
+    assert deduped.duration_seconds == 210
 
     # Confirm there is only 1 track in the table
     all_tracks = track_repo.find_by_filters()

@@ -89,3 +89,39 @@ def test_undo_latest_discovery_interaction_denies_missing_plan() -> None:
         use_case.execute(user_id=4)
 
     repository.delete_latest_discovery.assert_not_called()
+
+
+def test_undo_latest_discovery_interaction_allows_admin_on_free_plan() -> None:
+    admin = User(
+        user_id=4,
+        email="admin@example.com",
+        password_hash="hash",
+        display_name="Admin",
+        age=30,
+        plan_id=1,
+        is_admin=True,
+    )
+    free_plan = Plan(plan_id=1, name="Free", initial_monthly_price=0.0)
+    interaction = Interaction(
+        interaction_id=12,
+        user_id=4,
+        track_id=30,
+        action=InteractionAction.DISLIKE,
+        source="discovery",
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = admin
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = free_plan
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.delete_latest_discovery.return_value = interaction
+
+    use_case = UndoLatestDiscoveryInteractionUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        interaction_repo=interaction_repo,
+    )
+    result = use_case.execute(user_id=4)
+
+    assert result is interaction
+    interaction_repo.delete_latest_discovery.assert_called_once_with(4)

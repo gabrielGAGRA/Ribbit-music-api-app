@@ -1,4 +1,4 @@
-"""Domain service for weighted track recommendation in non-playlist swipe flows."""
+"""Domain service for weighted track recommendation in swipe flows."""
 
 import hashlib
 import random
@@ -79,8 +79,47 @@ def order_tracks_by_weighted_seed(
     return [item[2] for item in scored]
 
 
+def order_tracks_by_weighted_preference(
+    candidates: Sequence[Track],
+    user: User,
+    *,
+    seed_key: str | None = None,
+    rng: random.Random | None = None,
+    favorite_multiplier: float = DEFAULT_FAVORITE_WEIGHT_MULTIPLIER,
+) -> list[Track]:
+    """Orders eligible tracks using Efraimidis-Spirakis genre-preference weights.
+
+    Unlike `order_tracks_by_weighted_seed` (used by Jam), this always randomizes
+    track order even when the user has no favorite genres (uniform weight 1.0).
+    When `seed_key` is provided, keys are deterministic for cursor pagination;
+    otherwise fresh random keys are drawn from `rng` (or module `random`).
+    """
+    chooser = rng if rng is not None else random
+    scored: list[tuple[float, int, Track]] = []
+    for track in candidates:
+        if track.is_deleted:
+            continue
+        weight = user.recommendation_weight(
+            track, favorite_multiplier=favorite_multiplier
+        )
+        if weight <= 0.0:
+            continue
+        tid = track.track_id or 0
+        u = (
+            _deterministic_unit_interval(seed_key, tid)
+            if seed_key is not None
+            else (1.0 - chooser.random())
+        )
+        score = u ** (1.0 / weight)
+        scored.append((score, tid, track))
+
+    scored.sort(key=lambda item: (-item[0], item[1]))
+    return [item[2] for item in scored]
+
+
 __all__ = [
     "DEFAULT_FAVORITE_WEIGHT_MULTIPLIER",
+    "order_tracks_by_weighted_preference",
     "order_tracks_by_weighted_seed",
     "select_weighted_track",
 ]

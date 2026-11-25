@@ -84,4 +84,40 @@ describe('SongService', () => {
     req.flush([]);
     httpMock.verify();
   });
+
+  it('forwards include_deleted=true without adding deleted tracks to songsSignal', () => {
+    const initialSongs = service.songs();
+
+    service
+      .searchSongs({
+        query: 'Removed',
+        includeDeleted: true,
+      })
+      .subscribe((songs) => {
+        expect(songs.length).toBe(1);
+        expect(songs[0]?.isDeleted).toBe(true);
+      });
+
+    const req = httpMock.expectOne(
+      (r) =>
+        r.url === '/api/tracks/search' &&
+        r.params.get('query') === 'Removed' &&
+        r.params.get('include_deleted') === 'true',
+    );
+    expect(req.request.method).toBe('GET');
+    req.flush([
+      {
+        track_id: 77,
+        title: 'Removed Song',
+        artist: 'Ghost Artist',
+        duration_seconds: 210,
+        genre: 'Rock',
+        explicit: false,
+        is_deleted: true,
+      },
+    ]);
+
+    expect(service.songs()).toBe(initialSongs);
+    httpMock.verify();
+  });
 });
