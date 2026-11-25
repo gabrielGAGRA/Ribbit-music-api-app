@@ -48,8 +48,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Oxfmt Format Check
+        run: npm run format:check
+
       - name: TS 7 Oxlint
         run: npm run lint:ts
 
       - name: Angular ESLint
         run: npm run lint:angular
+
+      - name: TypeScript 7 Typecheck
+        run: npm run typecheck
+
+      - name: Angular Production Build
+        run: npm run build

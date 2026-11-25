@@ -40,8 +40,8 @@ jobs:
       - name: Instalando dependências Node
         run: npm ci
 
-      - name: Rodando testes unitários do frontend
-        run: npm test
+      - name: Rodando testes unitários do frontend e validando cobertura >= 85%
+        run: npm run test:cov
 
   e2e-browser-tests:
     name: Browser E2E Tests (Playwright)
