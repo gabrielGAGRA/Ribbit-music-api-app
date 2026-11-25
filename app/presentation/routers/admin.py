@@ -25,6 +25,7 @@ from app.application.use_cases.admin import (
     ListBlockedTracksUseCase,
     ListUsersWithPlansUseCase,
     RegisterAdministratorUseCase,
+    SearchExternalTracksUseCase,
     SyncCatalogVersionUseCase,
     UpdateAdminRoleUseCase,
     UpdatePlatformCostsUseCase,
@@ -49,6 +50,7 @@ from app.presentation.schemas.admin import (
     CompactCatalogResponse,
     CreateTrackAdminRequest,
     ExecutiveDashboardResponse,
+    ExternalTrackCandidateResponse,
     PlanResponse,
     PlatformCostSettingsResponse,
     RegisterAdminRequest,
@@ -243,6 +245,24 @@ def list_admin_tracks(
         offset=offset,
     )
     return [AdminCatalogTrackResponse.model_validate(t) for t in tracks]
+
+
+@router.get(
+    "/tracks/external-search",
+    response_model=list[ExternalTrackCandidateResponse],
+)
+def search_external_tracks(
+    use_case: Annotated[
+        SearchExternalTracksUseCase,
+        Depends(provide(SearchExternalTracksUseCase)),
+    ],
+    title: str | None = None,
+    artist: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=25)] = 10,
+    admin_id: Annotated[int, Depends(require_admin)] = 0,
+) -> list[ExternalTrackCandidateResponse]:
+    candidates = use_case.execute(title=title, artist=artist, limit=limit)
+    return [ExternalTrackCandidateResponse.model_validate(item) for item in candidates]
 
 
 @router.post(

@@ -40,6 +40,9 @@ export interface PlanBreakdownEntry {
   readonly userPercent: number;
   readonly revenue: number;
   readonly revenuePercent: number;
+  readonly isPaid: boolean;
+  readonly profit: number;
+  readonly marginPercent: number;
 }
 
 export interface BlockedGenreEntry {
@@ -48,11 +51,39 @@ export interface BlockedGenreEntry {
   readonly percent: number;
 }
 
+export interface FirestoreQuotaSummaryApiDto {
+  readonly reads_today: number;
+  readonly reads_free_limit: number;
+  readonly reads_percent: number;
+  readonly reads_rate_per_100k: number;
+  readonly writes_today: number;
+  readonly writes_free_limit: number;
+  readonly writes_percent: number;
+  readonly writes_rate_per_100k: number;
+  readonly deletes_today: number;
+  readonly deletes_free_limit: number;
+  readonly deletes_percent: number;
+  readonly deletes_rate_per_100k: number;
+  readonly stored_bytes?: number;
+  readonly stored_gib: number;
+  readonly stored_free_limit_gib: number;
+  readonly stored_percent: number;
+  readonly egress_bytes_month?: number;
+  readonly egress_gib_month: number;
+  readonly egress_free_limit_gib: number;
+  readonly egress_percent: number;
+  readonly monthly_estimated_cost: number;
+}
+
 export interface ExecutiveDashboardApiDto {
   readonly total_users: number;
   readonly estimated_net_revenue: number;
   readonly users_by_plan: Readonly<Record<string, number>>;
   readonly revenue_by_plan: Readonly<Record<string, number>>;
+  readonly profit_by_plan?: Readonly<Record<string, number>>;
+  readonly paid_plans_revenue?: number;
+  readonly paid_plans_profit?: number;
+  readonly cost_to_revenue_percent?: number;
   readonly gross_revenue?: number;
   readonly content_cost?: number;
   readonly infrastructure_cost?: number;
@@ -61,6 +92,7 @@ export interface ExecutiveDashboardApiDto {
   readonly content_cost_per_track?: number;
   readonly infrastructure_fixed_cost?: number;
   readonly infrastructure_cost_per_user?: number;
+  readonly firestore_usage?: FirestoreQuotaSummaryApiDto | null;
 }
 
 export interface TrackAccessRankApiDto {

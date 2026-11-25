@@ -128,6 +128,12 @@ def create_app(
         settings=resolved_settings,
         password_hasher=container.password_hasher,
     )
+    if container.firestore_sync_service is None and hasattr(
+        container.connection, "set_trace_callback"
+    ):
+        container.connection.set_trace_callback(
+            container.firestore_usage_tracker.record_sql_statement
+        )
     catalog_sync_thread: threading.Thread | None = None
 
     @asynccontextmanager
@@ -164,6 +170,7 @@ def create_app(
             if owns_connection:
                 if catalog_sync_thread is not None and catalog_sync_thread.is_alive():
                     catalog_sync_thread.join(timeout=5.0)
+                container.firestore_usage_tracker.flush(container.connection)
                 container.connection.close()
             container.http_session.close()
 

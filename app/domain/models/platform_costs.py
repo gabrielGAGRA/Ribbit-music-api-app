@@ -9,8 +9,8 @@ class PlatformCostSettings:
     """Stores per-track content cost and infrastructure cost parameters."""
 
     content_cost_per_track: float = 0.04
-    infrastructure_fixed_cost: float = 10.00
-    infrastructure_cost_per_user: float = 0.50
+    infrastructure_fixed_cost: float = 25.00
+    infrastructure_cost_per_user: float = 0.00
     updated_at: datetime | None = None
 
     def __post_init__(self) -> None:

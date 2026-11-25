@@ -107,11 +107,54 @@
       </div>
     </div>
 
+    <div class="cost-tracker-block">
+      <div class="cost-tracker-header">
+        <span>Comprometimento da Receita Bruta pelos Custos</span>
+        <strong [class.negative-value]="costToRevenuePercent() > 100">
+          {{ costToRevenuePercent() }}%
+        </strong>
+      </div>
+      <div class="bar-track">
+        <i
+          class="bar-fill"
+          [class.pink-fill]="costToRevenuePercent() > 75"
+          [class.blue-fill]="costToRevenuePercent() <= 75"
+          [appWidthPercent]="costTrackerBarPercent()"
+        ></i>
+      </div>
+    </div>
+
+    <div class="quota-tracker-section">
+      <div class="quota-tracker-title">
+        <span>Custo de Conteúdos (Firestore Free Tier &amp; Excedente)</span>
+        <small>Reads $0.06 / Writes $0.18 / Deletes $0.02 por 100k</small>
+      </div>
+      <div class="quota-tracker-grid">
+        @for (item of firestoreQuotaRows(); track item.id) {
+          <div class="quota-item">
+            <div class="quota-meta">
+              <strong>{{ item.label }}</strong>
+              <span>{{ item.usedLabel }} / {{ item.limitLabel }} ({{ item.percentLabel }})</span>
+            </div>
+            <div class="bar-track">
+              <i
+                class="bar-fill"
+                [class.pink-fill]="item.percent >= 85"
+                [class.blue-fill]="item.percent < 85"
+                [appWidthPercent]="item.percent"
+              ></i>
+            </div>
+            <small class="quota-rate">{{ item.rateHint }}</small>
+          </div>
+        }
+      </div>
+    </div>
+
     @if (editingCosts()) {
       <form class="cost-editor-form" (submit)="savePlatformCosts($event)">
         <div class="cost-inputs-row">
           <label class="cost-field">
-            <span>Custo por faixa ativa (R$)</span>
+            <span>Custo por faixa ativa ($ USD)</span>
             <input
               type="number"
               step="0.01"
@@ -121,7 +164,7 @@
             />
           </label>
           <label class="cost-field">
-            <span>Infraestrutura fixa (R$)</span>
+            <span>Infraestrutura fixa mensal ($ USD)</span>
             <input
               type="number"
               step="0.01"
@@ -131,7 +174,7 @@
             />
           </label>
           <label class="cost-field">
-            <span>Infraestrutura por usuário (R$)</span>
+            <span>Infraestrutura por usuário ($ USD)</span>
             <input
               type="number"
               step="0.01"
@@ -170,6 +213,19 @@
         </button>
       </div>
 
+      <div class="paid-profit-summary">
+        <div class="paid-profit-stat">
+          <span>Receita Planos Pagos</span>
+          <strong>{{ formatCurrency(paidPlansRevenue()) }}</strong>
+        </div>
+        <div class="paid-profit-stat">
+          <span>Lucro Planos Pagos</span>
+          <strong [class.negative-value]="isPaidPlansProfitNegative()">
+            {{ formatCurrency(paidPlansProfit()) }}
+          </strong>
+        </div>
+      </div>
+
       <div
         tabindex="0"
         role="region"
@@ -178,7 +234,7 @@
       >
         <table class="admin-table plan-breakdown-table">
           <caption id="plan-breakdown-caption" class="sr-only">
-            Distribuição de usuários e receita mensal por plano de assinatura
+            Distribuição de usuários, receita mensal e lucro estimado por plano de assinatura
           </caption>
           <thead>
             <tr>
@@ -186,6 +242,7 @@
               <th scope="col">Usuários</th>
               <th scope="col">Receita Mensal</th>
               <th scope="col">Participação na Receita</th>
+              <th scope="col">Lucro Estimado</th>
             </tr>
           </thead>
           <tbody>
@@ -202,10 +259,20 @@
                     <span>{{ row.revenuePercent }}%</span>
                   </div>
                 </td>
+                <td>
+                  @if (row.isPaid) {
+                    <strong [class.negative-value]="row.profit < 0">
+                      {{ formatCurrency(row.profit) }}
+                    </strong>
+                    <small class="profit-margin">({{ row.marginPercent }}%)</small>
+                  } @else {
+                    <span class="free-plan-dash">—</span>
+                  }
+                </td>
               </tr>
             } @empty {
               <tr>
-                <td colspan="4" class="empty-cell">Nenhum plano cadastrado.</td>
+                <td colspan="5" class="empty-cell">Nenhum plano cadastrado.</td>
               </tr>
             }
           </tbody>
