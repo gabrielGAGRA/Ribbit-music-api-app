@@ -2,9 +2,11 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PlaylistsComponent } from './playlists.component';
+import { AudioPlayerService } from '../../core/audio-player.service';
 import { authInterceptor } from '../../core/auth.interceptor';
 import { writeAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -427,5 +429,157 @@ describe('PlaylistsComponent', () => {
     expect(template).toContain('class="swipe-controls"');
     expect(template).not.toContain('playlist-card-actions');
     expect(template).not.toContain('quick-spotify-btn');
+  });
+
+  it('passes next_cursor on loadMoreRecommendations when has_more is true and resets after end', () => {
+    writeAuthToken('jwt-token');
+    component['selectedPlaylist'].set({
+      id: '24',
+      playlistId: 24,
+      name: 'pedra',
+      count: 0,
+      duration: '0 min',
+      songs: [],
+    });
+
+    component['loadMoreRecommendations']();
+    const firstReq = httpMock.expectOne('/api/playlists/24/deck?limit=25');
+    firstReq.flush({
+      items: [
+        {
+          track_id: 901,
+          title: 'First Pick',
+          artist: 'Artist A',
+          album: null,
+          genre: 'rock',
+          duration_seconds: 180,
+          cover_url: null,
+          itunes_preview_url: null,
+        },
+      ],
+      next_cursor: 901,
+      has_more: true,
+    });
+
+    component['loadMoreRecommendations']();
+    const secondReq = httpMock.expectOne('/api/playlists/24/deck?limit=25&cursor_id=901');
+    secondReq.flush({
+      items: [
+        {
+          track_id: 512,
+          title: 'Second Pick',
+          artist: 'Artist B',
+          album: null,
+          genre: 'pop',
+          duration_seconds: 180,
+          cover_url: null,
+          itunes_preview_url: null,
+        },
+      ],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    component['loadMoreRecommendations']();
+    const resetReq = httpMock.expectOne('/api/playlists/24/deck?limit=25');
+    resetReq.flush({ items: [], next_cursor: null, has_more: false });
+
+    expect(component['deckCandidates']()).toEqual([]);
+  });
+});
+
+describe('PlaylistsComponent DOM', () => {
+  let state: RibbitStateService;
+  let player: AudioPlayerService;
+
+  beforeEach(() => {
+    localStorage.clear();
+    const html = readFileSync(resolve(__dirname, './playlists.component.html'), 'utf8');
+    TestBed.overrideComponent(PlaylistsComponent, {
+      set: {
+        template: html,
+        templateUrl: undefined,
+        styleUrl: undefined,
+        styles: [],
+        imports: [],
+        schemas: [NO_ERRORS_SCHEMA],
+      },
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+      ],
+    });
+    state = TestBed.inject(RibbitStateService);
+    player = TestBed.inject(AudioPlayerService);
+  });
+
+  it('should not start deck card drag when pointerdown targets SVG icon inside preview play button', () => {
+    const playlist = {
+      id: '10',
+      playlistId: 10,
+      name: 'Dias de sol',
+      count: 0,
+      duration: '0 min',
+      songs: [],
+    };
+    state.playlists.set([playlist]);
+    state.songs.set([
+      {
+        trackId: 1,
+        title: 'Bloom',
+        artist: 'Odesza',
+        genre: 'Electronic',
+        time: '3:15',
+        image: 'https://example.com/bloom.jpg',
+        album: 'In Return',
+        year: '2014',
+        match: 95,
+      },
+    ]);
+
+    const fixture = TestBed.createComponent(PlaylistsComponent);
+    const instance = fixture.componentInstance;
+    instance['selectedPlaylist'].set(playlist);
+    instance['isSwipeMode'].set(true);
+    fixture.detectChanges();
+
+    const deckTrack = instance['activeTrack']();
+    if (!deckTrack) {
+      throw new Error('Expected active deck track');
+    }
+    instance['toggleDeckPlay'](deckTrack);
+    expect(player.isPlaying()).toBe(true);
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement;
+    if (!(root instanceof HTMLElement)) {
+      throw new TypeError('Expected root element');
+    }
+    const card = root.querySelector('.discovery-card.playlist-swipe-card');
+    const playButton = root.querySelector('.preview-play');
+    if (!(card instanceof HTMLElement) || !(playButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected playlist deck card and play button');
+    }
+
+    const iconHost = playButton.querySelector('app-icon') ?? playButton;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    svg.appendChild(rect);
+    iconHost.appendChild(svg);
+
+    const setPointerCaptureSpy = vi.fn();
+    Object.defineProperty(card, 'setPointerCapture', {
+      value: setPointerCaptureSpy,
+      configurable: true,
+    });
+
+    rect.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+    expect(instance['isDragging']()).toBe(false);
+    expect(setPointerCaptureSpy).not.toHaveBeenCalled();
+
+    playButton.click();
+    expect(player.isPlaying()).toBe(false);
   });
 });

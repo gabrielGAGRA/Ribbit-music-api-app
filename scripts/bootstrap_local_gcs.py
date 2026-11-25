@@ -27,7 +27,7 @@ def bootstrap_gcs_emulator() -> int:
     """Initializes the baseline Parquet catalog in local GCS emulator."""
     settings = load_settings()
     bucket_name = settings.gcs_bucket_name or "ribbit-catalog-local"
-    tracks_file_path = settings.gcs_tracks_file_path or "Songs/songs_final.parquet"
+    tracks_file_path = settings.gcs_tracks_file_path or "Songs/tracks.parquet"
 
     emulator_host = os.getenv("STORAGE_EMULATOR_HOST")
     if not emulator_host:
@@ -63,13 +63,6 @@ def bootstrap_gcs_emulator() -> int:
                         "Eminem",
                         "The Weeknd",
                         "Nirvana",
-                    ],
-                    "album": [
-                        "A Night at the Opera",
-                        "÷ (Divide)",
-                        "The Marshall Mathers LP 2",
-                        "After Hours",
-                        "Nevermind",
                     ],
                     "duration_seconds": [354, 233, 363, 200, 301],
                     "genre": ["Rock", "Pop", "Hip Hop", "Pop", "Grunge"],

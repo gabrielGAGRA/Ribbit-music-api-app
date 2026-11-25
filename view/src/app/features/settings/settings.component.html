@@ -47,8 +47,8 @@
           </div>
         }
         <span class="user-email">{{ state.userEmail() || 'conta@ribbit.app' }}</span>
-        <span class="plan-tag" [class.pro]="state.currentPlan() !== 'Free'">
-          {{ state.currentPlan() === 'Free' ? 'Plano Free' : 'Ribbit ' + state.currentPlan() }}
+        <span class="plan-tag" [class.pro]="state.hasPaidAccess()">
+          {{ planTagLabel() }}
         </span>
       </div>
     </div>
@@ -138,18 +138,19 @@
     <div class="settings-plan-details">
       <div class="plan-status-box">
         <div class="plan-status-info">
-          <strong>{{
-            state.currentPlan() === 'Free' ? 'Plano Free' : 'Ribbit ' + state.currentPlan()
-          }}</strong>
+          <strong>{{ planStatusTitle() }}</strong>
           <span>
-            @if (state.currentPlan() === 'Free') {
+            @if (state.isAdmin()) {
+              Acesso gratuito e completo ao Plano Família, dashboard anual, bloqueio de gêneros e
+              contas filhas.
+            } @else if (state.currentPlan() === 'Free') {
               Descobertas diárias com recomendações inteligentes e criação de playlists locais.
             } @else {
               Dashboard anual liberado, bloqueio de gêneros, revisão de escolhas e exportação.
             }
           </span>
         </div>
-        @if (state.currentPlan() !== 'Free') {
+        @if (!state.isAdmin() && state.currentPlan() !== 'Free') {
           <button class="danger-link-btn" (click)="cancelSubscription()">
             Cancelar assinatura
           </button>

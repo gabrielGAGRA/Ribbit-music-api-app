@@ -29,7 +29,7 @@ class ListBlockedGenresUseCase:
 
         if self.plan_repo is not None:
             plan = self.plan_repo.find_by_id(user.plan_id)
-            if not plan or not plan.is_paid:
+            if not user.has_premium_access(plan):
                 raise PremiumRequiredError("Feature exclusive to Premium subscribers.")
 
         return sorted(user.blocked_genres)

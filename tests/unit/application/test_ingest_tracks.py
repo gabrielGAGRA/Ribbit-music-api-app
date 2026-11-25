@@ -61,7 +61,8 @@ def test_ingest_tracks_inserts_new_tracks_into_empty_repo() -> None:
     assert track_a is not None
     assert track_a.title == "Song A"
     assert track_a.artist == "Artist 1"
-    assert track_a.album == "Album 1"
+    assert track_a.album is None
+    assert track_a.cover_url == "https://example.com/cover1.jpg"
 
     track_b = repo.find_by_title_and_artist("Song B", "Artist 2")
     assert track_b is not None

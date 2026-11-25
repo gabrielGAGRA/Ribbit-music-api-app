@@ -35,7 +35,6 @@ CREATE TABLE IF NOT EXISTS tracks (
     spotify_id TEXT,
     title TEXT NOT NULL,
     artist TEXT NOT NULL,
-    album TEXT,
     duration_seconds INTEGER NOT NULL,
     genre TEXT NOT NULL,
     country TEXT,

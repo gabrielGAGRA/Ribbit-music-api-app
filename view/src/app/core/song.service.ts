@@ -33,6 +33,7 @@ export interface SearchTracksParams {
   readonly endYear?: number;
   readonly minRating?: number | null;
   readonly sortBy?: 'rating_desc' | 'rating_asc' | null;
+  readonly includeDeleted?: boolean;
   readonly limit?: number;
 }
 
@@ -52,6 +53,7 @@ function buildSearchHttpParams(params: SearchTracksParams): HttpParams {
     ['end_year', formatFiniteNumber(params.endYear)],
     ['min_rating', formatFiniteNumber(params.minRating)],
     ['sort_by', params.sortBy ?? undefined],
+    ['include_deleted', params.includeDeleted ? 'true' : undefined],
   ];
   for (const [key, value] of optionalPairs) {
     if (value && value.length > 0) {
@@ -109,8 +111,9 @@ export class SongService {
     return this.http.get<readonly TrackApiDto[]>('/api/tracks/search', { params: httpParams }).pipe(
       map((dtos) => dtos.map((dto) => mapTrackDtoToSong(dto))),
       tap((songs) => {
-        if (isUnfiltered && songs.length > 0) {
-          this.songsSignal.set(songs);
+        const activeSongs = songs.filter((song) => !song.isDeleted);
+        if (isUnfiltered && !params.includeDeleted && activeSongs.length > 0) {
+          this.songsSignal.set(activeSongs);
         }
       }),
     );

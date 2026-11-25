@@ -101,8 +101,8 @@
           <span>Carregando...</span>
         </div>
       } @else {
-        @for (item of filteredSongs(); track item.title) {
-          <div class="song-row">
+        @for (item of filteredSongs(); track item.trackId ?? item.title) {
+          <div class="song-row" [class.song-row-unavailable]="item.isDeleted">
             <button
               class="song-cover"
               (click)="selectSong(item)"
@@ -114,6 +114,9 @@
               <strong>{{ item.title }}</strong>
               <span>
                 {{ item.artist }}
+                @if (item.isDeleted) {
+                  <span class="unavailable-badge">Indisponível</span>
+                }
                 @if (getVisibleRating(item); as visibleRating) {
                   <span class="track-rating-badge">
                     ★ {{ visibleRating }} ({{ item.reviewCount }})

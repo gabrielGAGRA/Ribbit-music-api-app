@@ -24,7 +24,7 @@ services:
       - ENVIRONMENT=development
       - DATABASE_PATH=/data/local.db
       - GCS_BUCKET_NAME=ribbit-catalog-local
-      - GCS_TRACKS_FILE_PATH=Songs/songs_final.parquet
+      - GCS_TRACKS_FILE_PATH=Songs/tracks.parquet
       - STORAGE_EMULATOR_HOST=http://gcs-emulator:4443
     command: >
       sh -c "python -m scripts.init_db && python -m scripts.bootstrap_local_gcs && uvicorn app.main:app --host 0.0.0.0 --port 8000"

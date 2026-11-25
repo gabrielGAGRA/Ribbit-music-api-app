@@ -730,6 +730,24 @@
         </div>
       }
 
+      <!-- Modal: track-unavailable (Faixa removida/indisponível no catálogo) -->
+      @if (state.activeModal() === 'track-unavailable') {
+        <span class="modal-symbol">
+          <app-icon name="lock" [size]="28" />
+        </span>
+        <h2>Faixa indisponível</h2>
+        <p>
+          <strong>{{ detailsSong().title }}</strong> — {{ detailsSong().artist }}
+        </p>
+        <div class="info-note">
+          Esta música não está mais disponível no catálogo do Ribbit e não pode ser reproduzida ou
+          avaliada.
+        </div>
+        <button type="button" class="primary-button full-width" (click)="closeModal()">
+          Entendi
+        </button>
+      }
+
       <!-- Modal: checkout (Pagamento simulado de plano pago) -->
       @if (state.activeModal() === 'checkout' && checkoutPlan(); as plan) {
         <span class="modal-symbol">

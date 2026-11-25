@@ -14,6 +14,7 @@ import type { CommunityReview, Song } from '@ribbit/shared-types';
 import { toApiError } from '../../core/api-error';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
+import { matchesGenreFilter } from '../../core/genre-catalog';
 import { SongService } from '../../core/song.service';
 import type { ReviewSortOption } from '../../core/song.service';
 import { readInputValue, readSelectValue } from '../../shared/dom-event-values';
@@ -141,7 +142,7 @@ export class ExploreComponent implements OnInit {
       return false;
     }
     const genre = this.state.searchFilterGenre();
-    if (genre !== 'Todos' && !song.genre.toLowerCase().includes(genre.toLowerCase())) {
+    if (genre !== 'Todos' && !matchesGenreFilter(song.genre, genre)) {
       return false;
     }
     const artist = this.state.searchFilterArtist().toLowerCase().trim();
@@ -236,6 +237,7 @@ export class ExploreComponent implements OnInit {
         ...(endYear !== undefined ? { endYear } : {}),
         ...(minRating !== null ? { minRating } : {}),
         ...(sortBy !== 'default' ? { sortBy } : {}),
+        includeDeleted: true,
         limit: 30,
       })
       .pipe(
@@ -335,13 +337,20 @@ export class ExploreComponent implements OnInit {
   }
 
   protected selectSong(song: Song): void {
+    if (song.isDeleted) {
+      this.state.openUnavailableTrackModal(song);
+      return;
+    }
     this.state.recordTrackAccess(song, 'search');
-    this.state.discoverySong.set(song);
-    this.state.setPage('discover');
+    this.state.openTrackForCommunitySwipe(song);
     void this.router?.navigate(['/discover']).catch(() => false);
   }
 
   protected likeAndSaveTrack(song: Song): void {
+    if (song.isDeleted) {
+      this.state.openUnavailableTrackModal(song);
+      return;
+    }
     if (song.trackId === undefined) return;
     this.songService.likeAndSaveSearchTrack(song.trackId).subscribe({
       next: () => {
@@ -356,6 +365,10 @@ export class ExploreComponent implements OnInit {
   }
 
   protected openSongDetails(song: Song): void {
+    if (song.isDeleted) {
+      this.state.openUnavailableTrackModal(song);
+      return;
+    }
     this.state.openTrackDetailsModal(song);
   }
 

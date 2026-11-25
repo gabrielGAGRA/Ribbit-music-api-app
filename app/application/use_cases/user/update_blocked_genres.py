@@ -30,7 +30,7 @@ class UpdateBlockedGenresUseCase:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
         plan = self.plan_repo.find_by_id(user.plan_id)
-        if not plan or not plan.is_paid:
+        if not user.has_premium_access(plan):
             raise PremiumRequiredError("Feature exclusive to Premium subscribers.")
 
         user.update_blocked_genres(blocked_genres)
@@ -53,7 +53,7 @@ class UpdateBlockedGenresUseCase:
             )
 
         plan = self.plan_repo.find_by_id(primary_user.plan_id)
-        if not plan or not plan.allows_dependents:
+        if not primary_user.has_family_access(plan):
             raise PermissionDeniedError("Current plan does not support family members.")
 
         dependent = self.user_repo.find_by_id(dependent_user_id)

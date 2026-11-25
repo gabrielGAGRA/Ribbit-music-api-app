@@ -58,6 +58,7 @@ class ArtistStat:
     superlikes: int
     dislikes: int
     total_positive: int
+    cover_url: str | None = None
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

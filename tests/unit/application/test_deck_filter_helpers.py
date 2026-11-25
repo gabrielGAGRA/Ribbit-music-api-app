@@ -61,6 +61,95 @@ def test_matches_track_filters_all_criteria() -> None:
     assert matches_track_filters(track, artist=["Beatles"]) is False
     assert matches_track_filters(track, country=["Brazil"]) is False
 
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=2,
+                title="Rap",
+                artist="A",
+                duration_seconds=180,
+                genre="hip-hop",
+            ),
+            genre=["Hip Hop"],
+        )
+        is True
+    )
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=3, title="Soul", artist="A", duration_seconds=180, genre="r&b"
+            ),
+            genre=["R&B"],
+        )
+        is True
+    )
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=4,
+                title="Forro",
+                artist="A",
+                duration_seconds=180,
+                genre="forro",
+            ),
+            genre=["Forró"],
+        )
+        is True
+    )
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=5, title="Axe", artist="A", duration_seconds=180, genre="axe"
+            ),
+            genre=["Axé"],
+        )
+        is True
+    )
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=2,
+                title="Rap",
+                artist="A",
+                duration_seconds=180,
+                genre="hip-hop",
+            ),
+            genre=["Hip Hop"],
+        )
+        is True
+    )
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=3, title="Soul", artist="A", duration_seconds=180, genre="r&b"
+            ),
+            genre=["R&B"],
+        )
+        is True
+    )
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=4,
+                title="Forro",
+                artist="A",
+                duration_seconds=180,
+                genre="forro",
+            ),
+            genre=["Forró"],
+        )
+        is True
+    )
+    assert (
+        matches_track_filters(
+            Track(
+                track_id=5, title="Axe", artist="A", duration_seconds=180, genre="axe"
+            ),
+            genre=["Axé"],
+        )
+        is True
+    )
+
 
 def test_extract_dict_filters_and_resolve_deck_filters() -> None:
     extracted = extract_dict_filters(

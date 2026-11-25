@@ -7,12 +7,16 @@ from unittest.mock import MagicMock
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
+import urllib3
 from google.api_core.exceptions import GoogleAPIError
 from google.cloud import storage
 
 from app.application.ports.services.catalog_source import TrackCatalogFilePort
 from app.domain.exceptions import ExternalServiceError
-from app.infrastructure.adapters.gcp.gcs_track_catalog import GCSTrackCatalogAdapter
+from app.infrastructure.adapters.gcp.gcs_track_catalog import (
+    GCSTrackCatalogAdapter,
+    _GCSHTTPAdapter,
+)
 
 
 def _build_test_parquet_bytes() -> bytes:
@@ -162,7 +166,7 @@ def test_write_track_delta_uploads_parquet() -> None:
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -310,7 +314,7 @@ def test_compact_catalog_merges_deltas_deletes_blobs_and_increments_version() ->
     mock_version_blob.download_as_text.return_value = '{"version": 2}'
 
     def blob_side_effect(name: str) -> MagicMock:
-        if name == "Songs/songs_final.parquet":
+        if name == "Songs/tracks.parquet":
             return mock_base_blob
         if name == "Songs/catalog_version.json":
             return mock_version_blob
@@ -321,7 +325,7 @@ def test_compact_catalog_merges_deltas_deletes_blobs_and_increments_version() ->
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -390,7 +394,7 @@ def test_compact_catalog_tolerates_delta_delete_failure() -> None:
     mock_version_blob.download_as_text.return_value = '{"version": 1}'
 
     def blob_side_effect(name: str) -> MagicMock:
-        if name == "Songs/songs_final.parquet":
+        if name == "Songs/tracks.parquet":
             return mock_base_blob
         if name == "Songs/catalog_version.json":
             return mock_version_blob
@@ -401,7 +405,7 @@ def test_compact_catalog_tolerates_delta_delete_failure() -> None:
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -418,7 +422,7 @@ def test_write_track_delta_uploads_parquet_with_genre() -> None:
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -479,7 +483,7 @@ def test_compact_catalog_merges_genre_from_delta() -> None:
     mock_version_blob.download_as_text.return_value = '{"version": 1}'
 
     def blob_side_effect(name: str) -> MagicMock:
-        if name == "Songs/songs_final.parquet":
+        if name == "Songs/tracks.parquet":
             return mock_base_blob
         if name == "Songs/catalog_version.json":
             return mock_version_blob
@@ -490,7 +494,7 @@ def test_compact_catalog_merges_genre_from_delta() -> None:
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -542,7 +546,7 @@ def test_write_fetch_and_compact_track_delta_handles_cover_url() -> None:
     mock_write_blob = MagicMock()
 
     def blob_side_effect(name: str) -> MagicMock:
-        if name == "Songs/songs_final.parquet":
+        if name == "Songs/tracks.parquet":
             return mock_base_blob
         if name == "Songs/catalog_version.json":
             return mock_version_blob
@@ -553,7 +557,7 @@ def test_write_fetch_and_compact_track_delta_handles_cover_url() -> None:
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -651,7 +655,7 @@ def test_compact_catalog_handles_null_and_missing_cover_url_column(
     mock_version_blob.exists.return_value = False
 
     def blob_side_effect(name: str) -> MagicMock:
-        if name == "Songs/songs_final.parquet":
+        if name == "Songs/tracks.parquet":
             return mock_base_blob
         if name == "Songs/catalog_version.json":
             return mock_version_blob
@@ -662,7 +666,7 @@ def test_compact_catalog_handles_null_and_missing_cover_url_column(
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
     new_version = adapter.compact_catalog()
@@ -716,7 +720,7 @@ def test_fetch_and_compact_merge_split_key_deltas_across_blobs() -> None:
     mock_version_blob.exists.return_value = False
 
     def blob_side_effect(name: str) -> MagicMock:
-        if name == "Songs/songs_final.parquet":
+        if name == "Songs/tracks.parquet":
             return mock_base_blob
         if name == "Songs/catalog_version.json":
             return mock_version_blob
@@ -727,7 +731,7 @@ def test_fetch_and_compact_merge_split_key_deltas_across_blobs() -> None:
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -823,7 +827,7 @@ def test_write_track_delta_matches_tracks_schema_and_fetch_tracks_includes_new_t
     mock_delta_upload_blob.upload_from_string.side_effect = upload_delta
 
     def blob_side_effect(name: str) -> MagicMock:
-        if name == "Songs/songs_final.parquet":
+        if name == "Songs/tracks.parquet":
             return mock_base_blob
         return mock_delta_upload_blob
 
@@ -832,7 +836,7 @@ def test_write_track_delta_matches_tracks_schema_and_fetch_tracks_includes_new_t
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
     adapter.write_track_delta(
@@ -857,7 +861,6 @@ def test_write_track_delta_matches_tracks_schema_and_fetch_tracks_includes_new_t
         "spotify_id",
         "title",
         "artist",
-        "album",
         "duration_seconds",
         "genre",
         "country",
@@ -877,7 +880,7 @@ def test_write_track_delta_matches_tracks_schema_and_fetch_tracks_includes_new_t
     tracks = adapter.fetch_tracks()
     new_track = next(t for t in tracks if t.spotify_id == "sp-brand-new")
     assert new_track.title == "Brand New Track"
-    assert new_track.album == "New Album"
+    assert new_track.album is None
     assert new_track.duration_seconds == 242
     assert new_track.genre == "Synthwave"
     assert new_track.country == "Brazil"
@@ -946,7 +949,7 @@ def test_iter_track_batches_respects_max_tracks_and_filters_partial_deltas() -> 
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
         max_tracks=1,
     )
@@ -993,7 +996,7 @@ def test_fetch_tracks_skips_missing_delta_blob_without_dropping_other_deltas() -
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
 
@@ -1058,7 +1061,7 @@ def test_delta_merge_orders_chronologically_and_preserves_known_genre() -> None:
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
     tracks = adapter.fetch_tracks()
@@ -1193,13 +1196,20 @@ def test_compact_catalog_streams_large_string_schema_assigns_track_id_and_applie
 
     adapter = GCSTrackCatalogAdapter(
         bucket_name="music-catalog-bucket",
-        file_path="Songs/songs_final.parquet",
+        file_path="Songs/tracks.parquet",
         storage_client=mock_client,
     )
     new_version = adapter.compact_catalog()
     assert new_version == 2
 
     compacted_bytes = mock_base_blob.upload_from_string.call_args[0][0]
+    assert (
+        pq.ParquetFile(io.BytesIO(compacted_bytes))
+        .metadata.row_group(0)
+        .column(0)
+        .compression
+        == "ZSTD"
+    )
     compacted_table = pq.read_table(io.BytesIO(compacted_bytes))
     assert compacted_table.schema.equals(base_schema)
     rows = {r["spotify_id"]: r for r in compacted_table.to_pylist()}
@@ -1210,3 +1220,56 @@ def test_compact_catalog_streams_large_string_schema_assigns_track_id_and_applie
     assert rows["sp-brand-new"]["track_id"] == 102
     assert rows["sp-brand-new"]["is_deleted"] == 0
     assert rows["sp-brand-new"]["created_at"] == "2026-11-19T12:02:00+00:00"
+
+
+def test_get_client_mounts_http11_adapter_disabling_http2_and_http3(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mock_http = MagicMock()
+    mock_instance = MagicMock(spec=storage.Client)
+    mock_instance._http = mock_http
+    monkeypatch.setattr(storage, "Client", lambda *args, **kwargs: mock_instance)
+
+    adapter = GCSTrackCatalogAdapter(bucket_name="test-bucket")
+    client = adapter._get_client()
+
+    assert client is mock_instance
+    mock_http.mount.assert_called_once()
+    prefix, mounted_adapter = mock_http.mount.call_args[0]
+    assert prefix == "https://"
+    assert isinstance(mounted_adapter, _GCSHTTPAdapter)
+
+    captured_kwargs: dict[str, Any] = {}
+
+    def fake_super_init(
+        self_adapter: _GCSHTTPAdapter,
+        connections: int,
+        maxsize: int,
+        block: bool = False,
+        **pool_kwargs: Any,
+    ) -> None:
+        captured_kwargs.update(pool_kwargs)
+
+    monkeypatch.setattr(_GCSHTTPAdapter.__mro__[1], "init_poolmanager", fake_super_init)
+    mounted_adapter.init_poolmanager(16, 16)
+    http_version = getattr(urllib3, "HttpVersion", None)
+    assert http_version is not None
+    assert captured_kwargs["disabled_svn"] == {http_version.h2, http_version.h3}
+
+
+def test_delete_delta_blobs_deletes_multiple_blobs_and_tolerates_failure() -> None:
+    b1, b2, b3 = MagicMock(), MagicMock(), MagicMock()
+    b1.name = "deltas/1.parquet"
+    b2.name = "deltas/2.parquet"
+    b3.name = "deltas/3.parquet"
+    b2.delete.side_effect = RuntimeError("transient error")
+
+    adapter = GCSTrackCatalogAdapter(
+        bucket_name="test-bucket",
+        storage_client=MagicMock(spec=storage.Client),
+    )
+    adapter._delete_delta_blobs([b1, b2, b3])
+
+    b1.delete.assert_called_once()
+    b2.delete.assert_called_once()
+    b3.delete.assert_called_once()

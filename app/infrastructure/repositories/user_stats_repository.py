@@ -129,7 +129,21 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
                 COALESCE(SUM(CASE WHEN i.action = 'like' THEN 1 ELSE 0 END), 0) AS likes,
                 COALESCE(SUM(CASE WHEN i.action = 'superlike' THEN 1 ELSE 0 END), 0) AS superlikes,
                 COALESCE(SUM(CASE WHEN i.action = 'dislike' THEN 1 ELSE 0 END), 0) AS dislikes,
-                COALESCE(SUM(CASE WHEN i.action IN ('like', 'superlike') THEN 1 ELSE 0 END), 0) AS total_positive
+                COALESCE(SUM(CASE WHEN i.action IN ('like', 'superlike') THEN 1 ELSE 0 END), 0) AS total_positive,
+                (
+                    SELECT t2.cover_url
+                    FROM interactions i2
+                    JOIN tracks t2 ON t2.track_id = i2.track_id
+                    WHERE i2.user_id = ?
+                      AND t2.is_deleted = 0
+                      AND TRIM(t2.artist) = TRIM(t.artist)
+                      AND i2.action IN ('like', 'superlike')
+                      AND t2.cover_url IS NOT NULL
+                      AND TRIM(t2.cover_url) != ''
+                      AND (? IS NULL OR CAST(strftime('%Y', i2.created_at) AS INTEGER) = ?)
+                    ORDER BY i2.created_at ASC, i2.interaction_id ASC
+                    LIMIT 1
+                ) AS cover_url
             FROM interactions i
             JOIN tracks t ON t.track_id = i.track_id
             WHERE i.user_id = ?
@@ -138,10 +152,11 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
               AND TRIM(t.artist) != ''
               AND (? IS NULL OR CAST(strftime('%Y', i.created_at) AS INTEGER) = ?)
             GROUP BY TRIM(t.artist)
+            HAVING total_positive > 0
             ORDER BY total_positive DESC, superlikes DESC, likes DESC, artist ASC
             LIMIT ?
             """,
-            (user_id, year, year, _TOP_RANKING_LIMIT),
+            (user_id, year, year, user_id, year, year, _TOP_RANKING_LIMIT),
         ).fetchall()
         return [
             ArtistStat(
@@ -150,6 +165,7 @@ class SQLiteUserStatsRepository(UserStatsRepositoryPort):
                 superlikes=int(row["superlikes"]),
                 dislikes=int(row["dislikes"]),
                 total_positive=int(row["total_positive"]),
+                cover_url=str(row["cover_url"]) if row["cover_url"] else None,
             )
             for row in rows
         ]

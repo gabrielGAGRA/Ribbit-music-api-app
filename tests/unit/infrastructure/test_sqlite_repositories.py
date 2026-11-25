@@ -787,14 +787,18 @@ def test_track_repository_update_and_comprehensive_filters(
     assert len(active_excluding_t1) == 1
     assert active_excluding_t1[0].track_id == t2.track_id
 
-    # find_by_filters: query, artist, album, genre, year, pagination, and deleted exclusion
+    # find_by_filters: query, artist, genre, year, pagination, and deleted exclusion
     assert len(track_repo.find_by_filters()) == 2
     assert len(track_repo.find_by_filters(query="heaven")) == 1
-    assert len(track_repo.find_by_filters(query="damn")) == 1
-    assert len(track_repo.find_by_filters(album="zeppelin iv")) == 1
+    assert len(track_repo.find_by_filters(artist="kendrick")) == 1
     assert len(track_repo.find_by_filters(genre="rock")) == 1
     assert len(track_repo.find_by_filters(year=2017)) == 1
     assert len(track_repo.find_by_filters(year=1982)) == 0  # t3 is deleted
+    deleted_found = track_repo.find_by_filters(year=1982, include_deleted=True)
+    assert len(deleted_found) == 1
+    assert deleted_found[0].track_id == t3.track_id
+    assert deleted_found[0].is_deleted is True
+    assert all(t.track_id != t3.track_id for t in track_repo.list_active(limit=10))
     assert len(track_repo.find_by_filters(limit=1, offset=1)) == 1
 
 
@@ -1250,3 +1254,181 @@ def test_track_repository_admin_catalog_metrics_and_blocked_metrics(
     assert len(blocked) == 1
     assert blocked[0].track_id == t3.track_id
     assert blocked[0].dislikes_count == 1
+
+
+def test_track_repository_genre_dictionary_filters_and_sampling(
+    conn: sqlite3.Connection,
+) -> None:
+    track_repo = SQLiteTrackRepository(conn)
+    samples = [
+        ("Hip Hop Track", "hip-hop"),
+        ("RnB Track", "r&b"),
+        ("Forro Track", "forro"),
+        ("Axe Track", "axe"),
+        ("Tropical Track", "música tropical"),
+        ("Rock Track", "rock"),
+    ]
+    for idx, (title, genre) in enumerate(samples, start=1):
+        track_repo.save(
+            Track(
+                title=title,
+                artist=f"Artist {idx}",
+                duration_seconds=180,
+                genre=genre,
+            )
+        )
+
+    assert [t.title for t in track_repo.find_by_filters(genre="Hip Hop")] == [
+        "Hip Hop Track"
+    ]
+    assert [t.title for t in track_repo.find_by_filters(genre="R&B")] == ["RnB Track"]
+    assert [t.title for t in track_repo.find_by_filters(genre="Forró")] == [
+        "Forro Track"
+    ]
+    assert [t.title for t in track_repo.find_by_filters(genre="Axé")] == ["Axe Track"]
+    assert [t.title for t in track_repo.find_by_filters(genre="Latin")] == [
+        "Tropical Track"
+    ]
+
+    # Exercise preferred_genres + excluded_genres sampling path (> limit * 2 rows span)
+    for extra in range(10):
+        track_repo.save(
+            Track(
+                title=f"Filler {extra}",
+                artist="Filler",
+                duration_seconds=180,
+                genre="pop",
+            )
+        )
+
+    active = track_repo.list_active(
+        limit=4,
+        preferred_genres=("Hip Hop",),
+        excluded_genres=("R&B", "Latin"),
+    )
+    active_genres = {t.genre for t in active}
+    assert "r&b" not in active_genres
+    assert "música tropical" not in active_genres
+    assert "hip-hop" in active_genres
+
+
+def test_list_active_random_sampling_handles_sparse_ids_and_clustered_genres(
+    conn: sqlite3.Connection,
+) -> None:
+    track_repo = SQLiteTrackRepository(conn)
+    for idx in range(1, 121):
+        genre = "forro" if 40 <= idx <= 100 else "pop"
+        track_repo.save(
+            Track(
+                title=f"Track {idx}",
+                artist=f"Artist {idx}",
+                duration_seconds=180,
+                genre=genre,
+            )
+        )
+    conn.execute(
+        """
+        INSERT INTO tracks (
+            track_id, title, artist, duration_seconds, genre, explicit, is_deleted, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            10_000_000,
+            "Outlier Pop",
+            "Artist Outlier",
+            180,
+            "pop",
+            0,
+            0,
+            datetime.now(UTC).isoformat(),
+        ),
+    )
+    conn.commit()
+
+    lowest_five_forro = [40, 41, 42, 43, 44]
+    sampled_forro_batches: list[list[int]] = []
+    for _ in range(6):
+        tracks = track_repo.list_active(limit=10, preferred_genres=("Forró",))
+        assert len(tracks) == 10
+        ids = [t.track_id for t in tracks if t.track_id is not None]
+        assert len(set(ids)) == 10
+        forro_ids = [
+            t.track_id for t in tracks if t.genre == "forro" and t.track_id is not None
+        ]
+        assert len(forro_ids) >= 5
+        sampled_forro_batches.append(forro_ids[:5])
+
+    assert any(batch != lowest_five_forro for batch in sampled_forro_batches)
+    all_seen_forro = {tid for batch in sampled_forro_batches for tid in batch}
+    assert any(tid > 55 for tid in all_seen_forro)
+
+
+def test_list_active_filtered_random_sampling_with_country_genre_duration_and_preferences(
+    conn: sqlite3.Connection,
+) -> None:
+    track_repo = SQLiteTrackRepository(conn)
+    for idx in range(1, 161):
+        track_repo.save(
+            Track(
+                title=f"AA Brasil {idx:03d}",
+                artist=f"Artista BR {idx:03d}",
+                duration_seconds=180,
+                genre="rock" if idx % 2 == 0 else "pop",
+                country="BR",
+            )
+        )
+    for idx in range(161, 221):
+        track_repo.save(
+            Track(
+                title=f"US Track {idx:03d}",
+                artist=f"US Artist {idx:03d}",
+                duration_seconds=180,
+                genre="rock",
+                country="US",
+            )
+        )
+    for idx in range(221, 241):
+        track_repo.save(
+            Track(
+                title=f"Long BR {idx:03d}",
+                artist="Artista Longo",
+                duration_seconds=360,
+                genre="rock",
+                country="BR",
+            )
+        )
+
+    excluded = [1, 2, 3]
+    lowest_twenty_br = list(range(4, 24))
+    seen_batches: list[list[int]] = []
+    seen_genres: set[str] = set()
+    for _ in range(6):
+        tracks = track_repo.list_active(
+            limit=20,
+            country=["Brasil"],
+            preferred_genres=("Rock",),
+            excluded_ids=excluded,
+            max_duration_seconds=240,
+        )
+        assert len(tracks) == 20
+        batch_ids = [t.track_id for t in tracks if t.track_id is not None]
+        assert len(set(batch_ids)) == 20
+        assert all(t.country == "BR" for t in tracks)
+        assert all(t.duration_seconds <= 240 for t in tracks)
+        assert set(batch_ids).isdisjoint(excluded)
+        assert sum(1 for t in tracks if t.genre == "rock") >= 10
+        seen_genres.update(t.genre for t in tracks)
+        seen_batches.append(batch_ids)
+
+    assert any(batch != lowest_twenty_br for batch in seen_batches)
+    assert any(tid > 60 for batch in seen_batches for tid in batch)
+    assert "pop" in seen_genres
+    assert "rock" in seen_genres
+    assert (
+        track_repo.list_active(
+            limit=20,
+            country=["Brasil"],
+            genre=["NonexistentGenre"],
+        )
+        == []
+    )

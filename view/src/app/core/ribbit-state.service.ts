@@ -30,6 +30,7 @@ import {
 import { mapApiActionToDecision, mapJamStateDto, mapTrackDtoToSong } from './api-mappers';
 import { AudioPlayerService } from './audio-player.service';
 import { AuthSessionNotifier } from './auth-session.notifier';
+import { matchesGenreFilter } from './genre-catalog';
 import {
   clearAuthStorage,
   readAuthToken,
@@ -256,6 +257,15 @@ export class RibbitStateService implements OnDestroy {
   });
   readonly currentPlanId = signal<number>(this.initialUser?.plan_id ?? 1);
   readonly currentPlan = signal<string>('Free');
+  readonly isAdmin = signal<boolean>(Boolean(this.initialUser?.is_admin));
+  readonly hasPaidAccess = computed<boolean>(
+    () => this.isAdmin() || this.currentPlan().toLowerCase() !== 'free',
+  );
+  readonly hasFamilyAccess = computed<boolean>(() => {
+    if (this.isAdmin()) return true;
+    const planName = this.currentPlan().toLowerCase();
+    return planName.includes('famíl') || planName.includes('famil');
+  });
   readonly spotifyId = signal<string | null>(this.initialUser?.spotify_id ?? null);
   readonly spotifyPremium = signal<boolean>(Boolean(this.initialUser?.spotify_premium));
   readonly preferredTheme = signal<'light' | 'dark'>(
@@ -284,6 +294,7 @@ export class RibbitStateService implements OnDestroy {
   readonly pendingCheckoutPlan = signal<SubscriptionPlan | null>(null);
 
   readonly selectedDetailsSong = signal<Song | null>(null);
+  readonly pendingCommunityReturnSong = signal<Song | null>(null);
   readonly activeTrackReviews = signal<readonly CommunityReview[]>([]);
   readonly searchQuery = signal<string>('');
   readonly searchFilterGenre = signal<string>('Todos');
@@ -388,6 +399,9 @@ export class RibbitStateService implements OnDestroy {
 
   /** Updates the currently active navigation page identifier. */
   setPage(page: string): void {
+    if (page !== 'discover') {
+      this.pendingCommunityReturnSong.set(null);
+    }
     this.activePage.set(page);
   }
 
@@ -412,10 +426,46 @@ export class RibbitStateService implements OnDestroy {
     }
   }
 
+  /** Opens the unavailable-track informational modal when a removed catalog track is opened. */
+  openUnavailableTrackModal(song: Song): void {
+    this.selectedDetailsSong.set(song);
+    this.setModal('track-unavailable');
+  }
+
   /** Opens the track details & reviews modal for a specific song. */
   openTrackDetailsModal(song: Song): void {
+    if (song.isDeleted) {
+      this.openUnavailableTrackModal(song);
+      return;
+    }
     this.selectedDetailsSong.set(song);
     this.setModal('details');
+  }
+
+  /** Opens a community track in Discovery swipe mode and remembers it for return to its reviews. */
+  openTrackForCommunitySwipe(song: Song): boolean {
+    if (song.isDeleted) {
+      this.openUnavailableTrackModal(song);
+      return false;
+    }
+    this.pendingCommunityReturnSong.set(song);
+    this.discoverySong.set(song);
+    this.audioPlayer.loadTrack(song.previewUrl);
+    this.setPage('discover');
+    return true;
+  }
+
+  /** Consumes and returns the originating community song if the swiped card matches it. */
+  consumeCommunityReturnSong(swipedSong: Song): Song | null {
+    const pending = this.pendingCommunityReturnSong();
+    this.pendingCommunityReturnSong.set(null);
+    if (!pending) return null;
+    if (pending.trackId !== undefined && swipedSong.trackId !== undefined) {
+      return pending.trackId === swipedSong.trackId ? pending : null;
+    }
+    return pending.title === swipedSong.title && pending.artist === swipedSong.artist
+      ? pending
+      : null;
   }
 
   /** Switches between authenticated shell, login, registration, and forgot-password views. */
@@ -598,7 +648,7 @@ export class RibbitStateService implements OnDestroy {
   }
 
   /** Fetches the next candidate song for the Discovery deck (using prefetched queue when ready). */
-  loadNextDiscoveryTrack(resetQueue = false): void {
+  loadNextDiscoveryTrack(resetQueue = false, autoPlay = false): void {
     if (!readAuthToken()) return;
     if (resetQueue) {
       this.discoveryQueue.length = 0;
@@ -608,6 +658,9 @@ export class RibbitStateService implements OnDestroy {
       this.discoverySong.set(nextSong);
       this.isDeckEmpty.set(false);
       this.audioPlayer.loadTrack(nextSong.previewUrl);
+      if (autoPlay) {
+        this.audioPlayer.play();
+      }
       setTimeout(() => {
         this.refillDiscoveryQueue();
       }, 0);
@@ -620,6 +673,9 @@ export class RibbitStateService implements OnDestroy {
           this.isDeckEmpty.set(false);
           this.preloadCoverImage(song.image);
           this.audioPlayer.loadTrack(song.previewUrl);
+          if (autoPlay) {
+            this.audioPlayer.play();
+          }
           setTimeout(() => {
             this.refillDiscoveryQueue();
           }, 0);
@@ -752,6 +808,10 @@ export class RibbitStateService implements OnDestroy {
 
   /** Opens the mock payment checkout modal for paid plans or downgrades to Free. */
   initiatePlanSelection(plan: SubscriptionPlan): void {
+    if (this.isAdmin()) {
+      this.notify('Como Administrador, você já tem acesso gratuito completo ao Plano Família.');
+      return;
+    }
     if (plan.name === this.currentPlan()) {
       this.notify(`Você já está no plano ${plan.displayName}.`);
       return;
@@ -864,7 +924,7 @@ export class RibbitStateService implements OnDestroy {
   }
 
   /** Records a swipe decision on /api/discovery/interact and advances to the next track. */
-  decide(kind: DecisionKind): void {
+  decide(kind: DecisionKind, autoPlayNext = true): void {
     const song = this.currentSong();
     const idx = this.currentIndex();
     const nextHistory: readonly Decision[] = [
@@ -890,13 +950,13 @@ export class RibbitStateService implements OnDestroy {
       const hadQueued = this.discoveryQueue.length > 0;
       this.isLoadingDiscovery.set(true);
       if (hadQueued) {
-        this.loadNextDiscoveryTrack();
+        this.loadNextDiscoveryTrack(false, autoPlayNext);
       }
       this.songService.recordSwipe(song.trackId, kind).subscribe({
         next: () => {
           this.isLoadingDiscovery.set(false);
           if (!hadQueued) {
-            this.loadNextDiscoveryTrack();
+            this.loadNextDiscoveryTrack(false, autoPlayNext);
           } else {
             this.refillDiscoveryQueue();
           }
@@ -1632,6 +1692,7 @@ export class RibbitStateService implements OnDestroy {
     this.userName.set(user.display_name);
     this.userAge.set(user.age ?? null);
     this.currentPlanId.set(user.plan_id);
+    this.isAdmin.set(Boolean(user.is_admin));
     this.spotifyId.set(user.spotify_id ?? null);
     this.spotifyPremium.set(Boolean(user.spotify_premium));
     this.applyUserPreferencesFromDto(user);
@@ -1721,7 +1782,10 @@ export class RibbitStateService implements OnDestroy {
     const list = this.songs();
     const blocked = this.blockedGenres();
     const nextIdx = list.findIndex(
-      (s, i) => i > idx && !blocked.includes(s.genre) && !nextHistory.some((h) => h.index === i),
+      (s, i) =>
+        i > idx &&
+        !blocked.some((b) => matchesGenreFilter(s.genre, b)) &&
+        !nextHistory.some((h) => h.index === i),
     );
     if (nextIdx < 0) {
       this.isDeckEmpty.set(true);
@@ -1869,13 +1933,13 @@ export class RibbitStateService implements OnDestroy {
   private findNextJamFallbackSong(jamDeck: readonly Song[]): Song | null {
     const jam = this.jamState();
     const excludedIds = this.buildJamExcludedTrackIds(jam, jamDeck);
-    const blockedGenres = new Set(this.blockedGenres().map((g) => g.trim().toLowerCase()));
+    const blocked = this.blockedGenres();
     const requireTrackId = jam.jamId !== undefined && Boolean(readAuthToken());
     const seenKeys = this.jamSeenFallbackKeys();
 
     return (
       this.songs().find((song) => {
-        if (blockedGenres.has(song.genre.trim().toLowerCase())) {
+        if (blocked.some((b) => matchesGenreFilter(song.genre, b))) {
           return false;
         }
         if (song.trackId !== undefined) {
@@ -2004,6 +2068,7 @@ export class RibbitStateService implements OnDestroy {
     this.recentAccessTimestamps.clear();
     this.playlists.set([]);
     this.activeTrackReviews.set([]);
+    this.pendingCommunityReturnSong.set(null);
     this.discoveryQueue.length = 0;
     this.discoverySong.set(null);
     this.swipeUndoStack.set([]);
@@ -2017,6 +2082,7 @@ export class RibbitStateService implements OnDestroy {
     this.userAge.set(null);
     this.currentPlan.set('Free');
     this.currentPlanId.set(1);
+    this.isAdmin.set(false);
     this.spotifyId.set(null);
     this.blockedGenres.set([]);
     this.blockedArtists.set([]);
