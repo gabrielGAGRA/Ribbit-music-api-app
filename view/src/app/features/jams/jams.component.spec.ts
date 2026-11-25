@@ -118,11 +118,11 @@ describe('JamsComponent', () => {
     expect(component['jamSuperlikesCount']()).toBe(1);
   });
 
-  it('should allow vertical scroll on jam swipe card and stack join form on mobile', () => {
+  it('should disable browser touch-action on jam swipe card and stack join form on mobile', () => {
     const globalStyles = readFileSync(resolve(__dirname, '../../../styles.css'), 'utf8');
     const componentStyles = readFileSync(resolve(__dirname, './jams.component.css'), 'utf8');
 
-    expect(componentStyles).toMatch(/\.jam-swipe-card\s*\{[^}]*touch-action:\s*pan-y/);
+    expect(componentStyles).toMatch(/\.jam-swipe-card\s*\{[^}]*touch-action:\s*none/);
     expect(globalStyles).toMatch(
       /@media\s*\(max-width:\s*768px\)[\s\S]*\.join-panel form\s*\{[^}]*flex-direction:\s*column/,
     );
@@ -269,7 +269,7 @@ describe('JamsComponent', () => {
     state.jamDeckLoaded.set(true);
 
     expect(component.currentJamDeckSong()?.trackId).toBe(101);
-    component.decideJamCard('reject');
+    component['decideJamCard']('reject');
     expect(component.jamDeckCursor()).toBe(1);
 
     const recreated = TestBed.runInInjectionContext(() => new JamsComponent());
@@ -296,11 +296,11 @@ describe('JamsComponent', () => {
     state.jamDeckLoaded.set(true);
 
     expect(component.currentJamDeckSong()?.trackId).toBe(101);
-    component.decideJamCard('reject');
+    component['decideJamCard']('reject');
 
     // Moves to unseen catalog track outside the base playlist rather than wrapping to 101
     expect(component.currentJamDeckSong()?.trackId).toBe(201);
-    component.decideJamCard('reject');
+    component['decideJamCard']('reject');
 
     // Once all tracks are seen, stops cleanly instead of repeating
     expect(component.currentJamDeckSong()).toBeNull();
@@ -313,7 +313,7 @@ describe('JamsComponent', () => {
     state.spotifyPremium.set(true);
 
     // Join Jam 70 for the first time
-    component.joinJam('ROOM-70');
+    component['joinJam']('ROOM-70');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 70,
       host_user_id: 7,
@@ -369,11 +369,11 @@ describe('JamsComponent', () => {
     });
 
     // Reject Track 11 (only saved locally because no backend reject endpoint exists)
-    component.decideJamCard('reject');
+    component['decideJamCard']('reject');
     expect(component.currentJamDeckSong()?.trackId).toBe(12);
 
     // Rejoin Jam 70 -> must pass cursor_id=11 to resume from Track 12
-    component.joinJam('ROOM-70');
+    component['joinJam']('ROOM-70');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 70,
       host_user_id: 7,
@@ -424,7 +424,7 @@ describe('JamsComponent', () => {
     expect(component.currentJamDeckSong()?.trackId).toBe(12);
 
     // Joining a different Jam (71) starts without cursor_id
-    component.joinJam('ROOM-71');
+    component['joinJam']('ROOM-71');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 71,
       host_user_id: 7,
@@ -490,8 +490,8 @@ describe('JamsComponent', () => {
     state.jamDeckSongs.set([makeSong(1, 'S1')]);
     state.jamDeckNextCursor.set(1);
 
-    component.fetchMoreJamDeck();
-    component.fetchMoreJamDeck();
+    component['fetchMoreJamDeck']();
+    component['fetchMoreJamDeck']();
 
     const deckReqs = httpMock.match('/api/jams/80/deck?limit=30&cursor_id=1');
     expect(deckReqs).toHaveLength(1);
@@ -524,14 +524,14 @@ describe('JamsComponent', () => {
     state.jamDeckSongs.set([makeSong(1, 'S1')]);
     state.jamDeckNextCursor.set(1);
 
-    component.fetchMoreJamDeck();
+    component['fetchMoreJamDeck']();
     const deckReq = httpMock.expectOne('/api/jams/81/deck?limit=30&cursor_id=1');
     deckReq.flush({ detail: 'Internal error' }, { status: 500, statusText: 'Server Error' });
 
     expect(state.jamDeckLoading()).toBe(false);
     expect(state.jamDeckNextCursor()).toBeNull();
 
-    component.decideJamCard('reject');
+    component['decideJamCard']('reject');
     expect(component.currentJamDeckSong()?.trackId).toBe(2);
   });
 
@@ -541,7 +541,7 @@ describe('JamsComponent', () => {
     state.spotifyId.set('spot_7');
     state.spotifyPremium.set(true);
 
-    component.joinJam('OLD-70');
+    component['joinJam']('OLD-70');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 70,
       host_user_id: 7,
@@ -576,7 +576,7 @@ describe('JamsComponent', () => {
     });
 
     // Switch to Jam 71 before Jam 70's deck responds
-    component.joinJam('NEW-71');
+    component['joinJam']('NEW-71');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 71,
       host_user_id: 7,
@@ -640,8 +640,8 @@ describe('JamsComponent', () => {
     });
     state.jamDeckSongs.set([makeSong(55, 'Fail Track'), makeSong(56, 'Next Track')]);
 
-    component.decideJamCard('superlike');
-    expect(component.jamSuperlikesCount()).toBe(1);
+    component['decideJamCard']('superlike');
+    expect(component['jamSuperlikesCount']()).toBe(1);
     expect(component.jamDeckCursor()).toBe(1);
 
     const voteReq = httpMock.expectOne('/api/jams/82/deck-vote');
@@ -650,7 +650,7 @@ describe('JamsComponent', () => {
       { status: 400, statusText: 'Bad Request' },
     );
 
-    expect(component.jamSuperlikesCount()).toBe(0);
+    expect(component['jamSuperlikesCount']()).toBe(0);
     expect(component.jamDeckCursor()).toBe(0);
     expect(component.currentJamDeckSong()?.trackId).toBe(55);
     expect(state.jamSeenTrackIds().has(55)).toBe(false);
@@ -707,10 +707,10 @@ describe('JamsComponent', () => {
       makeSong(57, 'Third Song'),
     ]);
 
-    component.decideJamCard('superlike');
+    component['decideJamCard']('superlike');
     const vote55Req = httpMock.expectOne('/api/jams/84/deck-vote');
 
-    component.decideJamCard('reject');
+    component['decideJamCard']('reject');
     const savedBeforeFailure = JSON.parse(localStorage.getItem('ribbit:jam_deck:7:84') ?? '{}');
     expect(savedBeforeFailure.seenTrackIds).toEqual([56]);
     expect(savedBeforeFailure.cursorTrackId).toBeUndefined();
@@ -720,13 +720,13 @@ describe('JamsComponent', () => {
       { status: 400, statusText: 'Bad Request' },
     );
 
-    expect(component.jamSuperlikesCount()).toBe(0);
+    expect(component['jamSuperlikesCount']()).toBe(0);
     expect(component.currentJamDeckSong()?.trackId).toBe(55);
     expect(state.jamSeenTrackIds().has(55)).toBe(false);
     expect(state.jamSeenTrackIds().has(56)).toBe(true);
 
     // Retry with like on 55 -> advances cleanly past already-rejected 56 to 57
-    component.decideJamCard('like');
+    component['decideJamCard']('like');
     httpMock.expectOne('/api/jams/84/deck-vote').flush({
       jam_queue_id: 1,
       jam_id: 84,
@@ -763,7 +763,7 @@ describe('JamsComponent', () => {
     state.spotifyId.set('spot_7');
     state.spotifyPremium.set(true);
 
-    component.joinJam('POLL-85');
+    component['joinJam']('POLL-85');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 85,
       host_user_id: 7,
@@ -788,8 +788,8 @@ describe('JamsComponent', () => {
     });
     const initialStateReq = httpMock.expectOne('/api/jams/85/state');
 
-    component.decideJamCard('superlike');
-    expect(component.jamSuperlikesCount()).toBe(1);
+    component['decideJamCard']('superlike');
+    expect(component['jamSuperlikesCount']()).toBe(1);
     const voteReq = httpMock.expectOne('/api/jams/85/deck-vote');
 
     // Stale poll returns superlikes_used: 0 while superlike request is in flight
@@ -811,11 +811,11 @@ describe('JamsComponent', () => {
       queue: [],
       skip_votes: 0,
     });
-    expect(component.jamSuperlikesCount()).toBe(1);
+    expect(component['jamSuperlikesCount']()).toBe(1);
 
     // Vote fails -> pending count clears and superlikesCount rolls back to 0
     voteReq.flush({ detail: 'Limit reached' }, { status: 400, statusText: 'Bad Request' });
-    expect(component.jamSuperlikesCount()).toBe(0);
+    expect(component['jamSuperlikesCount']()).toBe(0);
   });
 
   it('does not wipe new Jam or bleed stale vote responses when host closes and immediately joins another Jam', () => {
@@ -837,14 +837,14 @@ describe('JamsComponent', () => {
     });
     state.jamDeckSongs.set([makeSong(301, 'Old Song')]);
 
-    component.decideJamCard('like');
+    component['decideJamCard']('like');
     const oldVoteReq = httpMock.expectOne('/api/jams/90/deck-vote');
 
-    component.leaveJam();
+    component['leaveJam']();
     const closeReq = httpMock.expectOne('/api/jams/90/close');
     expect(state.jamState().active).toBe(false);
 
-    component.joinJam('NEW-91');
+    component['joinJam']('NEW-91');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 91,
       host_user_id: 7,
@@ -900,7 +900,7 @@ describe('JamsComponent', () => {
     state.spotifyId.set('spot_7');
     state.spotifyPremium.set(true);
 
-    component.joinJam('ORD-92');
+    component['joinJam']('ORD-92');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 92,
       host_user_id: 7,
@@ -944,8 +944,8 @@ describe('JamsComponent', () => {
     });
 
     // Two concurrent votes in flight
-    component.decideJamCard('like'); // 55
-    component.decideJamCard('like'); // 56
+    component['decideJamCard']('like'); // 55
+    component['decideJamCard']('like'); // 56
     const voteReqs = httpMock.match('/api/jams/92/deck-vote');
     expect(voteReqs).toHaveLength(2);
 
@@ -976,7 +976,7 @@ describe('JamsComponent', () => {
     expect(saved.seenTrackIds).toEqual([56]);
 
     // Rejoining does not pass cursor_id=56 and still surfaces unvoted 55
-    component.joinJam('ORD-92');
+    component['joinJam']('ORD-92');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 92,
       host_user_id: 7,
@@ -1027,7 +1027,7 @@ describe('JamsComponent', () => {
     state.spotifyId.set('spot_7');
     state.spotifyPremium.set(true);
 
-    component.joinJam('CAP-93');
+    component['joinJam']('CAP-93');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 93,
       host_user_id: 7,
@@ -1048,8 +1048,8 @@ describe('JamsComponent', () => {
     });
     const pollReq = httpMock.expectOne('/api/jams/93/state');
 
-    component.decideJamCard('superlike');
-    expect(component.jamSuperlikesCount()).toBe(5);
+    component['decideJamCard']('superlike');
+    expect(component['jamSuperlikesCount']()).toBe(5);
     const voteReq = httpMock.expectOne('/api/jams/93/deck-vote');
 
     // Another user exhausted the 5th superlike on the server
@@ -1071,13 +1071,13 @@ describe('JamsComponent', () => {
       queue: [],
       skip_votes: 0,
     });
-    expect(component.jamSuperlikesCount()).toBe(5);
+    expect(component['jamSuperlikesCount']()).toBe(5);
 
     voteReq.flush(
       { detail: 'Superlike limit reached' },
       { status: 400, statusText: 'Bad Request' },
     );
-    expect(component.jamSuperlikesCount()).toBe(5);
+    expect(component['jamSuperlikesCount']()).toBe(5);
   });
 
   it('cancels stale pre-vote state poll when superlike succeeds so quota is not clobbered', () => {
@@ -1086,7 +1086,7 @@ describe('JamsComponent', () => {
     state.spotifyId.set('spot_7');
     state.spotifyPremium.set(true);
 
-    component.joinJam('SEQ-94');
+    component['joinJam']('SEQ-94');
     httpMock.expectOne('/api/jams/join').flush({
       jam_id: 94,
       host_user_id: 7,
@@ -1107,7 +1107,7 @@ describe('JamsComponent', () => {
     });
     const stalePollReq = httpMock.expectOne('/api/jams/94/state');
 
-    component.decideJamCard('superlike');
+    component['decideJamCard']('superlike');
     const voteReq = httpMock.expectOne('/api/jams/94/deck-vote');
     voteReq.flush({ jam_queue_id: 1, jam_id: 94, track_id: 10, vote_points: 2 });
 
@@ -1131,6 +1131,48 @@ describe('JamsComponent', () => {
       queue: [],
       skip_votes: 0,
     });
-    expect(component.jamSuperlikesCount()).toBe(1);
+    expect(component['jamSuperlikesCount']()).toBe(1);
+  });
+
+  it('switches jam views, handles drag lifecycle, and likes/loves current track', () => {
+    component['selectJamView']('room');
+    expect(component['jamView']()).toBe('room');
+    component['selectJamView']('swipe');
+    expect(component['jamView']()).toBe('swipe');
+
+    component['cancelJamCardDrag']();
+    component['finishJamCardDrag']();
+
+    component['likeCurrent']();
+    const song = {
+      trackId: 99,
+      title: 'Jam Track',
+      artist: 'DJ',
+      genre: 'House',
+      time: '3:00',
+      image: '',
+      album: 'Club',
+      year: '2024',
+      match: 90,
+    };
+    component['loveTrack'](song);
+    expect(state.toast()).toBeTruthy();
+
+    component['startJamCardDrag']({
+      clientX: 10,
+      clientY: 20,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    component['moveJamCardDrag']({ clientX: 80, clientY: 25 } as unknown as PointerEvent);
+    component['finishJamCardDrag']();
+    component['cancelJamCardDrag']();
+
+    state.spotifyId.set('sp-1');
+    state.spotifyPremium.set(true);
+    component['openJamModal']();
+    expect(state.activeModal()).toBe('jam');
+    state.setModal(null);
   });
 });

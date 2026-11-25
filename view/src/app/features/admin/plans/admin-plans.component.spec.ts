@@ -91,4 +91,23 @@ describe('AdminPlansComponent', () => {
     expect(component['editingPlanId']()).toBeNull();
     expect(state.plans().find((plan) => plan.planId === 3)?.name).toBe('Família Plus');
   });
+
+  it('updates plan draft inputs, cancels editing, and handles invalid numeric fields', () => {
+    const component = TestBed.runInInjectionContext(() => new AdminPlansComponent());
+    const input = document.createElement('input');
+
+    input.value = 'Studio';
+    component['updateNameDraft']({ target: input } as unknown as Event);
+    input.value = '-10';
+    component['updatePriceDraft']({ target: input } as unknown as Event);
+    input.value = '0';
+    component['updateMaxProfilesDraft']({ target: input } as unknown as Event);
+
+    component['savePlan'](new Event('submit'), 1);
+    expect(component['formError']()).toContain('não encontrado');
+
+    component['cancelEditing']();
+    expect(component['editingPlanId']()).toBeNull();
+    expect(component['formError']()).toBe('');
+  });
 });

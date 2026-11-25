@@ -761,6 +761,31 @@ describe('AuthComponent', () => {
     expect(component['errorMessage']()).toBe('');
     expect(component['infoMessage']()).toContain('Complete seu cadastro');
   });
+
+  it('updates auth drafts, navigates forgot-password/backToLogin, and opens admin console', () => {
+    const input = document.createElement('input');
+    input.value = 'Ana';
+    component['updateNameDraft']({ target: input } as unknown as Event);
+    input.value = 'ana@ribbit.app';
+    component['updateEmailDraft']({ target: input } as unknown as Event);
+    input.value = '2001-01-01';
+    component['updateBirthDateDraft']({ target: input } as unknown as Event);
+    input.value = 'pass123';
+    component['updatePasswordDraft']({ target: input } as unknown as Event);
+    component['updateConfirmPasswordDraft']({ target: input } as unknown as Event);
+
+    const sel = document.createElement('select');
+    sel.innerHTML = '<option value="Pro">Pro</option>';
+    sel.value = 'Pro';
+    component['selectPlanOption']({ target: sel } as unknown as Event);
+
+    component['openForgotPassword']();
+    expect(component['authView']()).toBe('forgot-password');
+    component['backToLogin']();
+    expect(component['authView']()).toBe('login');
+
+    component['openAdminConsole']();
+  });
 });
 
 describe('AuthComponent DOM', () => {

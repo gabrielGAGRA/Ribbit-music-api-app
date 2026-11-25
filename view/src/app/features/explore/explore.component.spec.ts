@@ -167,7 +167,7 @@ describe('ExploreComponent', () => {
     component['query'].set('Bloom');
 
     component['submitSearch'](new Event('submit'));
-    expect(component.isSearching()).toBe(true);
+    expect(component['isSearching']()).toBe(true);
 
     const req = httpMock.expectOne(
       (r) =>
@@ -186,7 +186,7 @@ describe('ExploreComponent', () => {
       },
     ]);
 
-    expect(component.isSearching()).toBe(false);
+    expect(component['isSearching']()).toBe(false);
     expect(component['filteredSongs']().length).toBe(1);
     expect(component['filteredSongs']()[0]?.title).toBe('Bloom');
   });
@@ -299,5 +299,45 @@ describe('ExploreComponent', () => {
     component['likeAndSaveTrack'](deletedSong);
     expect(state.activeModal()).toBe('track-unavailable');
     httpMock.expectNone('/api/reviews/999/like-and-save');
+  });
+
+  it('clears query and rating filters, updates sort options, and opens search filters', () => {
+    const state = TestBed.inject(RibbitStateService);
+    const input = document.createElement('input');
+    input.value = 'indie';
+    component['updateSearchQuery']({ target: input } as unknown as Event);
+    expect(state.searchQuery()).toBe('indie');
+
+    component['clearQuery']();
+    expect(state.searchQuery()).toBe('');
+
+    const select = document.createElement('select');
+    select.innerHTML =
+      '<option value="rating">rating</option><option value="recent">recent</option>';
+    select.value = 'rating';
+    component['updateSearchSort']({ target: select } as unknown as Event);
+    component['updateReviewSort']({ target: select } as unknown as Event);
+
+    component['clearMinRatingFilter']();
+    component['openSearchFilters']();
+    expect(state.activeModal()).toBe('search-filters');
+
+    const ratedSong: Song = {
+      trackId: 12,
+      title: 'Rated',
+      artist: 'Artist',
+      genre: 'Pop',
+      time: '3:00',
+      image: '',
+      album: 'Album',
+      year: '2024',
+      match: 90,
+      averageRating: 4.5,
+      reviewCount: 2,
+    };
+    expect(component['hasTrackRating'](ratedSong)).toBe(true);
+    expect(component['getVisibleRating'](ratedSong)).toBe('4.5');
+    component['fallbackReviewSong'](0);
+    component['submitSearch'](new Event('submit'));
   });
 });

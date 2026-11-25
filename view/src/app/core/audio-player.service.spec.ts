@@ -134,7 +134,9 @@ describe('AudioPlayerService', () => {
       player.pause();
       expect(player.isPlaying()).toBe(false);
 
-      rejectPlay(new DOMException('The play() request was interrupted by a call to pause()', 'AbortError'));
+      rejectPlay(
+        new DOMException('The play() request was interrupted by a call to pause()', 'AbortError'),
+      );
       await Promise.resolve();
 
       expect(player.isPlaying()).toBe(false);

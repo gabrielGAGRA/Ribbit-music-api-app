@@ -178,4 +178,45 @@ describe('ProfileComponent', () => {
     expect(template).toContain('Histórico');
     expect(template).toContain('Ouvido');
   });
+
+  it('navigates across profile subpages, plays songs, opens modals, and logs out', () => {
+    const song = {
+      trackId: 5,
+      title: 'Neon',
+      artist: 'Lumen',
+      genre: 'Synth',
+      time: '3:10',
+      image: '',
+      album: 'Glow',
+      year: '2024',
+      match: 91,
+      previewUrl: 'https://example.com/neon.mp3',
+    };
+
+    expect(component['formatCappedCount'](10)).toBe('10');
+    component['openSongDetails'](song);
+    expect(state.activeModal()).toBe('details');
+    state.setModal(null);
+
+    component['playSong'](song);
+    expect(component['isSongPlaying'](song)).toBe(true);
+    component['playSong'](song);
+    expect(component['isSongPlaying'](song)).toBe(false);
+
+    component['goToPlans']();
+    expect(state.activePage()).toBe('plans');
+    component['goToDashboard']();
+    expect(state.activePage()).toBe('dashboard');
+    component['goToSettings']();
+    expect(state.activePage()).toBe('settings');
+    component['goToFamily']();
+    expect(state.activePage()).toBe('family');
+    component['openTutorial']();
+    expect(state.activeModal()).toBe('onboarding');
+    component['openDeleteModal']();
+    expect(state.activeModal()).toBe('delete');
+    component['viewFullCollection']();
+    component['logout']();
+    expect(state.authView()).toBe('login');
+  });
 });

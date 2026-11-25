@@ -222,7 +222,7 @@ describe('PlaylistsComponent', () => {
     const globalStyles = readFileSync(resolve(__dirname, '../../../styles.css'), 'utf8');
     const componentStyles = readFileSync(resolve(__dirname, './playlists.component.css'), 'utf8');
 
-    expect(componentStyles).toMatch(/\.playlist-swipe-card\s*\{[^}]*touch-action:\s*pan-y/);
+    expect(componentStyles).toMatch(/\.playlist-swipe-card\s*\{[^}]*touch-action:\s*none/);
     expect(componentStyles).toMatch(
       /\.playlists-grid[\s\S]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
     );
@@ -773,5 +773,85 @@ describe('PlaylistsComponent DOM', () => {
 
     playButton.click();
     expect(player.isPlaying()).toBe(false);
+  });
+
+  it('handles deck card drag lifecycle and opens track details', () => {
+    const fixture = TestBed.createComponent(PlaylistsComponent);
+    fixture.detectChanges();
+    const instance = fixture.componentInstance;
+
+    instance['cancelDeckCardDrag']();
+    expect(instance['isDragging']()).toBe(false);
+    instance['finishDeckCardDrag']();
+
+    const song = {
+      trackId: 50,
+      title: 'Playlist Track',
+      artist: 'Artist',
+      genre: 'Pop',
+      time: '3:00',
+      image: '',
+      album: 'Album',
+      year: '2024',
+      match: 90,
+    };
+    instance['openTrackDetails'](song);
+    expect(state.activeModal()).toBe('details');
+    state.setModal(null);
+
+    instance['closePlaylistView']();
+    expect(instance['selectedPlaylist']()).toBeNull();
+  });
+
+  it('removes tracks, deletes current playlist, and resolves playlist cover fallbacks', () => {
+    const fixture = TestBed.createComponent(PlaylistsComponent);
+    fixture.detectChanges();
+    const instance = fixture.componentInstance;
+
+    const pl = {
+      id: '77',
+      playlistId: 77,
+      name: 'Temp List',
+      count: 1,
+      duration: '3 min',
+      isExported: false,
+      songs: [
+        {
+          trackId: 10,
+          title: 'Song A',
+          artist: 'Artist A',
+          genre: 'Pop',
+          time: '3:00',
+          image: '',
+          album: 'Album',
+          year: '2024',
+          match: 90,
+        },
+      ],
+    };
+    state.playlists.set([pl]);
+    instance['selectedPlaylist'].set(pl);
+    expect(instance['getPlaylistCoverSrc'](pl, 0)).toBeTruthy();
+
+    instance['removeTrackFromCurrent'](0);
+    instance['deleteCurrentPlaylist']();
+    expect(instance['selectedPlaylist']()).toBeNull();
+
+    instance['openCreateModal']();
+    expect(state.activeModal()).toBe('playlist');
+    state.setModal(null);
+
+    instance['startDeckCardDrag']({
+      clientX: 10,
+      clientY: 20,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    instance['moveDeckCardDrag']({ clientX: 50, clientY: 20 } as unknown as PointerEvent);
+    instance['cancelDeckCardDrag']();
+
+    instance['openPlaylistView']('Temp List');
+    instance['exportCurrentToSpotify']();
   });
 });

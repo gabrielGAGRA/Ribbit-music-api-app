@@ -179,5 +179,51 @@ describe('AdminDashboardComponent', () => {
     expect(refreshedRows[3].usedLabel).toBe('512.00 KiB');
     expect(refreshedRows[4].usedLabel).toBe('2.00 KiB');
     expect(refreshedRows[4].percentLabel).toBe('< 0.01%');
+    expect(component['financialBarItems']().map((i) => i.variant)).toEqual([
+      'revenue',
+      'content',
+      'infra',
+      'net-negative',
+    ]);
+  });
+
+  it('validates cost inputs, updates signals, cancels editor, and navigates to sections', () => {
+    const component = TestBed.runInInjectionContext(() => new AdminDashboardComponent());
+
+    component['openCostEditor']();
+    const inputEl = document.createElement('input');
+    inputEl.value = '-5';
+    component['updateCostPerTrack']({ target: inputEl } as unknown as Event);
+    inputEl.value = '10';
+    component['updateInfraFixed']({ target: inputEl } as unknown as Event);
+    inputEl.value = '1';
+    component['updateInfraPerUser']({ target: inputEl } as unknown as Event);
+
+    component['savePlatformCosts'](new Event('submit'));
+    expect(component['costFormError']()).toContain('maiores ou iguais a zero');
+
+    component['cancelCostEditor']();
+    expect(component['editingCosts']()).toBe(false);
+    expect(component['costFormError']()).toBe('');
+
+    component['goToPlans']();
+    component['goToModeration']();
+    component['goToUsers']();
+
+    component['openCostEditor']();
+    component['costPerTrackInput'].set('0.2');
+    component['infraFixedInput'].set('10');
+    component['infraPerUserInput'].set('1');
+    component['savePlatformCosts'](new Event('submit'));
+    httpMock
+      .expectOne('/api/admin/costs')
+      .flush({ detail: 'Error' }, { status: 400, statusText: 'Bad Request' });
+    expect(component['isSavingCosts']()).toBe(false);
+    expect(component['costFormError']()).toBeTruthy();
+    expect(component['formatCurrency'](100)).toContain('100');
+    expect(component['grossRevenue']()).toBeTypeOf('number');
+    expect(component['contentCost']()).toBeTypeOf('number');
+    expect(component['infrastructureCost']()).toBeTypeOf('number');
+    expect(component['totalCosts']()).toBeTypeOf('number');
   });
 });

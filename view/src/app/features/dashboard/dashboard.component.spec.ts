@@ -192,7 +192,9 @@ describe('DashboardComponent DOM', () => {
     expect(root.querySelector('.dashboard-blocked-screen')).toBeNull();
     expect(root.querySelector('.mood-card')).toBeNull();
     expect(root.querySelector('.dashboard-hero')).not.toBeNull();
-    expect(root.querySelector('.approval-ring .ring-center strong')?.textContent?.trim()).toBe('75%');
+    expect(root.querySelector('.approval-ring .ring-center strong')?.textContent?.trim()).toBe(
+      '75%',
+    );
     expect(root.querySelector('.monthly-chart-svg')).not.toBeNull();
     expect(root.querySelector('.dashboard-secondary-columns')).not.toBeNull();
 

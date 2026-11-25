@@ -248,4 +248,57 @@ describe('DiscoverComponent DOM', () => {
     playButton.click();
     expect(player.isPlaying()).toBe(false);
   });
+
+  it('supports target playlist selection, details modal, and drag/keyboard interactions', () => {
+    const fixture = TestBed.createComponent(DiscoverComponent);
+    fixture.detectChanges();
+    const instance = fixture.componentInstance;
+
+    state.playlists.set([
+      {
+        id: '10',
+        playlistId: 10,
+        name: 'Treino',
+        count: 0,
+        duration: '0 min',
+        isExported: false,
+        songs: [],
+      },
+    ]);
+
+    instance['selectTargetPlaylist'](10);
+    expect(instance['targetPlaylist']()?.playlistId).toBe(10);
+    expect(instance['getPlaylistCover'](instance['targetPlaylist']()!)).toContain('unsplash');
+    instance['selectTargetPlaylist'](null);
+    expect(instance['targetPlaylist']()).toBeNull();
+
+    instance['openCreatePlaylist']();
+    expect(state.activeModal()).toBe('playlist');
+    state.setModal(null);
+
+    instance['openDetails']();
+    expect(state.activeModal()).toBe('details');
+    state.setModal(null);
+
+    instance['openAddModal']();
+    expect(state.activeModal()).toBe('add');
+    state.setModal(null);
+
+    instance['cancelCardDrag']();
+    expect(instance['isDragging']()).toBe(false);
+    instance['finishCardDrag']();
+
+    instance['startCardDrag']({
+      clientX: 10,
+      clientY: 20,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    expect(instance['isDragging']()).toBe(true);
+    instance['moveCardDrag']({ clientX: 25, clientY: 20 } as unknown as PointerEvent);
+    expect(instance['cardTransform']()).toContain('translate(15px');
+    instance['finishCardDrag']();
+    expect(instance['isDragging']()).toBe(false);
+  });
 });

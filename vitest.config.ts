@@ -15,8 +15,21 @@ export default defineConfig({
     globals: true,
     include: ['view/**/*.spec.ts'],
     setupFiles: ['./view/src/test-setup.ts'],
-    env: {
-      TUNNEL_URL: 'https://grumpy-books-scream.loca.lt',
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json-summary', 'lcovonly'],
+      include: ['view/src/app/**/*.ts'],
+      exclude: [
+        '**/*.spec.ts',
+        'view/src/app/core/models/**',
+        'view/src/app/app.routes.ts',
+        'view/src/test-setup.ts',
+      ],
+      thresholds: {
+        lines: 85,
+        statements: 85,
+        functions: 85,
+      },
     },
   },
 });

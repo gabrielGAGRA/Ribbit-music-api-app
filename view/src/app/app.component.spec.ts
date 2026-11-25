@@ -111,4 +111,22 @@ describe('AppComponent', () => {
 
     expect(player.isPlaying()).toBe(false);
   });
+
+  it('handles navigation helpers, capped counts, modals, and theme switching', () => {
+    expect(component['formatCappedCount'](120)).toBe('99+');
+    expect(component['isNavItemActive']('discover')).toBe(true);
+
+    component['openCreatePlaylist']();
+    expect(state.activeModal()).toBe('playlist');
+    state.setModal(null);
+
+    component['openTutorial']();
+    expect(state.activeModal()).toBe('onboarding');
+    state.setModal(null);
+
+    component['openNotifications']();
+
+    component['setTheme']('light');
+    expect(state.preferredTheme()).toBe('light');
+  });
 });

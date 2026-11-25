@@ -80,4 +80,18 @@ describe('PlansComponent & Mock Checkout Flow', () => {
     expect(state.toast()).toContain('Administrador');
     httpMock.expectNone('/api/profile/plan');
   });
+
+  it('toggles annual/monthly billing, active slide, and plan icons', () => {
+    const component = TestBed.runInInjectionContext(() => new PlansComponent());
+
+    component['setAnnual'](false);
+    expect(component['annualPlans']()).toBe(false);
+
+    component['setSlide'](2);
+    expect(component['activeSlide']()).toBe(2);
+
+    expect(component['getPlanIcon']('Free')).toBe('pond');
+    expect(component['getPlanIcon']('Individual')).toBe('star');
+    expect(component['getPlanIcon']('Família')).toBe('users');
+  });
 });

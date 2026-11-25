@@ -591,4 +591,108 @@ describe('AdminStateService', () => {
     });
     expect(service.executiveDashboard().estimatedNetRevenue).toBe(35.5);
   });
+
+  it('manages toast notifications, logout, and catalog sync/compact/track mutations', () => {
+    service.notify('Alerta Admin');
+    expect(service.toastMessage()).toBe('Alerta Admin');
+    service.clearToast();
+    expect(service.toastMessage()).toBe('');
+
+    service.compactCatalog().subscribe();
+    httpMock.expectOne('/api/admin/catalog/compact').flush({ message: 'Compacted' });
+
+    service.syncCatalog(true).subscribe();
+    httpMock
+      .expectOne('/api/admin/catalog/sync?force=true')
+      .flush({ version: 2, tracks_synced: 10 });
+
+    service
+      .createTrack({
+        title: 'New Track',
+        artist: 'New Artist',
+        genre: 'Pop',
+        duration_seconds: 180,
+        explicit: false,
+      })
+      .subscribe();
+    httpMock.expectOne('/api/admin/tracks').flush({
+      track_id: 500,
+      title: 'New Track',
+      artist: 'New Artist',
+      genre: 'Pop',
+      duration_seconds: 180,
+      explicit: false,
+      is_deleted: false,
+    });
+    httpMock
+      .match((r) => r.url === '/api/admin/audience')
+      .forEach((r) => {
+        r.flush({ total_users: 1, total_tracks: 1, active_tracks: 1, blocked_genres: {} });
+      });
+    httpMock
+      .match((r) => r.url === '/api/admin/dashboard')
+      .forEach((r) => {
+        r.flush({
+          total_users: 1,
+          estimated_net_revenue: 0,
+          users_by_plan: {},
+          revenue_by_plan: {},
+        });
+      });
+
+    service.setTrackExplicit(500, true).subscribe();
+    httpMock.expectOne('/api/admin/tracks/500/explicit').flush({ track_id: 500, explicit: true });
+
+    service.updateTrackGenre(500, 'Indie').subscribe();
+    httpMock.expectOne('/api/admin/tracks/500/genre').flush({ track_id: 500, genre: 'Indie' });
+
+    service.setTrackBlocked(500, true).subscribe();
+    httpMock.expectOne('/api/admin/tracks/500/block').flush({ track_id: 500, blocked: true });
+    httpMock
+      .match((r) => r.url === '/api/admin/audience')
+      .forEach((r) => {
+        r.flush({ total_users: 1, total_tracks: 1, active_tracks: 0, blocked_genres: {} });
+      });
+    httpMock
+      .match((r) => r.url === '/api/admin/dashboard')
+      .forEach((r) => {
+        r.flush({
+          total_users: 1,
+          estimated_net_revenue: 0,
+          users_by_plan: {},
+          revenue_by_plan: {},
+        });
+      });
+
+    service.deleteReview(1).subscribe();
+    httpMock.expectOne('/api/admin/reviews/1').flush({ success: true, message: 'ok' });
+
+    service.promoteUserToAdmin(20).subscribe();
+    httpMock.expectOne('/api/admin/administrators/20').flush({
+      user_id: 20,
+      email: 'p@ribbit.app',
+      display_name: 'Promoted',
+      plan_id: 1,
+      is_admin: true,
+    });
+
+    service.loadAccessHistory();
+    httpMock
+      .expectOne('/api/admin/access-history?limit=100')
+      .flush({ detail: 'Err' }, { status: 500, statusText: 'Err' });
+
+    service
+      .updatePlatformCosts({
+        content_cost_per_track: 0.1,
+        infrastructure_fixed_cost: 10,
+        infrastructure_cost_per_user: 1,
+      })
+      .subscribe({ error: () => undefined });
+    httpMock
+      .expectOne('/api/admin/costs')
+      .flush({ detail: 'Err' }, { status: 400, statusText: 'Bad' });
+
+    service.logoutAdmin();
+    expect(service.isAuthenticated()).toBe(false);
+  });
 });

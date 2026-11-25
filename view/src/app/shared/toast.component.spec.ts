@@ -14,5 +14,7 @@ describe('ToastComponent', () => {
     const component = TestBed.runInInjectionContext(() => new ToastComponent());
     state.toast.set('Operação concluída');
     expect(component['state'].toast()).toBe('Operação concluída');
+    component['closeToast']();
+    expect(state.toast()).toBe('');
   });
 });

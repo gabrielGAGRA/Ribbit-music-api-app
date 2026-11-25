@@ -60,4 +60,23 @@ describe('AdminLoginComponent', () => {
     expect(component['isSubmitting']()).toBe(false);
     expect(component['errorMessage']()).toBe('');
   });
+
+  it('handles login failure, updates drafts, and navigates back to app', () => {
+    const emailInput = document.createElement('input');
+    emailInput.value = 'admin@ribbit.app';
+    component['updateEmail']({ target: emailInput } as unknown as Event);
+
+    const passInput = document.createElement('input');
+    passInput.value = 'wrong';
+    component['updatePassword']({ target: passInput } as unknown as Event);
+
+    component['authenticateAdmin'](new Event('submit'));
+    const req = httpMock.expectOne('/api/admin/login');
+    req.flush({ detail: 'Invalid credentials' }, { status: 401, statusText: 'Unauthorized' });
+
+    expect(component['isSubmitting']()).toBe(false);
+    expect(component['errorMessage']()).toContain('Invalid credentials');
+
+    component['returnToListenerApp']();
+  });
 });

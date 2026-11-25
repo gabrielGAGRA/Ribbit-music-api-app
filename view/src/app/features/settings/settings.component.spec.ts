@@ -259,6 +259,38 @@ describe('SettingsComponent', () => {
       /@media\s*\(max-width:\s*768px\)[\s\S]*\.plan-status-box\s*\{[^}]*flex-direction:\s*column/,
     );
   });
+
+  it('handles name editing, password draft validation, navigation, modals, and theme', () => {
+    component['startEditingName']();
+    expect(component['isEditingName']()).toBe(true);
+    const input = document.createElement('input');
+    input.value = 'Novo Nome';
+    component['updateNameDraft']({ target: input } as unknown as Event);
+    component['cancelEditingName']();
+    expect(component['isEditingName']()).toBe(false);
+
+    input.value = 'oldpass';
+    component['updateCurrentPasswordDraft']({ target: input } as unknown as Event);
+    input.value = '123';
+    component['updateNewPasswordDraft']({ target: input } as unknown as Event);
+    component['updatePassword']();
+    expect(component['passwordError']()).toBeTruthy();
+
+    component['goToPlans']();
+    expect(state.activePage()).toBe('plans');
+    component['goToFamily']();
+    expect(state.activePage()).toBe('family');
+    component['openBlockedGenresModal']();
+    expect(state.activeModal()).toBe('filters');
+    component['openOnboardingModal']();
+    expect(state.activeModal()).toBe('onboarding');
+    component['openDeleteModal']();
+    expect(state.activeModal()).toBe('delete');
+    component['setTheme']('light');
+    expect(state.preferredTheme()).toBe('light');
+    component['logout']();
+    expect(state.authView()).toBe('login');
+  });
 });
 
 describe('SettingsComponent DOM', () => {

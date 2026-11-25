@@ -322,6 +322,89 @@ describe('FamilyComponent', () => {
     expect(component['calculatedChildAge']()).toBe(18);
     expect(component['isNewChildMinor']()).toBe(false);
   });
+
+  it('treats age === 0 or null birthDate as minor and manages add-child form, genres, artists, and navigation', () => {
+    const zeroAgeMember = {
+      userId: 11,
+      email: 'zero@familia.com',
+      displayName: 'Sem Data',
+      age: 0,
+      planId: 3,
+      birthDate: null,
+      primaryAccountId: 1,
+      blockedGenres: ['Rock'],
+      blockedArtists: ['Artist X'],
+      isAdmin: false,
+    };
+    const adultMember = {
+      ...zeroAgeMember,
+      userId: 12,
+      age: 22,
+    };
+
+    expect(component['isMemberMinor'](zeroAgeMember)).toBe(true);
+    expect(component['getMemberAgeLabel'](zeroAgeMember)).toBe('Idade não informada');
+    expect(component['isMemberMinor'](adultMember)).toBe(false);
+    expect(component['getMemberAgeLabel'](adultMember)).toBe('22 anos');
+    expect(component['hasParentalBlocks'](zeroAgeMember)).toBe(true);
+
+    component['openAddChildForm']('link');
+    expect(component['isFormOpen']()).toBe(true);
+    expect(component['addMode']()).toBe('link');
+    component['switchAddMode']('create');
+    expect(component['addMode']()).toBe('create');
+    component['closeAddChildForm']();
+    expect(component['isFormOpen']()).toBe(false);
+
+    component['openParentalControls'](zeroAgeMember);
+    component['customGenreInput'].set('Chiptune');
+    component['addCustomBlockedGenre']();
+    expect(component['getExtraDraftGenres']()).toContain('Chiptune');
+    component['removeDraftGenre']('Chiptune');
+    component['artistBanInput'].set('Artist Y');
+    component['addBlockedArtist']();
+    expect(component['draftBlockedArtists']()).toContain('Artist Y');
+    component['removeDraftArtist']('Artist Y');
+    component['closeParentalControls']();
+
+    component['goToPlans']();
+    expect(state.activePage()).toBe('plans');
+    component['goToProfile']();
+    expect(state.activePage()).toBe('profile');
+  });
+
+  it('updates add-child and parental-control input signals, validates form submissions, and removes offline members', () => {
+    const input = document.createElement('input');
+    input.value = 'Ana';
+    component['updateChildDisplayName']({ target: input } as unknown as Event);
+    input.value = 'ana@familia.com';
+    component['updateChildEmail']({ target: input } as unknown as Event);
+    input.value = '123456';
+    component['updateChildPassword']({ target: input } as unknown as Event);
+    input.value = '2012-03-10';
+    component['updateChildBirthDate']({ target: input } as unknown as Event);
+    input.value = 'exist@familia.com';
+    component['updateExistingChildIdentifier']({ target: input } as unknown as Event);
+    input.value = 'pass123';
+    component['updateExistingChildPassword']({ target: input } as unknown as Event);
+    input.value = 'Ska';
+    component['updateCustomGenreInput']({ target: input } as unknown as Event);
+    input.value = 'Band Z';
+    component['updateArtistBanInput']({ target: input } as unknown as Event);
+
+    component['submitAddChild'](new Event('submit'));
+    expect(component['familyMembers']().length).toBe(1);
+
+    component['switchAddMode']('link');
+    component['existingChildIdentifier'].set('invalid-id');
+    component['submitAddChild'](new Event('submit'));
+    expect(component['errorMessage']()).toContain('ID numérico');
+
+    const added = component['familyMembers']()[0]!;
+    component['openParentalControls'](added);
+    component['removeChildAccount'](added);
+    expect(component['familyMembers']().length).toBe(0);
+  });
 });
 
 describe('FamilyComponent DOM', () => {

@@ -213,4 +213,47 @@ describe('AdminUsersComponent', () => {
     filteredReq.flush([]);
     expect(state.accessHistory().length).toBe(0);
   });
+
+  it('updates search, plan filter, new admin form drafts, and formats access timestamps', () => {
+    const component = TestBed.runInInjectionContext(() => new AdminUsersComponent());
+
+    const input = document.createElement('input');
+    input.value = 'alice';
+    component['updateSearch']({ target: input } as unknown as Event);
+    expect(component['searchQuery']()).toBe('alice');
+
+    const select = document.createElement('select');
+    select.innerHTML = '<option value="Pro">Pro</option>';
+    select.value = 'Pro';
+    component['updatePlanFilter']({ target: select } as unknown as Event);
+    expect(component['selectedPlanFilter']()).toBe('Pro');
+
+    input.value = 'Alice';
+    component['updateNewAdminName']({ target: input } as unknown as Event);
+    input.value = 'alice@ribbit.app';
+    component['updateNewAdminEmail']({ target: input } as unknown as Event);
+    input.value = 'pass123';
+    component['updateNewAdminPassword']({ target: input } as unknown as Event);
+    input.value = '25';
+    component['updateNewAdminAge']({ target: input } as unknown as Event);
+
+    expect(component['formatAccessTimestamp']('2026-02-01T10:12:00Z')).toBeTruthy();
+    expect(component['isCurrentSessionUser'](999)).toBe(false);
+
+    component['newAdminName'].set('A');
+    component['submitRegisterAdmin'](new Event('submit'));
+    expect(component['registerError']()).toBeTruthy();
+
+    component['promoteUser'](99);
+    httpMock
+      .expectOne('/api/admin/administrators/99')
+      .flush({ detail: 'Err' }, { status: 400, statusText: 'Bad' });
+    expect(component['actionError']()).toBeTruthy();
+
+    component['revokeAdmin'](99);
+    httpMock
+      .expectOne('/api/admin/administrators/99')
+      .flush({ detail: 'Err' }, { status: 400, statusText: 'Bad' });
+    expect(component['actionError']()).toBeTruthy();
+  });
 });

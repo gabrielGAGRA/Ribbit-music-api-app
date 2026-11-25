@@ -479,5 +479,122 @@ describe('ModalsComponent', () => {
       expect(template).toContain("state.activeModal() === 'track-unavailable'");
       expect(template).toContain('não está mais disponível');
     });
+
+    it('handles modal navigation, onboarding steps, word cloud, search drafts, and checkout controls', () => {
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+
+      const state = TestBed.inject(RibbitStateService);
+      const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+
+      component['closeModal']();
+      expect(state.activeModal()).toBeNull();
+
+      component['selectSearchGenre']('Jazz');
+      const input = document.createElement('input');
+      input.value = 'Miles';
+      component['updateSearchArtistDraft']({ target: input } as unknown as Event);
+      input.value = '2020';
+      component['updateSearchStartDateDraft']({ target: input } as unknown as Event);
+      input.value = '2024';
+      component['updateSearchEndDateDraft']({ target: input } as unknown as Event);
+      input.value = '4';
+      component['updateSearchMinRating']({ target: input } as unknown as Event);
+
+      const wasPopSelected = component['isGenreSelected']('Pop');
+      component['toggleSelectedGenre']('Pop');
+      expect(component['isGenreSelected']('Pop')).toBe(!wasPopSelected);
+      const wasMetalBlocked = component['isGenreBlocked']('Metal');
+      component['toggleBlockedGenre']('Metal');
+      expect(component['isGenreBlocked']('Metal')).toBe(!wasMetalBlocked);
+
+      component['selectPaymentMethod']('pix');
+      expect(component['paymentMethod']()).toBe('pix');
+
+      component['nextOnboardingStep']();
+      expect(component['onboardingStep']()).toBe(2);
+      component['prevOnboardingStep']();
+      expect(component['onboardingStep']()).toBe(1);
+      component['goToOnboardingStep'](2);
+      expect(component['onboardingStep']()).toBe(2);
+      component['pokeRibby']();
+      component['toggleWordCloudGenre']('Indie');
+      expect(component['isWordCloudSelected']('Indie')).toBe(true);
+      component['finishOnboarding']();
+      expect(state.activeModal()).toBeNull();
+
+      component['goToPlansFromUpgrade']();
+      expect(state.activePage()).toBe('plans');
+      component['goToSettingsFromSpotify']();
+      expect(state.activePage()).toBe('settings');
+      component['goToExploreRadar']();
+      expect(state.activePage()).toBe('explore');
+
+      component['openCreateFromAdd']();
+      expect(state.activeModal()).toBe('playlist');
+
+      component['addBySwipe']();
+      expect(state.activePage()).toBe('discover');
+
+      component['finishAndNavigate']('discover');
+      expect(state.activePage()).toBe('discover');
+
+      component['selectTutorialTopic']('playlists');
+      component['selectTutorialTopic']('jams');
+      component['selectTutorialTopic']('swipe');
+      component['triggerDemoSwipe']('like');
+      component['triggerDemoSwipe']('reject');
+
+      state.userId.set(5);
+      component['rateSong'](5);
+      expect(
+        component['isOwnReview']({
+          id: 1,
+          userId: 5,
+          author: 'Me',
+          initials: 'ME',
+          text: 'Hi',
+          likes: 0,
+          age: 'agora',
+          date: Date.now(),
+        }),
+      ).toBe(true);
+
+      const sel = document.createElement('select');
+      sel.innerHTML = '<option value="likes">likes</option>';
+      sel.value = 'likes';
+      component['updateTrackReviewSort']({ target: sel } as unknown as Event);
+
+      const overlay = document.createElement('div');
+      component['closeOnBackdrop']({
+        target: overlay,
+        currentTarget: overlay,
+      } as unknown as MouseEvent);
+      expect(state.activeModal()).toBeNull();
+
+      component['applyFilters']();
+      component['saveFrequencies']();
+      component['confirmDeleteAccount']();
+      component['submitCheckout'](new Event('submit'));
+      component['addToExistingPlaylist'](0);
+
+      const qForm = document.createElement('form');
+      qForm.innerHTML = '<input name="name" value="Queue Mix" />';
+      component['saveQueueAsPlaylist']({
+        preventDefault: () => undefined,
+        target: qForm,
+      } as unknown as Event);
+
+      const pForm = document.createElement('form');
+      pForm.innerHTML = '<input name="name" value="Custom Mix" />';
+      component['createPlaylistFromForm']({
+        preventDefault: () => undefined,
+        target: pForm,
+      } as unknown as Event);
+    });
   });
 });

@@ -346,4 +346,58 @@ describe('AdminModerationComponent', () => {
     dislikeReq.flush([]);
     component.ngOnDestroy();
   });
+
+  it('formats track duration, manages genre editing cancellation, and renders star arrays', () => {
+    const state = TestBed.inject(AdminStateService);
+    hydrateWithSampleData(state);
+    const component = TestBed.runInInjectionContext(() => new AdminModerationComponent());
+
+    expect(component['formatDuration'](185)).toBe('3:05');
+    expect(component['starArray'](4)).toEqual([0, 1, 2, 3]);
+
+    const track = state.activeTracks()[0]!;
+    component['startEditingGenre'](track);
+    const input = document.createElement('input');
+    input.value = 'Jazz';
+    component['updateGenreDraft']({ target: input } as unknown as Event);
+    expect(component['editGenreDraft']()).toBe('Jazz');
+    component['cancelEditingGenre']();
+    expect(component['editingTrackId']()).toBeNull();
+
+    component['toggleNewTrackExplicit']();
+    expect(component['newTrackExplicit']()).toBe(true);
+    component['toggleCreateTrackForm']();
+    expect(component['showCreateTrackForm']()).toBe(true);
+    component['updateTextSignal'](component['newTrackTitle'], {
+      target: input,
+    } as unknown as Event);
+    expect(component['newTrackTitle']()).toBe('Jazz');
+    component['updateTrackQuery']({ target: input } as unknown as Event);
+    expect(component['trackQuery']()).toBe('Jazz');
+
+    component['newTrackTitle'].set('');
+    component['submitCreateTrack'](new Event('submit'));
+    expect(component['moderationError']()).toBeTruthy();
+
+    component['editGenreDraft'].set('');
+    component['saveGenre'](track.trackId);
+
+    component['toggleExplicit'](track);
+    httpMock
+      .expectOne(`/api/admin/tracks/${track.trackId}/explicit`)
+      .flush({ detail: 'Err' }, { status: 400, statusText: 'Bad' });
+    expect(component['moderationError']()).toBeTruthy();
+
+    component['blockTrack'](track.trackId);
+    httpMock
+      .expectOne(`/api/admin/tracks/${track.trackId}/block`)
+      .flush({ detail: 'Err' }, { status: 400, statusText: 'Bad' });
+
+    component['restoreTrack'](track.trackId);
+    httpMock
+      .expectOne(`/api/admin/tracks/${track.trackId}/block`)
+      .flush({ detail: 'Err' }, { status: 400, statusText: 'Bad' });
+
+    component.ngOnDestroy();
+  });
 });

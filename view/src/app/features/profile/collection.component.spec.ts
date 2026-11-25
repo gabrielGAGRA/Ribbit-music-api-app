@@ -48,4 +48,36 @@ describe('CollectionComponent', () => {
     component['updateSearchQuery']({ target: input } as unknown as Event);
     expect(component['filteredItems']().map((s) => s.title)).toEqual(['Bloom']);
   });
+
+  it('computes kind-specific metadata, plays summary track, opens discovery, and revises items', () => {
+    const song = {
+      trackId: 10,
+      title: 'Solar',
+      artist: 'Prism',
+      genre: 'Pop',
+      time: '3:00',
+      image: '',
+      album: 'Light',
+      year: '2024',
+      match: 95,
+      previewUrl: 'https://example.com/p.mp3',
+    };
+
+    expect(component['accentClass']()).toBe('green');
+    expect(component['iconName']()).toBe('heart');
+    expect(component['subtitle']()).toBe('músicas curtidas');
+    expect(component['totalCount']()).toBe(0);
+
+    component['runSummaryAction']();
+    expect(state.toast()).toContain('vazia');
+
+    state.likedSongs.set([song]);
+    component['runSummaryAction']();
+    expect(state.discoverySong()?.trackId).toBe(10);
+
+    component['openSongInDiscovery'](song);
+    expect(state.activePage()).toBe('discover');
+
+    component['runItemAction'](song);
+  });
 });
