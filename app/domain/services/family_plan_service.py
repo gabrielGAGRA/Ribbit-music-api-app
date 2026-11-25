@@ -23,7 +23,7 @@ class FamilyPlanService:
         current_dependents_count: int,
     ) -> User:
         """Validates family plan rules and links dependent to primary user account."""
-        if not plan.allows_dependents:
+        if not primary_user.has_family_access(plan):
             raise PermissionDeniedError(
                 "Current plan does not support adding family members."
             )
@@ -52,9 +52,12 @@ class FamilyPlanService:
                 "This user is already linked to another family account."
             )
 
-        if not plan.can_accommodate_new_dependent(current_dependents_count):
+        effective_max_profiles = (
+            plan.max_profiles if plan.allows_dependents else max(plan.max_profiles, 4)
+        )
+        if 1 + current_dependents_count + 1 > effective_max_profiles:
             raise BusinessRuleViolationError(
-                f"Family plan profile limit of {plan.max_profiles} reached."
+                f"Family plan profile limit of {effective_max_profiles} reached."
             )
 
         if primary_user.user_id is not None:

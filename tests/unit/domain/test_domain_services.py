@@ -17,6 +17,8 @@ def _make_user(
     user_id: int,
     plan_id: int = 1,
     primary_account_id: int | None = None,
+    *,
+    is_admin: bool = False,
 ) -> User:
     return User(
         user_id=user_id,
@@ -26,6 +28,7 @@ def _make_user(
         age=25,
         plan_id=plan_id,
         primary_account_id=primary_account_id,
+        is_admin=is_admin,
     )
 
 
@@ -202,3 +205,43 @@ def test_subscription_analytics_service_calculates_breakdown() -> None:
     assert breakdown.estimated_net_revenue == 40.0
     assert breakdown.users_by_plan == {"Free": 1, "Pro": 1, "Family": 2}
     assert breakdown.revenue_by_plan == {"Free": 0.0, "Pro": 10.0, "Family": 30.0}
+
+
+def test_family_plan_service_allows_admin_without_paid_family_plan() -> None:
+    service = FamilyPlanService()
+    admin_primary = _make_user(1, plan_id=1, is_admin=True)
+    dep = _make_user(2, plan_id=1)
+    free_plan = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+
+    result = service.link_dependent(
+        primary_user=admin_primary,
+        dependent_user=dep,
+        plan=free_plan,
+        current_dependents_count=0,
+    )
+    assert result.primary_account_id == 1
+
+
+def test_subscription_analytics_service_excludes_admin_from_billed_revenue() -> None:
+    service = SubscriptionAnalyticsService()
+    free_plan = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+    family_plan = Plan(
+        plan_id=3, name="Família", initial_monthly_price=27.9, initial_max_profiles=4
+    )
+    users = [
+        _make_user(1, plan_id=3, is_admin=True),
+        _make_user(2, plan_id=3, is_admin=False),
+    ]
+
+    breakdown = service.calculate_revenue_breakdown(
+        users=users, plans=[free_plan, family_plan]
+    )
+
+    assert breakdown.total_users == 2
+    assert breakdown.users_by_plan == {"Free": 0, "Família": 2}
+    assert breakdown.gross_revenue == 27.9
+    assert breakdown.revenue_by_plan == {"Free": 0.0, "Família": 27.9}

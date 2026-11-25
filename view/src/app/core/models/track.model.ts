@@ -21,6 +21,7 @@ export interface Song {
   readonly previewUrl?: string;
   readonly country?: string;
   readonly explicit?: boolean;
+  readonly isDeleted?: boolean;
   readonly durationSeconds?: number;
   readonly averageRating?: number | null;
   readonly reviewCount?: number;

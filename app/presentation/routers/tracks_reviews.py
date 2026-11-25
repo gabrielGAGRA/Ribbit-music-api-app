@@ -62,6 +62,7 @@ def search_tracks(
             end_year=query.end_year,
             min_rating=query.min_rating,
             sort_by=query.sort_by,
+            include_deleted=query.include_deleted,
             limit=query.limit,
             offset=query.offset,
         )

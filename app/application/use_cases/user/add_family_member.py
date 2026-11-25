@@ -117,7 +117,7 @@ class AddFamilyMemberUseCase:
             password_hash=pw_hash,
             display_name=(display_name or "").strip(),
             age=age,
-            plan_id=primary_user.plan_id,
+            plan_id=plan.plan_id if plan.plan_id is not None else primary_user.plan_id,
             primary_account_id=primary_user.user_id,
             birth_date=birth_date_str,
         )
@@ -158,6 +158,27 @@ class AddFamilyMemberUseCase:
             birth_date=birth_date,
         )
 
+    def _resolve_effective_family_plan(self, primary_user: User, plan: Plan) -> Plan:
+        if plan.allows_dependents:
+            return plan
+        if not primary_user.is_admin:
+            raise PermissionDeniedError(
+                "Current plan does not support adding family members."
+            )
+        family_plans = [
+            candidate
+            for candidate in self.plan_repo.list_all()
+            if candidate.allows_dependents
+        ]
+        if family_plans:
+            return max(family_plans, key=lambda candidate: candidate.max_profiles)
+        return Plan(
+            plan_id=plan.plan_id,
+            name="Família",
+            initial_monthly_price=0.01,
+            initial_max_profiles=4,
+        )
+
     def execute(
         self,
         primary_user_id: int,
@@ -186,23 +207,20 @@ class AddFamilyMemberUseCase:
         if not plan:
             raise EntityNotFoundError(f"Plan with ID {primary_user.plan_id} not found.")
 
-        if not plan.allows_dependents:
-            raise PermissionDeniedError(
-                "Current plan does not support adding family members."
-            )
-
         if primary_user.primary_account_id is not None:
             raise PermissionDeniedError(
                 "A dependent user cannot manage family members."
             )
 
+        effective_plan = self._resolve_effective_family_plan(primary_user, plan)
+
         if dependent_user_id is not None and not (email and password):
-            return self._link_existing(primary_user, dependent_user_id, plan)
+            return self._link_existing(primary_user, dependent_user_id, effective_plan)
 
         if email and password:
             return self._add_by_credentials(
                 primary_user=primary_user,
-                plan=plan,
+                plan=effective_plan,
                 email=email,
                 password=password,
                 display_name=display_name,

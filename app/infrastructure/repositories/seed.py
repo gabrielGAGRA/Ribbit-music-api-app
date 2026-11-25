@@ -304,15 +304,14 @@ def seed_database(
             conn.execute(
                 """
                 INSERT INTO tracks (
-                    title, artist, album, duration_seconds, genre, country,
+                    title, artist, duration_seconds, genre, country,
                     release_year, cover_url, itunes_preview_url, explicit,
                     is_deleted, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
                 """,
                 (
                     t["title"],
                     t["artist"],
-                    t["album"],
                     t["duration_seconds"],
                     t["genre"],
                     t["country"],

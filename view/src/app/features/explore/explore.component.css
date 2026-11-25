@@ -71,3 +71,19 @@
   font-size: 11px;
   font-weight: 700;
 }
+
+.song-row-unavailable {
+  opacity: 0.72;
+}
+
+.unavailable-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  color: #dc2626;
+  font-size: 11px;
+  font-weight: 700;
+}

@@ -64,3 +64,28 @@ def test_list_blocked_genres_free_plan_raises_business_rule_violation() -> None:
 
     with pytest.raises(BusinessRuleViolationError):
         use_case.execute(user_id=1)
+
+
+def test_list_blocked_genres_allows_admin_on_free_plan() -> None:
+    from app.application.ports.repositories.plan_repository import PlanRepositoryPort
+    from app.domain.models.plan import Plan
+
+    admin = User(
+        user_id=1,
+        email="admin@test.com",
+        password_hash="hash",
+        display_name="Admin",
+        age=30,
+        plan_id=1,
+        is_admin=True,
+        blocked_genres=frozenset({"Rock"}),
+    )
+    free_plan = Plan(plan_id=1, name="Free", initial_monthly_price=0.0)
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = admin
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = free_plan
+
+    use_case = ListBlockedGenresUseCase(user_repo=user_repo, plan_repo=plan_repo)
+    assert use_case.execute(user_id=1) == ["rock"]

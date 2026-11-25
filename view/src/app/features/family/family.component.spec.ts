@@ -432,4 +432,26 @@ describe('FamilyComponent DOM', () => {
     expect(badge?.textContent?.trim()).toBe('FILHA');
     expect(fixture.nativeElement.querySelector('.family-capacity-bar')).toBeNull();
   });
+
+  it('unlocks Family plan management for administrators even when assigned Free plan', () => {
+    writeAuthToken('admin-jwt');
+    state.isAdmin.set(true);
+    state.currentPlan.set('Free');
+    state.currentPlanId.set(1);
+    state.primaryAccountId.set(null);
+
+    const fixture = TestBed.createComponent(FamilyComponent);
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/profile/family/members').flush([]);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance['isFamilyPlan']()).toBe(true);
+    const root = fixture.nativeElement;
+    if (!(root instanceof HTMLElement)) {
+      throw new TypeError('Expected root HTMLElement');
+    }
+    expect(root.querySelector('.family-upgrade-banner')).toBeNull();
+    expect(root.querySelector('.parent-crown-badge')?.textContent?.trim()).toBe('ADMIN');
+  });
 });

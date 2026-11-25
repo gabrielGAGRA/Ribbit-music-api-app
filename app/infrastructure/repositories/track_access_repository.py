@@ -95,7 +95,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
                 t.title AS track_title,
                 t.artist AS track_artist,
                 t.genre AS track_genre,
-                t.album AS track_album,
+                NULL AS track_album,
                 t.duration_seconds AS track_duration_seconds,
                 t.cover_url AS track_cover_url,
                 t.itunes_preview_url AS track_preview_url,

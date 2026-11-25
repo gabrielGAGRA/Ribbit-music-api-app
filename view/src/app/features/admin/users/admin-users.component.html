@@ -156,8 +156,8 @@
                   }
                 </td>
                 <td>
-                  <span class="plan-chip" [class.paid]="user.planName !== 'Free'">
-                    {{ user.planName }}
+                  <span class="plan-chip" [class.paid]="user.isAdmin || user.planName !== 'Free'">
+                    {{ user.isAdmin ? 'Família (Grátis)' : user.planName }}
                   </span>
                 </td>
                 <td>

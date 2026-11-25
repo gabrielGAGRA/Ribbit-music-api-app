@@ -6,7 +6,7 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import type { Playlist, Song } from '@ribbit/shared-types';
+import type { PaginatedTracksApiDto, Playlist, Song } from '@ribbit/shared-types';
 import { isSpotifyConnectionRequiredError, isSpotifyError, toApiError } from '../../core/api-error';
 import { mapPlaylistDtoToPlaylist, mapTrackDtoToSong } from '../../core/api-mappers';
 import { AudioPlayerService } from '../../core/audio-player.service';
@@ -53,6 +53,7 @@ export class PlaylistsComponent {
   protected readonly isDragging = signal<boolean>(false);
   private deckPointerStart: { readonly x: number; readonly y: number } | null = null;
   private deckModifiedDuringSwipe = false;
+  private deckNextCursor: number | null = null;
 
   constructor() {
     let lastReset = this.state.playlistsViewReset();
@@ -195,9 +196,25 @@ export class PlaylistsComponent {
     }
   }
 
-  private loadPlaylistDeck(): void {
+  private handleDeckPage(page: PaginatedTracksApiDto, cursorId?: number): void {
+    const candidates = page.items.map((dto) => mapTrackDtoToSong(dto));
+    if (candidates.length === 0 && cursorId !== undefined) {
+      this.deckNextCursor = null;
+      this.loadPlaylistDeck();
+      return;
+    }
+    this.deckNextCursor = page.has_more ? (page.next_cursor ?? null) : null;
+    this.isLoadingDeck.set(false);
+    this.deckLoadedFromBackend.set(true);
+    this.deckCandidates.set(candidates);
+    this.deckCursor.set(0);
+    this.preloadUpcomingDeckImages(candidates, 0);
+  }
+
+  private loadPlaylistDeck(cursorId?: number): void {
     const p = this.selectedPlaylist();
     if (!p?.playlistId || !readAuthToken()) {
+      this.deckNextCursor = null;
       this.isLoadingDeck.set(false);
       this.deckLoadedFromBackend.set(false);
       this.deckCandidates.set(this.state.songs());
@@ -208,16 +225,12 @@ export class PlaylistsComponent {
     this.isLoadingDeck.set(true);
     this.deckCandidates.set([]);
     this.deckCursor.set(0);
-    this.playlistService.getPlaylistDeck(p.playlistId, 25).subscribe({
+    this.playlistService.getPlaylistDeck(p.playlistId, 25, cursorId).subscribe({
       next: (page) => {
-        const candidates = page.items.map((dto) => mapTrackDtoToSong(dto));
-        this.isLoadingDeck.set(false);
-        this.deckLoadedFromBackend.set(true);
-        this.deckCandidates.set(candidates);
-        this.deckCursor.set(0);
-        this.preloadUpcomingDeckImages(candidates, 0);
+        this.handleDeckPage(page, cursorId);
       },
       error: () => {
+        this.deckNextCursor = null;
         this.isLoadingDeck.set(false);
         this.deckLoadedFromBackend.set(true);
         this.deckCandidates.set([]);
@@ -229,7 +242,7 @@ export class PlaylistsComponent {
   protected loadMoreRecommendations(): void {
     const p = this.selectedPlaylist();
     if (p?.playlistId && readAuthToken()) {
-      this.loadPlaylistDeck();
+      this.loadPlaylistDeck(this.deckNextCursor ?? undefined);
       return;
     }
     const existingKeys = new Set(
@@ -309,10 +322,15 @@ export class PlaylistsComponent {
     this.deckCursor.set(nextCursor);
     this.fallbackCursor.update((c) => c + 1);
     this.preloadUpcomingDeckImages(this.deckCandidates(), nextCursor);
+    const nextTrack = this.activeTrack();
+    if (nextTrack) {
+      this.player.loadTrack(nextTrack.previewUrl);
+      this.player.play();
+    }
   }
 
   protected startDeckCardDrag(event: PointerEvent): void {
-    if (event.target instanceof HTMLElement && event.target.closest('button')) return;
+    if (event.target instanceof Element && event.target.closest('button')) return;
     this.deckPointerStart = { x: event.clientX, y: event.clientY };
     this.isDragging.set(true);
     if (event.currentTarget instanceof HTMLElement) {
@@ -381,6 +399,7 @@ export class PlaylistsComponent {
         : playlistOrName;
 
     this.player.pause();
+    this.deckNextCursor = null;
     this.deckLoadedFromBackend.set(false);
     this.selectedPlaylist.set(resolved);
     const hasTracks = (resolved.songs?.length ?? 0) > 0 || resolved.count > 0;
@@ -409,6 +428,7 @@ export class PlaylistsComponent {
       this.deckModifiedDuringSwipe = false;
       this.state.refreshPlaylists();
     }
+    this.deckNextCursor = null;
     this.deckLoadedFromBackend.set(false);
     this.selectedPlaylist.set(null);
     this.isSwipeMode.set(false);

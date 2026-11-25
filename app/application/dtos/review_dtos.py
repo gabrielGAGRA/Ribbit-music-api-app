@@ -18,6 +18,7 @@ class SearchTracksCommand:
     query: str | None = None
     min_rating: float | None = None
     sort_by: str | None = None
+    include_deleted: bool = False
     limit: int = 50
     offset: int = 0
 

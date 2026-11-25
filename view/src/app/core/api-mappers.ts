@@ -1,24 +1,34 @@
 import type {
   AnnualStatsApiDto,
+  ArtistStatApiDto,
   CommunityReview,
+  DashboardViewData,
   DecisionKind,
   FamilyMember,
+  GenreStatApiDto,
+  InteractionSourcePoint,
   JamQueueTrack,
   JamState,
   JamStateApiDto,
   MetricItem,
+  MonthlyActivityBar,
+  MonthlyInteractionStatApiDto,
   PlanApiDto,
   Playlist,
   PlaylistApiDto,
   RankedArtist,
   RankedGenre,
+  ReleaseEraPoint,
+  ReleaseYearStatApiDto,
   ReviewApiDto,
   Song,
+  SourceStatApiDto,
   SubscriptionPlan,
   SwipeApiAction,
   TrackApiDto,
   UserApiDto,
 } from '@ribbit/shared-types';
+import { formatGenreLabel } from './genre-catalog';
 
 const FALLBACK_COVERS: readonly string[] = [
   'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=900&q=85',
@@ -74,7 +84,7 @@ export function mapTrackDtoToSong(dto: TrackApiDto): Song {
     trackId: dto.track_id,
     title: dto.title,
     artist: dto.artist,
-    genre: dto.genre || 'Desconhecido',
+    genre: formatGenreLabel(dto.genre),
     time: formatDurationSeconds(dto.duration_seconds),
     image: resolveCoverUrl(dto.cover_url, dto.track_id),
     album: dto.album ?? 'Single',
@@ -83,6 +93,7 @@ export function mapTrackDtoToSong(dto: TrackApiDto): Song {
     ...(previewUrl ? { previewUrl } : {}),
     ...(dto.country ? { country: dto.country } : {}),
     explicit: dto.explicit,
+    ...(dto.is_deleted ? { isDeleted: true } : {}),
     durationSeconds: dto.duration_seconds,
     averageRating: dto.average_rating ?? null,
     reviewCount: dto.review_count ?? 0,
@@ -367,73 +378,302 @@ export function mapJamStateDto(options: {
   };
 }
 
-/** Maps AnnualStatsApiDto into Dashboard metrics, ranked genres, and ranked artists. */
-export function mapAnnualStatsToDashboard(
-  dto: AnnualStatsApiDto,
-  knownSongs: readonly Song[],
-): {
-  readonly hoursLabel: string;
-  readonly metrics: readonly MetricItem[];
-  readonly genres: readonly RankedGenre[];
-  readonly artists: readonly RankedArtist[];
-} {
-  const hoursRounded = Math.max(0, Math.round(dto.estimated_listening_hours * 10) / 10);
-  const hoursLabel = `${hoursRounded}h`;
-  const metrics: readonly MetricItem[] = [
-    {
-      value: String(dto.total_likes),
-      label: 'Músicas curtidas',
-      detail: 'Interações positivas no seu histórico',
-      icon: 'heart',
-    },
-    {
-      value: `${hoursRounded}h`,
-      label: 'Tempo estimado',
-      detail: 'Calculado sobre suas descobertas',
-      icon: 'headphones',
-    },
-    {
-      value: String(dto.top_genres.length),
-      label: 'Gêneros em alta',
-      detail: dto.top_genres[0] ? `Liderado por ${dto.top_genres[0]}` : 'Continue deslizando',
-      icon: 'sparkles',
-    },
-    {
-      value: String(dto.top_artists.length),
-      label: 'Artistas favoritos',
-      detail: dto.top_artists[0] ? `Destaque: ${dto.top_artists[0]}` : 'Explore novos sons',
-      icon: 'music',
-    },
-  ];
+const MONTH_LABELS: readonly string[] = [
+  'Jan',
+  'Fev',
+  'Mar',
+  'Abr',
+  'Mai',
+  'Jun',
+  'Jul',
+  'Ago',
+  'Set',
+  'Out',
+  'Nov',
+  'Dez',
+];
 
-  const weights: readonly number[] = [52, 31, 17];
-  const genres: readonly RankedGenre[] = dto.top_genres.map((genre, idx) => ({
-    genre,
-    percentage: weights[idx] ?? 15,
-    rank: `0${idx + 1}`,
+const SOURCE_LABELS: Record<string, string> = {
+  discovery: 'Descoberta',
+  playlist: 'Playlists',
+  search: 'Busca',
+  profile: 'Perfil',
+  jam: 'Jams',
+  unknown: 'Outros',
+};
+
+function formatArtistInteractionSummary(likes: number, superlikes: number): string {
+  const parts: string[] = [];
+  if (likes > 0) parts.push(likes === 1 ? '1 curtida' : `${likes} curtidas`);
+  if (superlikes > 0) parts.push(superlikes === 1 ? '1 amada' : `${superlikes} amadas`);
+  return parts.length > 0 ? parts.join(' · ') : '0 curtidas';
+}
+
+function mapTopGenres(rawGenres: readonly GenreStatApiDto[]): readonly RankedGenre[] {
+  const totalPositiveSum = rawGenres.reduce(
+    (sum, item) => sum + Math.max(0, item.total_positive),
+    0,
+  );
+  return rawGenres.map((item, idx) => ({
+    genre: formatGenreLabel(item.genre),
+    likes: item.likes,
+    superlikes: item.superlikes,
+    dislikes: item.dislikes,
+    totalPositive: item.total_positive,
+    percentage:
+      totalPositiveSum > 0
+        ? Math.round((Math.max(0, item.total_positive) / totalPositiveSum) * 100)
+        : 0,
+    rank: String(idx + 1).padStart(2, '0'),
   }));
+}
 
-  const artists: readonly RankedArtist[] = dto.top_artists.map((artistName, idx) => {
-    const matchedSong = knownSongs.find(
-      (item) => item.artist.toLowerCase() === artistName.toLowerCase(),
-    );
-    const song: Song = matchedSong ?? {
-      title: artistName,
-      artist: artistName,
-      genre: dto.top_genres[idx] ?? 'Descoberta',
-      time: '3:30',
-      image: resolveCoverUrl(null, idx + 1),
-      album: 'Ribbit Radar',
-      year: '2026',
-      match: 95 - idx * 3,
-    };
-    const estMinutes = Math.max(15, Math.round((dto.total_likes * 3.5) / (idx + 1.5)));
+function mapTopArtists(
+  rawArtists: readonly ArtistStatApiDto[],
+  knownSongs: readonly Song[],
+): readonly RankedArtist[] {
+  return rawArtists
+    .filter((item) => item.total_positive > 0)
+    .map((item, idx) => {
+      const artistLower = item.artist.trim().toLowerCase();
+      const matchedSong = knownSongs.find(
+        (candidate) => candidate.artist.trim().toLowerCase() === artistLower,
+      );
+      const artistImage =
+        item.cover_url && !isPlaceholderMediaUrl(item.cover_url)
+          ? item.cover_url
+          : (matchedSong?.image ?? resolveCoverUrl(null, idx + 1));
+      const song: Song = matchedSong
+        ? { ...matchedSong, image: artistImage }
+        : {
+            title: item.artist,
+            artist: item.artist,
+            genre: '',
+            time: '',
+            image: artistImage,
+            album: '',
+            year: '',
+            match: 0,
+          };
+      return {
+        song,
+        rank: String(idx + 1),
+        likes: item.likes,
+        superlikes: item.superlikes,
+        totalPositive: item.total_positive,
+        summary: formatArtistInteractionSummary(item.likes, item.superlikes),
+      };
+    });
+}
+
+function scaleBarSegment(count: number, maxTotal: number, plotHeight: number): number {
+  if (count <= 0 || maxTotal <= 0) return 0;
+  return Math.min(plotHeight, Math.max(2, Math.round((count / maxTotal) * plotHeight)));
+}
+
+function mapMonthlyActivityBars(rawMonths: readonly MonthlyInteractionStatApiDto[]): {
+  readonly bars: readonly MonthlyActivityBar[];
+  readonly maxTotal: number;
+} {
+  const plotHeight = 128;
+  const baselineY = 150;
+  const byMonth = new Map<number, MonthlyInteractionStatApiDto>();
+  for (const item of rawMonths) {
+    byMonth.set(item.month, item);
+  }
+  const totals = MONTH_LABELS.map((_, idx) => byMonth.get(idx + 1)?.total ?? 0);
+  const maxTotal = Math.max(0, ...totals);
+
+  const bars: readonly MonthlyActivityBar[] = MONTH_LABELS.map((label, idx) => {
+    const month = idx + 1;
+    const stats = byMonth.get(month);
+    const likes = stats?.likes ?? 0;
+    const superlikes = stats?.superlikes ?? 0;
+    const dislikes = stats?.dislikes ?? 0;
+    const total = stats?.total ?? 0;
+    const x = 18 + idx * 48;
+    const dislikesHeight = scaleBarSegment(dislikes, maxTotal, plotHeight);
+    const likesHeight = scaleBarSegment(likes, maxTotal, plotHeight);
+    const superlikesHeight = scaleBarSegment(superlikes, maxTotal, plotHeight);
+    const dislikesY = baselineY - dislikesHeight;
+    const likesY = dislikesY - likesHeight;
+    const superlikesY = likesY - superlikesHeight;
     return {
-      song,
-      rank: String(idx + 1),
-      time: `${estMinutes} min`,
+      month,
+      label,
+      likes,
+      superlikes,
+      dislikes,
+      total,
+      x,
+      dislikesY,
+      dislikesHeight,
+      likesY,
+      likesHeight,
+      superlikesY,
+      superlikesHeight,
+      totalLabelY: Math.max(14, superlikesY - 6),
+      tooltip: `${label}: ${total} interações (${likes} curtidas, ${superlikes} amadas, ${dislikes} rejeitadas)`,
     };
   });
 
-  return { hoursLabel, metrics, genres, artists };
+  return { bars, maxTotal };
+}
+
+function mapReleaseEras(rawYears: readonly ReleaseYearStatApiDto[]): readonly ReleaseEraPoint[] {
+  const decadeMap = new Map<number, { likes: number; superlikes: number; totalPositive: number }>();
+  for (const item of rawYears) {
+    const decade = Math.floor(item.release_year / 10) * 10;
+    const existing = decadeMap.get(decade) ?? { likes: 0, superlikes: 0, totalPositive: 0 };
+    decadeMap.set(decade, {
+      likes: existing.likes + item.likes,
+      superlikes: existing.superlikes + item.superlikes,
+      totalPositive: existing.totalPositive + item.total_positive,
+    });
+  }
+  const sorted = [...decadeMap.entries()].sort((a, b) => a[0] - b[0]);
+  const totalPositiveSum = sorted.reduce(
+    (sum, [, bucket]) => sum + Math.max(0, bucket.totalPositive),
+    0,
+  );
+  return sorted.map(([decade, bucket]) => ({
+    decade,
+    label: `${decade}s`,
+    totalPositive: bucket.totalPositive,
+    likes: bucket.likes,
+    superlikes: bucket.superlikes,
+    percentage:
+      totalPositiveSum > 0
+        ? Math.round((Math.max(0, bucket.totalPositive) / totalPositiveSum) * 100)
+        : 0,
+  }));
+}
+
+function mapInteractionSources(
+  rawSources: readonly SourceStatApiDto[],
+): readonly InteractionSourcePoint[] {
+  const totalSum = rawSources.reduce((sum, item) => sum + Math.max(0, item.total), 0);
+  return rawSources.map((item) => ({
+    source: item.source,
+    label: SOURCE_LABELS[item.source.toLowerCase()] ?? item.source,
+    total: item.total,
+    likes: item.likes,
+    superlikes: item.superlikes,
+    dislikes: item.dislikes,
+    percentage: totalSum > 0 ? Math.round((Math.max(0, item.total) / totalSum) * 100) : 0,
+  }));
+}
+
+function resolvePositiveRatePercent(
+  dto: AnnualStatsApiDto,
+  totalPositive: number,
+  totalInteractions: number,
+): number {
+  if (dto.positive_rate !== undefined) {
+    return Math.round(Math.max(0, Math.min(1, dto.positive_rate)) * 100);
+  }
+  if (totalInteractions > 0) {
+    return Math.round((totalPositive / totalInteractions) * 100);
+  }
+  return 0;
+}
+
+interface NormalizedDashboardTotals {
+  readonly totalLikes: number;
+  readonly totalSuperlikes: number;
+  readonly totalDislikes: number;
+  readonly totalInteractions: number;
+  readonly positiveRatePercent: number;
+  readonly totalReviews: number;
+  readonly averageRating: number;
+  readonly totalPlaylists: number;
+  readonly totalJamsParticipated: number;
+}
+
+function normalizeDashboardTotals(dto: AnnualStatsApiDto): NormalizedDashboardTotals {
+  const totalLikes = dto.total_likes;
+  const totalSuperlikes = dto.total_superlikes ?? 0;
+  const totalDislikes = dto.total_dislikes ?? 0;
+  const totalInteractions = dto.total_interactions ?? totalLikes + totalSuperlikes + totalDislikes;
+  const positiveRatePercent = resolvePositiveRatePercent(
+    dto,
+    totalLikes + totalSuperlikes,
+    totalInteractions,
+  );
+  return {
+    totalLikes,
+    totalSuperlikes,
+    totalDislikes,
+    totalInteractions,
+    positiveRatePercent,
+    totalReviews: dto.total_reviews ?? 0,
+    averageRating: dto.average_rating ?? 0,
+    totalPlaylists: dto.total_playlists ?? 0,
+    totalJamsParticipated: dto.total_jams_participated ?? 0,
+  };
+}
+
+function buildDashboardMetrics(totals: NormalizedDashboardTotals): readonly MetricItem[] {
+  const jamWord = totals.totalJamsParticipated === 1 ? 'jam participada' : 'jams participadas';
+  const reviewDetail =
+    totals.totalReviews > 0
+      ? `Média ${totals.averageRating.toFixed(1)} de 5`
+      : 'Nenhuma avaliação ainda';
+
+  return [
+    {
+      value: String(totals.totalInteractions),
+      label: 'Interações totais',
+      detail: `${totals.totalLikes} curtidas · ${totals.totalSuperlikes} amadas`,
+      icon: 'heart',
+    },
+    {
+      value: `${totals.positiveRatePercent}%`,
+      label: 'Taxa de aprovação',
+      detail: `${totals.totalDislikes} rejeitadas no período`,
+      icon: 'sparkles',
+    },
+    {
+      value: String(totals.totalPlaylists),
+      label: 'Playlists criadas',
+      detail: `${totals.totalJamsParticipated} ${jamWord}`,
+      icon: 'music',
+    },
+    {
+      value: String(totals.totalReviews),
+      label: 'Avaliações',
+      detail: reviewDetail,
+      icon: 'star',
+    },
+  ];
+}
+
+/** Maps AnnualStatsApiDto into Dashboard metrics, ranked genres, artists, and chart series. */
+export function mapAnnualStatsToDashboard(
+  dto: AnnualStatsApiDto,
+  knownSongs: readonly Song[],
+): DashboardViewData {
+  const totals = normalizeDashboardTotals(dto);
+  const monthly = mapMonthlyActivityBars(dto.by_month ?? []);
+
+  return {
+    selectedYear: dto.year ?? null,
+    availableYears: dto.available_years ?? [],
+    totalInteractions: totals.totalInteractions,
+    positiveRatePercent: totals.positiveRatePercent,
+    totalLikes: totals.totalLikes,
+    totalSuperlikes: totals.totalSuperlikes,
+    totalDislikes: totals.totalDislikes,
+    metrics: buildDashboardMetrics(totals),
+    genres: mapTopGenres(dto.top_genres),
+    artists: mapTopArtists(dto.top_artists, knownSongs),
+    monthlyBars: monthly.bars,
+    maxMonthlyTotal: monthly.maxTotal,
+    releaseEras: mapReleaseEras(dto.by_release_year ?? []),
+    sources: mapInteractionSources(dto.by_source ?? []),
+    totalReviews: totals.totalReviews,
+    averageRating: totals.averageRating,
+    totalPlaylists: totals.totalPlaylists,
+    totalJamsParticipated: totals.totalJamsParticipated,
+  };
 }

@@ -188,15 +188,117 @@ describe('api-mappers', () => {
     const dashboard = mapAnnualStatsToDashboard(
       {
         user_id: 9,
-        estimated_listening_hours: 12.4,
-        total_likes: 48,
-        top_genres: ['Rock', 'Pop'],
-        top_artists: ['Queen'],
+        year: null,
+        available_years: [2026],
+        total_interactions: 10,
+        total_likes: 5,
+        total_superlikes: 2,
+        total_dislikes: 3,
+        positive_rate: 0.7,
+        top_genres: [
+          { genre: 'hip-hop', likes: 3, superlikes: 1, dislikes: 0, total_positive: 4 },
+          { genre: 'rock', likes: 1, superlikes: 0, dislikes: 1, total_positive: 1 },
+        ],
+        top_artists: [
+          {
+            artist: 'Queen',
+            likes: 3,
+            superlikes: 1,
+            dislikes: 0,
+            total_positive: 4,
+            cover_url: 'https://is1-ssl.mzstatic.com/first-liked-cover.jpg',
+          },
+          {
+            artist: 'Zero Likes Band',
+            likes: 0,
+            superlikes: 0,
+            dislikes: 3,
+            total_positive: 0,
+            cover_url: null,
+          },
+        ],
+        by_month: [{ month: 11, likes: 5, superlikes: 2, dislikes: 3, total: 10 }],
+        by_release_year: [
+          { release_year: 2018, likes: 3, superlikes: 0, total_positive: 3 },
+          { release_year: 2021, likes: 1, superlikes: 1, total_positive: 2 },
+        ],
+        by_source: [
+          { source: 'discovery', likes: 4, superlikes: 1, dislikes: 3, total: 8 },
+          { source: 'playlist', likes: 1, superlikes: 1, dislikes: 0, total: 2 },
+        ],
+        total_reviews: 2,
+        average_rating: 4.5,
+        total_playlists: 3,
+        total_jams_participated: 1,
       },
       [fallbackSong],
     );
-    expect(dashboard.hoursLabel).toBe('12.4h');
-    expect(dashboard.genres.length).toBe(2);
+    expect(dashboard.totalInteractions).toBe(10);
+    expect(dashboard.positiveRatePercent).toBe(70);
+    expect(dashboard.availableYears).toEqual([2026]);
+    expect(dashboard.genres).toEqual([
+      {
+        genre: 'Hip Hop',
+        likes: 3,
+        superlikes: 1,
+        dislikes: 0,
+        totalPositive: 4,
+        percentage: 80,
+        rank: '01',
+      },
+      {
+        genre: 'Rock',
+        likes: 1,
+        superlikes: 0,
+        dislikes: 1,
+        totalPositive: 1,
+        percentage: 20,
+        rank: '02',
+      },
+    ]);
+    expect(dashboard.artists).toHaveLength(1);
     expect(dashboard.artists[0]?.song.artist).toBe('Queen');
+    expect(dashboard.artists[0]?.song.image).toBe(
+      'https://is1-ssl.mzstatic.com/first-liked-cover.jpg',
+    );
+    expect(dashboard.artists[0]?.summary).toBe('3 curtidas · 1 amada');
+    expect(dashboard.monthlyBars).toHaveLength(12);
+    expect(dashboard.maxMonthlyTotal).toBe(10);
+    expect(dashboard.monthlyBars[10]?.total).toBe(10);
+    expect(dashboard.monthlyBars[10]?.likesHeight).toBeGreaterThan(0);
+    expect(dashboard.releaseEras.map((era) => ({ label: era.label, pct: era.percentage }))).toEqual(
+      [
+        { label: '2010s', pct: 60 },
+        { label: '2020s', pct: 40 },
+      ],
+    );
+    expect(dashboard.sources.map((src) => ({ label: src.label, pct: src.percentage }))).toEqual([
+      { label: 'Descoberta', pct: 80 },
+      { label: 'Playlists', pct: 20 },
+    ]);
+  });
+
+  it('marks isDeleted only when TrackApiDto.is_deleted is true', () => {
+    const active = mapTrackDtoToSong({
+      track_id: 1,
+      title: 'Active',
+      artist: 'Artist',
+      duration_seconds: 180,
+      genre: 'Pop',
+      explicit: false,
+      is_deleted: false,
+    });
+    const removed = mapTrackDtoToSong({
+      track_id: 2,
+      title: 'Removed',
+      artist: 'Artist',
+      duration_seconds: 180,
+      genre: 'Pop',
+      explicit: false,
+      is_deleted: true,
+    });
+
+    expect(active.isDeleted).toBeUndefined();
+    expect(removed.isDeleted).toBe(true);
   });
 });

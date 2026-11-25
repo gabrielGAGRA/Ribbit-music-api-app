@@ -5,13 +5,7 @@
     </button>
     <span class="family-tier-pill" [class.active]="isFamilyPlan()">
       <app-icon name="shield" [size]="14" />
-      {{
-        isChildAccount()
-          ? 'Conta Filha Vinculada'
-          : isFamilyPlan()
-            ? 'Plano Família Ativo'
-            : 'Plano Atual: ' + state.currentPlan()
-      }}
+      {{ familyTierLabel() }}
     </span>
   </div>
 
@@ -23,15 +17,25 @@
           {{ parentInitials() }}
           <span
             class="parent-crown-badge"
-            [title]="isChildAccount() ? 'Conta Filha' : 'Conta Pai (Titular)'"
+            [title]="
+              isChildAccount()
+                ? 'Conta Filha'
+                : state.isAdmin()
+                  ? 'Administrador · Acesso Família Gratuito'
+                  : 'Conta Pai (Titular)'
+            "
           >
-            {{ isChildAccount() ? 'FILHA' : 'PAI' }}
+            {{ isChildAccount() ? 'FILHA' : state.isAdmin() ? 'ADMIN' : 'PAI' }}
           </span>
         </div>
         <div class="parent-copy">
           <span class="eyebrow blue">
             {{
-              isChildAccount() ? 'MEMBRO DE PLANO FAMILIAR' : 'CONTA PAI · GESTOR DO PLANO FAMILIAR'
+              isChildAccount()
+                ? 'MEMBRO DE PLANO FAMILIAR'
+                : state.isAdmin()
+                  ? 'ADMINISTRADOR · ACESSO GRATUITO AO PLANO FAMÍLIA'
+                  : 'CONTA PAI · GESTOR DO PLANO FAMILIAR'
             }}
           </span>
           <h2>{{ state.userName() }}</h2>

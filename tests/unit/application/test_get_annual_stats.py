@@ -106,3 +106,44 @@ def test_get_annual_stats_delegates_to_user_stats_repo_with_year() -> None:
 
     assert stats is expected
     user_stats_repo.get_user_stats.assert_called_once_with(user_id=1, year=2026)
+
+
+def test_get_annual_stats_allows_admin_on_free_plan() -> None:
+    admin_user = User(
+        user_id=1,
+        email="admin@test.com",
+        password_hash="pw",
+        display_name="Admin",
+        age=30,
+        plan_id=1,
+        is_admin=True,
+    )
+    free_plan = Plan(plan_id=1, name="Free", initial_monthly_price=0.0)
+    expected = AnnualStatsResult(
+        user_id=1,
+        year=2026,
+        available_years=[2026],
+        total_interactions=2,
+        total_likes=2,
+        total_superlikes=0,
+        total_dislikes=0,
+        positive_rate=1.0,
+    )
+
+    user_repo = MagicMock()
+    user_repo.find_by_id.return_value = admin_user
+    plan_repo = MagicMock()
+    plan_repo.find_by_id.return_value = free_plan
+    user_stats_repo = MagicMock()
+    user_stats_repo.get_user_stats.return_value = expected
+
+    use_case = GetAnnualListeningStatsUseCase(
+        user_repo=user_repo,
+        plan_repo=plan_repo,
+        user_stats_repo=user_stats_repo,
+    )
+
+    stats = use_case.execute(user_id=1, year=2026)
+
+    assert stats is expected
+    user_stats_repo.get_user_stats.assert_called_once_with(user_id=1, year=2026)

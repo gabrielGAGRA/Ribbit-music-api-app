@@ -256,3 +256,32 @@ def test_like_review_router_passes_review_and_user_id() -> None:
     assert res.review_id == 1
     assert res.likes_count == 1
     mock_use_case.execute.assert_called_once_with(review_id=1, user_id=20)
+
+
+def test_search_tracks_forwards_include_deleted_query_flag() -> None:
+    mock_use_case = MagicMock()
+    mock_use_case.execute.return_value = [
+        Track(
+            track_id=102,
+            title="Removed",
+            artist="Band",
+            duration_seconds=180,
+            genre="Pop",
+            is_deleted=True,
+        )
+    ]
+    query = TrackSearchQuery(query="Removed", include_deleted=True)
+
+    res = search_tracks(user_id=7, query=query, use_case=mock_use_case)
+
+    assert len(res) == 1
+    assert res[0].is_deleted is True
+    mock_use_case.execute.assert_called_once_with(
+        SearchTracksCommand(
+            user_id=7,
+            query="Removed",
+            include_deleted=True,
+            limit=20,
+            offset=0,
+        )
+    )

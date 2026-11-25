@@ -61,6 +61,7 @@ class TrackSearchQuery(BaseModel):
     end_year: int | None = None
     min_rating: float | None = Field(default=None, ge=1.0, le=5.0)
     sort_by: Literal["rating_desc", "rating_asc"] | None = None
+    include_deleted: bool = False
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
 

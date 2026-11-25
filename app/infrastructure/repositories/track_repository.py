@@ -10,8 +10,19 @@ from app.application.dtos.admin_dtos import AdminCatalogTrackResult
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.track import Track, TrackId
-from app.domain.services.genre_names import expand_genre_aliases
+from app.domain.services.genre_names import (
+    expand_genre_aliases,
+    expand_genre_db_values,
+    genre_matches_preference,
+)
 from app.infrastructure.repositories.connection import transaction
+
+_GENRE_TOKEN_TRANSLATION = str.maketrans("-/&,.;:()[]!", "            ")
+_RANDOM_ORDER_MAX_ROWS = 250_000
+
+
+def _normalize_genre_tokens(value: str) -> str:
+    return f" {value.translate(_GENRE_TOKEN_TRANSLATION).casefold()} "
 
 
 def _sqlite_translate(value: str | None, from_chars: str, to_chars: str) -> str | None:
@@ -47,7 +58,7 @@ def _row_to_track(row: sqlite3.Row) -> Track:
         duration_seconds=row["duration_seconds"],
         genre=row["genre"],
         spotify_id=row["spotify_id"],
-        album=row["album"],
+        album=None,
         country=row["country"],
         release_year=row["release_year"],
         cover_url=row["cover_url"],
@@ -126,6 +137,8 @@ def _append_country_clause(
     conditions: list[str],
     params: list[object],
     values: list[str],
+    *,
+    column: str = "t.country",
 ) -> None:
     if not values:
         return
@@ -135,19 +148,64 @@ def _append_country_clause(
     clauses: list[str] = []
     if exact_codes:
         placeholders = ",".join("?" for _ in exact_codes)
-        clauses.append(f"lower(t.country) IN ({placeholders})")
+        clauses.append(f"lower({column}) IN ({placeholders})")
         params.extend(exact_codes)
     for v in name_terms:
         exact = f"%{v.lower()}%"
         flex = f"%{_to_flexible_like(v)}%"
         if exact == flex:
-            clauses.append("lower(t.country) LIKE ?")
+            clauses.append(f"lower({column}) LIKE ?")
             params.append(exact)
         else:
-            clauses.append("(lower(t.country) LIKE ? OR t.country LIKE ?)")
+            clauses.append(f"(lower({column}) LIKE ? OR {column} LIKE ?)")
             params.extend([exact, flex])
     if clauses:
         conditions.append(f"({' OR '.join(clauses)})")
+
+
+def _normalized_genre_sql(column: str) -> str:
+    return f"' ' || lower(TRANSLATE({column}, '-/&,.;:()[]!', '            ')) || ' '"
+
+
+def _build_genre_match_sql(
+    column: str,
+    values: Sequence[str],
+) -> tuple[list[str], list[object]]:
+    db_values = list(
+        dict.fromkeys(
+            val for v in values if v.strip() for val in expand_genre_db_values(v)
+        )
+    )
+    folded_aliases = list(
+        dict.fromkeys(
+            alias for v in values if v.strip() for alias in expand_genre_aliases(v)
+        )
+    )
+    clauses: list[str] = []
+    clause_params: list[object] = []
+    if db_values:
+        placeholders = ",".join("?" for _ in db_values)
+        clauses.append(f"lower({column}) IN ({placeholders})")
+        clause_params.extend(db_values)
+    normalized_col = _normalized_genre_sql(column)
+    for alias in folded_aliases:
+        clauses.append(f"instr({normalized_col}, ?) > 0")
+        clause_params.append(f" {alias} ")
+    return clauses, clause_params
+
+
+def _append_genre_clause(
+    conditions: list[str],
+    params: list[object],
+    column: str,
+    values: list[str],
+) -> None:
+    if not values:
+        return
+    clauses, clause_params = _build_genre_match_sql(column, values)
+    if clauses:
+        conditions.append(f"({' OR '.join(clauses)})")
+        params.extend(clause_params)
 
 
 def _append_in_clause(
@@ -171,41 +229,33 @@ def _build_filter_conditions(
     country: str | Sequence[str] | None,
     year: int | Sequence[int] | None,
     query: str | None,
+    include_deleted: bool = False,
 ) -> tuple[list[str], list[object]]:
-    conditions: list[str] = ["t.is_deleted = 0"]
+    conditions: list[str] = [] if include_deleted else ["t.is_deleted = 0"]
     params: list[object] = []
 
     if query:
         exact_like = f"%{query.lower()}%"
         flex_like = f"%{_to_flexible_like(query)}%"
         if exact_like == flex_like:
-            conditions.append(
-                "(lower(t.title) LIKE ? OR lower(t.artist) LIKE ? OR lower(t.album) LIKE ?)"
-            )
-            params.extend([exact_like, exact_like, exact_like])
+            conditions.append("(lower(t.title) LIKE ? OR lower(t.artist) LIKE ?)")
+            params.extend([exact_like, exact_like])
         else:
             conditions.append(
                 "("
-                "lower(t.title) LIKE ? OR lower(t.artist) LIKE ? OR lower(t.album) LIKE ?"
+                "lower(t.title) LIKE ? OR lower(t.artist) LIKE ?"
                 " OR t.artist LIKE ? OR t.title LIKE ?"
                 ")"
             )
-            params.extend([exact_like, exact_like, exact_like, flex_like, flex_like])
+            params.extend([exact_like, exact_like, flex_like, flex_like])
 
     _append_like_clause(
         conditions, params, "t.artist", _normalize_string_sequence(artist)
     )
-    _append_like_clause(
-        conditions, params, "t.album", _normalize_string_sequence(album)
+    _ = album
+    _append_genre_clause(
+        conditions, params, "t.genre", _normalize_string_sequence(genre)
     )
-    expanded_genres = list(
-        dict.fromkeys(
-            alias
-            for g in _normalize_string_sequence(genre)
-            for alias in expand_genre_aliases(g)
-        )
-    )
-    _append_like_clause(conditions, params, "t.genre", expanded_genres)
     _append_country_clause(conditions, params, _normalize_string_sequence(country))
     _append_in_clause(
         conditions, params, "t.release_year", _normalize_year_sequence(year)
@@ -243,7 +293,7 @@ def _row_to_admin_catalog_track(row: sqlite3.Row) -> AdminCatalogTrackResult:
         duration_seconds=int(row["duration_seconds"]),
         genre=row["genre"],
         spotify_id=row["spotify_id"],
-        album=row["album"],
+        album=None,
         country=row["country"],
         release_year=row["release_year"],
         cover_url=row["cover_url"],
@@ -307,7 +357,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             SET spotify_id = ?,
                 title = ?,
                 artist = ?,
-                album = ?,
                 duration_seconds = ?,
                 genre = ?,
                 country = ?,
@@ -322,7 +371,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
                 track.spotify_id,
                 track.title,
                 track.artist,
-                track.album,
                 track.duration_seconds,
                 track.genre or "",
                 track.country,
@@ -353,7 +401,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             UPDATE tracks
             SET title = ?,
                 artist = ?,
-                album = ?,
                 duration_seconds = ?,
                 genre = ?,
                 country = ?,
@@ -367,7 +414,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             (
                 track.title,
                 track.artist,
-                track.album,
                 track.duration_seconds,
                 track.genre or "",
                 track.country,
@@ -386,16 +432,15 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         cursor.execute(
             """
             INSERT INTO tracks (
-                spotify_id, title, artist, album, duration_seconds,
+                spotify_id, title, artist, duration_seconds,
                 genre, country, release_year, cover_url, itunes_preview_url,
                 explicit, is_deleted, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 track.spotify_id,
                 track.title,
                 track.artist,
-                track.album,
                 track.duration_seconds,
                 track.genre or "",
                 track.country,
@@ -437,25 +482,127 @@ class SQLiteTrackRepository(TrackRepositoryPort):
                 if len(collected) >= target:
                     break
 
-    def _fetch_random_probes(
+    def _resolve_genre_sets(
+        self,
+        *,
+        excluded_genres: Sequence[str],
+        excluded_genre_terms: Sequence[str],
+        preferred_genres: Sequence[str],
+        included_genres: Sequence[str] = (),
+    ) -> tuple[list[str], list[str] | None, list[str] | None]:
+        clean_excluded = [g.strip() for g in excluded_genres if g and g.strip()]
+        clean_terms = [
+            t.casefold().strip() for t in excluded_genre_terms if t and t.strip()
+        ]
+        clean_preferred = [g.strip() for g in preferred_genres if g and g.strip()]
+        clean_included = [g.strip() for g in included_genres if g and g.strip()]
+        if (
+            not clean_excluded
+            and not clean_terms
+            and not clean_preferred
+            and not clean_included
+        ):
+            return [], None, None
+
+        distinct_genres = [
+            str(r[0])
+            for r in self.conn.execute("SELECT DISTINCT genre FROM tracks").fetchall()
+            if r[0] is not None
+        ]
+        blocked_raw = [
+            g
+            for g in distinct_genres
+            if any(genre_matches_preference(g, exc) for exc in clean_excluded)
+            or (
+                clean_terms
+                and any(
+                    f" {term} " in _normalize_genre_tokens(g) for term in clean_terms
+                )
+            )
+        ]
+        blocked_set = set(blocked_raw)
+        allowed_genres = [g for g in distinct_genres if g not in blocked_set]
+        included_raw = (
+            [
+                g
+                for g in allowed_genres
+                if any(genre_matches_preference(g, inc) for inc in clean_included)
+            ]
+            if clean_included
+            else None
+        )
+        if not clean_preferred:
+            return blocked_raw, None, included_raw
+        candidate_genres = allowed_genres if included_raw is None else included_raw
+        preferred_raw = [
+            g
+            for g in candidate_genres
+            if any(genre_matches_preference(g, pref) for pref in clean_preferred)
+        ]
+        return blocked_raw, preferred_raw, included_raw
+
+    def _fetch_random_rows(
         self,
         where_clause: str,
         base_params: list[object],
         *,
-        min_id: int,
-        max_id: int,
         target: int,
         seen_ids: set[int],
     ) -> list[sqlite3.Row]:
         if target <= 0:
             return []
+        effective_where = where_clause
+        effective_params = list(base_params)
+        if seen_ids:
+            placeholders = ",".join("?" for _ in seen_ids)
+            effective_where = f"{where_clause} AND track_id NOT IN ({placeholders})"
+            effective_params.extend(seen_ids)
+        id_query = (
+            f"SELECT track_id FROM tracks WHERE {effective_where} "  # noqa: S608
+            "ORDER BY RANDOM() LIMIT ?"
+        )
+        picked_ids = [
+            int(r[0])
+            for r in self.conn.execute(id_query, (*effective_params, target)).fetchall()
+            if int(r[0]) not in seen_ids
+        ]
+        if not picked_ids:
+            return []
+        id_placeholders = ",".join("?" for _ in picked_ids)
+        rows = self.conn.execute(
+            f"SELECT * FROM tracks WHERE track_id IN ({id_placeholders})",  # noqa: S608
+            tuple(picked_ids),
+        ).fetchall()
+        rows_by_id = {int(r["track_id"]): r for r in rows}
+        ordered_rows = [rows_by_id[tid] for tid in picked_ids if tid in rows_by_id]
         collected: list[sqlite3.Row] = []
-        probes = min(2, max(1, target))
+        self._append_unique_rows(ordered_rows, collected, seen_ids, target)
+        return collected
+
+    def _fetch_random_probes(
+        self,
+        where_clause: str,
+        base_params: list[object],
+        *,
+        target: int,
+        seen_ids: set[int],
+    ) -> list[sqlite3.Row]:
+        if target <= 0:
+            return []
+        bounds = self.conn.execute(
+            f"SELECT MIN(track_id), MAX(track_id) FROM tracks WHERE {where_clause}",  # noqa: S608
+            tuple(base_params),
+        ).fetchone()
+        if bounds is None or bounds[0] is None or bounds[1] is None:
+            return []
+        scoped_min, scoped_max = int(bounds[0]), int(bounds[1])
+        collected: list[sqlite3.Row] = []
+        probes = min(target, 16)
         per_probe = max(1, (target + probes - 1) // probes)
         for _ in range(probes):
             if len(collected) >= target:
                 break
-            start_id = random.randint(min_id, max_id)  # noqa: S311
+            start_id = random.randint(scoped_min, scoped_max)  # noqa: S311
             query = (
                 f"SELECT * FROM tracks WHERE track_id >= ? AND {where_clause} "  # noqa: S608
                 "ORDER BY track_id ASC LIMIT ?"
@@ -464,16 +611,17 @@ class SQLiteTrackRepository(TrackRepositoryPort):
                 query, (start_id, *base_params, per_probe)
             ).fetchall()
             self._append_unique_rows(rows, collected, seen_ids, target)
-        if len(collected) < target:
-            remaining = target - len(collected)
-            fallback_q = (
-                f"SELECT * FROM tracks WHERE {where_clause} "  # noqa: S608
-                "ORDER BY track_id ASC LIMIT ?"
-            )
-            rows = self.conn.execute(
-                fallback_q, (*base_params, remaining + len(seen_ids))
-            ).fetchall()
-            self._append_unique_rows(rows, collected, seen_ids, target)
+            if len(rows) < per_probe and len(collected) < target:
+                wrap_limit = per_probe - len(rows)
+                wrap_query = (
+                    f"SELECT * FROM tracks WHERE track_id < ? AND {where_clause} "  # noqa: S608
+                    "ORDER BY track_id DESC LIMIT ?"
+                )
+                wrap_rows = self.conn.execute(
+                    wrap_query, (start_id, *base_params, wrap_limit)
+                ).fetchall()
+                self._append_unique_rows(wrap_rows, collected, seen_ids, target)
+        random.shuffle(collected)
         return collected
 
     def list_active(
@@ -485,6 +633,11 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         preferred_genres: Sequence[str] = (),
         block_explicit: bool = False,
         excluded_ids: Sequence[int] = (),
+        artist: str | Sequence[str] | None = None,
+        genre: str | Sequence[str] | None = None,
+        country: str | Sequence[str] | None = None,
+        year: int | Sequence[int] | None = None,
+        max_duration_seconds: int | None = None,
     ) -> list[Track]:
         conditions = ["is_deleted = 0"]
         params: list[object] = []
@@ -497,75 +650,77 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             conditions.append(f"track_id NOT IN ({placeholders})")
             params.extend(excluded_ids)
 
-        normalized_genre = (
-            "' ' || lower(TRANSLATE(genre, '-/&,.;:()[]!', '            ')) || ' '"
+        blocked_raw, preferred_raw, included_raw = self._resolve_genre_sets(
+            excluded_genres=excluded_genres,
+            excluded_genre_terms=excluded_genre_terms,
+            preferred_genres=preferred_genres,
+            included_genres=_normalize_string_sequence(genre),
         )
-        blocked_terms = list(
-            dict.fromkeys(
-                [
-                    *(
-                        alias
-                        for g in excluded_genres
-                        if g.strip()
-                        for alias in expand_genre_aliases(g)
-                    ),
-                    *(t.casefold().strip() for t in excluded_genre_terms if t.strip()),
-                ]
-            )
+        if included_raw is not None:
+            if not included_raw:
+                return []
+            placeholders = ",".join("?" for _ in included_raw)
+            conditions.append(f"genre IN ({placeholders})")
+            params.extend(included_raw)
+        elif blocked_raw:
+            placeholders = ",".join("?" for _ in blocked_raw)
+            conditions.append(f"(genre IS NULL OR genre NOT IN ({placeholders}))")
+            params.extend(blocked_raw)
+
+        _append_like_clause(
+            conditions, params, "artist", _normalize_string_sequence(artist)
         )
-        for term in blocked_terms:
-            conditions.append(f"instr({normalized_genre}, ?) = 0")
-            params.append(f" {term} ")
+        _append_country_clause(
+            conditions,
+            params,
+            _normalize_string_sequence(country),
+            column="country",
+        )
+        _append_in_clause(
+            conditions, params, "release_year", _normalize_year_sequence(year)
+        )
+        if max_duration_seconds is not None:
+            conditions.append("duration_seconds <= ?")
+            params.append(max_duration_seconds)
 
         where_clause = " AND ".join(conditions)
-        min_row = self.conn.execute("SELECT MIN(track_id) FROM tracks").fetchone()
-        max_row = self.conn.execute("SELECT MAX(track_id) FROM tracks").fetchone()
-        if (
-            min_row is None
-            or max_row is None
-            or min_row[0] is None
-            or max_row[0] is None
-        ):
+        total_row = self.conn.execute("SELECT COUNT(*) FROM tracks").fetchone()
+        if total_row is None or int(total_row[0]) == 0:
             return []
-        min_id, max_id = int(min_row[0]), int(max_row[0])
+        total_tracks = int(total_row[0])
 
-        if (max_id - min_id) <= limit * 2:
+        if total_tracks <= limit * 2:
             query = f"SELECT * FROM tracks WHERE {where_clause} ORDER BY track_id ASC LIMIT ?"  # noqa: S608
             rows = self.conn.execute(query, (*params, limit)).fetchall()
             return [_row_to_track(r) for r in rows]
 
         seen_ids: set[int] = set()
         sampled_rows: list[sqlite3.Row] = []
-
-        pref_aliases = list(
-            dict.fromkeys(
-                alias
-                for g in preferred_genres
-                if g.strip()
-                for alias in expand_genre_aliases(g)
-            )
+        fetcher = (
+            self._fetch_random_rows
+            if total_tracks <= _RANDOM_ORDER_MAX_ROWS
+            else self._fetch_random_probes
         )
-        if pref_aliases:
-            pref_clauses = ["lower(genre) LIKE ?" for _ in pref_aliases]
-            pref_where = f"{where_clause} AND ({' OR '.join(pref_clauses)})"
-            pref_params: list[object] = [*params, *(f"%{a}%" for a in pref_aliases)]
+
+        if preferred_raw and (
+            included_raw is None or len(preferred_raw) < len(included_raw)
+        ):
+            placeholders = ",".join("?" for _ in preferred_raw)
+            pref_where = f"{where_clause} AND genre IN ({placeholders})"
+            pref_params: list[object] = [*params, *preferred_raw]
             sampled_rows.extend(
-                self._fetch_random_probes(
+                fetcher(
                     pref_where,
                     pref_params,
-                    min_id=min_id,
-                    max_id=max_id,
                     target=max(1, limit // 2),
                     seen_ids=seen_ids,
                 )
             )
 
         sampled_rows.extend(
-            self._fetch_random_probes(
+            fetcher(
                 where_clause,
                 params,
-                min_id=min_id,
-                max_id=max_id,
                 target=limit - len(sampled_rows),
                 seen_ids=seen_ids,
             )
@@ -583,6 +738,7 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         query: str | None = None,
         min_rating: float | None = None,
         sort_by: str | None = None,
+        include_deleted: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Track]:
@@ -593,11 +749,12 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             country=country,
             year=year,
             query=query,
+            include_deleted=include_deleted,
         )
         if min_rating is not None:
             conditions.append("r_agg.avg_rating >= ?")
             params.append(min_rating)
-        where_clause = " AND ".join(conditions)
+        where_clause = " AND ".join(conditions) if conditions else "1 = 1"
         order_by = _TRACK_SORT_ORDERS.get(sort_by or "", "t.track_id ASC")
         sql = (
             "SELECT t.*, r_agg.avg_rating AS avg_rating, "  # noqa: S608
@@ -711,10 +868,9 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         if query and query.strip():
             like = f"%{query.strip().lower()}%"
             conditions.append(
-                "(lower(t.title) LIKE ? OR lower(t.artist) LIKE ? "
-                "OR lower(COALESCE(t.album, '')) LIKE ? OR lower(t.genre) LIKE ?)"
+                "(lower(t.title) LIKE ? OR lower(t.artist) LIKE ? OR lower(t.genre) LIKE ?)"
             )
-            params.extend([like, like, like, like])
+            params.extend([like, like, like])
         if min_dislikes is not None:
             conditions.append("COALESCE(i_agg.dislikes_count, 0) >= ?")
             params.append(min_dislikes)
@@ -736,7 +892,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             t.spotify_id,
             t.title,
             t.artist,
-            t.album,
             t.duration_seconds,
             t.genre,
             t.country,
@@ -754,10 +909,10 @@ class SQLiteTrackRepository(TrackRepositoryPort):
         self.conn.executemany(
             """
             INSERT INTO tracks (
-                spotify_id, title, artist, album, duration_seconds, genre,
+                spotify_id, title, artist, duration_seconds, genre,
                 country, release_year, cover_url, itunes_preview_url,
                 explicit, is_deleted, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             rows,
         )
@@ -776,7 +931,6 @@ class SQLiteTrackRepository(TrackRepositoryPort):
                     spotify_id TEXT,
                     title TEXT NOT NULL,
                     artist TEXT NOT NULL,
-                    album TEXT,
                     duration_seconds INTEGER NOT NULL,
                     genre TEXT NOT NULL,
                     country TEXT,
@@ -793,22 +947,22 @@ class SQLiteTrackRepository(TrackRepositoryPort):
             cursor.executemany(
                 """
                 INSERT INTO _stage_tracks (
-                    spotify_id, title, artist, album, duration_seconds, genre,
+                    spotify_id, title, artist, duration_seconds, genre,
                     country, release_year, cover_url, itunes_preview_url,
                     explicit, is_deleted, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )
             cursor.execute(
                 """
                 INSERT INTO tracks (
-                    spotify_id, title, artist, album, duration_seconds, genre,
+                    spotify_id, title, artist, duration_seconds, genre,
                     country, release_year, cover_url, itunes_preview_url,
                     explicit, is_deleted, created_at
                 )
                 SELECT
-                    s.spotify_id, s.title, s.artist, s.album, s.duration_seconds, s.genre,
+                    s.spotify_id, s.title, s.artist, s.duration_seconds, s.genre,
                     s.country, s.release_year, s.cover_url, s.itunes_preview_url,
                     s.explicit, s.is_deleted, s.created_at
                 FROM _stage_tracks s
