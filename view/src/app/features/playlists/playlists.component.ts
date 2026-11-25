@@ -6,9 +6,15 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import type { PaginatedTracksApiDto, Playlist, Song } from '@ribbit/shared-types';
+import type { PaginatedTracksApiDto, Playlist, ReferenceSource, Song } from '@ribbit/shared-types';
 import { isSpotifyConnectionRequiredError, isSpotifyError, toApiError } from '../../core/api-error';
-import { mapPlaylistDtoToPlaylist, mapTrackDtoToSong } from '../../core/api-mappers';
+import {
+  computeSongsDurationSeconds,
+  extractReferenceSourceFromFilters,
+  formatTotalMinutes,
+  mapPlaylistDtoToPlaylist,
+  mapTrackDtoToSong,
+} from '../../core/api-mappers';
 import { AudioPlayerService } from '../../core/audio-player.service';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
@@ -48,12 +54,22 @@ export class PlaylistsComponent {
   private readonly deckCursor = signal<number>(0);
   private readonly deckLoadedFromBackend = signal<boolean>(false);
   protected readonly isLoadingDeck = signal<boolean>(false);
+  private readonly deckPhase = signal<'primary' | 'additional'>('primary');
+  protected readonly referenceExhausted = signal<boolean>(false);
+  protected readonly additionalReferenceWarning = signal<string | null>(null);
   private readonly fallbackCursor = signal<number>(0);
   private readonly deckDrag = signal<{ readonly x: number; readonly y: number }>({ x: 0, y: 0 });
   protected readonly isDragging = signal<boolean>(false);
   private deckPointerStart: { readonly x: number; readonly y: number } | null = null;
   private deckModifiedDuringSwipe = false;
   private deckNextCursor: number | null = null;
+
+  private readonly referenceSourceLabels: Record<ReferenceSource, string> = {
+    curtidas: 'Minhas Curtidas',
+    amadas: 'Minhas Amadas (Superlikes)',
+    playlists: 'Outras Playlists da Biblioteca',
+    livre: 'Descoberta Livre (Catálogo geral)',
+  };
 
   constructor() {
     let lastReset = this.state.playlistsViewReset();
@@ -130,15 +146,10 @@ export class PlaylistsComponent {
     return pool[idx] ?? pool[0] ?? null;
   }
 
-  protected readonly activeTrack = computed<Song | null>(() => {
-    const fromDeck = this.currentDeckTrack();
-    if (fromDeck) return fromDeck;
-    const playlist = this.selectedPlaylist();
-    const isServerDeck = Boolean(playlist?.playlistId !== undefined && readAuthToken());
-    if (!playlist || this.deckLoadedFromBackend() || this.isLoadingDeck() || isServerDeck) {
-      return null;
-    }
-    return this.pickFallbackTrack(playlist);
+  protected readonly selectedPlaylistTracks = computed<readonly Song[]>(() => {
+    const p = this.selectedPlaylist();
+    if (!p) return [];
+    return p.songs ?? [];
   });
 
   protected readonly activeDeckDragAction = computed<'like' | 'dislike' | null>(() => {
@@ -159,22 +170,79 @@ export class PlaylistsComponent {
     return String(sec).padStart(2, '0');
   });
 
-  protected readonly selectedPlaylistTracks = computed<readonly Song[]>(() => {
+  protected readonly selectedPlaylistDurationSeconds = computed<number>(() => {
     const p = this.selectedPlaylist();
-    if (!p) return [];
-    return p.songs ?? [];
+    if (!p) return 0;
+    const songs = p.songs ?? [];
+    if (songs.length > 0) {
+      return computeSongsDurationSeconds(songs);
+    }
+    return p.totalDurationSeconds ?? 0;
   });
+
+  protected readonly isDurationLimitReached = computed<boolean>(() => {
+    const max = this.selectedPlaylist()?.maxDurationSeconds;
+    return max != null && max > 0 && this.selectedPlaylistDurationSeconds() >= max;
+  });
+
+  protected readonly formattedMaxDuration = computed<string | null>(() =>
+    this.formatMaxDuration(this.selectedPlaylist()?.maxDurationSeconds),
+  );
+
+  private readonly playlistReferenceConfig = computed<{
+    readonly hasSourcePlaylist: boolean;
+    readonly referenceSource: ReferenceSource | null;
+  }>(() => {
+    const p = this.selectedPlaylist();
+    if (!p) {
+      return { hasSourcePlaylist: false, referenceSource: null };
+    }
+    const hasSourcePlaylist =
+      (p.sourcePlaylistId != null && p.sourcePlaylistId > 0) ||
+      (p.referencePlaylistId != null && p.referencePlaylistId > 0);
+    const referenceSource = p.referenceSource ?? extractReferenceSourceFromFilters(p.deckFilters);
+    return { hasSourcePlaylist, referenceSource };
+  });
+
+  protected readonly isSwipeBlocked = computed<boolean>(
+    () => this.isDurationLimitReached() || this.referenceExhausted(),
+  );
+
+  protected formatMaxDuration(seconds: number | null | undefined): string | null {
+    if (seconds == null || seconds <= 0) return null;
+    return formatTotalMinutes(seconds);
+  }
+
+  protected readonly activeTrack = computed<Song | null>(() => {
+    if (this.isSwipeBlocked()) {
+      return null;
+    }
+    const fromDeck = this.currentDeckTrack();
+    if (fromDeck) return fromDeck;
+    const playlist = this.selectedPlaylist();
+    const isServerDeck = Boolean(playlist?.playlistId !== undefined && readAuthToken());
+    if (!playlist || this.deckLoadedFromBackend() || this.isLoadingDeck() || isServerDeck) {
+      return null;
+    }
+    return this.pickFallbackTrack(playlist);
+  });
+
+  private notifySwipeBlocked(): void {
+    this.state.notify(
+      this.isDurationLimitReached()
+        ? 'Esta playlist já atingiu o limite de duração. Remova uma faixa para continuar.'
+        : 'Todas as faixas desta referência já foram exibidas.',
+    );
+  }
 
   protected toggleSwipeMode(): void {
     this.player.pause();
-    if (this.selectedPlaylistTracks().length === 0) {
-      this.isSwipeMode.set(true);
-      if (this.deckCandidates().length === 0) {
-        this.loadPlaylistDeck();
-      }
+    const hasTracks = this.selectedPlaylistTracks().length > 0;
+    const next = hasTracks ? !this.isSwipeMode() : true;
+    if (next && this.isSwipeBlocked()) {
+      if (hasTracks) this.notifySwipeBlocked();
       return;
     }
-    const next = !this.isSwipeMode();
     this.isSwipeMode.set(next);
     if (!next && this.deckModifiedDuringSwipe) {
       this.deckModifiedDuringSwipe = false;
@@ -183,6 +251,59 @@ export class PlaylistsComponent {
     if (next && this.deckCandidates().length === 0) {
       this.loadPlaylistDeck();
     }
+  }
+
+  private resetDeckSessionState(): void {
+    this.deckNextCursor = null;
+    this.deckLoadedFromBackend.set(false);
+    this.deckPhase.set('primary');
+    this.referenceExhausted.set(false);
+    this.additionalReferenceWarning.set(null);
+    this.deckCandidates.set([]);
+    this.deckCursor.set(0);
+  }
+
+  private transitionToAdditionalOrBlock(): boolean {
+    if (this.isDurationLimitReached()) {
+      return false;
+    }
+    const { hasSourcePlaylist, referenceSource } = this.playlistReferenceConfig();
+    if (hasSourcePlaylist && this.deckPhase() === 'primary') {
+      if (referenceSource) {
+        this.deckPhase.set('additional');
+        const label = this.referenceSourceLabels[referenceSource];
+        const msg = `Todas as faixas da playlist de referência foram exibidas. Agora usando a referência adicional: ${label}.`;
+        this.additionalReferenceWarning.set(msg);
+        this.state.notify(msg);
+        this.loadPlaylistDeck(undefined, 'additional');
+        return true;
+      }
+      this.referenceExhausted.set(true);
+      this.deckNextCursor = null;
+      this.isLoadingDeck.set(false);
+      this.deckLoadedFromBackend.set(true);
+      this.deckCandidates.set([]);
+      this.deckCursor.set(0);
+      this.state.notify(
+        'Todas as faixas da playlist de referência já foram exibidas. Swipe bloqueado.',
+      );
+      return true;
+    }
+    if (
+      referenceSource === 'curtidas' ||
+      referenceSource === 'amadas' ||
+      referenceSource === 'playlists'
+    ) {
+      this.referenceExhausted.set(true);
+      this.deckNextCursor = null;
+      this.isLoadingDeck.set(false);
+      this.deckLoadedFromBackend.set(true);
+      this.deckCandidates.set([]);
+      this.deckCursor.set(0);
+      this.state.notify('Todas as faixas da referência já foram exibidas. Swipe bloqueado.');
+      return true;
+    }
+    return false;
   }
 
   private preloadUpcomingDeckImages(candidates: readonly Song[], startIndex: number): void {
@@ -196,12 +317,21 @@ export class PlaylistsComponent {
     }
   }
 
-  private handleDeckPage(page: PaginatedTracksApiDto, cursorId?: number): void {
+  private handleDeckPage(
+    page: PaginatedTracksApiDto,
+    cursorId: number | undefined,
+    phase: 'primary' | 'additional',
+  ): void {
     const candidates = page.items.map((dto) => mapTrackDtoToSong(dto));
-    if (candidates.length === 0 && cursorId !== undefined) {
-      this.deckNextCursor = null;
-      this.loadPlaylistDeck();
-      return;
+    if (candidates.length === 0) {
+      if (this.transitionToAdditionalOrBlock()) {
+        return;
+      }
+      if (cursorId !== undefined) {
+        this.deckNextCursor = null;
+        this.loadPlaylistDeck(undefined, phase);
+        return;
+      }
     }
     this.deckNextCursor = page.has_more ? (page.next_cursor ?? null) : null;
     this.isLoadingDeck.set(false);
@@ -211,8 +341,19 @@ export class PlaylistsComponent {
     this.preloadUpcomingDeckImages(candidates, 0);
   }
 
-  private loadPlaylistDeck(cursorId?: number): void {
+  private loadPlaylistDeck(
+    cursorId?: number,
+    phase: 'primary' | 'additional' = this.deckPhase(),
+  ): void {
     const p = this.selectedPlaylist();
+    if (this.isDurationLimitReached()) {
+      this.deckNextCursor = null;
+      this.isLoadingDeck.set(false);
+      this.deckLoadedFromBackend.set(true);
+      this.deckCandidates.set([]);
+      this.deckCursor.set(0);
+      return;
+    }
     if (!p?.playlistId || !readAuthToken()) {
       this.deckNextCursor = null;
       this.isLoadingDeck.set(false);
@@ -225,9 +366,9 @@ export class PlaylistsComponent {
     this.isLoadingDeck.set(true);
     this.deckCandidates.set([]);
     this.deckCursor.set(0);
-    this.playlistService.getPlaylistDeck(p.playlistId, 25, cursorId).subscribe({
+    this.playlistService.getPlaylistDeck(p.playlistId, 25, cursorId, phase).subscribe({
       next: (page) => {
-        this.handleDeckPage(page, cursorId);
+        this.handleDeckPage(page, cursorId, phase);
       },
       error: () => {
         this.deckNextCursor = null;
@@ -240,9 +381,12 @@ export class PlaylistsComponent {
   }
 
   protected loadMoreRecommendations(): void {
+    if (this.isSwipeBlocked()) {
+      return;
+    }
     const p = this.selectedPlaylist();
     if (p?.playlistId && readAuthToken()) {
-      this.loadPlaylistDeck(this.deckNextCursor ?? undefined);
+      this.loadPlaylistDeck(this.deckNextCursor ?? undefined, this.deckPhase());
       return;
     }
     const existingKeys = new Set(
@@ -284,43 +428,68 @@ export class PlaylistsComponent {
     });
   }
 
-  protected swipeDeckTrack(action: 'like' | 'dislike'): void {
-    const p = this.selectedPlaylist();
-    const track = this.activeTrack();
-    this.isDragging.set(false);
-    this.deckDrag.set({ x: 0, y: 0 });
-    this.player.pause();
-    if (!p || !track) return;
+  private persistLikedDeckTrack(playlist: Playlist, track: Song): void {
+    this.selectedPlaylist.update((current) => {
+      if (!current) return current;
+      const currentSongs = current.songs ?? [];
+      const exists =
+        track.trackId !== undefined && currentSongs.some((s) => s.trackId === track.trackId);
+      const updatedSongs = exists ? currentSongs : [...currentSongs, track];
+      const totalDurationSeconds = computeSongsDurationSeconds(updatedSongs);
+      return {
+        ...current,
+        count: updatedSongs.length,
+        duration: formatTotalMinutes(totalDurationSeconds),
+        totalDurationSeconds,
+        songs: updatedSongs,
+      };
+    });
+    this.state.notify(`"${track.title}" adicionada a ${playlist.name}!`);
 
-    if (action === 'like') {
-      this.selectedPlaylist.update((current) => {
-        if (!current) return current;
-        const currentSongs = current.songs ?? [];
-        const exists =
-          track.trackId !== undefined && currentSongs.some((s) => s.trackId === track.trackId);
-        const updatedSongs = exists ? currentSongs : [...currentSongs, track];
-        return {
-          ...current,
-          count: updatedSongs.length,
-          songs: updatedSongs,
-        };
-      });
-      this.state.notify(`"${track.title}" adicionada a ${p.name}!`);
+    const playlistId = playlist.playlistId;
+    if (playlistId === undefined || track.trackId === undefined || !readAuthToken()) {
+      return;
+    }
+    this.deckModifiedDuringSwipe = true;
+    this.playlistService.addTrackToPlaylist(playlistId, track.trackId, 'like').subscribe({
+      error: (err: unknown) => {
+        this.syncPlaylistAfterAddError(playlistId, err);
+      },
+    });
+  }
 
-      if (p.playlistId !== undefined && track.trackId !== undefined && readAuthToken()) {
-        this.deckModifiedDuringSwipe = true;
-        this.playlistService.addTrackToPlaylist(p.playlistId, track.trackId, 'like').subscribe({
-          error: (err: unknown) => {
-            this.state.notify(toApiError(err).message);
-            this.state.refreshPlaylists();
-          },
-        });
+  private syncPlaylistAfterAddError(playlistId: number, err: unknown): void {
+    this.state.notify(toApiError(err).message);
+    this.state.refreshPlaylists();
+    this.playlistService.getPlaylistById(playlistId).subscribe({
+      next: (fresh) => {
+        if (this.selectedPlaylist()?.playlistId === playlistId) {
+          this.selectedPlaylist.set(fresh);
+        }
+      },
+      error: () => undefined,
+    });
+  }
+
+  private advanceAfterDeckSwipe(playlist: Playlist, nextCursor: number): void {
+    if (this.isDurationLimitReached()) {
+      this.player.pause();
+      this.state.notify(
+        'Limite de duração da playlist atingido. Swipe bloqueado até remover uma faixa.',
+      );
+      return;
+    }
+
+    if (nextCursor >= this.deckCandidates().length) {
+      if (this.deckNextCursor !== null && playlist.playlistId !== undefined && readAuthToken()) {
+        this.loadPlaylistDeck(this.deckNextCursor, this.deckPhase());
+        return;
+      }
+      if (this.transitionToAdditionalOrBlock()) {
+        return;
       }
     }
 
-    const nextCursor = this.deckCursor() + 1;
-    this.deckCursor.set(nextCursor);
-    this.fallbackCursor.update((c) => c + 1);
     this.preloadUpcomingDeckImages(this.deckCandidates(), nextCursor);
     const nextTrack = this.activeTrack();
     if (nextTrack) {
@@ -329,7 +498,26 @@ export class PlaylistsComponent {
     }
   }
 
+  protected swipeDeckTrack(action: 'like' | 'dislike'): void {
+    const p = this.selectedPlaylist();
+    const track = this.activeTrack();
+    this.isDragging.set(false);
+    this.deckDrag.set({ x: 0, y: 0 });
+    this.player.pause();
+    if (!p || !track || this.isSwipeBlocked()) return;
+
+    if (action === 'like') {
+      this.persistLikedDeckTrack(p, track);
+    }
+
+    const nextCursor = this.deckCursor() + 1;
+    this.deckCursor.set(nextCursor);
+    this.fallbackCursor.update((c) => c + 1);
+    this.advanceAfterDeckSwipe(p, nextCursor);
+  }
+
   protected startDeckCardDrag(event: PointerEvent): void {
+    if (this.isSwipeBlocked()) return;
     if (event.target instanceof Element && event.target.closest('button')) return;
     this.deckPointerStart = { x: event.clientX, y: event.clientY };
     this.isDragging.set(true);
@@ -399,19 +587,27 @@ export class PlaylistsComponent {
         : playlistOrName;
 
     this.player.pause();
-    this.deckNextCursor = null;
-    this.deckLoadedFromBackend.set(false);
+    this.resetDeckSessionState();
     this.selectedPlaylist.set(resolved);
     const hasTracks = (resolved.songs?.length ?? 0) > 0 || resolved.count > 0;
-    this.isSwipeMode.set(!hasTracks);
-    this.loadPlaylistDeck();
+    this.isSwipeMode.set(!hasTracks && !this.isDurationLimitReached());
+    if (!this.isDurationLimitReached()) {
+      this.loadPlaylistDeck();
+    } else {
+      this.deckLoadedFromBackend.set(true);
+    }
 
     if (resolved.playlistId !== undefined && readAuthToken()) {
       this.playlistService.getPlaylistById(resolved.playlistId).subscribe({
         next: (fresh) => {
+          if (this.selectedPlaylist()?.playlistId !== resolved.playlistId) return;
           this.selectedPlaylist.set(fresh);
           const freshHasTracks = (fresh.songs?.length ?? 0) > 0;
-          if (!freshHasTracks) {
+          if (this.isDurationLimitReached()) {
+            this.player.pause();
+            this.deckCandidates.set([]);
+            this.deckLoadedFromBackend.set(true);
+          } else if (!freshHasTracks) {
             this.isSwipeMode.set(true);
           }
         },
@@ -428,8 +624,7 @@ export class PlaylistsComponent {
       this.deckModifiedDuringSwipe = false;
       this.state.refreshPlaylists();
     }
-    this.deckNextCursor = null;
-    this.deckLoadedFromBackend.set(false);
+    this.resetDeckSessionState();
     this.selectedPlaylist.set(null);
     this.isSwipeMode.set(false);
   }
@@ -499,12 +694,26 @@ export class PlaylistsComponent {
       this.playlistService.removeTrackFromPlaylist(p.playlistId, track.trackId).subscribe({
         next: () => {
           const updatedSongs = (p.songs ?? []).filter((_, idx) => idx !== index);
+          const totalDurationSeconds = computeSongsDurationSeconds(updatedSongs);
           const updated: Playlist = {
             ...p,
             count: updatedSongs.length,
+            duration: formatTotalMinutes(totalDurationSeconds),
+            totalDurationSeconds,
             songs: updatedSongs,
           };
           this.selectedPlaylist.set(updated);
+          this.referenceExhausted.set(false);
+          if (!this.isDurationLimitReached()) {
+            this.deckPhase.set('primary');
+            this.additionalReferenceWarning.set(null);
+            this.deckNextCursor = null;
+            this.deckCandidates.set([]);
+            this.deckCursor.set(0);
+            if (this.isSwipeMode() || updatedSongs.length === 0) {
+              this.loadPlaylistDeck();
+            }
+          }
           this.state.refreshPlaylists();
           this.state.notify(`"${track.title}" removida de ${p.name}.`);
         },

@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 _DEFAULT_DEV_SECRET_KEY = "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
 _DEFAULT_DEV_ADMIN_PASSWORD = "RibbitLocal2026!"  # noqa: S105
 _DEFAULT_ADMIN_ELIGIBLE_EMAILS = ("admin@ribbit.example.com",)
-_DEFAULT_GCS_MAX_INGEST_TRACKS = 50_000
+_DEFAULT_GCS_MAX_INGEST_TRACKS: int | None = None
 
 
 def _extract_client_id_from_payload(payload: object) -> str | None:

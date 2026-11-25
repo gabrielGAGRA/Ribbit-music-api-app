@@ -329,7 +329,7 @@ def test_load_settings_resolves_google_client_id_from_credentials_file(
 
     sa_settings = load_settings()
     assert sa_settings.google_client_id is None
-    assert sa_settings.gcs_max_ingest_tracks == 50_000
+    assert sa_settings.gcs_max_ingest_tracks is None
 
     oauth_creds_path = Path(str(tmp_path)) / "oauth_creds.json"
     oauth_creds_path.write_text(
@@ -343,6 +343,10 @@ def test_load_settings_resolves_google_client_id_from_credentials_file(
     monkeypatch.setenv(
         "GOOGLE_CLIENT_ID", "explicit-oauth-id.apps.googleusercontent.com"
     )
+    monkeypatch.setenv("GCS_MAX_INGEST_TRACKS", "25000")
+    capped = load_settings()
+    assert capped.gcs_max_ingest_tracks == 25_000
+
     monkeypatch.setenv("GCS_MAX_INGEST_TRACKS", "0")
     override = load_settings()
     assert override.google_client_id == "explicit-oauth-id.apps.googleusercontent.com"

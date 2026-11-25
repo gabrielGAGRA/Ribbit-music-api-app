@@ -326,3 +326,44 @@ def test_create_deck_playlist_filters_blocked_genres_for_user_from_reference() -
     result = use_case.execute(command)
 
     assert result.tracks == (allowed_track,)
+
+
+def test_create_deck_playlist_persists_reference_source_in_deck_filters() -> None:
+    import json
+
+    user = User(
+        user_id=1,
+        email="adult@ribbit.com",
+        password_hash="pw",
+        display_name="Adult",
+        age=25,
+        plan_id=1,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.save.side_effect = lambda p: p
+    ref_playlist = MagicMock()
+    ref_playlist.is_owned_by.return_value = True
+    ref_playlist.tracks = []
+    playlist_repo.find_by_id.return_value = ref_playlist
+
+    use_case = CreateDeckPlaylistUseCase(
+        user_repo=user_repo,
+        track_repo=MagicMock(spec=TrackRepositoryPort),
+        playlist_repo=playlist_repo,
+    )
+    command = CreateDeckPlaylistCommand(
+        user_id=1,
+        name="Ref + Extra",
+        populate_tracks=False,
+        source_playlist_id=10,
+        reference_source="curtidas",
+    )
+
+    result = use_case.execute(command)
+
+    assert result.source_playlist_id == 10
+    assert result.deck_filters is not None
+    parsed = json.loads(result.deck_filters)
+    assert parsed["reference_source"] == "curtidas"

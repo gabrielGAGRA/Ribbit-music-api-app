@@ -46,7 +46,6 @@ def test_update_admin_role_promotes_another_user() -> None:
 
     use_case = UpdateAdminRoleUseCase(
         user_repo=user_repo,
-        eligible_emails=("moderator@ribbit.com",),
         audit_log_repo=audit_log_repo,
     )
     result = use_case.execute(admin_id=1, target_user_id=2, is_admin=True)
@@ -68,55 +67,50 @@ def test_update_admin_role_user_not_found_raises_entity_not_found() -> None:
         use_case.execute(admin_id=1, target_user_id=99, is_admin=False)
 
 
-def test_update_admin_role_rejects_ineligible_user_promotion() -> None:
+def test_update_admin_role_promotes_any_registered_user() -> None:
     target = User(
         user_id=2,
-        email="ineligible@example.com",
+        email="any.user@example.com",
         password_hash="pw",
-        display_name="Ineligible",
+        display_name="Any User",
         age=28,
         plan_id=1,
         is_admin=False,
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = target
+    user_repo.save.side_effect = lambda u: u
 
-    use_case = UpdateAdminRoleUseCase(
-        user_repo=user_repo,
-        eligible_emails=("gabriel.agra@usp.br",),
-    )
+    use_case = UpdateAdminRoleUseCase(user_repo=user_repo)
+    result = use_case.execute(admin_id=1, target_user_id=2, is_admin=True)
 
-    with pytest.raises(
-        BusinessRuleViolationError,
-        match="User ineligible@example.com is not eligible",
-    ):
-        use_case.execute(admin_id=1, target_user_id=2, is_admin=True)
-
-    user_repo.save.assert_not_called()
+    assert result.is_admin is True
+    user_repo.save.assert_called_once_with(target)
 
 
-def test_update_admin_role_rejects_promotion_when_eligible_emails_empty() -> None:
+def test_update_admin_role_demotes_another_admin() -> None:
     target = User(
         user_id=2,
-        email="someone@example.com",
+        email="other.admin@example.com",
         password_hash="pw",
-        display_name="Someone",
-        age=28,
+        display_name="Other Admin",
+        age=30,
         plan_id=1,
-        is_admin=False,
+        is_admin=True,
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = target
+    user_repo.save.side_effect = lambda u: u
+    audit_log_repo = MagicMock()
 
     use_case = UpdateAdminRoleUseCase(
         user_repo=user_repo,
-        eligible_emails=(),
+        audit_log_repo=audit_log_repo,
     )
+    result = use_case.execute(admin_id=1, target_user_id=2, is_admin=False)
 
-    with pytest.raises(
-        BusinessRuleViolationError,
-        match="User someone@example.com is not eligible",
-    ):
-        use_case.execute(admin_id=1, target_user_id=2, is_admin=True)
-
-    user_repo.save.assert_not_called()
+    assert result.is_admin is False
+    user_repo.save.assert_called_once_with(target)
+    audit_log_repo.log_event.assert_called_once_with(
+        "ADMIN_ROLE_UPDATED:other.admin@example.com:False", "OK"
+    )

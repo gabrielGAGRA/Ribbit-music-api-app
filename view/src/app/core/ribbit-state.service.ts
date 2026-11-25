@@ -27,7 +27,14 @@ import {
   isSpotifyPremiumRequiredError,
   toApiError,
 } from './api-error';
-import { mapApiActionToDecision, mapJamStateDto, mapTrackDtoToSong } from './api-mappers';
+import {
+  computeSongsDurationSeconds,
+  formatTotalMinutes,
+  isPlaylistDurationLimitReached,
+  mapApiActionToDecision,
+  mapJamStateDto,
+  mapTrackDtoToSong,
+} from './api-mappers';
 import { AudioPlayerService } from './audio-player.service';
 import { AuthSessionNotifier } from './auth-session.notifier';
 import { matchesGenreFilter } from './genre-catalog';
@@ -1076,7 +1083,7 @@ export class RibbitStateService implements OnDestroy {
 
   private createLocalMockPlaylist(
     name: string,
-    durationMinutes: number,
+    durationMinutes: number | null,
     extraFilters: Omit<DeckPlaylistApiRequest, 'name' | 'duration_minutes'>,
     seedSongs: readonly Song[],
   ): Playlist {
@@ -1084,14 +1091,18 @@ export class RibbitStateService implements OnDestroy {
       extraFilters.reference_playlist_id ??
       extraFilters.source_playlist_id ??
       extraFilters.referencePlaylistId;
+    const totalDurationSeconds = computeSongsDurationSeconds(seedSongs);
     return {
       id: String(Date.now()),
       playlistId: Date.now(),
       name,
       count: seedSongs.length,
-      duration: `${durationMinutes} min`,
+      duration: formatTotalMinutes(totalDurationSeconds),
+      totalDurationSeconds,
       songs: seedSongs,
+      ...(durationMinutes != null ? { maxDurationSeconds: durationMinutes * 60 } : {}),
       ...(refId ? { referencePlaylistId: refId, sourcePlaylistId: refId } : {}),
+      ...(extraFilters.reference_source ? { referenceSource: extraFilters.reference_source } : {}),
       ...(extraFilters.startDate ? { startDate: extraFilters.startDate } : {}),
       ...(extraFilters.endDate ? { endDate: extraFilters.endDate } : {}),
     };
@@ -1100,7 +1111,7 @@ export class RibbitStateService implements OnDestroy {
   /** Creates a contextual playlist on the backend and optionally populates it with tracks. */
   createPlaylist(
     name: string,
-    durationMinutes = 45,
+    durationMinutes: number | null = null,
     extraFilters: Omit<DeckPlaylistApiRequest, 'name' | 'duration_minutes'> = {},
     seedSongs: readonly Song[] = [],
   ): void {
@@ -1120,7 +1131,7 @@ export class RibbitStateService implements OnDestroy {
     this.playlistService
       .createDeckPlaylist({
         name: trimmedName,
-        duration_minutes: durationMinutes,
+        ...(durationMinutes != null ? { duration_minutes: durationMinutes } : {}),
         ...extraFilters,
       })
       .subscribe({
@@ -1135,6 +1146,26 @@ export class RibbitStateService implements OnDestroy {
       });
   }
 
+  private appendSongOptimistically(playlistIndex: number, playlist: Playlist, song: Song): void {
+    const currentSongs = playlist.songs ?? [];
+    const exists = currentSongs.some(
+      (s) => (s.trackId && song.trackId && s.trackId === song.trackId) || s.title === song.title,
+    );
+    if (exists) return;
+    const updatedSongs = [...currentSongs, song];
+    const nextSeconds = computeSongsDurationSeconds(updatedSongs);
+    const updated: Playlist = {
+      ...playlist,
+      count: updatedSongs.length,
+      duration: formatTotalMinutes(nextSeconds),
+      totalDurationSeconds: nextSeconds,
+      songs: updatedSongs,
+    };
+    this.playlists.update((list) =>
+      list.map((item, idx) => (idx === playlistIndex ? updated : item)),
+    );
+  }
+
   /** Adds the current (or provided) song to an existing playlist via swipe-add. */
   addSongToPlaylist(playlistIndex: number, targetSong?: Song): void {
     const playlist = this.playlists()[playlistIndex];
@@ -1143,21 +1174,12 @@ export class RibbitStateService implements OnDestroy {
       this.notify('Selecione uma playlist válida para adicionar a música.');
       return;
     }
-
-    const currentSongs = playlist.songs ?? [];
-    const exists = currentSongs.some(
-      (s) => (s.trackId && song.trackId && s.trackId === song.trackId) || s.title === song.title,
-    );
-    if (!exists) {
-      const updated: Playlist = {
-        ...playlist,
-        count: currentSongs.length + 1,
-        songs: [...currentSongs, song],
-      };
-      this.playlists.update((list) =>
-        list.map((item, idx) => (idx === playlistIndex ? updated : item)),
-      );
+    if (isPlaylistDurationLimitReached(playlist)) {
+      this.notify(`A playlist "${playlist.name}" já atingiu o limite de duração.`);
+      return;
     }
+
+    this.appendSongOptimistically(playlistIndex, playlist, song);
 
     const playlistId = playlist.playlistId;
     if (playlistId && song.trackId !== undefined && readAuthToken()) {
@@ -1168,11 +1190,12 @@ export class RibbitStateService implements OnDestroy {
         },
         error: (err: unknown) => {
           this.notify(toApiError(err).message);
+          this.refreshPlaylists();
         },
       });
-    } else {
-      this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
+      return;
     }
+    this.notify(`"${song.title}" adicionada a ${playlist.name}.`);
   }
 
   /** Deletes a playlist by name or Playlist reference on the backend. */

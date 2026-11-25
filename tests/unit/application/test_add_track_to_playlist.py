@@ -276,6 +276,52 @@ def test_add_track_to_playlist_deleted_track_raises_entity_not_found() -> None:
         use_case.execute(command)
 
 
+def test_add_track_to_playlist_allows_single_track_crossing_max_duration() -> None:
+    user = User(
+        user_id=1,
+        email="owner@ribbit.com",
+        password_hash="pw",
+        display_name="Owner",
+        age=25,
+        plan_id=1,
+    )
+    t1 = Track(
+        track_id=10, title="Song 1", artist="Artist", duration_seconds=200, genre="Pop"
+    )
+    t2 = Track(
+        track_id=20, title="Song 2", artist="Artist", duration_seconds=150, genre="Pop"
+    )
+    playlist = Playlist(
+        playlist_id=5,
+        user_id=1,
+        name="Capped",
+        max_duration_seconds=300,
+        initial_tracks=[t1],
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = playlist
+    playlist_repo.save.side_effect = lambda p: p
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = t2
+
+    use_case = AddTrackToPlaylistUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        playlist_repo=playlist_repo,
+    )
+    command = AddTrackToPlaylistCommand(playlist_id=5, track_id=20, user_id=1)
+
+    res = use_case.execute(command)
+
+    assert res.total_duration_seconds == 350
+    assert res.tracks == (t1, t2)
+
+
 def test_add_track_to_playlist_duration_cap_exceeded_raises_business_rule_error() -> (
     None
 ):
@@ -293,13 +339,16 @@ def test_add_track_to_playlist_duration_cap_exceeded_raises_business_rule_error(
     t2 = Track(
         track_id=20, title="Song 2", artist="Artist", duration_seconds=150, genre="Pop"
     )
-    # Playlist has max duration of 300 seconds; t1 is 200s, adding t2 (150s) exceeds 300s
+    t3 = Track(
+        track_id=30, title="Song 3", artist="Artist", duration_seconds=90, genre="Pop"
+    )
+    # Playlist has max duration of 300 seconds and already surpassed it at 350s
     playlist = Playlist(
         playlist_id=5,
         user_id=1,
         name="Capped",
         max_duration_seconds=300,
-        initial_tracks=[t1],
+        initial_tracks=[t1, t2],
     )
 
     user_repo = MagicMock(spec=UserRepositoryPort)
@@ -309,17 +358,19 @@ def test_add_track_to_playlist_duration_cap_exceeded_raises_business_rule_error(
     playlist_repo.find_by_id.return_value = playlist
 
     track_repo = MagicMock(spec=TrackRepositoryPort)
-    track_repo.find_by_id.return_value = t2
+    track_repo.find_by_id.return_value = t3
 
     use_case = AddTrackToPlaylistUseCase(
         user_repo=user_repo,
         track_repo=track_repo,
         playlist_repo=playlist_repo,
     )
-    command = AddTrackToPlaylistCommand(playlist_id=5, track_id=20, user_id=1)
+    command = AddTrackToPlaylistCommand(playlist_id=5, track_id=30, user_id=1)
 
     with pytest.raises(BusinessRuleViolationError, match="maximum playlist duration"):
         use_case.execute(command)
+
+    playlist_repo.save.assert_not_called()
 
 
 def test_add_track_to_playlist_superlike_records_loved_interaction() -> None:

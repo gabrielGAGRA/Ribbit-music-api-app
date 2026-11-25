@@ -542,7 +542,9 @@ def test_get_playlist_deck_paginates_cursor_when_cursor_track_interacted_between
     assert page1.next_cursor not in page2_ids
 
 
-def test_get_playlist_deck_forwards_remaining_duration_to_list_active() -> None:
+def test_get_playlist_deck_allows_crossing_track_before_limit_and_blocks_after() -> (
+    None
+):
     user = User(
         user_id=1,
         email="dur@ribbit.com",
@@ -558,6 +560,13 @@ def test_get_playlist_deck_forwards_remaining_duration_to_list_active() -> None:
         duration_seconds=180,
         genre="Rock",
     )
+    longer_crossing = Track(
+        track_id=6,
+        title="Crossing",
+        artist="Artist",
+        duration_seconds=500,
+        genre="Rock",
+    )
     playlist = Playlist(
         playlist_id=55,
         user_id=1,
@@ -571,14 +580,308 @@ def test_get_playlist_deck_forwards_remaining_duration_to_list_active() -> None:
     playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
     playlist_repo.find_by_id.return_value = playlist
     track_repo = MagicMock(spec=TrackRepositoryPort)
-    track_repo.list_active.return_value = []
+    track_repo.list_active.return_value = [longer_crossing]
 
     use_case = GetPlaylistDeckUseCase(
         user_repo=user_repo,
         playlist_repo=playlist_repo,
         track_repo=track_repo,
     )
-    use_case.execute(playlist_id=55, user_id=1)
+    res_under = use_case.execute(playlist_id=55, user_id=1)
 
     track_repo.list_active.assert_called_once()
-    assert track_repo.list_active.call_args.kwargs["max_duration_seconds"] == 420
+    assert track_repo.list_active.call_args.kwargs["max_duration_seconds"] is None
+    assert [t.track_id for t in res_under.items] == [6]
+
+    playlist.add_track(longer_crossing)
+    track_repo.list_active.reset_mock()
+    res_surpassed = use_case.execute(playlist_id=55, user_id=1)
+    assert res_surpassed.items == []
+    assert res_surpassed.has_more is False
+    track_repo.list_active.assert_not_called()
+
+
+def test_get_playlist_deck_reference_playlist_keeps_liked_tracks_and_excludes_dislikes() -> (
+    None
+):
+    user = User(
+        user_id=1,
+        email="ref@ribbit.com",
+        password_hash="hash",
+        display_name="Listener",
+        age=25,
+        plan_id=1,
+    )
+    ref_tracks = [
+        Track(
+            track_id=idx,
+            title=f"Ref {idx}",
+            artist="Artist",
+            duration_seconds=180,
+            genre="Rock",
+        )
+        for idx in range(1, 7)
+    ]
+    deck = Playlist(
+        playlist_id=20,
+        user_id=1,
+        name="From ref",
+        source_playlist_id=7,
+        initial_tracks=[ref_tracks[0]],
+    )
+    source_playlist = Playlist(
+        playlist_id=7,
+        user_id=1,
+        name="Source",
+        initial_tracks=ref_tracks,
+    )
+    interactions = [
+        Interaction(user_id=1, track_id=2, action=InteractionAction.LIKE),
+        Interaction(user_id=1, track_id=3, action=InteractionAction.SUPERLIKE),
+        Interaction(user_id=1, track_id=4, action=InteractionAction.DISLIKE),
+    ]
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.side_effect = lambda pid: (
+        source_playlist if pid == 7 else deck
+    )
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_by_user.return_value = interactions
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+    result = use_case.execute(playlist_id=20, user_id=1)
+
+    assert {t.track_id for t in result.items} == {2, 3, 5, 6}
+    track_repo.list_active.assert_not_called()
+
+
+def test_get_playlist_deck_reference_playlist_empty_returns_empty_without_fallback() -> (
+    None
+):
+    user = User(
+        user_id=1,
+        email="ref@ribbit.com",
+        password_hash="hash",
+        display_name="Listener",
+        age=25,
+        plan_id=1,
+    )
+    t1 = Track(
+        track_id=11, title="Done", artist="Artist", duration_seconds=180, genre="Rock"
+    )
+    deck = Playlist(
+        playlist_id=20,
+        user_id=1,
+        name="From ref",
+        source_playlist_id=7,
+        initial_tracks=[t1],
+    )
+    source_playlist = Playlist(
+        playlist_id=7,
+        user_id=1,
+        name="Source",
+        initial_tracks=[t1],
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.side_effect = lambda pid: (
+        source_playlist if pid == 7 else deck
+    )
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+    )
+    result = use_case.execute(playlist_id=20, user_id=1)
+
+    assert result.items == []
+    assert result.has_more is False
+    track_repo.list_active.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("reference_source", "expected_ids"),
+    [
+        ("curtidas", {101, 102}),
+        ("amadas", {102}),
+        ("playlists", {201}),
+    ],
+)
+def test_get_playlist_deck_additional_phase_uses_reference_source_and_excludes_primary(
+    reference_source: str,
+    expected_ids: set[int],
+) -> None:
+    user = User(
+        user_id=1,
+        email="add@ribbit.com",
+        password_hash="hash",
+        display_name="Listener",
+        age=25,
+        plan_id=1,
+    )
+    tracks = {
+        tid: Track(
+            track_id=tid,
+            title=f"Track {tid}",
+            artist="Artist",
+            duration_seconds=180,
+            genre="Pop",
+        )
+        for tid in (10, 101, 102, 201)
+    }
+    source_playlist = Playlist(
+        playlist_id=7,
+        user_id=1,
+        name="Primary Ref",
+        initial_tracks=[tracks[10]],
+    )
+    other_playlist = Playlist(
+        playlist_id=8,
+        user_id=1,
+        name="Other Ref",
+        initial_tracks=[tracks[10], tracks[201]],
+    )
+    deck = Playlist(
+        playlist_id=20,
+        user_id=1,
+        name="With Additional",
+        source_playlist_id=7,
+        deck_filters=f'{{"genre": [], "year": [], "artist": [], "country": [], "reference_source": "{reference_source}"}}',
+    )
+    interactions = [
+        Interaction(user_id=1, track_id=10, action=InteractionAction.LIKE),
+        Interaction(user_id=1, track_id=101, action=InteractionAction.LIKE),
+        Interaction(user_id=1, track_id=102, action=InteractionAction.SUPERLIKE),
+    ]
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.side_effect = lambda pid: (
+        source_playlist if pid == 7 else deck
+    )
+    playlist_repo.list_by_user.return_value = [source_playlist, other_playlist, deck]
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_by_user.return_value = interactions
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_ids.side_effect = lambda tids: {
+        int(tid): tracks[int(tid)] for tid in tids if int(tid) in tracks
+    }
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+    result = use_case.execute(
+        GetPlaylistDeckCommand(playlist_id=20, user_id=1, limit=10, phase="additional")
+    )
+
+    assert {t.track_id for t in result.items} == expected_ids
+
+
+def test_get_playlist_deck_additional_phase_returns_empty_without_reference_source() -> (
+    None
+):
+    user = User(
+        user_id=1,
+        email="add@ribbit.com",
+        password_hash="hash",
+        display_name="Listener",
+        age=25,
+        plan_id=1,
+    )
+    deck = Playlist(
+        playlist_id=20,
+        user_id=1,
+        name="No Additional",
+        source_playlist_id=7,
+    )
+    source_playlist = Playlist(playlist_id=7, user_id=1, name="Ref")
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.side_effect = lambda pid: (
+        source_playlist if pid == 7 else deck
+    )
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+    )
+    result = use_case.execute(
+        GetPlaylistDeckCommand(playlist_id=20, user_id=1, limit=10, phase="additional")
+    )
+
+    assert result.items == []
+    assert result.has_more is False
+    track_repo.list_active.assert_not_called()
+
+
+def test_get_playlist_deck_standalone_curtidas_and_amadas_reference_source() -> None:
+    user = User(
+        user_id=1,
+        email="refsrc@ribbit.com",
+        password_hash="hash",
+        display_name="Listener",
+        age=25,
+        plan_id=1,
+    )
+    liked = Track(
+        track_id=1, title="Liked", artist="Artist", duration_seconds=180, genre="Pop"
+    )
+    loved = Track(
+        track_id=2, title="Loved", artist="Artist", duration_seconds=180, genre="Rock"
+    )
+    disliked = Track(
+        track_id=3, title="Disliked", artist="Artist", duration_seconds=180, genre="Pop"
+    )
+    tracks = {1: liked, 2: loved, 3: disliked}
+    deck = Playlist(
+        playlist_id=30,
+        user_id=1,
+        name="Only Loved",
+        deck_filters='{"genre": [], "year": [], "artist": [], "country": [], "reference_source": "amadas"}',
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+    playlist_repo = MagicMock(spec=PlaylistRepositoryPort)
+    playlist_repo.find_by_id.return_value = deck
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+    interaction_repo.list_by_user.return_value = [
+        Interaction(user_id=1, track_id=1, action=InteractionAction.LIKE),
+        Interaction(user_id=1, track_id=2, action=InteractionAction.SUPERLIKE),
+        Interaction(user_id=1, track_id=3, action=InteractionAction.DISLIKE),
+    ]
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_ids.side_effect = lambda tids: {
+        int(tid): tracks[int(tid)] for tid in tids if int(tid) in tracks
+    }
+
+    use_case = GetPlaylistDeckUseCase(
+        user_repo=user_repo,
+        playlist_repo=playlist_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+    result = use_case.execute(playlist_id=30, user_id=1)
+
+    assert [t.track_id for t in result.items] == [2]
+    track_repo.list_active.assert_not_called()

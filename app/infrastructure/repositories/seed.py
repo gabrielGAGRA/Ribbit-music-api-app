@@ -306,34 +306,38 @@ def seed_database(
         "WHERE itunes_preview_url LIKE 'https://example.com/%'"
     )
 
-    now_str = datetime.now(UTC).isoformat()
-    for t in sample_tracks:
-        existing = conn.execute(
-            "SELECT track_id FROM tracks WHERE lower(title) = ? AND lower(artist) = ?",
-            (str(t["title"]).lower(), str(t["artist"]).lower()),
-        ).fetchone()
-        if not existing:
-            conn.execute(
-                """
-                INSERT INTO tracks (
-                    title, artist, duration_seconds, genre, country,
-                    release_year, cover_url, itunes_preview_url, explicit,
-                    is_deleted, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
-                """,
-                (
-                    t["title"],
-                    t["artist"],
-                    t["duration_seconds"],
-                    t["genre"],
-                    t["country"],
-                    t["release_year"],
-                    t["cover_url"],
-                    t["itunes_preview_url"],
-                    t["explicit"],
-                    now_str,
-                ),
-            )
+    if (
+        resolved_settings.environment.lower() != "production"
+        and not resolved_settings.gcs_bucket_name
+    ):
+        now_str = datetime.now(UTC).isoformat()
+        for t in sample_tracks:
+            existing = conn.execute(
+                "SELECT track_id FROM tracks WHERE lower(title) = ? AND lower(artist) = ?",
+                (str(t["title"]).lower(), str(t["artist"]).lower()),
+            ).fetchone()
+            if not existing:
+                conn.execute(
+                    """
+                    INSERT INTO tracks (
+                        title, artist, duration_seconds, genre, country,
+                        release_year, cover_url, itunes_preview_url, explicit,
+                        is_deleted, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                    """,
+                    (
+                        t["title"],
+                        t["artist"],
+                        t["duration_seconds"],
+                        t["genre"],
+                        t["country"],
+                        t["release_year"],
+                        t["cover_url"],
+                        t["itunes_preview_url"],
+                        t["explicit"],
+                        now_str,
+                    ),
+                )
     conn.commit()
 
 

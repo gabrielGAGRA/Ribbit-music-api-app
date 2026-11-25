@@ -16,7 +16,6 @@ class UpdateAdminRoleUseCase:
     """Updates user is_admin status while preventing administrator self-demotion."""
 
     user_repo: UserRepositoryPort
-    eligible_emails: tuple[str, ...] = ()
     audit_log_repo: AuditLogRepositoryPort | None = None
 
     def execute(
@@ -44,13 +43,6 @@ class UpdateAdminRoleUseCase:
         user = self.user_repo.find_by_id(effective_target_id)
         if not user:
             raise EntityNotFoundError(f"User with ID {effective_target_id} not found.")
-
-        if effective_is_admin:
-            normalized_eligible = {e.strip().lower() for e in self.eligible_emails}
-            if user.email.strip().lower() not in normalized_eligible:
-                raise BusinessRuleViolationError(
-                    f"User {user.email} is not eligible for administrative privileges."
-                )
 
         user.is_admin = effective_is_admin
         saved_user = self.user_repo.save(user)
