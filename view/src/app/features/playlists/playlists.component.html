@@ -20,7 +20,11 @@
           <h1 class="hero-title">{{ activePlaylist.name }}</h1>
           <p class="hero-meta">
             <span>{{ activePlaylist.count }} faixas</span> ·
-            <span>{{ activePlaylist.duration }}</span> ·
+            <span>{{ activePlaylist.duration }}</span>
+            @if (formattedMaxDuration(); as maxLabel) {
+              <span> (limite: {{ maxLabel }})</span>
+            }
+            ·
             <span>{{
               activePlaylist.isExported ? 'Sincronizada com Spotify' : 'Criada no Ribbit'
             }}</span>
@@ -41,10 +45,19 @@
             @if (selectedPlaylistTracks().length > 0) {
               <button
                 class="outline-button"
+                [disabled]="!isSwipeMode() && isSwipeBlocked()"
                 (click)="toggleSwipeMode()"
                 title="Adicionar novas músicas com Swipe"
               >
-                {{ isSwipeMode() ? 'Ver Faixas Salvas' : 'Adicionar com Swipe' }}
+                @if (isSwipeMode()) {
+                  Ver Faixas Salvas
+                } @else if (isDurationLimitReached()) {
+                  Limite de Duração Atingido
+                } @else if (referenceExhausted()) {
+                  Referência Concluída
+                } @else {
+                  Adicionar com Swipe
+                }
               </button>
             }
 
@@ -76,7 +89,37 @@
       @if (isSwipeMode() || selectedPlaylistTracks().length === 0) {
         <!-- Swipe-Add Deck for Playlist -->
         <div class="playlist-swipe-deck-section tab-enter">
-          @if (activeTrack(); as deckTrack) {
+          @if (isDurationLimitReached()) {
+            <div class="panel empty-deck-panel swipe-blocked-panel" role="status">
+              <app-icon name="clock" [size]="28" />
+              <strong>Limite de duração atingido</strong>
+              <p>
+                Esta playlist atingiu o limite de {{ formattedMaxDuration() }}. O swipe está
+                bloqueado até que você remova uma faixa.
+              </p>
+              @if (selectedPlaylistTracks().length > 0) {
+                <button class="outline-button" (click)="toggleSwipeMode()">Ver Faixas Salvas</button>
+              }
+            </div>
+          } @else if (referenceExhausted()) {
+            <div class="panel empty-deck-panel swipe-blocked-panel" role="status">
+              <app-icon name="sparkles" [size]="28" />
+              <strong>Referência concluída</strong>
+              <p>
+                Todas as faixas da referência selecionada já foram exibidas. O swipe foi bloqueado
+                para esta playlist.
+              </p>
+              @if (selectedPlaylistTracks().length > 0) {
+                <button class="outline-button" (click)="toggleSwipeMode()">Ver Faixas Salvas</button>
+              }
+            </div>
+          } @else if (activeTrack(); as deckTrack) {
+            @if (additionalReferenceWarning(); as warning) {
+              <div class="reference-transition-warning" role="alert">
+                <app-icon name="sparkles" [size]="16" />
+                <span>{{ warning }}</span>
+              </div>
+            }
             <div class="deck-stage-wrapper">
               <div class="discovery-stage">
                 <div class="deck-back back-one"></div>
@@ -297,7 +340,12 @@
             <button class="playlist-card" (click)="openPlaylistView(p)">
               <img [src]="getPlaylistCoverSrc(p, i)" alt="Paisagem da playlist" />
               <strong>{{ p.name }}</strong>
-              <span>{{ p.count }} faixas · {{ p.duration }}</span>
+              <span>
+                {{ p.count }} faixas · {{ p.duration }}
+                @if (formatMaxDuration(p.maxDurationSeconds); as maxLabel) {
+                  <span> (limite {{ maxLabel }})</span>
+                }
+              </span>
             </button>
           </div>
         } @empty {

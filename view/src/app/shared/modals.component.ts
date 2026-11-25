@@ -10,12 +10,14 @@ import { Router } from '@angular/router';
 import type {
   CommunityReview,
   DeckPlaylistApiRequest,
+  ReferenceSource,
   Song,
   SubscriptionPlan,
 } from '@ribbit/shared-types';
 import { readInputValue, readNamedFormControl, readSelectValue } from './dom-event-values';
 import { FrogComponent, type FrogMood } from './frog.component';
 import { IconComponent } from './icon.component';
+import { toReferenceSource } from '../core/api-mappers';
 import { CATALOG_GENRES } from '../core/genre-catalog';
 import { RibbitStateService } from '../core/ribbit-state.service';
 import type { ReviewSortOption } from '../core/song.service';
@@ -38,6 +40,29 @@ function readNamedInputValue(form: HTMLFormElement, name: string): string {
     return item.value.trim();
   }
   return '';
+}
+
+function readPositiveNamedId(form: HTMLFormElement, names: readonly string[]): number | undefined {
+  for (const name of names) {
+    const raw = readNamedInputValue(form, name);
+    if (!raw) continue;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function setDefinedEntries(
+  target: Record<string, unknown>,
+  entries: Readonly<Record<string, unknown>>,
+): void {
+  for (const [key, value] of Object.entries(entries)) {
+    if (value !== undefined) {
+      target[key] = value;
+    }
+  }
 }
 
 function toJamDeckSource(value: string): 'livre' | 'curtidas' | 'playlist' {
@@ -205,7 +230,7 @@ export class ModalsComponent {
     const description = readNamedInputValue(form, 'queueDescription');
     this.state.createPlaylist(
       queueName,
-      18,
+      null,
       description ? { description } : {},
       this.state.queueSongs(),
     );
@@ -302,8 +327,13 @@ export class ModalsComponent {
     if (!(event.target instanceof HTMLFormElement)) return;
     const form = event.target;
     const name = readNamedInputValue(form, 'name') || 'Minha nova frequência';
-    const rawDuration = Number(readNamedInputValue(form, 'duration'));
-    const duration = Number.isFinite(rawDuration) && rawDuration >= 10 ? rawDuration : 45;
+    let duration: number | null = null;
+    if (this.isFilterActive('Duração')) {
+      const rawDuration = Number(readNamedInputValue(form, 'duration'));
+      if (Number.isFinite(rawDuration) && rawDuration >= 1) {
+        duration = Math.min(600, Math.round(rawDuration));
+      }
+    }
     const extraFilters = this.extractPlaylistFilters(form);
 
     this.state.createPlaylist(name, duration, extraFilters);
@@ -441,26 +471,22 @@ export class ModalsComponent {
     form: HTMLFormElement,
   ): Omit<DeckPlaylistApiRequest, 'name' | 'duration_minutes'> {
     const res: Record<string, unknown> = {};
-    if (this.isFilterActive('Gênero')) {
-      const g = readNamedInputValue(form, 'genre');
-      if (g) res['genre'] = g;
-    }
+    const genre = this.isFilterActive('Gênero') ? readNamedInputValue(form, 'genre') : '';
     const artists = this.extractPlaylistArtists(form);
-    if (artists.length === 1) res['artist'] = artists[0];
-    else if (artists.length > 1) res['artist'] = artists;
+    const artist = artists.length === 1 ? artists[0] : artists.length > 1 ? artists : undefined;
+    const { referencePlaylistId, sourcePlaylistId, referenceSource } =
+      this.extractPlaylistSources(form);
 
-    const country = readNamedInputValue(form, 'country');
-    if (country) res['country'] = country;
-    const description = readNamedInputValue(form, 'description');
-    if (description) res['description'] = description;
-
-    const years = this.extractPlaylistYears(form);
-    if (years !== undefined) res['year'] = years;
-
-    const { referencePlaylistId, sourcePlaylistId } = this.extractPlaylistSources(form);
-    if (referencePlaylistId !== undefined) res['reference_playlist_id'] = referencePlaylistId;
-    if (sourcePlaylistId !== undefined) res['source_playlist_id'] = sourcePlaylistId;
-
+    setDefinedEntries(res, {
+      genre: genre || undefined,
+      artist,
+      country: readNamedInputValue(form, 'country') || undefined,
+      description: readNamedInputValue(form, 'description') || undefined,
+      year: this.extractPlaylistYears(form),
+      reference_playlist_id: referencePlaylistId,
+      source_playlist_id: sourcePlaylistId,
+      reference_source: referenceSource,
+    });
     Object.assign(res, this.extractPlaylistDates(form));
 
     return res;
@@ -517,24 +543,23 @@ export class ModalsComponent {
   private extractPlaylistSources(form: HTMLFormElement): {
     referencePlaylistId?: number;
     sourcePlaylistId?: number;
+    referenceSource?: ReferenceSource;
   } {
-    const rawRef = this.isFilterActive('Referência')
-      ? readNamedInputValue(form, 'referencePlaylistId') ||
-        readNamedInputValue(form, 'source_playlist_id') ||
-        readNamedInputValue(form, 'sourcePlaylistId')
-      : '';
-    const refNum = Number(rawRef);
-    const referencePlaylistId = Number.isFinite(refNum) && refNum > 0 ? refNum : undefined;
+    const isRefActive = this.isFilterActive('Referência');
+    const explicitSource = readPositiveNamedId(form, ['source_playlist_id', 'sourcePlaylistId']);
+    const refId = isRefActive
+      ? readPositiveNamedId(form, ['referencePlaylistId', 'source_playlist_id', 'sourcePlaylistId'])
+      : undefined;
+    const sourcePlaylistId = explicitSource ?? refId;
+    const referenceSource = isRefActive
+      ? (toReferenceSource(readNamedInputValue(form, 'referenceSource')) ?? undefined)
+      : undefined;
 
-    const rawSource =
-      readNamedInputValue(form, 'source_playlist_id') ||
-      readNamedInputValue(form, 'sourcePlaylistId') ||
-      rawRef;
-    const sourceNum = Number(rawSource);
-    const hasSource = Number.isFinite(sourceNum) && sourceNum > 0;
-    const sourcePlaylistId = hasSource ? sourceNum : referencePlaylistId;
-
-    return { referencePlaylistId, sourcePlaylistId };
+    return {
+      referencePlaylistId: refId,
+      sourcePlaylistId,
+      ...(referenceSource ? { referenceSource } : {}),
+    };
   }
 
   protected nextOnboardingStep(): void {

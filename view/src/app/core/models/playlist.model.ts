@@ -18,7 +18,9 @@ export interface Playlist {
   readonly endDate?: string | null;
   readonly coverImageUrl?: string | null;
   readonly maxDurationSeconds?: number | null;
+  readonly totalDurationSeconds?: number;
   readonly deckFilters?: string | null;
+  readonly referenceSource?: ReferenceSource | null;
   readonly songs?: readonly Song[];
 }
 
@@ -47,6 +49,7 @@ export interface DeckPlaylistApiRequest {
   readonly description?: string | null;
   readonly reference_playlist_id?: number | null;
   readonly source_playlist_id?: number | null;
+  readonly reference_source?: ReferenceSource | null;
   readonly referencePlaylistId?: number | null;
   readonly sourcePlaylistId?: number | null;
   readonly startDate?: string | null;

@@ -271,6 +271,29 @@ describe('RibbitStateService', () => {
     playlistReq.flush(createdPlaylist);
     expect(service.playlists().some((p) => p.name === 'Noite Indie')).toBe(true);
 
+    service.createPlaylist('Sem Limite Padrão', null, { reference_source: 'amadas' });
+    const noDurationReq = httpMock.expectOne('/api/playlists/deck');
+    expect(noDurationReq.request.body).toEqual({
+      name: 'Sem Limite Padrão',
+      reference_source: 'amadas',
+    });
+    noDurationReq.flush({
+      playlist_id: 51,
+      user_id: 7,
+      name: 'Sem Limite Padrão',
+      description: null,
+      max_duration_seconds: null,
+      is_exported: false,
+      spotify_playlist_id: null,
+      total_duration_seconds: 0,
+      deck_filters: '{"reference_source":"amadas"}',
+      tracks: [],
+    });
+    const createdNoLimit = service.playlists().find((p) => p.playlistId === 51);
+    expect(createdNoLimit?.duration).toBe('0 min');
+    expect(createdNoLimit?.maxDurationSeconds).toBeUndefined();
+    expect(createdNoLimit?.referenceSource).toBe('amadas');
+
     service.decideQueue(true);
     expect(service.queue().length).toBe(1);
 

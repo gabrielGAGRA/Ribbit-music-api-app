@@ -296,3 +296,26 @@ def test_seed_database_raises_if_eligible_admin_exists_without_admin_role() -> N
             seed_database(conn, settings=settings)
     finally:
         conn.close()
+
+
+def test_seed_database_skips_sample_tracks_with_gcs_or_production() -> None:
+    for settings in (
+        Settings(gcs_bucket_name="ribbit-catalog"),
+        Settings(
+            environment="production",
+            secret_key="prod-secret-key-at-least-32-characters-long",
+            firestore_enabled=True,
+            gcp_project_id="ribbit-prod",
+        ),
+    ):
+        conn = create_connection(":memory:")
+        try:
+            seed_database(
+                conn,
+                settings=settings,
+                password_hasher=PBKDF2PasswordHasher(iterations=1_000),
+            )
+            track_count = conn.execute("SELECT COUNT(*) FROM tracks").fetchone()[0]
+            assert track_count == 0
+        finally:
+            conn.close()

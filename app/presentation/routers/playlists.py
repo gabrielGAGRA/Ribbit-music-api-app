@@ -1,6 +1,6 @@
 """Playlist deck, swipe-add, library, and export router."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from starlette.responses import Response
@@ -166,6 +166,7 @@ def create_deck_playlist(
             description=req.description,
             populate_tracks=False,
             source_playlist_id=req.source_playlist_id,
+            reference_source=req.reference_source,
         )
     )
     return _build_playlist_response(playlist)
@@ -180,6 +181,7 @@ def get_playlist_deck(
     ],
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
     cursor_id: Annotated[int | None, Query(gt=0)] = None,
+    phase: Annotated[Literal["primary", "additional"], Query()] = "primary",
 ) -> PaginatedTracksResponse:
     page_limit = limit if isinstance(limit, int) else 20
     cursor_val = cursor_id if isinstance(cursor_id, int) else None
@@ -189,6 +191,7 @@ def get_playlist_deck(
             user_id=current_user_id,
             limit=page_limit,
             cursor_id=cursor_val,
+            phase=phase,
         )
     )
     return PaginatedTracksResponse(

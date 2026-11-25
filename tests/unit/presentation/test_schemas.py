@@ -150,13 +150,20 @@ def test_deck_playlist_request_accepts_valid_range_year(
 
 
 def test_deck_playlist_request_resolves_reference_playlist_id_alias() -> None:
-    req_by_source = DeckPlaylistRequest(name="Valid", source_playlist_id=12)
+    req_by_source = DeckPlaylistRequest(
+        name="Valid", source_playlist_id=12, reference_source="curtidas"
+    )
     assert req_by_source.source_playlist_id == 12
     assert req_by_source.reference_playlist_id == 12
+    assert req_by_source.reference_source == "curtidas"
 
     req_by_ref = DeckPlaylistRequest(name="Valid", reference_playlist_id=34)
     assert req_by_ref.source_playlist_id == 34
     assert req_by_ref.reference_playlist_id == 34
+    assert req_by_ref.reference_source is None
+
+    with pytest.raises(ValidationError):
+        DeckPlaylistRequest.model_validate({"name": "Valid", "reference_source": "all"})
 
 
 @pytest.mark.parametrize(

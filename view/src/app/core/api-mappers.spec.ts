@@ -19,6 +19,7 @@ describe('api-mappers', () => {
     expect(formatDurationSeconds(233)).toBe('3:53');
     expect(formatDurationSeconds(0)).toBe('0:00');
     expect(formatTotalMinutes(1080)).toBe('18 min');
+    expect(formatTotalMinutes(0)).toBe('0 min');
   });
 
   it('replaces example.com placeholder cover and preview URLs safely', () => {
@@ -80,11 +81,27 @@ describe('api-mappers', () => {
     expect(playlist.playlistId).toBe(12);
     expect(playlist.count).toBe(1);
     expect(playlist.duration).toBe('3 min');
+    expect(playlist.totalDurationSeconds).toBe(200);
     expect(playlist.isExported).toBe(true);
     expect(playlist.coverImageUrl).toBe('https://example.com/cover.png');
     expect(playlist.maxDurationSeconds).toBe(3600);
     expect(playlist.deckFilters).toBe('{"genre":"Pop"}');
     expect(playlist.sourcePlaylistId).toBe(3);
+
+    const emptyDurationPlaylist = mapPlaylistDtoToPlaylist({
+      playlist_id: 13,
+      user_id: 1,
+      name: 'Nova com Limite',
+      is_exported: false,
+      tracks: [],
+      total_duration_seconds: 0,
+      max_duration_seconds: 2700,
+      deck_filters: '{"genre":[],"reference_source":"curtidas"}',
+    });
+    expect(emptyDurationPlaylist.duration).toBe('0 min');
+    expect(emptyDurationPlaylist.totalDurationSeconds).toBe(0);
+    expect(emptyDurationPlaylist.maxDurationSeconds).toBe(2700);
+    expect(emptyDurationPlaylist.referenceSource).toBe('curtidas');
   });
 
   it('translates swipe actions between UI and backend contracts', () => {
