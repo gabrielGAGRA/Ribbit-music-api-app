@@ -486,6 +486,198 @@ describe('PlaylistsComponent', () => {
 
     expect(component['deckCandidates']()).toEqual([]);
   });
+
+  it('allows one track to surpass max duration then blocks further swipe and drag until removal', () => {
+    writeAuthToken('jwt-token');
+    component['selectedPlaylist'].set({
+      id: '30',
+      playlistId: 30,
+      name: 'Sprint 5 min',
+      count: 1,
+      duration: '3 min',
+      totalDurationSeconds: 180,
+      maxDurationSeconds: 300,
+      songs: [
+        {
+          trackId: 1,
+          title: 'First Track',
+          artist: 'Artist 1',
+          genre: 'Pop',
+          time: '3:00',
+          durationSeconds: 180,
+          image: 'img-1',
+          album: 'A1',
+          year: '2024',
+          match: 95,
+        },
+      ],
+    });
+    component['isSwipeMode'].set(true);
+    component['deckCandidates'].set([
+      {
+        trackId: 2,
+        title: 'Crossing Track',
+        artist: 'Artist 2',
+        genre: 'Pop',
+        time: '4:00',
+        durationSeconds: 240,
+        image: 'img-2',
+        album: 'A2',
+        year: '2024',
+        match: 94,
+      },
+      {
+        trackId: 3,
+        title: 'Blocked Next Track',
+        artist: 'Artist 3',
+        genre: 'Pop',
+        time: '2:00',
+        durationSeconds: 120,
+        image: 'img-3',
+        album: 'A3',
+        year: '2024',
+        match: 93,
+      },
+    ]);
+    component['deckCursor'].set(0);
+
+    expect(component['isDurationLimitReached']()).toBe(false);
+    expect(component['isSwipeBlocked']()).toBe(false);
+
+    // Crossing track brings duration to 420s >= 300s (allowed once!)
+    component['swipeDeckTrack']('like');
+    const addReq = httpMock.expectOne('/api/playlists/30/swipe-add');
+    addReq.flush({ success: true, message: 'Track added' });
+
+    expect(component['isDurationLimitReached']()).toBe(true);
+    expect(component['isSwipeBlocked']()).toBe(true);
+    expect(component['activeTrack']()).toBeNull();
+    expect(state.toast()).toContain('Limite de duração');
+
+    // Subsequent swipe or drag is blocked
+    component['swipeDeckTrack']('like');
+    httpMock.expectNone('/api/playlists/30/swipe-add');
+    component['startDeckCardDrag']({
+      clientX: 10,
+      clientY: 10,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: document.createElement('div'),
+    } as unknown as PointerEvent);
+    expect(component['isDragging']()).toBe(false);
+
+    // Removing the crossing track drops total back to 180s < 300s and unblocks swipe
+    component['removeTrackFromCurrent'](1);
+    const delReq = httpMock.expectOne('/api/playlists/30/tracks/2');
+    expect(delReq.request.method).toBe('DELETE');
+    delReq.flush({ success: true });
+
+    expect(component['isDurationLimitReached']()).toBe(false);
+    expect(component['isSwipeBlocked']()).toBe(false);
+    const reloadDeck = httpMock.expectOne('/api/playlists/30/deck?limit=25');
+    reloadDeck.flush({ items: [], next_cursor: null, has_more: false });
+  });
+
+  it('blocks swipe when reference playlist tracks finish without additional source', () => {
+    writeAuthToken('jwt-token');
+    component['selectedPlaylist'].set({
+      id: '40',
+      playlistId: 40,
+      name: 'Só da Referência',
+      count: 0,
+      duration: '0 min',
+      totalDurationSeconds: 0,
+      sourcePlaylistId: 7,
+      songs: [],
+    });
+
+    component['loadPlaylistDeck']();
+    const firstReq = httpMock.expectOne('/api/playlists/40/deck?limit=25');
+    firstReq.flush({
+      items: [
+        {
+          track_id: 701,
+          title: 'Ref Track Only',
+          artist: 'Ref Artist',
+          album: null,
+          genre: 'rock',
+          duration_seconds: 180,
+          cover_url: null,
+          itunes_preview_url: null,
+        },
+      ],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    component['swipeDeckTrack']('dislike');
+    httpMock.expectNone('/api/playlists/40/deck?limit=25');
+    httpMock.expectNone('/api/playlists/40/deck?limit=25&phase=additional');
+
+    expect(component['referenceExhausted']()).toBe(true);
+    expect(component['isSwipeBlocked']()).toBe(true);
+    expect(component['activeTrack']()).toBeNull();
+  });
+
+  it('warns and transitions to additional reference source when base reference finishes', () => {
+    writeAuthToken('jwt-token');
+    component['selectedPlaylist'].set({
+      id: '41',
+      playlistId: 41,
+      name: 'Ref + Curtidas',
+      count: 0,
+      duration: '0 min',
+      totalDurationSeconds: 0,
+      sourcePlaylistId: 7,
+      referenceSource: 'curtidas',
+      songs: [],
+    });
+
+    component['loadPlaylistDeck']();
+    const firstReq = httpMock.expectOne('/api/playlists/41/deck?limit=25');
+    firstReq.flush({
+      items: [
+        {
+          track_id: 801,
+          title: 'Primary Ref Track',
+          artist: 'Artist A',
+          album: null,
+          genre: 'rock',
+          duration_seconds: 180,
+          cover_url: null,
+          itunes_preview_url: null,
+        },
+      ],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    component['swipeDeckTrack']('dislike');
+
+    expect(component['additionalReferenceWarning']()).toContain('Minhas Curtidas');
+    expect(state.toast()).toContain('Minhas Curtidas');
+
+    const additionalReq = httpMock.expectOne('/api/playlists/41/deck?limit=25&phase=additional');
+    additionalReq.flush({
+      items: [
+        {
+          track_id: 802,
+          title: 'Additional Liked Track',
+          artist: 'Artist B',
+          album: null,
+          genre: 'pop',
+          duration_seconds: 200,
+          cover_url: null,
+          itunes_preview_url: null,
+        },
+      ],
+      next_cursor: null,
+      has_more: false,
+    });
+
+    expect(component['referenceExhausted']()).toBe(false);
+    expect(component['activeTrack']()?.trackId).toBe(802);
+  });
 });
 
 describe('PlaylistsComponent DOM', () => {

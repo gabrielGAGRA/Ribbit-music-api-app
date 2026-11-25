@@ -464,3 +464,28 @@
 .hidden-file-input {
   display: none;
 }
+
+.reference-transition-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 520px;
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--blue, #3b82f6) 40%, var(--border));
+  background: color-mix(in srgb, var(--blue, #3b82f6) 10%, var(--surface-tint));
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.swipe-blocked-panel strong {
+  color: var(--ink);
+  font-size: 16px;
+}
+
+.swipe-blocked-panel p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 440px;
+}

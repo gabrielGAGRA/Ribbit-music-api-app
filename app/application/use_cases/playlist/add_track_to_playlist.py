@@ -71,13 +71,8 @@ class AddTrackToPlaylistUseCase:
                 "Track is blocked for underage users or violates genre preferences."
             )
 
-        # Enforce max duration cap before adding
-        current_duration = playlist.total_duration_seconds
-        if (
-            playlist.max_duration_seconds is not None
-            and current_duration + track.duration_seconds
-            > playlist.max_duration_seconds
-        ):
+        # Enforce duration limit once reached (a single addition may exceed it)
+        if not playlist.can_fit_duration(track.duration_seconds):
             raise BusinessRuleViolationError(
                 "Track addition exceeds maximum playlist duration."
             )

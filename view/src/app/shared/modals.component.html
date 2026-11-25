@@ -446,7 +446,7 @@
             <label>
               Playlist de Referência (Base)
               <select name="referencePlaylistId">
-                <option value="">Sem referência (Catálogo geral)</option>
+                <option value="">Sem playlist de referência</option>
                 @for (item of state.playlists(); track item.playlistId ?? item.name) {
                   <option [value]="item.playlistId ?? item.name">
                     {{ item.name }} ({{ item.count }} faixas)
@@ -457,10 +457,11 @@
             <label>
               Fonte de referência adicional
               <select name="referenceSource">
-                <option value="playlists">Playlists da Biblioteca</option>
+                <option value="">Nenhuma</option>
                 <option value="curtidas">Minhas Curtidas</option>
                 <option value="amadas">Minhas Amadas (Superlikes)</option>
-                <option value="livre">Descoberta Livre</option>
+                <option value="playlists">Outras Playlists da Biblioteca</option>
+                <option value="livre">Descoberta Livre (Catálogo geral)</option>
               </select>
             </label>
           }
@@ -469,6 +470,7 @@
             <label>
               Gênero musical
               <select name="genre">
+                <option value="">Todos os gêneros</option>
                 @for (g of allGenres; track g) {
                   <option [value]="g">{{ g }}</option>
                 }
@@ -507,7 +509,7 @@
           @if (isFilterActive('Duração')) {
             <label>
               Duração total (minutos)
-              <input name="duration" type="number" min="10" max="480" defaultValue="90" />
+              <input name="duration" type="number" min="1" max="600" defaultValue="30" />
             </label>
           }
 

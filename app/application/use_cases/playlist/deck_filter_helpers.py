@@ -1,11 +1,21 @@
 """Helpers for coerction and matching of deck playlist filters."""
 
 import json
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from app.domain.services.country_names import country_matches
 from app.domain.services.genre_names import genre_matches_preference
 lazy from app.domain.models.track import Track
+
+VALID_REFERENCE_SOURCES = frozenset({"curtidas", "amadas", "playlists", "livre"})
+
+
+def normalize_reference_source(value: object | None) -> str | None:
+    """Normalize an optional reference_source string to a valid value or None."""
+    if not isinstance(value, str):
+        return None
+    cleaned = value.strip().casefold()
+    return cleaned if cleaned in VALID_REFERENCE_SOURCES else None
 
 
 class DeckFilters(TypedDict):
@@ -15,6 +25,14 @@ class DeckFilters(TypedDict):
     year: list[int]
     artist: list[str]
     country: list[str]
+    reference_source: NotRequired[str]
+
+
+def has_track_filters(filters: DeckFilters) -> bool:
+    """Return True if any track-level filter criterion is non-empty."""
+    return bool(
+        filters["genre"] or filters["year"] or filters["artist"] or filters["country"]
+    )
 
 
 def coerce_string_list(value: object | None) -> list[str]:
@@ -79,12 +97,16 @@ def matches_track_filters(
 
 def extract_dict_filters(payload: dict[str, Any]) -> DeckFilters:
     """Extract normalized DeckFilters from a raw dictionary payload."""
-    return {
+    result: DeckFilters = {
         "genre": coerce_string_list(payload.get("genre")),
         "year": coerce_int_list(payload.get("year")),
         "artist": coerce_string_list(payload.get("artist")),
         "country": coerce_string_list(payload.get("country")),
     }
+    ref_src = normalize_reference_source(payload.get("reference_source"))
+    if ref_src is not None:
+        result["reference_source"] = ref_src
+    return result
 
 
 def resolve_deck_filters(
@@ -93,6 +115,7 @@ def resolve_deck_filters(
     year: object = None,
     artist: object = None,
     country: object = None,
+    reference_source: object = None,
     raw_deck_filters: object = None,
 ) -> DeckFilters:
     """Resolve and normalize deck filters from command fields and optional raw payload."""
@@ -103,13 +126,16 @@ def resolve_deck_filters(
         "country": coerce_string_list(country),
     }
 
+    raw_ref_source: str | None = None
     if isinstance(raw_deck_filters, dict):
         deck_filters_dict = extract_dict_filters(raw_deck_filters)
+        raw_ref_source = deck_filters_dict.get("reference_source")
     elif isinstance(raw_deck_filters, str):
         try:
             parsed = json.loads(raw_deck_filters)
             if isinstance(parsed, dict):
                 deck_filters_dict = extract_dict_filters(parsed)
+                raw_ref_source = deck_filters_dict.get("reference_source")
             else:
                 deck_filters_dict = {
                     "genre": [],
@@ -125,7 +151,7 @@ def resolve_deck_filters(
                 "country": [],
             }
 
-    if not any(deck_filters_dict.values()):
+    if not has_track_filters(deck_filters_dict):
         deck_filters_dict = {
             "genre": coerce_string_list(genre),
             "year": coerce_int_list(year),
@@ -133,7 +159,24 @@ def resolve_deck_filters(
             "country": coerce_string_list(country),
         }
 
+    resolved_ref = normalize_reference_source(reference_source) or raw_ref_source
+    if resolved_ref is not None:
+        deck_filters_dict["reference_source"] = resolved_ref
+
     return deck_filters_dict
+
+
+def extract_reference_source(deck_filters: str | None) -> str | None:
+    """Parse normalized reference_source from stored deck_filters JSON."""
+    if not deck_filters:
+        return None
+    try:
+        filters = json.loads(deck_filters)
+    except ValueError, TypeError:
+        return None
+    if not isinstance(filters, dict):
+        return None
+    return normalize_reference_source(filters.get("reference_source"))
 
 
 def extract_deck_filters_tuple(

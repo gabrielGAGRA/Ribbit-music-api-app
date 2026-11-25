@@ -47,6 +47,55 @@ describe('ModalsComponent', () => {
     expect(filters['source_playlist_id']).toBe(42);
   });
 
+  it('omits duration when Duração filter is inactive and includes reference_source when selected', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+      ],
+    });
+
+    const state = TestBed.inject(RibbitStateService);
+    const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+    const createSpy = vi.spyOn(state, 'createPlaylist').mockImplementation(() => undefined);
+
+    const form = document.createElement('form');
+    form.innerHTML = `
+      <input name="name" value="Sem Limite" />
+      <select name="referencePlaylistId">
+        <option value="12" selected>Base</option>
+      </select>
+      <select name="referenceSource">
+        <option value="curtidas" selected>Minhas Curtidas</option>
+      </select>
+    `;
+
+    component['createPlaylistFromForm']({
+      preventDefault: () => undefined,
+      target: form,
+    } as unknown as Event);
+
+    expect(createSpy).toHaveBeenCalledWith('Sem Limite', null, {
+      reference_playlist_id: 12,
+      source_playlist_id: 12,
+      reference_source: 'curtidas',
+    });
+
+    createSpy.mockClear();
+    component['toggleFilter']('Duração');
+    const durationForm = document.createElement('form');
+    durationForm.innerHTML = `
+      <input name="name" value="Com Limite" />
+      <input name="duration" value="25" />
+    `;
+    component['createPlaylistFromForm']({
+      preventDefault: () => undefined,
+      target: durationForm,
+    } as unknown as Event);
+
+    expect(createSpy).toHaveBeenCalledWith('Com Limite', 25, expect.any(Object));
+  });
+
   it('submits Jam creation with deck_source, max_superlikes and source_playlist_id', () => {
     TestBed.configureTestingModule({
       providers: [

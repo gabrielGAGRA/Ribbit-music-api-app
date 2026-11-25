@@ -53,6 +53,7 @@ def test_create_deck_playlist_forwards_command_and_returns_playlist() -> None:
         artist="Artist 1",
         country="US",
         description="Energetic rock",
+        reference_source="curtidas",
     )
 
     res = create_deck_playlist(req=req, current_user_id=3, use_case=mock_use_case)
@@ -73,6 +74,7 @@ def test_create_deck_playlist_forwards_command_and_returns_playlist() -> None:
             country="US",
             description="Energetic rock",
             populate_tracks=False,
+            reference_source="curtidas",
         )
     )
 
@@ -157,13 +159,23 @@ def test_get_playlist_deck_endpoint() -> None:
     )
 
     res = get_playlist_deck(
-        playlist_id=10, current_user_id=3, limit=10, use_case=mock_use_case
+        playlist_id=10,
+        current_user_id=3,
+        limit=10,
+        phase="additional",
+        use_case=mock_use_case,
     )
 
     assert len(res.items) == 1
     assert res.items[0].track_id == 1
     mock_use_case.execute.assert_called_once_with(
-        GetPlaylistDeckCommand(playlist_id=10, user_id=3, limit=10, cursor_id=None)
+        GetPlaylistDeckCommand(
+            playlist_id=10,
+            user_id=3,
+            limit=10,
+            cursor_id=None,
+            phase="additional",
+        )
     )
 
 

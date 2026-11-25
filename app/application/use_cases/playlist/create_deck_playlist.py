@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from app.application.use_cases.playlist.deck_filter_helpers import (
     DeckFilters,
+    has_track_filters,
     matches_track_filters,
     resolve_deck_filters,
 )
@@ -38,7 +39,7 @@ class CreateDeckPlaylistUseCase:
         if source_playlist is not None:
             return list(source_playlist.tracks)
 
-        if any(deck_filters.values()):
+        if has_track_filters(deck_filters):
             artist_arg = (
                 deck_filters["artist"][0]
                 if len(deck_filters["artist"]) == 1
@@ -90,7 +91,7 @@ class CreateDeckPlaylistUseCase:
         user: User,
         target_seconds: int | None,
     ) -> tuple[list[Track], int]:
-        if any(deck_filters.values()):
+        if has_track_filters(deck_filters):
             candidates = [
                 t
                 for t in candidates
@@ -139,6 +140,7 @@ class CreateDeckPlaylistUseCase:
             year=command.year,
             artist=command.artist,
             country=command.country,
+            reference_source=command.reference_source,
             raw_deck_filters=command.deck_filters,
         )
         deck_filters_str = json.dumps(deck_filters_dict)

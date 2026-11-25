@@ -1,5 +1,7 @@
 """Playlist and track presentation schemas."""
 
+from typing import Literal
+
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 
@@ -39,6 +41,7 @@ class DeckPlaylistRequest(BaseModel):
         default=None,
         validation_alias=AliasChoices("source_playlist_id", "reference_playlist_id"),
     )
+    reference_source: Literal["playlists", "curtidas", "amadas", "livre"] | None = None
 
     @field_validator("year")
     @classmethod

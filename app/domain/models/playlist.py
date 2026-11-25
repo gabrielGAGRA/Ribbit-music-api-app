@@ -42,13 +42,16 @@ class Playlist:
 
     duracao_total_segundos = total_duration_seconds
 
-    def can_fit_duration(self, additional_seconds: int) -> bool:
-        if self.max_duration_seconds is None:
-            return True
+    @property
+    def is_duration_limit_reached(self) -> bool:
         return (
-            self.total_duration_seconds + additional_seconds
-            <= self.max_duration_seconds
+            self.max_duration_seconds is not None
+            and self.total_duration_seconds >= self.max_duration_seconds
         )
+
+    def can_fit_duration(self, additional_seconds: int = 0) -> bool:
+        _ = additional_seconds
+        return not self.is_duration_limit_reached
 
     def add_track(self, track: Track) -> Self:
         if track.track_id is not None and any(

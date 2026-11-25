@@ -740,7 +740,6 @@ def build_container(
         list_administrators_use_case=ListAdministratorsUseCase(user_repo),
         update_admin_role_use_case=UpdateAdminRoleUseCase(
             user_repo=user_repo,
-            eligible_emails=settings.admin_eligible_emails,
             audit_log_repo=audit_log_repo,
         ),
         register_administrator_use_case=RegisterAdministratorUseCase(

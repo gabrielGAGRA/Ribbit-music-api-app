@@ -11,15 +11,17 @@ if str(_REPO_ROOT) not in sys.path:
 
 from scripts.init_db import init_database  # noqa: E402
 
+E2E_DUMP_PATH = _REPO_ROOT / "tests" / "fixtures" / "e2e_dump.sql"
+
 
 def prepare_e2e_database(db_path: Path) -> int:
-    """Creates a clean E2E SQLite database seeded from database/dump.sql."""
+    """Creates a clean E2E SQLite database seeded from the E2E fixture dump."""
     for suffix in ("", "-wal", "-shm"):
         candidate = Path(f"{db_path}{suffix}")
         if candidate.exists():
             candidate.unlink()
 
-    exit_code = init_database(db_path=str(db_path), force=True)
+    exit_code = init_database(db_path=str(db_path), dump_path=E2E_DUMP_PATH, force=True)
     if exit_code != 0:
         return exit_code
 

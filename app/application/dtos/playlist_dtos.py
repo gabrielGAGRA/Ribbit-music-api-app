@@ -22,6 +22,7 @@ class CreateDeckPlaylistCommand:
     populate_tracks: bool = True
     source_playlist_id: int | None = None
     reference_playlist_id: int | None = None
+    reference_source: str | None = None
 
     def __post_init__(self) -> None:
         effective = self.source_playlist_id or self.reference_playlist_id
@@ -35,6 +36,7 @@ class GetPlaylistDeckCommand:
     user_id: int
     limit: int = 20
     cursor_id: int | None = None
+    phase: str = "primary"
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -18,6 +18,7 @@ import type {
   PlaylistApiDto,
   RankedArtist,
   RankedGenre,
+  ReferenceSource,
   ReleaseEraPoint,
   ReleaseYearStatApiDto,
   ReviewApiDto,
@@ -52,9 +53,75 @@ export function formatDurationSeconds(seconds: number): string {
   return `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
+/** Parses a raw value into a valid ReferenceSource, or null. */
+export function toReferenceSource(value: unknown): ReferenceSource | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === 'curtidas' ||
+    normalized === 'amadas' ||
+    normalized === 'playlists' ||
+    normalized === 'livre'
+  ) {
+    return normalized;
+  }
+  return null;
+}
+
+/** Extracts reference_source from serialized backend deck_filters JSON. */
+export function extractReferenceSourceFromFilters(
+  deckFilters: string | null | undefined,
+): ReferenceSource | null {
+  if (!deckFilters) return null;
+  try {
+    const parsed: unknown = JSON.parse(deckFilters);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      return null;
+    }
+    return 'reference_source' in parsed ? toReferenceSource(parsed.reference_source) : null;
+  } catch {
+    return null;
+  }
+}
+
+function parseTimeDurationSeconds(rawTime: string): number {
+  const parts = rawTime.split(':').map((part) => Number(part.trim()));
+  if (parts.length !== 2) return 0;
+  const [mins = Number.NaN, secs = Number.NaN] = parts;
+  if (!Number.isFinite(mins) || !Number.isFinite(secs) || mins < 0 || secs < 0) {
+    return 0;
+  }
+  return Math.round(mins * 60 + secs);
+}
+
+/** Resolves a Song's duration in seconds from durationSeconds or formatted m:ss time. */
+export function resolveSongDurationSeconds(song: Song): number {
+  const seconds = song.durationSeconds;
+  if (seconds !== undefined && Number.isFinite(seconds) && seconds > 0) {
+    return seconds;
+  }
+  return parseTimeDurationSeconds(song.time);
+}
+
+/** Sums the duration in seconds across a list of songs. */
+export function computeSongsDurationSeconds(songs: readonly Song[]): number {
+  return songs.reduce((acc, song) => acc + resolveSongDurationSeconds(song), 0);
+}
+
+/** Computes total playlist duration seconds and returns whether its cap is reached. */
+export function isPlaylistDurationLimitReached(playlist: Playlist): boolean {
+  const max = playlist.maxDurationSeconds;
+  if (max == null || max <= 0) return false;
+  const songs = playlist.songs ?? [];
+  const totalSeconds =
+    songs.length > 0 ? computeSongsDurationSeconds(songs) : (playlist.totalDurationSeconds ?? 0);
+  return totalSeconds >= max;
+}
+
 /** Formats total seconds into human-readable minutes label. */
 export function formatTotalMinutes(totalSeconds: number): string {
   const safe = Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : 0;
+  if (safe === 0) return '0 min';
   const mins = Math.max(1, Math.round(safe / 60));
   return `${mins} min`;
 }
@@ -107,12 +174,8 @@ export function mapPlaylistDtoToPlaylist(dto: PlaylistApiDto): Playlist {
     dto.total_duration_seconds > 0
       ? dto.total_duration_seconds
       : dto.tracks.reduce((acc, item) => acc + item.duration_seconds, 0);
-  const durationLabel =
-    computedSeconds > 0
-      ? formatTotalMinutes(computedSeconds)
-      : dto.max_duration_seconds
-        ? formatTotalMinutes(dto.max_duration_seconds)
-        : '0 min';
+  const durationLabel = computedSeconds > 0 ? formatTotalMinutes(computedSeconds) : '0 min';
+  const referenceSource = extractReferenceSourceFromFilters(dto.deck_filters);
 
   return {
     id: String(dto.playlist_id),
@@ -120,6 +183,7 @@ export function mapPlaylistDtoToPlaylist(dto: PlaylistApiDto): Playlist {
     name: dto.name,
     count: songs.length,
     duration: durationLabel,
+    totalDurationSeconds: computedSeconds,
     ...(dto.description ? { description: dto.description } : {}),
     isExported: dto.is_exported,
     ...(dto.spotify_playlist_id ? { spotifyPlaylistId: dto.spotify_playlist_id } : {}),
@@ -127,6 +191,7 @@ export function mapPlaylistDtoToPlaylist(dto: PlaylistApiDto): Playlist {
     ...(dto.cover_image_url ? { coverImageUrl: dto.cover_image_url } : {}),
     ...(dto.max_duration_seconds != null ? { maxDurationSeconds: dto.max_duration_seconds } : {}),
     ...(dto.deck_filters ? { deckFilters: dto.deck_filters } : {}),
+    ...(referenceSource ? { referenceSource } : {}),
     songs,
   };
 }

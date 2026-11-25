@@ -275,16 +275,52 @@ def test_playlist_replace_tracks_swaps_whole_list() -> None:
     assert playlist.tracks == (new,)
 
 
+def test_playlist_duration_limit_allows_crossing_once_then_blocks_until_removal() -> (
+    None
+):
+    first = Track(
+        track_id=1, title="First", artist="A", duration_seconds=200, genre="Rock"
+    )
+    crossing = Track(
+        track_id=2, title="Crossing", artist="A", duration_seconds=200, genre="Rock"
+    )
+    extra = Track(
+        track_id=3, title="Extra", artist="A", duration_seconds=100, genre="Rock"
+    )
+    playlist = Playlist(
+        user_id=1, name="Timed", max_duration_seconds=300, initial_tracks=[first]
+    )
+
+    assert playlist.is_duration_limit_reached is False
+    assert playlist.can_fit_duration(crossing.duration_seconds) is True
+
+    playlist.add_track(crossing)
+    assert playlist.total_duration_seconds == 400
+    assert playlist.is_duration_limit_reached is True
+    assert playlist.can_fit_duration(extra.duration_seconds) is False
+
+    with pytest.raises(BusinessRuleViolationError, match="maximum playlist duration"):
+        playlist.add_track(extra)
+
+    playlist.remove_track(2)
+    assert playlist.total_duration_seconds == 200
+    assert playlist.is_duration_limit_reached is False
+    assert playlist.can_fit_duration(extra.duration_seconds) is True
+
+
 def test_playlist_replace_tracks_keeps_previous_tracks_on_rejection() -> None:
     old = Track(track_id=1, title="Old", artist="A", duration_seconds=10, genre="Rock")
     long_track = Track(
         track_id=2, title="Long", artist="A", duration_seconds=100, genre="Rock"
+    )
+    after_limit = Track(
+        track_id=3, title="After", artist="A", duration_seconds=20, genre="Rock"
     )
     playlist = Playlist(
         user_id=1, name="Mix", max_duration_seconds=50, initial_tracks=[old]
     )
 
     with pytest.raises(BusinessRuleViolationError):
-        playlist.replace_tracks([long_track])
+        playlist.replace_tracks([long_track, after_limit])
 
     assert playlist.tracks == (old,)

@@ -84,10 +84,11 @@ export class PlaylistService {
       'artist',
       'country',
       'description',
+      'reference_source',
     ] as const;
     for (const field of fields) {
       const val = payload[field];
-      if (val !== undefined) cleanPayload[field] = val;
+      if (val !== undefined && val !== null) cleanPayload[field] = val;
     }
     if (srcId != null) cleanPayload['source_playlist_id'] = srcId;
 
@@ -118,10 +119,14 @@ export class PlaylistService {
     playlistId: number,
     limit = 20,
     cursorId?: number,
+    phase?: 'primary' | 'additional',
   ): Observable<PaginatedTracksApiDto> {
     let params = new HttpParams().set('limit', String(limit));
     if (cursorId !== undefined && cursorId !== null) {
       params = params.set('cursor_id', String(cursorId));
+    }
+    if (phase === 'additional') {
+      params = params.set('phase', phase);
     }
     return this.http.get<PaginatedTracksApiDto>(`/api/playlists/${playlistId}/deck`, { params });
   }
