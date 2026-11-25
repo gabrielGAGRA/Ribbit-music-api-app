@@ -64,4 +64,20 @@ describe('PlansComponent & Mock Checkout Flow', () => {
     expect(state.currentPlan()).toBe('Família');
     expect(state.activeModal()).toBeNull();
   });
+
+  it('prevents checkout for admin users without adding an extra plan card', () => {
+    state.isAdmin.set(true);
+    state.currentPlan.set('Free');
+    const familyPlan = plansComponent['computedPlans']().find((item) => item.name === 'Família');
+    if (!familyPlan) {
+      throw new Error('Expected Família plan');
+    }
+
+    expect(plansComponent['computedPlans']().map((p) => p.name)).not.toContain('Administrador');
+    plansComponent['selectPlan'](familyPlan);
+
+    expect(state.activeModal()).toBeNull();
+    expect(state.toast()).toContain('Administrador');
+    httpMock.expectNone('/api/profile/plan');
+  });
 });

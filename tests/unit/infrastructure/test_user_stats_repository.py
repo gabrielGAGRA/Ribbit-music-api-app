@@ -194,3 +194,46 @@ def test_user_stats_filtered_by_year(conn: sqlite3.Connection) -> None:
     assert stats.average_rating == 5.0
     assert stats.total_playlists == 1
     assert stats.total_jams_participated == 1
+
+
+def test_user_stats_top_artists_uses_first_liked_track_cover_and_excludes_zero_likes(
+    conn: sqlite3.Connection,
+) -> None:
+    conn.execute(
+        "INSERT INTO plans (name, monthly_price, max_profiles) VALUES ('Premium', 19.9, 1)"
+    )
+    conn.execute(
+        """
+        INSERT INTO users (email, password_hash, display_name, age, plan_id, created_at)
+        VALUES ('covers@test.com', 'hash', 'Cover User', 25, 1, '2026-01-01T00:00:00+00:00')
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO tracks (
+            title, artist, duration_seconds, genre, release_year, cover_url, is_deleted, created_at
+        ) VALUES
+            ('DislikedFirst', 'Liked Artist', 200, 'Rock', 2020, 'https://cdn.example/disliked.jpg', 0, '2026-01-01T00:00:00+00:00'),
+            ('FirstPositive', 'Liked Artist', 210, 'Rock', 2021, 'https://cdn.example/first-liked.jpg', 0, '2026-01-01T00:00:00+00:00'),
+            ('SecondPositive', 'Liked Artist', 220, 'Rock', 2022, 'https://cdn.example/second-liked.jpg', 0, '2026-01-01T00:00:00+00:00'),
+            ('OnlyDislikedTrack', 'Disliked Only Artist', 190, 'Pop', 2023, 'https://cdn.example/ignored.jpg', 0, '2026-01-01T00:00:00+00:00')
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO interactions (user_id, track_id, action, created_at, source)
+        VALUES
+            (1, 1, 'dislike', '2026-01-02T10:00:00+00:00', 'discovery'),
+            (1, 2, 'like', '2026-02-01T10:00:00+00:00', 'discovery'),
+            (1, 3, 'superlike', '2026-03-01T10:00:00+00:00', 'discovery'),
+            (1, 4, 'dislike', '2026-02-15T10:00:00+00:00', 'discovery')
+        """
+    )
+    conn.commit()
+
+    repo = SQLiteUserStatsRepository(conn)
+    stats = repo.get_user_stats(user_id=1)
+
+    assert [item.artist for item in stats.top_artists] == ["Liked Artist"]
+    assert stats.top_artists[0].cover_url == "https://cdn.example/first-liked.jpg"
+    assert stats.top_artists[0].total_positive == 2

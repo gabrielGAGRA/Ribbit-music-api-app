@@ -28,7 +28,7 @@ class UndoLatestDiscoveryInteractionUseCase:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
         plan = self.plan_repo.find_by_id(user.plan_id)
-        if not plan or not plan.is_paid:
+        if not user.has_premium_access(plan):
             raise PermissionDeniedError("Feature exclusive to Premium subscribers.")
 
         interaction = self.interaction_repo.delete_latest_discovery(user_id)

@@ -115,6 +115,7 @@ export class FamilyComponent {
   );
 
   protected readonly isFamilyPlan = computed<boolean>(() => {
+    if (this.state.isAdmin()) return true;
     const planName = this.state.currentPlan().toLowerCase();
     if (planName.includes('famíl') || planName.includes('famil')) {
       return true;
@@ -123,6 +124,13 @@ export class FamilyComponent {
     const plans = this.planService?.rawPlans() ?? [];
     const matched = plans.find((p) => p.plan_id === currentPlanId);
     return (matched?.max_profiles ?? 1) > 1;
+  });
+
+  protected readonly familyTierLabel = computed<string>(() => {
+    if (this.isChildAccount()) return 'Conta Filha Vinculada';
+    if (this.state.isAdmin()) return 'Administrador · Plano Família Gratuito';
+    if (this.isFamilyPlan()) return 'Plano Família Ativo';
+    return `Plano Atual: ${this.state.currentPlan()}`;
   });
 
   protected readonly maxProfiles = computed<number>(() => {

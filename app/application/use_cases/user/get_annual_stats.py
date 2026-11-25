@@ -25,7 +25,7 @@ class GetAnnualListeningStatsUseCase:
             raise EntityNotFoundError(f"User with ID {user_id} not found.")
 
         plan = self.plan_repo.find_by_id(user.plan_id)
-        if not plan or not plan.is_paid:
+        if not user.has_premium_access(plan):
             raise PermissionDeniedError("Feature exclusive to Premium subscribers.")
 
         return self.user_stats_repo.get_user_stats(user_id=user_id, year=year)

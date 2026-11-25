@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Song } from '@ribbit/shared-types';
@@ -137,5 +138,114 @@ describe('DiscoverComponent', () => {
     expect(template).toContain('class="vinyl-spinner"');
     expect(globalStyles).toContain('.vinyl-spinner');
     expect(globalStyles).toContain('@media (prefers-reduced-motion: reduce)');
+  });
+
+  it('returns to community explore and opens track reviews modal after swiping a community track', () => {
+    const communitySong: Song = {
+      trackId: 55,
+      title: 'Community Pick',
+      artist: 'Artist',
+      genre: 'Rock',
+      time: '3:00',
+      image: 'https://example.com/community.jpg',
+      album: 'Single',
+      year: '2023',
+      match: 91,
+      previewUrl: 'https://audio.itunes.apple.com/preview.m4a',
+    };
+    state.openTrackForCommunitySwipe(communitySong);
+    expect(state.activePage()).toBe('discover');
+    expect(state.pendingCommunityReturnSong()).toEqual(communitySong);
+
+    component['submitDecision']('like');
+    vi.advanceTimersByTime(300);
+
+    expect(state.history().some((entry) => entry.trackId === 55 && entry.kind === 'like')).toBe(
+      true,
+    );
+    expect(state.pendingCommunityReturnSong()).toBeNull();
+    expect(state.activePage()).toBe('explore');
+    expect(state.activeModal()).toBe('details');
+    expect(state.detailsTargetSong()).toEqual(communitySong);
+    expect(player.isPlaying()).toBe(false);
+  });
+
+  it('stays on discover without opening reviews modal after a regular swipe', () => {
+    state.setPage('discover');
+    expect(state.pendingCommunityReturnSong()).toBeNull();
+
+    component['submitDecision']('like');
+    vi.advanceTimersByTime(300);
+
+    expect(state.activePage()).toBe('discover');
+    expect(state.activeModal()).toBeNull();
+  });
+});
+
+describe('DiscoverComponent DOM', () => {
+  let state: RibbitStateService;
+  let player: AudioPlayerService;
+
+  beforeEach(() => {
+    localStorage.clear();
+    const html = readFileSync(resolve(__dirname, './discover.component.html'), 'utf8');
+    TestBed.overrideComponent(DiscoverComponent, {
+      set: {
+        template: html,
+        templateUrl: undefined,
+        styleUrl: undefined,
+        styles: [],
+        imports: [],
+        schemas: [NO_ERRORS_SCHEMA],
+      },
+    });
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+      ],
+    });
+    state = TestBed.inject(RibbitStateService);
+    state.songs.set([TEST_SONG]);
+    player = TestBed.inject(AudioPlayerService);
+  });
+
+  it('should not start card drag when pointerdown targets SVG icon inside preview play button', () => {
+    const fixture = TestBed.createComponent(DiscoverComponent);
+    fixture.detectChanges();
+
+    const instance = fixture.componentInstance;
+    instance['togglePlay']();
+    expect(player.isPlaying()).toBe(true);
+    fixture.detectChanges();
+
+    const root = fixture.nativeElement;
+    if (!(root instanceof HTMLElement)) {
+      throw new TypeError('Expected root element');
+    }
+    const card = root.querySelector('.discovery-card');
+    const playButton = root.querySelector('.preview-play');
+    if (!(card instanceof HTMLElement) || !(playButton instanceof HTMLButtonElement)) {
+      throw new Error('Expected discovery card and play button');
+    }
+
+    const iconHost = playButton.querySelector('app-icon') ?? playButton;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    svg.appendChild(rect);
+    iconHost.appendChild(svg);
+
+    const setPointerCaptureSpy = vi.fn();
+    Object.defineProperty(card, 'setPointerCapture', {
+      value: setPointerCaptureSpy,
+      configurable: true,
+    });
+
+    rect.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true }));
+    expect(instance['isDragging']()).toBe(false);
+    expect(setPointerCaptureSpy).not.toHaveBeenCalled();
+
+    playButton.click();
+    expect(player.isPlaying()).toBe(false);
   });
 });

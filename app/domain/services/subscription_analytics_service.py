@@ -44,7 +44,7 @@ class SubscriptionAnalyticsService:
             plan = plan_map.get(user.plan_id)
             if plan:
                 users_by_plan[plan.name] = users_by_plan.get(plan.name, 0) + 1
-                if user.primary_account_id is None:
+                if user.primary_account_id is None and not user.is_admin:
                     total_revenue += plan.monthly_price
                     revenue_by_plan[plan.name] = (
                         revenue_by_plan.get(plan.name, 0.0) + plan.monthly_price

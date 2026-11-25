@@ -4,6 +4,7 @@ import json
 from typing import Any, TypedDict
 
 from app.domain.services.country_names import country_matches
+from app.domain.services.genre_names import genre_matches_preference
 lazy from app.domain.models.track import Track
 
 
@@ -67,7 +68,7 @@ def matches_track_filters(
     country: list[str] | None = None,
 ) -> bool:
     """Check whether a track satisfies all supplied deck filter criteria."""
-    if genre and not matches_any(track.genre, genre):
+    if genre and not any(genre_matches_preference(track.genre, g) for g in genre):
         return False
     if year is not None and track.release_year not in year:
         return False

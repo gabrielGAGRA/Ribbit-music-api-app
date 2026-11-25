@@ -16,6 +16,7 @@ import type {
 import { readInputValue, readNamedFormControl, readSelectValue } from './dom-event-values';
 import { FrogComponent, type FrogMood } from './frog.component';
 import { IconComponent } from './icon.component';
+import { CATALOG_GENRES } from '../core/genre-catalog';
 import { RibbitStateService } from '../core/ribbit-state.service';
 import type { ReviewSortOption } from '../core/song.service';
 
@@ -25,23 +26,7 @@ interface WordCloudItem {
 
 export const MAX_FAVORITE_GENRES = 3;
 
-export const BACKEND_GENRES: readonly string[] = [
-  'Rock',
-  'Pop',
-  'Hip Hop',
-  'Grunge',
-  'Indie',
-  'Jazz',
-  'Metal',
-  'Electronic',
-  'Funk',
-  'Rap',
-  'Trap',
-  'Lo-fi',
-  'Ambient',
-  'Country',
-  'Techno',
-];
+export const BACKEND_GENRES: readonly string[] = CATALOG_GENRES;
 
 function readNamedInputValue(form: HTMLFormElement, name: string): string {
   const item = form.elements.namedItem(name);

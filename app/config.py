@@ -175,7 +175,7 @@ class Settings(BaseModel):
     admin_password: str = _DEFAULT_DEV_ADMIN_PASSWORD
     admin_eligible_emails: tuple[str, ...] = _DEFAULT_ADMIN_ELIGIBLE_EMAILS
     gcs_bucket_name: str | None = None
-    gcs_tracks_file_path: str = "Songs/songs_final.parquet"
+    gcs_tracks_file_path: str = "Songs/tracks.parquet"
     gcs_max_ingest_tracks: int | None = _DEFAULT_GCS_MAX_INGEST_TRACKS
     google_client_id: str | None = None
     google_client_secret: str | None = None
@@ -268,9 +268,7 @@ def load_settings() -> Settings:
         admin_password=admin_password,
         admin_eligible_emails=admin_eligible_emails,
         gcs_bucket_name=os.getenv("GCS_BUCKET_NAME") or None,
-        gcs_tracks_file_path=os.getenv(
-            "GCS_TRACKS_FILE_PATH", "Songs/songs_final.parquet"
-        ),
+        gcs_tracks_file_path=os.getenv("GCS_TRACKS_FILE_PATH", "Songs/tracks.parquet"),
         gcs_max_ingest_tracks=_parse_optional_positive_int(
             os.getenv("GCS_MAX_INGEST_TRACKS"),
             _DEFAULT_GCS_MAX_INGEST_TRACKS,

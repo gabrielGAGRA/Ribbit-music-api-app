@@ -100,4 +100,50 @@ describe('AudioPlayerService', () => {
       vi.stubGlobal('Audio', originalAudio);
     }
   });
+
+  it('should preserve audio element when play rejects after pause (AbortError)', async () => {
+    let rejectPlay!: (reason?: unknown) => void;
+    const playSpy = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectPlay = reject;
+        }),
+    );
+    const pauseSpy = vi.fn();
+    const fakeAudio = {
+      preload: 'metadata',
+      volume: 0.7,
+      duration: 30,
+      currentTime: 0,
+      addEventListener: vi.fn(),
+      removeAttribute: vi.fn(),
+      play: playSpy,
+      pause: pauseSpy,
+    };
+    const originalAudio = globalThis.Audio;
+    function MockAudio() {
+      return fakeAudio;
+    }
+    vi.stubGlobal('Audio', MockAudio);
+
+    try {
+      player.loadTrack('https://cdn.ribbit.app/preview.mp3');
+      player.play();
+      expect(player.isPlaying()).toBe(true);
+
+      player.pause();
+      expect(player.isPlaying()).toBe(false);
+
+      rejectPlay(new DOMException('The play() request was interrupted by a call to pause()', 'AbortError'));
+      await Promise.resolve();
+
+      expect(player.isPlaying()).toBe(false);
+      expect(fakeAudio.removeAttribute).not.toHaveBeenCalled();
+
+      player.play();
+      expect(playSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.stubGlobal('Audio', originalAudio);
+    }
+  });
 });

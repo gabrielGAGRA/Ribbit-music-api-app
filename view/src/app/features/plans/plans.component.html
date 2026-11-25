@@ -45,9 +45,12 @@
 
         <button
           [class]="plan.featured ? 'primary-button full-width' : 'outline-button full-width'"
+          [disabled]="state.isAdmin()"
           (click)="selectPlan(plan)"
         >
-          @if (state.currentPlan() === plan.name) {
+          @if (state.isAdmin()) {
+            Incluso no nível Admin
+          } @else if (state.currentPlan() === plan.name) {
             Plano atual
           } @else if (plan.name === 'Free') {
             Mudar para Free

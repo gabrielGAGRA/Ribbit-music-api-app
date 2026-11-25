@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from typing import ClassVar, Self
 lazy from collections.abc import Iterable
 
+lazy from app.domain.models.plan import Plan
 lazy from app.domain.models.track import Track
 
 
@@ -97,6 +98,14 @@ class User:
     @property
     def is_adult(self) -> bool:
         return not self.is_minor()
+
+    def has_premium_access(self, plan: Plan | None) -> bool:
+        """Returns True for administrators or users on a paid subscription plan."""
+        return self.is_admin or (plan is not None and plan.is_paid)
+
+    def has_family_access(self, plan: Plan | None) -> bool:
+        """Returns True for administrators or users on a plan supporting dependents."""
+        return self.is_admin or (plan is not None and plan.allows_dependents)
 
     def restricted_genre_terms(self) -> tuple[str, ...]:
         if not self.is_minor():

@@ -105,15 +105,18 @@ export class AudioPlayerService implements OnDestroy {
       audio.preload = 'metadata';
       audio.volume = this.volume() / 100;
       audio.addEventListener('timeupdate', () => {
+        if (this.audioElement !== audio) return;
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
           this.progress.set(Math.min(100, (audio.currentTime / audio.duration) * 100));
         }
       });
       audio.addEventListener('ended', () => {
+        if (this.audioElement !== audio) return;
         this.isPlaying.set(false);
         this.progress.set(0);
       });
       audio.addEventListener('error', () => {
+        if (this.audioElement !== audio) return;
         this.fallbackToTicker();
       });
       this.audioElement = audio;
@@ -135,7 +138,7 @@ export class AudioPlayerService implements OnDestroy {
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise.then(
           () => {
-            if (!this.isPlaying()) {
+            if (this.audioElement !== audio || !this.isPlaying()) {
               audio.pause();
               return;
             }
@@ -143,6 +146,9 @@ export class AudioPlayerService implements OnDestroy {
             this.stopTicker();
           },
           () => {
+            if (this.audioElement !== audio || !this.isPlaying()) {
+              return;
+            }
             this.fallbackToTicker();
           },
         );

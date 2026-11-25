@@ -170,7 +170,10 @@ describe('ExploreComponent', () => {
     expect(component.isSearching()).toBe(true);
 
     const req = httpMock.expectOne(
-      (r) => r.url === '/api/tracks/search' && r.params.get('query') === 'Bloom',
+      (r) =>
+        r.url === '/api/tracks/search' &&
+        r.params.get('query') === 'Bloom' &&
+        r.params.get('include_deleted') === 'true',
     );
     expect(req.request.method).toBe('GET');
     req.flush([
@@ -248,5 +251,53 @@ describe('ExploreComponent', () => {
     const template = readFileSync(resolve(__dirname, './explore.component.html'), 'utf8');
     expect(template).not.toContain('Nenhuma faixa ouvida recentemente');
     expect(template).toContain('Ouvido');
+  });
+
+  it('remembers community track on selectSong for return to reviews after swipe', () => {
+    const state = TestBed.inject(RibbitStateService);
+    const activeSong = state.songs()[0];
+    expect(activeSong).toBeDefined();
+    if (!activeSong) return;
+
+    component['selectSong'](activeSong);
+
+    expect(state.pendingCommunityReturnSong()).toEqual(activeSong);
+    expect(state.discoverySong()).toEqual(activeSong);
+    expect(state.activePage()).toBe('discover');
+  });
+
+  it('shows track-unavailable modal without swiping, logging access, or liking when track is deleted', () => {
+    const httpMock = TestBed.inject(HttpTestingController);
+    const state = TestBed.inject(RibbitStateService);
+    state.setPage('explore');
+    const deletedSong: Song = {
+      trackId: 999,
+      title: 'Faixa Removida',
+      artist: 'Artista Oculto',
+      genre: 'Rock',
+      time: '3:10',
+      image: 'https://example.com/removed.jpg',
+      album: 'Single',
+      year: '2022',
+      match: 90,
+      isDeleted: true,
+    };
+
+    component['selectSong'](deletedSong);
+    expect(state.activeModal()).toBe('track-unavailable');
+    expect(state.detailsTargetSong()).toEqual(deletedSong);
+    expect(state.activePage()).toBe('explore');
+    expect(state.pendingCommunityReturnSong()).toBeNull();
+    expect(state.isTrackSeen(999)).toBe(false);
+
+    state.setModal(null);
+    component['openSongDetails'](deletedSong);
+    expect(state.activeModal()).toBe('track-unavailable');
+    expect(state.detailsTargetSong()).toEqual(deletedSong);
+
+    state.setModal(null);
+    component['likeAndSaveTrack'](deletedSong);
+    expect(state.activeModal()).toBe('track-unavailable');
+    httpMock.expectNone('/api/reviews/999/like-and-save');
   });
 });
