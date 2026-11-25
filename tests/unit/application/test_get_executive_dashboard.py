@@ -30,6 +30,7 @@ def test_get_executive_dashboard_empty_users_returns_zero_revenue() -> None:
         estimated_net_revenue=0.0,
         users_by_plan={"Free": 0, "Premium": 0},
         revenue_by_plan={"Free": 0.0, "Premium": 0.0},
+        profit_by_plan={"Free": 0.0, "Premium": 0.0},
     )
 
 
