@@ -176,7 +176,16 @@ CREATE INDEX IF NOT EXISTS idx_track_accesses_user_track ON track_accesses(user_
 CREATE TABLE IF NOT EXISTS platform_cost_settings (
     settings_id INTEGER PRIMARY KEY CHECK (settings_id = 1),
     content_cost_per_track REAL NOT NULL DEFAULT 0.04,
-    infrastructure_fixed_cost REAL NOT NULL DEFAULT 10.00,
-    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.50,
+    infrastructure_fixed_cost REAL NOT NULL DEFAULT 25.00,
+    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.00,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS firestore_usage_counters (
+    metric_date TEXT PRIMARY KEY,
+    reads_count INTEGER NOT NULL DEFAULT 0,
+    writes_count INTEGER NOT NULL DEFAULT 0,
+    deletes_count INTEGER NOT NULL DEFAULT 0,
+    egress_bytes INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );

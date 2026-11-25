@@ -256,7 +256,7 @@ describe('AdminModerationComponent', () => {
     reopened.ngOnDestroy();
   });
 
-  it('creates a new track via POST /api/admin/tracks and filters by dislikes', () => {
+  it('filters by title and artist, shows external candidates, adds one to delta table, and filters by dislikes', () => {
     const component = TestBed.runInInjectionContext(() => new AdminModerationComponent());
     component.ngOnInit();
 
@@ -265,9 +265,32 @@ describe('AdminModerationComponent', () => {
 
     component['newTrackTitle'].set('Neon Pulse');
     component['newTrackArtist'].set('Synth Unit');
-    component['newTrackGenre'].set('Electronic');
-    component['newTrackDuration'].set('210');
-    component['submitCreateTrack'](new Event('submit'));
+    component['searchExternalTracks'](new Event('submit'));
+
+    const searchExternalReq = httpMock.expectOne(
+      '/api/admin/tracks/external-search?limit=10&title=Neon%20Pulse&artist=Synth%20Unit',
+    );
+    expect(searchExternalReq.request.method).toBe('GET');
+    searchExternalReq.flush([
+      {
+        title: 'Neon Pulse',
+        artist: 'Synth Unit',
+        duration_seconds: 210,
+        genre: 'Electronic',
+        spotify_id: 'sp-neon',
+        album: null,
+        country: null,
+        release_year: 2024,
+        cover_url: 'https://example.com/neon.jpg',
+        itunes_preview_url: null,
+        explicit: false,
+        already_in_catalog: false,
+      },
+    ]);
+
+    expect(component['externalCandidates']().length).toBe(1);
+    const candidate = component['externalCandidates']()[0]!;
+    component['addCandidateToDelta'](candidate);
 
     const postReq = httpMock.expectOne('/api/admin/tracks');
     expect(postReq.request.method).toBe('POST');
@@ -276,6 +299,9 @@ describe('AdminModerationComponent', () => {
       artist: 'Synth Unit',
       genre: 'Electronic',
       duration_seconds: 210,
+      release_year: 2024,
+      cover_url: 'https://example.com/neon.jpg',
+      spotify_id: 'sp-neon',
       explicit: false,
     });
     postReq.flush({
@@ -303,7 +329,7 @@ describe('AdminModerationComponent', () => {
       revenue_by_plan: {},
     });
 
-    expect(component['showCreateTrackForm']()).toBe(false);
+    expect(component['externalCandidates']()[0]?.alreadyInCatalog).toBe(true);
     const adminState = TestBed.inject(AdminStateService);
     expect(adminState.activeTracks().some((t) => t.trackId === 999)).toBe(true);
 

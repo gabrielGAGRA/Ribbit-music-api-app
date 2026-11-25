@@ -275,3 +275,45 @@ def test_query_updated_since_uses_list_for_full_sync_and_filters_query_results(
         client.query_updated_since("users", "earlier")
     with pytest.raises(ExternalServiceError, match="invalid response"):
         client.query_updated_since("users", "earlier")
+
+
+def test_on_usage_callback_receives_reads_writes_deletes_and_egress(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("FIRESTORE_EMULATOR_HOST", "localhost:8080")
+    events: list[tuple[int, int, int, int]] = []
+    session = FakeSession(
+        [
+            FakeResponse(
+                200,
+                {"fields": {"email": {"stringValue": "a"}}},
+                text='{"fields":{"email":{"stringValue":"a"}}}',
+            ),
+            FakeResponse(
+                200,
+                {"name": "projects/p/databases/d/documents/users/a"},
+                text='{"name":"projects/p/databases/d/documents/users/a"}',
+            ),
+            FakeResponse(200, {}, text="{}"),
+        ]
+    )
+    client = FirestoreRestClient(
+        project_id="pond",
+        http_session=session,
+        on_usage=lambda *, reads=0, writes=0, deletes=0, egress_bytes=0: events.append(
+            (reads, writes, deletes, egress_bytes)
+        ),
+    )
+
+    assert client.get_document("users", "a") == {"email": "a"}
+    client.upsert_document("users", "a", {"email": "a"})
+    client.delete_document("users", "a")
+
+    assert [e[:3] for e in events] == [(1, 0, 0), (0, 1, 0), (0, 0, 1)]
+    assert events[0][3] > 0
+    assert client.get_usage_snapshot() == {
+        "reads_today": 1,
+        "writes_today": 1,
+        "deletes_today": 1,
+        "egress_bytes_month": sum(e[3] for e in events),
+    }

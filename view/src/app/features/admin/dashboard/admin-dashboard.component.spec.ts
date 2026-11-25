@@ -33,8 +33,35 @@ describe('AdminDashboardComponent', () => {
     httpMock.expectOne('/api/admin/dashboard').flush({
       total_users: 8,
       estimated_net_revenue: 72.6,
+      gross_revenue: 100.0,
+      total_costs: 27.4,
+      cost_to_revenue_percent: 27.4,
+      paid_plans_revenue: 100.0,
+      paid_plans_profit: 79.45,
       users_by_plan: { Free: 2, Individual: 3, Família: 3 },
-      revenue_by_plan: { Free: 0, Individual: 44.7, Família: 27.9 },
+      revenue_by_plan: { Free: 0, Individual: 44.7, Família: 55.3 },
+      profit_by_plan: { Free: 0, Individual: 34.43, Família: 45.02 },
+      firestore_usage: {
+        reads_today: 25000,
+        reads_free_limit: 50000,
+        reads_percent: 50,
+        reads_rate_per_100k: 0.06,
+        writes_today: 5000,
+        writes_free_limit: 20000,
+        writes_percent: 25,
+        writes_rate_per_100k: 0.18,
+        deletes_today: 1000,
+        deletes_free_limit: 20000,
+        deletes_percent: 5,
+        deletes_rate_per_100k: 0.02,
+        stored_gib: 0.25,
+        stored_free_limit_gib: 1.0,
+        stored_percent: 25,
+        egress_gib_month: 1.0,
+        egress_free_limit_gib: 10.0,
+        egress_percent: 10,
+        monthly_estimated_cost: 0,
+      },
     });
     httpMock.expectOne('/api/admin/audience').flush({
       total_users: 8,
@@ -72,10 +99,17 @@ describe('AdminDashboardComponent', () => {
 
     const component = TestBed.runInInjectionContext(() => new AdminDashboardComponent());
 
-    expect(component['formattedNetRevenue']()).toContain('72,60');
+    expect(component['formattedNetRevenue']()).toContain('72.60');
     expect(component['adminCount']()).toBe(2);
     expect(component['blockedTrackCount']()).toBe(2);
     expect(component['catalogAvailabilityPercent']()).toBe(71);
+    expect(component['costToRevenuePercent']()).toBe(27.4);
+    expect(component['paidPlansProfit']()).toBe(79.45);
+    expect(component['firestoreQuotaRows']()).toHaveLength(5);
+    expect(component['firestoreQuotaRows']()[0].percent).toBe(50);
+    expect(component['firestoreQuotaRows']()[3].usedLabel).toBe('256.00 MiB');
+    expect(state.planBreakdown().find((p) => p.planName === 'Individual')?.profit).toBe(34.43);
+    expect(state.planBreakdown().find((p) => p.planName === 'Free')?.isPaid).toBe(false);
   });
 
   it('edits and saves platform operational costs and flags negative net revenue', () => {
@@ -112,10 +146,38 @@ describe('AdminDashboardComponent', () => {
       total_costs: 103,
       users_by_plan: {},
       revenue_by_plan: {},
+      firestore_usage: {
+        reads_today: 1,
+        reads_free_limit: 50000,
+        reads_percent: 0,
+        reads_rate_per_100k: 0.06,
+        writes_today: 0,
+        writes_free_limit: 20000,
+        writes_percent: 0,
+        writes_rate_per_100k: 0.18,
+        deletes_today: 0,
+        deletes_free_limit: 20000,
+        deletes_percent: 0,
+        deletes_rate_per_100k: 0.02,
+        stored_bytes: 512 * 1024,
+        stored_gib: 0.000488,
+        stored_free_limit_gib: 1.0,
+        stored_percent: 0.05,
+        egress_bytes_month: 2048,
+        egress_gib_month: 0.000002,
+        egress_free_limit_gib: 10.0,
+        egress_percent: 0,
+        monthly_estimated_cost: 0,
+      },
     });
 
     expect(component['editingCosts']()).toBe(false);
     expect(component['isNetNegative']()).toBe(true);
     expect(state.executiveDashboard().totalCosts).toBe(103);
+    const refreshedRows = component['firestoreQuotaRows']();
+    expect(refreshedRows[0].percentLabel).toBe('< 0.01%');
+    expect(refreshedRows[3].usedLabel).toBe('512.00 KiB');
+    expect(refreshedRows[4].usedLabel).toBe('2.00 KiB');
+    expect(refreshedRows[4].percentLabel).toBe('< 0.01%');
   });
 });

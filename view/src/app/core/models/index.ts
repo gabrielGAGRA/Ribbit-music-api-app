@@ -7,6 +7,7 @@ export type {
   BlockedGenreEntry,
   CompactCatalogApiResponse,
   ExecutiveDashboardApiDto,
+  FirestoreQuotaSummaryApiDto,
   GenreAccessCountApiDto,
   PlanBreakdownEntry,
   PlatformCostSettingsApiDto,

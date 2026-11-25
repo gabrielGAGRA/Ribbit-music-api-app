@@ -15,8 +15,13 @@ from app.domain.models.platform_costs import PlatformCostSettings
 from app.domain.models.track import Track
 from app.domain.models.track_access import TrackAccess
 from app.domain.models.user import User
-from app.domain.services import SubscriptionAnalyticsService
+from app.domain.services import (
+    FirestoreUsageMetrics,
+    SubscriptionAnalyticsService,
+    calculate_firestore_content_cost,
+)
 from app.infrastructure.repositories import (
+    FirestoreUsageTracker,
     SQLitePlanRepository,
     SQLitePlatformCostRepository,
     SQLiteTrackAccessRepository,
@@ -24,7 +29,10 @@ from app.infrastructure.repositories import (
     SQLiteUserRepository,
     create_connection,
 )
-from app.infrastructure.repositories.seed import migrate_additive_columns
+from app.infrastructure.repositories.seed import (
+    _seed_platform_costs,
+    migrate_additive_columns,
+)
 
 
 def test_subscription_analytics_service_positive_and_negative_net_revenue() -> None:
@@ -91,8 +99,8 @@ def test_platform_cost_use_cases_and_validation() -> None:
 
         defaults = get_uc.execute()
         assert defaults.content_cost_per_track == 0.04
-        assert defaults.infrastructure_fixed_cost == 10.00
-        assert defaults.infrastructure_cost_per_user == 0.50
+        assert defaults.infrastructure_fixed_cost == 25.00
+        assert defaults.infrastructure_cost_per_user == 0.00
 
         updated = update_uc.execute(
             UpdatePlatformCostsCommand(
@@ -190,5 +198,166 @@ def test_executive_dashboard_and_audience_report_with_costs_and_accesses() -> No
             "Pop": 2,
             "Rock": 1,
         }
+    finally:
+        conn.close()
+
+
+def test_firestore_content_cost_free_tier_and_overage_plus_paid_plan_profit() -> None:
+    within_free = calculate_firestore_content_cost(
+        FirestoreUsageMetrics(
+            reads_today=25_000,
+            writes_today=10_000,
+            deletes_today=5_000,
+            stored_bytes=512 * 1024 * 1024,
+            egress_bytes_month=2 * 1024**3,
+        )
+    )
+    assert within_free.reads_percent == 50.0
+    assert within_free.writes_percent == 50.0
+    assert within_free.deletes_percent == 25.0
+    assert within_free.stored_percent == 50.0
+    assert within_free.egress_percent == 20.0
+    assert within_free.monthly_estimated_cost == 0.0
+
+    # Overage: +100k reads ($0.06/day), +100k writes ($0.18/day), +100k deletes ($0.02/day)
+    # = $0.26/day * 30 = $7.80/month
+    overage_usage = FirestoreUsageMetrics(
+        reads_today=150_000,
+        writes_today=120_000,
+        deletes_today=120_000,
+        stored_bytes=1024**3,
+        egress_bytes_month=10 * 1024**3,
+    )
+    svc = SubscriptionAnalyticsService()
+    free = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+    pro = Plan(
+        plan_id=2, name="Individual", initial_monthly_price=20.0, initial_max_profiles=1
+    )
+    fam = Plan(
+        plan_id=3, name="Família", initial_monthly_price=35.0, initial_max_profiles=4
+    )
+    users = [
+        User(
+            user_id=1,
+            email="f@example.com",
+            password_hash="h",
+            display_name="F",
+            age=25,
+            plan_id=1,
+        ),
+        User(
+            user_id=2,
+            email="p1@example.com",
+            password_hash="h",
+            display_name="P1",
+            age=25,
+            plan_id=2,
+        ),
+        User(
+            user_id=3,
+            email="p2@example.com",
+            password_hash="h",
+            display_name="P2",
+            age=25,
+            plan_id=2,
+        ),
+        User(
+            user_id=4,
+            email="fam@example.com",
+            password_hash="h",
+            display_name="Fam",
+            age=25,
+            plan_id=3,
+        ),
+    ]
+    breakdown = svc.calculate_revenue_breakdown(
+        users=users,
+        plans=[free, pro, fam],
+        infrastructure_fixed_cost=25.0,
+        infrastructure_cost_per_user=0.0,
+        firestore_usage=overage_usage,
+    )
+    assert breakdown.content_cost == 7.8
+    assert breakdown.infrastructure_cost == 25.0
+    assert breakdown.total_costs == 32.8
+    assert breakdown.gross_revenue == 75.0
+    # Individual has 2/4 users -> allocated 16.40 -> profit 40.0 - 16.40 = 23.60
+    # Família has 1/4 users -> allocated 8.20 -> profit 35.0 - 8.20 = 26.80
+    assert breakdown.profit_by_plan["Free"] == 0.0
+    assert breakdown.profit_by_plan["Individual"] == 23.6
+    assert breakdown.profit_by_plan["Família"] == 26.8
+    assert breakdown.paid_plans_revenue == 75.0
+    assert breakdown.paid_plans_profit == 50.4
+    assert breakdown.cost_to_revenue_percent == 43.7
+
+
+def test_seed_platform_costs_upgrades_legacy_seed_and_preserves_custom_edits() -> None:
+    conn = create_connection(":memory:")
+    migrate_additive_columns(conn)
+    try:
+        conn.execute(
+            """
+            INSERT INTO platform_cost_settings (
+                settings_id, content_cost_per_track, infrastructure_fixed_cost,
+                infrastructure_cost_per_user, updated_at
+            ) VALUES (1, 0.04, 10.00, 0.50, '1970-01-01T00:00:00+00:00')
+            """
+        )
+        conn.commit()
+
+        _seed_platform_costs(conn, "1970-01-01T00:00:00+00:00")
+        upgraded = SQLitePlatformCostRepository(conn).get_settings()
+        assert upgraded.infrastructure_fixed_cost == 25.00
+        assert upgraded.infrastructure_cost_per_user == 0.00
+
+        # Manually edited settings (non-seed updated_at) must not be overwritten
+        conn.execute(
+            """
+            UPDATE platform_cost_settings
+            SET infrastructure_fixed_cost = 42.00,
+                infrastructure_cost_per_user = 0.25,
+                updated_at = '2026-11-25T10:00:00+00:00'
+            WHERE settings_id = 1
+            """
+        )
+        conn.commit()
+        _seed_platform_costs(conn, "1970-01-01T00:00:00+00:00")
+        preserved = SQLitePlatformCostRepository(conn).get_settings()
+        assert preserved.infrastructure_fixed_cost == 42.00
+        assert preserved.infrastructure_cost_per_user == 0.25
+    finally:
+        conn.close()
+
+
+def test_firestore_usage_tracker_records_flushes_and_persists_across_restarts() -> None:
+    conn = create_connection(":memory:")
+    migrate_additive_columns(conn)
+    try:
+        tracker1 = FirestoreUsageTracker()
+        tracker1.record_sql_statement("SELECT * FROM users WHERE email = ?")
+        tracker1.record_sql_statement("INSERT INTO reviews (user_id) VALUES (?)")
+        tracker1.record_sql_statement("DELETE FROM review_likes WHERE review_id = ?")
+        # Non-synced/internal tables and PRAGMA statements should be ignored
+        tracker1.record_sql_statement("SELECT * FROM tracks LIMIT 10")
+        tracker1.record_sql_statement("PRAGMA page_count;")
+        tracker1.record_sql_statement("SELECT * FROM firestore_usage_counters")
+
+        metrics1 = tracker1.get_usage_metrics(conn)
+        assert metrics1.reads_today == 1
+        assert metrics1.writes_today == 1
+        assert metrics1.deletes_today == 1
+        assert metrics1.egress_bytes_month >= 512 + 256
+        assert metrics1.stored_bytes > 0
+
+        # A fresh tracker reading the same DB preserves flushed counts across restart
+        tracker2 = FirestoreUsageTracker()
+        tracker2.record(reads=2, egress_bytes=1024)
+        metrics2 = tracker2.get_usage_metrics(conn)
+        assert metrics2.reads_today == 3
+        assert metrics2.writes_today == 1
+        assert metrics2.deletes_today == 1
+        assert metrics2.egress_bytes_month >= 512 + 256 + 1024
     finally:
         conn.close()

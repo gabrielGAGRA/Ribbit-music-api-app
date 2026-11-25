@@ -12,7 +12,11 @@ import type { Subscription } from 'rxjs';
 import { readInputValue, readSelectValue } from '@shared/dom-event-values';
 import { IconComponent } from '@shared/icon.component';
 import type { AdminModerationReview } from '../admin-mappers';
-import type { AdminTrackItem, AdminTrackSortOption } from '../admin-state.service';
+import type {
+  AdminTrackItem,
+  AdminTrackSortOption,
+  ExternalTrackCandidate,
+} from '../admin-state.service';
 import { AdminStateService } from '../admin-state.service';
 
 type ModerationTab = 'catalog' | 'blocked' | 'reviews';
@@ -27,6 +31,22 @@ function toAdminTrackSortOption(value: string): AdminTrackSortOption {
     return value;
   }
   return 'id_asc';
+}
+
+function buildCandidateCreatePayload(candidate: ExternalTrackCandidate) {
+  return {
+    title: candidate.title,
+    artist: candidate.artist,
+    genre: candidate.genre || 'Unknown',
+    duration_seconds: Math.max(1, candidate.durationSeconds || 180),
+    ...(candidate.album ? { album: candidate.album } : {}),
+    ...(candidate.country ? { country: candidate.country } : {}),
+    ...(candidate.releaseYear !== null ? { release_year: candidate.releaseYear } : {}),
+    ...(candidate.coverUrl ? { cover_url: candidate.coverUrl } : {}),
+    ...(candidate.itunesPreviewUrl ? { itunes_preview_url: candidate.itunesPreviewUrl } : {}),
+    ...(candidate.spotifyId ? { spotify_id: candidate.spotifyId } : {}),
+    explicit: candidate.explicit,
+  };
 }
 
 /** Catalog block/explicit/genre controls, Delta sync/compaction, and review moderation screen. */
@@ -54,14 +74,12 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
   protected readonly catalogSort = signal<AdminTrackSortOption>('id_asc');
   protected readonly onlyDisliked = signal<boolean>(false);
   protected readonly showCreateTrackForm = signal<boolean>(false);
-  protected readonly isCreatingTrack = signal<boolean>(false);
+  protected readonly isSearchingExternal = signal<boolean>(false);
+  protected readonly hasSearchedExternal = signal<boolean>(false);
+  protected readonly addingCandidateKey = signal<string | null>(null);
   protected readonly newTrackTitle = signal<string>('');
   protected readonly newTrackArtist = signal<string>('');
-  protected readonly newTrackGenre = signal<string>('');
-  protected readonly newTrackDuration = signal<string>('180');
-  protected readonly newTrackAlbum = signal<string>('');
-  protected readonly newTrackYear = signal<string>('');
-  protected readonly newTrackExplicit = signal<boolean>(false);
+  protected readonly externalCandidates = signal<readonly ExternalTrackCandidate[]>([]);
 
   private statusTimer: ReturnType<typeof setTimeout> | null = null;
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -251,81 +269,72 @@ export class AdminModerationComponent implements OnInit, OnDestroy {
   protected toggleCreateTrackForm(): void {
     this.moderationError.set('');
     this.showCreateTrackForm.update((v) => !v);
+    if (!this.showCreateTrackForm()) {
+      this.newTrackTitle.set('');
+      this.newTrackArtist.set('');
+      this.externalCandidates.set([]);
+      this.hasSearchedExternal.set(false);
+    }
   }
 
   protected updateTextSignal(targetSignal: { set: (value: string) => void }, event: Event): void {
     targetSignal.set(readInputValue(event));
   }
 
-  protected toggleNewTrackExplicit(): void {
-    this.newTrackExplicit.update((v) => !v);
+  protected candidateKey(candidate: ExternalTrackCandidate): string {
+    return (
+      candidate.spotifyId ?? `${candidate.title.toLowerCase()}::${candidate.artist.toLowerCase()}`
+    );
   }
 
-  private parseOptionalReleaseYear(): number | null | 'invalid' {
-    const rawYear = this.newTrackYear().trim();
-    if (!rawYear) return null;
-    const parsed = Number(rawYear);
-    return Number.isFinite(parsed) && parsed >= 1900 ? Math.round(parsed) : 'invalid';
-  }
-
-  private buildCreateTrackPayload(): ReturnType<AdminStateService['createTrack']> | null {
+  protected searchExternalTracks(event: Event): void {
+    event.preventDefault();
     const title = this.newTrackTitle().trim();
     const artist = this.newTrackArtist().trim();
-    const genre = this.newTrackGenre().trim();
-    const duration = Number(this.newTrackDuration().trim());
-    if (!title || !artist || !genre) {
-      this.moderationError.set('Preencha título, artista e gênero da faixa.');
-      return null;
+    if (!title && !artist) {
+      this.moderationError.set('Informe o título ou o artista para buscar a faixa.');
+      return;
     }
-    if (!Number.isFinite(duration) || duration <= 0) {
-      this.moderationError.set('Informe uma duração válida em segundos (> 0).');
-      return null;
-    }
-    const parsedYear = this.parseOptionalReleaseYear();
-    if (parsedYear === 'invalid') {
-      this.moderationError.set('Informe um ano de lançamento válido.');
-      return null;
-    }
-    const album = this.newTrackAlbum().trim();
-    return this.adminState.createTrack({
-      title,
-      artist,
-      genre,
-      duration_seconds: Math.round(duration),
-      ...(album ? { album } : {}),
-      ...(parsedYear !== null ? { release_year: parsedYear } : {}),
-      explicit: this.newTrackExplicit(),
-    });
-  }
-
-  private resetCreateTrackForm(): void {
-    this.showCreateTrackForm.set(false);
-    this.newTrackTitle.set('');
-    this.newTrackArtist.set('');
-    this.newTrackGenre.set('');
-    this.newTrackDuration.set('180');
-    this.newTrackAlbum.set('');
-    this.newTrackYear.set('');
-    this.newTrackExplicit.set(false);
-  }
-
-  protected submitCreateTrack(event: Event): void {
-    event.preventDefault();
-    const request$ = this.buildCreateTrackPayload();
-    if (!request$) return;
-
     this.moderationError.set('');
-    this.isCreatingTrack.set(true);
-    request$.subscribe({
-      next: () => {
-        this.isCreatingTrack.set(false);
-        this.resetCreateTrackForm();
+    this.isSearchingExternal.set(true);
+    this.hasSearchedExternal.set(false);
+    this.adminState.searchExternalTracks(title, artist).subscribe({
+      next: (items) => {
+        this.isSearchingExternal.set(false);
+        this.hasSearchedExternal.set(true);
+        this.externalCandidates.set(items);
       },
       error: (err: Error) => {
-        this.isCreatingTrack.set(false);
+        this.isSearchingExternal.set(false);
         this.moderationError.set(err.message);
       },
     });
+  }
+
+  protected addCandidateToDelta(candidate: ExternalTrackCandidate): void {
+    if (candidate.alreadyInCatalog || this.addingCandidateKey() !== null) return;
+    const key = this.candidateKey(candidate);
+    this.moderationError.set('');
+    this.addingCandidateKey.set(key);
+    this.adminState
+      .createTrack(buildCandidateCreatePayload(candidate))
+      .subscribe({
+        next: () => {
+          this.addingCandidateKey.set(null);
+          this.externalCandidates.update((list) =>
+            list.map((item) =>
+              this.candidateKey(item) === key ? { ...item, alreadyInCatalog: true } : item,
+            ),
+          );
+          this.setTransientCatalogStatus(
+            `Faixa "${candidate.title}" adicionada ao catálogo e à Delta Table.`,
+          );
+        },
+        error: (err: Error) => {
+          this.addingCandidateKey.set(null);
+          this.moderationError.set(err.message);
+        },
+      });
   }
 
   protected starArray(rating: number): readonly number[] {

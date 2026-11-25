@@ -5,6 +5,7 @@ import logging
 import os
 import threading
 from collections.abc import Callable, Mapping, Sequence
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -96,14 +97,24 @@ class FirestoreRestClient:
         credentials_path: str | None = None,
         http_session: Any | None = None,
         timeout: float = 10.0,
+        on_usage: Callable[..., None] | None = None,
     ) -> None:
         self._project_id = project_id
         self._database_id = database_id
         self._credentials_path = credentials_path
         self._session = http_session or niquests.Session()
         self._timeout = timeout
+        self._on_usage = on_usage
         self._credentials: Any | None = None
         self._token_lock = threading.Lock()
+        self._usage_lock = threading.Lock()
+        now = datetime.now(UTC)
+        self._usage_day = now.date()
+        self._usage_month = (now.year, now.month)
+        self._reads_today = 0
+        self._writes_today = 0
+        self._deletes_today = 0
+        self._egress_bytes_month = 0
 
         emulator = os.getenv("FIRESTORE_EMULATOR_HOST", "").strip()
         if emulator:
@@ -166,6 +177,61 @@ class FirestoreRestClient:
                 service_name="GCP_Firestore",
             ) from exc
 
+    def _rollover_usage_locked(self) -> None:
+        now = datetime.now(UTC)
+        today = now.date()
+        month = (now.year, now.month)
+        if today != self._usage_day:
+            self._usage_day = today
+            self._reads_today = 0
+            self._writes_today = 0
+            self._deletes_today = 0
+        if month != self._usage_month:
+            self._usage_month = month
+            self._egress_bytes_month = 0
+
+    def _record_usage(
+        self,
+        *,
+        reads: int = 0,
+        writes: int = 0,
+        deletes: int = 0,
+        resp: Any | None = None,
+    ) -> None:
+        egress = 0
+        if resp is not None:
+            raw_content = getattr(resp, "content", None)
+            if isinstance(raw_content, (bytes, bytearray)):
+                egress = len(raw_content)
+            else:
+                raw_text = getattr(resp, "text", None)
+                if isinstance(raw_text, str):
+                    egress = len(raw_text.encode("utf-8"))
+        with self._usage_lock:
+            self._rollover_usage_locked()
+            self._reads_today += max(0, reads)
+            self._writes_today += max(0, writes)
+            self._deletes_today += max(0, deletes)
+            self._egress_bytes_month += egress
+        if self._on_usage is not None:
+            self._on_usage(
+                reads=reads,
+                writes=writes,
+                deletes=deletes,
+                egress_bytes=egress,
+            )
+
+    def get_usage_snapshot(self) -> dict[str, int]:
+        """Returns current daily read/write/delete counts and monthly egress bytes."""
+        with self._usage_lock:
+            self._rollover_usage_locked()
+            return {
+                "reads_today": self._reads_today,
+                "writes_today": self._writes_today,
+                "deletes_today": self._deletes_today,
+                "egress_bytes_month": self._egress_bytes_month,
+            }
+
     def get_document(
         self,
         collection: str,
@@ -174,6 +240,7 @@ class FirestoreRestClient:
         """Fetches a single Firestore document or returns None on 404."""
         url = f"{self._base_url}/{collection}/{doc_id}"
         resp = self._request("GET", url)
+        self._record_usage(reads=1, resp=resp)
         if resp.status_code == 404:
             return None
         if resp.status_code >= 400:
@@ -197,6 +264,7 @@ class FirestoreRestClient:
             url,
             json_body={"fields": encode_document_fields(data)},
         )
+        self._record_usage(writes=1, resp=resp)
         if resp.status_code >= 400:
             body_preview = (getattr(resp, "text", "") or "")[:200]
             raise ExternalServiceError(
@@ -208,6 +276,7 @@ class FirestoreRestClient:
         """Deletes a Firestore document, ignoring missing (404) documents."""
         url = f"{self._base_url}/{collection}/{doc_id}"
         resp = self._request("DELETE", url)
+        self._record_usage(deletes=1, resp=resp)
         if resp.status_code >= 400 and resp.status_code != 404:
             body_preview = (getattr(resp, "text", "") or "")[:200]
             raise ExternalServiceError(
@@ -231,6 +300,7 @@ class FirestoreRestClient:
                 params["pageToken"] = page_token
             resp = self._request("GET", url, params=params)
             if resp.status_code == 404:
+                self._record_usage(reads=1, resp=resp)
                 break
             if resp.status_code >= 400:
                 body_preview = (getattr(resp, "text", "") or "")[:200]
@@ -239,9 +309,9 @@ class FirestoreRestClient:
                     service_name="GCP_Firestore",
                 )
             payload = resp.json()
-            docs.extend(
-                decode_document(raw_doc) for raw_doc in payload.get("documents") or []
-            )
+            raw_docs = payload.get("documents") or []
+            self._record_usage(reads=max(1, len(raw_docs)), resp=resp)
+            docs.extend(decode_document(raw_doc) for raw_doc in raw_docs)
             page_token = payload.get("nextPageToken")
             if not page_token:
                 break
@@ -272,6 +342,7 @@ class FirestoreRestClient:
         }
         resp = self._request("POST", url, json_body=body)
         if resp.status_code == 404:
+            self._record_usage(reads=1, resp=resp)
             return []
         if resp.status_code >= 400:
             body_preview = (getattr(resp, "text", "") or "")[:200]
@@ -285,11 +356,13 @@ class FirestoreRestClient:
                 f"Firestore query on {collection} returned an invalid response.",
                 service_name="GCP_Firestore",
             )
-        return [
+        docs = [
             decode_document(entry["document"])
             for entry in payload
             if isinstance(entry, dict) and isinstance(entry.get("document"), dict)
         ]
+        self._record_usage(reads=max(1, len(docs)), resp=resp)
+        return docs
 
 
 __all__ = [
