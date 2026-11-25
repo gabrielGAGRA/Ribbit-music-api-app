@@ -186,9 +186,21 @@ def _seed_platform_costs(conn: sqlite3.Connection, now_str: str) -> None:
             infrastructure_fixed_cost,
             infrastructure_cost_per_user,
             updated_at
-        ) VALUES (1, 0.04, 10.00, 0.50, ?)
+        ) VALUES (1, 0.04, 25.00, 0.00, ?)
         """,
         (now_str,),
+    )
+    conn.execute(
+        """
+        UPDATE platform_cost_settings
+        SET infrastructure_fixed_cost = 25.00,
+            infrastructure_cost_per_user = 0.00
+        WHERE settings_id = 1
+          AND updated_at = ?
+          AND infrastructure_fixed_cost = 10.00
+          AND infrastructure_cost_per_user = 0.50
+        """,
+        (_SEED_EPOCH_ISO,),
     )
     conn.commit()
 

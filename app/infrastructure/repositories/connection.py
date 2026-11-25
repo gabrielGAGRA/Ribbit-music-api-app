@@ -5,7 +5,7 @@ import threading
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
-lazy from collections.abc import Generator
+lazy from collections.abc import Callable, Generator
 
 DEFAULT_DATABASE_PATH = "local.db"
 SCHEMA_PATH = Path(__file__).parent / "schema.sql"
@@ -35,6 +35,7 @@ class ThreadLocalConnection:
         object.__setattr__(self, "_lock", threading.Lock())
         object.__setattr__(self, "_connections", set())
         object.__setattr__(self, "_registered_functions", [])
+        object.__setattr__(self, "_trace_callback", None)
         object.__setattr__(self, "_closed", False)
 
     @property
@@ -54,6 +55,8 @@ class ThreadLocalConnection:
                     )
                 for name, narg, func, args, kwargs in self._registered_functions:
                     conn.create_function(name, narg, func, *args, **kwargs)
+                if self._trace_callback is not None:
+                    conn.set_trace_callback(self._trace_callback)
                 self._connections.add(conn)
             self._local.conn = conn
         return conn
@@ -106,6 +109,16 @@ class ThreadLocalConnection:
             existing = list(self._connections)
         for conn in existing:
             conn.create_function(name, narg, func, *args, **kwargs)
+
+    def set_trace_callback(self, callback: Callable[[str], None] | None) -> None:
+        """Register a SQLite trace callback on all existing and future thread connections."""
+        with self._lock:
+            if self._closed:
+                raise sqlite3.ProgrammingError("Cannot operate on a closed database.")
+            object.__setattr__(self, "_trace_callback", callback)
+            existing = list(self._connections)
+        for conn in existing:
+            conn.set_trace_callback(callback)
 
     def __enter__(self) -> ThreadLocalConnection:
         self.current_connection.__enter__()

@@ -3,6 +3,7 @@ import type {
   AdminUserPlanSummary as AdminUserPlanSummaryApiDto,
   AudienceReportApiDto,
   ExecutiveDashboardApiDto,
+  FirestoreQuotaSummaryApiDto,
   GenreAccessCountApiDto,
   PlanApiDto,
   PlatformCostSettingsApiDto,
@@ -44,11 +45,39 @@ export interface AdminPlanItem {
   readonly maxProfiles: number;
 }
 
+export interface FirestoreQuotaSummary {
+  readonly readsToday: number;
+  readonly readsFreeLimit: number;
+  readonly readsPercent: number;
+  readonly readsRatePer100k: number;
+  readonly writesToday: number;
+  readonly writesFreeLimit: number;
+  readonly writesPercent: number;
+  readonly writesRatePer100k: number;
+  readonly deletesToday: number;
+  readonly deletesFreeLimit: number;
+  readonly deletesPercent: number;
+  readonly deletesRatePer100k: number;
+  readonly storedBytes: number;
+  readonly storedGib: number;
+  readonly storedFreeLimitGib: number;
+  readonly storedPercent: number;
+  readonly egressBytesMonth: number;
+  readonly egressGibMonth: number;
+  readonly egressFreeLimitGib: number;
+  readonly egressPercent: number;
+  readonly monthlyEstimatedCost: number;
+}
+
 export interface ExecutiveDashboard {
   readonly totalUsers: number;
   readonly estimatedNetRevenue: number;
   readonly usersByPlan: Readonly<Record<string, number>>;
   readonly revenueByPlan: Readonly<Record<string, number>>;
+  readonly profitByPlan: Readonly<Record<string, number>>;
+  readonly paidPlansRevenue: number;
+  readonly paidPlansProfit: number;
+  readonly costToRevenuePercent: number;
   readonly grossRevenue: number;
   readonly contentCost: number;
   readonly infrastructureCost: number;
@@ -57,6 +86,7 @@ export interface ExecutiveDashboard {
   readonly contentCostPerTrack: number;
   readonly infrastructureFixedCost: number;
   readonly infrastructureCostPerUser: number;
+  readonly firestoreUsage: FirestoreQuotaSummary;
 }
 
 export interface TrackAccessRank {
@@ -191,21 +221,113 @@ export function mapAdminTrackDto(dto: AdminTrackApiDto): AdminTrackItem {
   };
 }
 
+export const DEFAULT_FIRESTORE_QUOTA: FirestoreQuotaSummary = {
+  readsToday: 0,
+  readsFreeLimit: 50_000,
+  readsPercent: 0,
+  readsRatePer100k: 0.06,
+  writesToday: 0,
+  writesFreeLimit: 20_000,
+  writesPercent: 0,
+  writesRatePer100k: 0.18,
+  deletesToday: 0,
+  deletesFreeLimit: 20_000,
+  deletesPercent: 0,
+  deletesRatePer100k: 0.02,
+  storedBytes: 0,
+  storedGib: 0,
+  storedFreeLimitGib: 1,
+  storedPercent: 0,
+  egressBytesMonth: 0,
+  egressGibMonth: 0,
+  egressFreeLimitGib: 10,
+  egressPercent: 0,
+  monthlyEstimatedCost: 0,
+};
+
+function resolveBytesFromGib(bytes: number | undefined, gib: number): number {
+  if (bytes !== undefined) return bytes;
+  return gib > 0 ? Math.round(gib * 1024 ** 3) : 0;
+}
+
+function mapFirestoreQuotaSummaryDto(
+  dto: FirestoreQuotaSummaryApiDto | null | undefined,
+): FirestoreQuotaSummary {
+  if (!dto) return DEFAULT_FIRESTORE_QUOTA;
+  return {
+    readsToday: dto.reads_today,
+    readsFreeLimit: dto.reads_free_limit,
+    readsPercent: dto.reads_percent,
+    readsRatePer100k: dto.reads_rate_per_100k,
+    writesToday: dto.writes_today,
+    writesFreeLimit: dto.writes_free_limit,
+    writesPercent: dto.writes_percent,
+    writesRatePer100k: dto.writes_rate_per_100k,
+    deletesToday: dto.deletes_today,
+    deletesFreeLimit: dto.deletes_free_limit,
+    deletesPercent: dto.deletes_percent,
+    deletesRatePer100k: dto.deletes_rate_per_100k,
+    storedBytes: resolveBytesFromGib(dto.stored_bytes, dto.stored_gib),
+    storedGib: dto.stored_gib,
+    storedFreeLimitGib: dto.stored_free_limit_gib,
+    storedPercent: dto.stored_percent,
+    egressBytesMonth: resolveBytesFromGib(dto.egress_bytes_month, dto.egress_gib_month),
+    egressGibMonth: dto.egress_gib_month,
+    egressFreeLimitGib: dto.egress_free_limit_gib,
+    egressPercent: dto.egress_percent,
+    monthlyEstimatedCost: dto.monthly_estimated_cost,
+  };
+}
+
+function computeCostToRevenuePercent(grossRevenue: number, totalCosts: number): number {
+  if (grossRevenue > 0) return Math.round((totalCosts / grossRevenue) * 1000) / 10;
+  return totalCosts > 0 ? 100 : 0;
+}
+
+function mapDashboardCostFields(
+  dto: ExecutiveDashboardApiDto,
+  grossRevenue: number,
+  totalCosts: number,
+): Pick<
+  ExecutiveDashboard,
+  | 'contentCost'
+  | 'infrastructureCost'
+  | 'totalCosts'
+  | 'activeTracksCount'
+  | 'contentCostPerTrack'
+  | 'infrastructureFixedCost'
+  | 'infrastructureCostPerUser'
+  | 'costToRevenuePercent'
+> {
+  return {
+    contentCost: dto.content_cost ?? 0,
+    infrastructureCost: dto.infrastructure_cost ?? 0,
+    totalCosts,
+    activeTracksCount: dto.active_tracks_count ?? 0,
+    contentCostPerTrack: dto.content_cost_per_track ?? 0.04,
+    infrastructureFixedCost: dto.infrastructure_fixed_cost ?? 25,
+    infrastructureCostPerUser: dto.infrastructure_cost_per_user ?? 0,
+    costToRevenuePercent:
+      dto.cost_to_revenue_percent ?? computeCostToRevenuePercent(grossRevenue, totalCosts),
+  };
+}
+
 export function mapExecutiveDashboardDto(dto: ExecutiveDashboardApiDto): ExecutiveDashboard {
   const planRevenueSum = Object.values(dto.revenue_by_plan).reduce((sum, value) => sum + value, 0);
+  const grossRevenue = dto.gross_revenue ?? planRevenueSum;
+  const totalCosts = dto.total_costs ?? 0;
   return {
     totalUsers: dto.total_users,
     estimatedNetRevenue: dto.estimated_net_revenue,
     usersByPlan: dto.users_by_plan,
     revenueByPlan: dto.revenue_by_plan,
-    grossRevenue: dto.gross_revenue ?? planRevenueSum,
-    contentCost: dto.content_cost ?? 0,
-    infrastructureCost: dto.infrastructure_cost ?? 0,
-    totalCosts: dto.total_costs ?? 0,
-    activeTracksCount: dto.active_tracks_count ?? 0,
-    contentCostPerTrack: dto.content_cost_per_track ?? 0.04,
-    infrastructureFixedCost: dto.infrastructure_fixed_cost ?? 10,
-    infrastructureCostPerUser: dto.infrastructure_cost_per_user ?? 0.5,
+    profitByPlan: dto.profit_by_plan ?? {},
+    paidPlansRevenue: dto.paid_plans_revenue ?? grossRevenue,
+    paidPlansProfit:
+      dto.paid_plans_profit ?? Math.round((grossRevenue - totalCosts) * 100) / 100,
+    grossRevenue,
+    ...mapDashboardCostFields(dto, grossRevenue, totalCosts),
+    firestoreUsage: mapFirestoreQuotaSummaryDto(dto.firestore_usage),
   };
 }
 

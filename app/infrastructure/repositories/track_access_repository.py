@@ -1,6 +1,7 @@
 """SQLite implementation of the track access repository port."""
 
 from datetime import UTC, datetime
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.track_access_repository import (
@@ -53,10 +54,18 @@ def _row_to_admin_entry(row: sqlite3.Row) -> AdminTrackAccessEntry:
 class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
     """SQLite adapter implementing TrackAccessRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
+
+    def _pull_deltas(self) -> None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
 
     def record(self, access: TrackAccess) -> TrackAccess:
+        self._pull_deltas()
         accessed_at = access.accessed_at or datetime.now(UTC)
         accessed_at_str = accessed_at.isoformat()
         with transaction(self.conn) as cursor:
@@ -68,6 +77,8 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
                 (access.user_id, access.track_id, str(access.source), accessed_at_str),
             )
             access_id = cursor.lastrowid
+            if self._sync is not None and access_id is not None:
+                self._sync.push_track_access_by_id(access_id)
         return TrackAccess(
             access_id=access_id,
             user_id=access.user_id,
@@ -84,6 +95,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
         limit: int = 100,
         offset: int = 0,
     ) -> list[TrackAccessEntry]:
+        self._pull_deltas()
         rows = self.conn.execute(
             """
             SELECT
@@ -113,6 +125,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
         return [_row_to_entry(row) for row in rows]
 
     def list_seen_track_ids(self, user_id: int) -> list[int]:
+        self._pull_deltas()
         rows = self.conn.execute(
             """
             SELECT DISTINCT ta.track_id AS track_id
@@ -139,6 +152,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
         limit: int = 100,
         offset: int = 0,
     ) -> list[AdminTrackAccessEntry]:
+        self._pull_deltas()
         rows = self.conn.execute(
             """
             SELECT
@@ -167,6 +181,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
         return [_row_to_admin_entry(row) for row in rows]
 
     def count_all(self) -> int:
+        self._pull_deltas()
         row = self.conn.execute(
             "SELECT COUNT(*) AS total FROM track_accesses"
         ).fetchone()
@@ -175,6 +190,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
     def count_by_track(
         self, limit: int = 10, include_deleted: bool = True
     ) -> list[TrackAccessCount]:
+        self._pull_deltas()
         rows = self.conn.execute(
             """
             SELECT
@@ -204,6 +220,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
         ]
 
     def count_by_genre(self, include_deleted: bool = True) -> list[TrackAccessCount]:
+        self._pull_deltas()
         rows = self.conn.execute(
             """
             SELECT

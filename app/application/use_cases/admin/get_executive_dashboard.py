@@ -1,10 +1,11 @@
 """Use case for calculating executive metrics and financial dashboard."""
 
 from dataclasses import dataclass, field
+lazy from collections.abc import Callable
 
 from app.application.dtos.admin_dtos import ExecutiveDashboardResult
 from app.domain.models.platform_costs import PlatformCostSettings
-from app.domain.services import SubscriptionAnalyticsService
+from app.domain.services import FirestoreUsageMetrics, SubscriptionAnalyticsService
 lazy from app.application.ports.repositories.plan_repository import PlanRepositoryPort
 lazy from app.application.ports.repositories.platform_cost_repository import (
     PlatformCostRepositoryPort,
@@ -24,6 +25,7 @@ class GetExecutiveDashboardUseCase:
     )
     track_repo: TrackRepositoryPort | None = None
     cost_repo: PlatformCostRepositoryPort | None = None
+    firestore_usage_provider: Callable[[], FirestoreUsageMetrics] | None = None
 
     def execute(self) -> ExecutiveDashboardResult:
         users = self.user_repo.list_all()
@@ -40,6 +42,11 @@ class GetExecutiveDashboardUseCase:
                 infrastructure_cost_per_user=0.0,
             )
         )
+        firestore_usage = (
+            self.firestore_usage_provider()
+            if self.firestore_usage_provider is not None
+            else None
+        )
 
         breakdown = self.analytics_service.calculate_revenue_breakdown(
             users=users,
@@ -48,6 +55,7 @@ class GetExecutiveDashboardUseCase:
             content_cost_per_track=costs.content_cost_per_track,
             infrastructure_fixed_cost=costs.infrastructure_fixed_cost,
             infrastructure_cost_per_user=costs.infrastructure_cost_per_user,
+            firestore_usage=firestore_usage,
         )
 
         return ExecutiveDashboardResult(
@@ -55,6 +63,10 @@ class GetExecutiveDashboardUseCase:
             estimated_net_revenue=breakdown.estimated_net_revenue,
             users_by_plan=breakdown.users_by_plan,
             revenue_by_plan=breakdown.revenue_by_plan,
+            profit_by_plan=breakdown.profit_by_plan,
+            paid_plans_revenue=breakdown.paid_plans_revenue,
+            paid_plans_profit=breakdown.paid_plans_profit,
+            cost_to_revenue_percent=breakdown.cost_to_revenue_percent,
             gross_revenue=breakdown.gross_revenue,
             content_cost=breakdown.content_cost,
             infrastructure_cost=breakdown.infrastructure_cost,
@@ -63,4 +75,5 @@ class GetExecutiveDashboardUseCase:
             content_cost_per_track=costs.content_cost_per_track,
             infrastructure_fixed_cost=costs.infrastructure_fixed_cost,
             infrastructure_cost_per_user=costs.infrastructure_cost_per_user,
+            firestore_usage=breakdown.firestore_usage,
         )

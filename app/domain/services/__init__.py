@@ -16,8 +16,11 @@ from app.domain.services.genre_names import (
     genre_matches_preference,
 )
 from app.domain.services.subscription_analytics_service import (
+    FirestoreQuotaSummary,
+    FirestoreUsageMetrics,
     RevenueBreakdown,
     SubscriptionAnalyticsService,
+    calculate_firestore_content_cost,
 )
 
 __all__ = [
@@ -26,8 +29,11 @@ __all__ = [
     "GENRE_CATALOG_DICT",
     "GENRE_DB_TO_CANONICAL",
     "FamilyPlanService",
+    "FirestoreQuotaSummary",
+    "FirestoreUsageMetrics",
     "RevenueBreakdown",
     "SubscriptionAnalyticsService",
+    "calculate_firestore_content_cost",
     "country_matches",
     "expand_country_terms",
     "expand_genre_aliases",

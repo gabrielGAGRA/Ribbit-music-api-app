@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+lazy from app.domain.services import FirestoreQuotaSummary
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class UpdateSubscriptionPlanCommand:
@@ -34,6 +36,10 @@ class ExecutiveDashboardResult:
     estimated_net_revenue: float
     users_by_plan: dict[str, int]
     revenue_by_plan: dict[str, float]
+    profit_by_plan: dict[str, float] = field(default_factory=dict)
+    paid_plans_revenue: float = 0.0
+    paid_plans_profit: float = 0.0
+    cost_to_revenue_percent: float = 0.0
     gross_revenue: float = 0.0
     content_cost: float = 0.0
     infrastructure_cost: float = 0.0
@@ -42,6 +48,7 @@ class ExecutiveDashboardResult:
     content_cost_per_track: float = 0.0
     infrastructure_fixed_cost: float = 0.0
     infrastructure_cost_per_user: float = 0.0
+    firestore_usage: FirestoreQuotaSummary | None = None
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -130,12 +137,29 @@ class AdminCatalogTrackResult:
     review_count: int = 0
 
 
+@dataclass(slots=True, frozen=True, kw_only=True)
+class ExternalTrackCandidateResult:
+    title: str
+    artist: str
+    duration_seconds: int = 180
+    genre: str = "Unknown"
+    spotify_id: str | None = None
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    explicit: bool = False
+    already_in_catalog: bool = False
+
+
 __all__ = [
     "AdminCatalogTrackResult",
     "AudienceReportResult",
     "AuditLogEntryResult",
     "CreateTrackCommand",
     "ExecutiveDashboardResult",
+    "ExternalTrackCandidateResult",
     "GenreAccessCountResult",
     "RegisterAdministratorCommand",
     "TrackAccessRankResult",

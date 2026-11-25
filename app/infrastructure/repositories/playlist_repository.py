@@ -1,6 +1,7 @@
 """SQLite implementation of the playlist persistence port."""
 
 from datetime import UTC, datetime
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.playlist_repository import (
@@ -44,8 +45,19 @@ def _row_to_playlist(row: sqlite3.Row, tracks: list[Track]) -> Playlist:
 class SQLitePlaylistRepository(PlaylistRepositoryPort):
     """SQLite adapter implementing PlaylistRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
+
+    def _pull_deltas(self) -> None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
+
+    def _push_playlist(self, playlist_id: int) -> None:
+        if self._sync is not None:
+            self._sync.push_playlist_by_id(playlist_id)
 
     def _get_tracks_for_playlist(self, playlist_id: int) -> list[Track]:
         cursor = self.conn.execute(
@@ -72,9 +84,11 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
         return _row_to_playlist(row, tracks)
 
     def find_by_id(self, playlist_id: int) -> Playlist | None:
+        self._pull_deltas()
         return self._find_by_id_local(playlist_id)
 
     def list_by_user(self, user_id: int) -> list[Playlist]:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM playlists WHERE user_id = ? ORDER BY playlist_id ASC",
             (user_id,),
@@ -92,7 +106,20 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
         playlist_id: int,
         tracks: tuple[Track, ...],
         now_str: str,
-    ) -> None:
+    ) -> list[int]:
+        old_track_ids = [
+            int(row["track_id"])
+            for row in cursor.execute(
+                "SELECT track_id FROM playlist_tracks WHERE playlist_id = ?",
+                (playlist_id,),
+            ).fetchall()
+        ]
+        new_track_ids = {
+            track.track_id for track in tracks if track.track_id is not None
+        }
+        removed_track_ids = [
+            track_id for track_id in old_track_ids if track_id not in new_track_ids
+        ]
         cursor.execute(
             "DELETE FROM playlist_tracks WHERE playlist_id = ?",
             (playlist_id,),
@@ -106,26 +133,52 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                     """,
                     (playlist_id, track.track_id, now_str),
                 )
+        return removed_track_ids
 
     def delete(self, playlist_id: int) -> bool:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
+            meta = cursor.execute(
+                """
+                SELECT u.email AS user_email, p.created_at AS created_at
+                FROM playlists p
+                LEFT JOIN users u ON u.user_id = p.user_id
+                WHERE p.playlist_id = ?
+                """,
+                (playlist_id,),
+            ).fetchone()
+            user_email = (
+                str(meta["user_email"]) if meta and meta["user_email"] else None
+            )
+            created_at = (
+                str(meta["created_at"]) if meta and meta["created_at"] else None
+            )
             cursor.execute(
                 "DELETE FROM playlists WHERE playlist_id = ?",
                 (playlist_id,),
             )
-            return cursor.rowcount > 0
+            deleted = cursor.rowcount > 0
+            if deleted and user_email and created_at and self._sync is not None:
+                self._sync.push_playlist_deleted(user_email, created_at)
+        return deleted
 
     def remove_track(self, playlist_id: int, track_id: int) -> bool:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             cursor.execute(
                 "DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?",
                 (playlist_id, track_id),
             )
-            return cursor.rowcount > 0
+            removed = cursor.rowcount > 0
+            if removed and self._sync is not None:
+                self._sync.push_playlist_track_removed(playlist_id, track_id)
+        return removed
 
     def save(self, playlist: Playlist) -> Playlist:
+        self._pull_deltas()
         now_str = datetime.now(UTC).isoformat()
         if playlist.playlist_id is not None:
+            removed_track_ids: list[int] = []
             with transaction(self.conn) as cursor:
                 cursor.execute(
                     "SELECT playlist_id FROM playlists WHERE playlist_id = ?",
@@ -160,9 +213,15 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                         playlist.playlist_id,
                     ),
                 )
-                self._replace_tracks_in_tx(
+                removed_track_ids = self._replace_tracks_in_tx(
                     cursor, playlist.playlist_id, playlist.tracks, now_str
                 )
+                self._push_playlist(playlist.playlist_id)
+                if self._sync is not None:
+                    for track_id in removed_track_ids:
+                        self._sync.push_playlist_track_removed(
+                            playlist.playlist_id, track_id
+                        )
             return self._find_by_id_local(playlist.playlist_id) or playlist
 
         created_at_str = (playlist.created_at or datetime.now(UTC)).isoformat()
@@ -191,6 +250,7 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
             new_id = cursor.lastrowid
             if new_id is not None:
                 self._replace_tracks_in_tx(cursor, new_id, playlist.tracks, now_str)
+                self._push_playlist(new_id)
         if new_id is not None:
             return self._find_by_id_local(new_id) or playlist
         return playlist
@@ -202,6 +262,7 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
         image_data: bytes,
         cover_image_url: str,
     ) -> bool:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             exists = cursor.execute(
                 "SELECT 1 FROM playlists WHERE playlist_id = ?",
@@ -226,9 +287,13 @@ class SQLitePlaylistRepository(PlaylistRepositoryPort):
                 "UPDATE playlists SET cover_image_url = ? WHERE playlist_id = ?",
                 (cover_image_url, playlist_id),
             )
+            if self._sync is not None:
+                self._sync.push_playlist_image(playlist_id)
+                self._sync.push_playlist_by_id(playlist_id)
         return True
 
     def get_cover_image(self, playlist_id: int) -> tuple[str, bytes] | None:
+        self._pull_deltas()
         row = self.conn.execute(
             """
             SELECT content_type, image_data

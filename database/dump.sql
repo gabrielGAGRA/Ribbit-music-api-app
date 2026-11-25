@@ -180,8 +180,17 @@ CREATE INDEX IF NOT EXISTS idx_track_accesses_user_track ON track_accesses(user_
 CREATE TABLE IF NOT EXISTS platform_cost_settings (
     settings_id INTEGER PRIMARY KEY CHECK (settings_id = 1),
     content_cost_per_track REAL NOT NULL DEFAULT 0.04,
-    infrastructure_fixed_cost REAL NOT NULL DEFAULT 10.00,
-    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.50,
+    infrastructure_fixed_cost REAL NOT NULL DEFAULT 25.00,
+    infrastructure_cost_per_user REAL NOT NULL DEFAULT 0.00,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS firestore_usage_counters (
+    metric_date TEXT PRIMARY KEY,
+    reads_count INTEGER NOT NULL DEFAULT 0,
+    writes_count INTEGER NOT NULL DEFAULT 0,
+    deletes_count INTEGER NOT NULL DEFAULT 0,
+    egress_bytes INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL
 );
 
@@ -845,7 +854,7 @@ INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, acce
 INSERT OR IGNORE INTO track_accesses (access_id, user_id, track_id, source, accessed_at) VALUES (7, 6, 1, 'jam', '2026-02-05T20:00:00+00:00');
 
 -- Default Platform Cost Settings
-INSERT OR IGNORE INTO platform_cost_settings (settings_id, content_cost_per_track, infrastructure_fixed_cost, infrastructure_cost_per_user, updated_at) VALUES (1, 0.04, 10.00, 0.50, '1970-01-01T00:00:00+00:00');
+INSERT OR IGNORE INTO platform_cost_settings (settings_id, content_cost_per_track, infrastructure_fixed_cost, infrastructure_cost_per_user, updated_at) VALUES (1, 0.04, 25.00, 0.00, '1970-01-01T00:00:00+00:00');
 
 COMMIT;
 PRAGMA foreign_keys = ON;

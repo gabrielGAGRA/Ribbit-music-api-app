@@ -58,6 +58,34 @@ class TrackExplicitResponse(BaseModel):
     explicit: bool
 
 
+class FirestoreQuotaSummaryResponse(BaseModel):
+    """Firestore usage vs free-tier quotas and projected monthly USD cost."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    reads_today: int = 0
+    reads_free_limit: int = 50_000
+    reads_percent: float = 0.0
+    reads_rate_per_100k: float = 0.06
+    writes_today: int = 0
+    writes_free_limit: int = 20_000
+    writes_percent: float = 0.0
+    writes_rate_per_100k: float = 0.18
+    deletes_today: int = 0
+    deletes_free_limit: int = 20_000
+    deletes_percent: float = 0.0
+    deletes_rate_per_100k: float = 0.02
+    stored_bytes: int = 0
+    stored_gib: float = 0.0
+    stored_free_limit_gib: float = 1.0
+    stored_percent: float = 0.0
+    egress_bytes_month: int = 0
+    egress_gib_month: float = 0.0
+    egress_free_limit_gib: float = 10.0
+    egress_percent: float = 0.0
+    monthly_estimated_cost: float = 0.0
+
+
 class ExecutiveDashboardResponse(BaseModel):
     """Aggregated platform performance and subscription revenue metrics."""
 
@@ -67,6 +95,10 @@ class ExecutiveDashboardResponse(BaseModel):
     estimated_net_revenue: float
     users_by_plan: dict[str, int] = Field(default_factory=dict)
     revenue_by_plan: dict[str, float] = Field(default_factory=dict)
+    profit_by_plan: dict[str, float] = Field(default_factory=dict)
+    paid_plans_revenue: float = 0.0
+    paid_plans_profit: float = 0.0
+    cost_to_revenue_percent: float = 0.0
     gross_revenue: float = 0.0
     content_cost: float = 0.0
     infrastructure_cost: float = 0.0
@@ -75,6 +107,7 @@ class ExecutiveDashboardResponse(BaseModel):
     content_cost_per_track: float = 0.0
     infrastructure_fixed_cost: float = 0.0
     infrastructure_cost_per_user: float = 0.0
+    firestore_usage: FirestoreQuotaSummaryResponse | None = None
 
 
 class TrackAccessRankResponse(BaseModel):
@@ -231,6 +264,25 @@ class AdminCatalogTrackResponse(BaseModel):
     superlikes_count: int = 0
     average_rating: float | None = None
     review_count: int = 0
+
+
+class ExternalTrackCandidateResponse(BaseModel):
+    """External track search candidate ready to be added to the Delta Table."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    title: str
+    artist: str
+    duration_seconds: int = 180
+    genre: str = "Unknown"
+    spotify_id: str | None = None
+    album: str | None = None
+    country: str | None = None
+    release_year: int | None = None
+    cover_url: str | None = None
+    itunes_preview_url: str | None = None
+    explicit: bool = False
+    already_in_catalog: bool = False
 
 
 class AdminTrackAccessEntryResponse(BaseModel):

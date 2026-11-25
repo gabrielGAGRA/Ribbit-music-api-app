@@ -183,6 +183,9 @@ class Settings(BaseModel):
     google_auth_uri: str = "https://accounts.google.com/o/oauth2/auth"
     google_token_uri: str = "https://oauth2.googleapis.com/token"  # noqa: S105
     google_frontend_redirect_url: str = "/"
+    firestore_enabled: bool = False
+    gcp_project_id: str | None = None
+    firestore_database: str = "(default)"
 
     @model_validator(mode="after")
     def _validate_production_secret_key(self) -> Self:  # noqa: N804
@@ -190,6 +193,11 @@ class Settings(BaseModel):
             not self.secret_key or self.secret_key == _DEFAULT_DEV_SECRET_KEY
         ):
             raise RuntimeError("RIBBIT_SECRET_KEY must be configured in production.")
+        if self.firestore_enabled and not self.gcp_project_id:
+            raise RuntimeError(
+                "GCP_PROJECT_ID or GOOGLE_CLOUD_PROJECT must be configured "
+                "when Firestore synchronization is enabled."
+            )
         return self
 
 
@@ -222,6 +230,28 @@ def load_settings() -> Settings:
 
     environment = os.getenv("ENVIRONMENT") or "development"
     secret_key = os.getenv("RIBBIT_SECRET_KEY") or _DEFAULT_DEV_SECRET_KEY
+    raw_firestore_enabled = os.getenv("FIRESTORE_ENABLED", "").strip().lower()
+    if raw_firestore_enabled not in (
+        "",
+        "1",
+        "true",
+        "yes",
+        "on",
+        "0",
+        "false",
+        "no",
+        "off",
+    ):
+        raise ValueError("FIRESTORE_ENABLED must be a boolean value.")
+    firestore_enabled = raw_firestore_enabled in ("1", "true", "yes", "on")
+    gcp_project_id = (
+        os.getenv("GCP_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or ""
+    ).strip() or None
+    if gcp_project_id is None:
+        credentials = _load_json_payload(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
+        raw_project_id = credentials.get("project_id") if credentials else None
+        if isinstance(raw_project_id, str) and raw_project_id.strip():
+            gcp_project_id = raw_project_id.strip()
 
     raw_token_exp = os.getenv("TOKEN_EXPIRATION_SECONDS")
     token_expiration = (
@@ -246,7 +276,7 @@ def load_settings() -> Settings:
         google_frontend_redirect_url,
     ) = _resolve_google_oauth_settings()
 
-    return Settings(
+    settings = Settings(
         database_path=db_path,
         password_hash_iterations=iterations,
         spotify_client_id=os.getenv("SPOTIFY_CLIENT_ID") or None,
@@ -279,7 +309,14 @@ def load_settings() -> Settings:
         google_auth_uri=google_auth_uri,
         google_token_uri=google_token_uri,
         google_frontend_redirect_url=google_frontend_redirect_url,
+        firestore_enabled=firestore_enabled,
+        gcp_project_id=gcp_project_id,
+        firestore_database=os.getenv("FIRESTORE_DATABASE", "(default)").strip()
+        or "(default)",
     )
+    if environment.lower() == "production" and not settings.firestore_enabled:
+        raise RuntimeError("FIRESTORE_ENABLED must be true in production.")
+    return settings
 
 
 __all__ = ["Settings", "load_settings"]

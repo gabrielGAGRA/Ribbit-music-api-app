@@ -94,85 +94,98 @@
       </div>
 
       @if (showCreateTrackForm()) {
-        <form class="create-track-form" (submit)="submitCreateTrack($event)">
+        <form class="create-track-form" (submit)="searchExternalTracks($event)">
           <h3>Cadastrar Nova Faixa</h3>
           <div class="create-track-grid">
             <label>
-              Título *
+              Título
               <input
                 name="newTrackTitle"
-                required
                 placeholder="Ex.: Midnight Rain"
                 [value]="newTrackTitle()"
                 (input)="updateTextSignal(newTrackTitle, $event)"
               />
             </label>
             <label>
-              Artista *
+              Artista
               <input
                 name="newTrackArtist"
-                required
-                placeholder="Ex.: Synth Collective"
+                placeholder="Ex.: Taylor Swift"
                 [value]="newTrackArtist()"
                 (input)="updateTextSignal(newTrackArtist, $event)"
               />
             </label>
-            <label>
-              Gênero *
-              <input
-                name="newTrackGenre"
-                required
-                placeholder="Ex.: Indie Pop"
-                [value]="newTrackGenre()"
-                (input)="updateTextSignal(newTrackGenre, $event)"
-              />
-            </label>
-            <label>
-              Duração (segundos) *
-              <input
-                name="newTrackDuration"
-                type="number"
-                min="1"
-                required
-                [value]="newTrackDuration()"
-                (input)="updateTextSignal(newTrackDuration, $event)"
-              />
-            </label>
-            <label>
-              Álbum
-              <input
-                name="newTrackAlbum"
-                placeholder="Opcional"
-                [value]="newTrackAlbum()"
-                (input)="updateTextSignal(newTrackAlbum, $event)"
-              />
-            </label>
-            <label>
-              Ano de lançamento
-              <input
-                name="newTrackYear"
-                type="number"
-                min="1900"
-                placeholder="Ex.: 2024"
-                [value]="newTrackYear()"
-                (input)="updateTextSignal(newTrackYear, $event)"
-              />
-            </label>
           </div>
           <div class="create-track-actions">
-            <label class="explicit-checkbox">
-              <input
-                type="checkbox"
-                [checked]="newTrackExplicit()"
-                (change)="toggleNewTrackExplicit()"
-              />
-              Conteúdo explícito (+18)
-            </label>
-            <button type="submit" class="catalog-action-btn" [disabled]="isCreatingTrack()">
-              <app-icon name="check" [size]="14" />
-              {{ isCreatingTrack() ? 'Cadastrando...' : 'Salvar Faixa' }}
+            <span class="field-hint">
+              Filtre por título e artista para localizar a faixa e adicioná-la à Delta Table.
+            </span>
+            <button type="submit" class="catalog-action-btn" [disabled]="isSearchingExternal()">
+              <app-icon name="search" [size]="14" />
+              {{ isSearchingExternal() ? 'Buscando...' : 'Buscar Faixa' }}
             </button>
           </div>
+
+          @if (externalCandidates().length > 0) {
+            <div class="external-candidates-list">
+              @for (candidate of externalCandidates(); track candidateKey(candidate)) {
+                <div class="external-candidate-row">
+                  <div class="candidate-info">
+                    @if (candidate.coverUrl) {
+                      <img
+                        class="candidate-cover"
+                        [src]="candidate.coverUrl"
+                        [alt]="candidate.title"
+                      />
+                    } @else {
+                      <span class="candidate-cover candidate-cover-fallback">
+                        <app-icon name="music" [size]="16" />
+                      </span>
+                    }
+                    <div class="candidate-meta">
+                      <strong>
+                        {{ candidate.title }}
+                        @if (candidate.explicit) {
+                          <span class="explicit-pill">+18</span>
+                        }
+                      </strong>
+                      <span>
+                        {{ candidate.artist }} · {{ candidate.genre }} ·
+                        {{ formatDuration(candidate.durationSeconds) }}
+                        @if (candidate.releaseYear) {
+                          · {{ candidate.releaseYear }}
+                        }
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="catalog-action-btn"
+                    [disabled]="
+                      candidate.alreadyInCatalog || addingCandidateKey() === candidateKey(candidate)
+                    "
+                    (click)="addCandidateToDelta(candidate)"
+                  >
+                    <app-icon
+                      [name]="candidate.alreadyInCatalog ? 'check' : 'plus'"
+                      [size]="14"
+                    />
+                    {{
+                      candidate.alreadyInCatalog
+                        ? 'Já no catálogo'
+                        : addingCandidateKey() === candidateKey(candidate)
+                          ? 'Adicionando...'
+                          : 'Adicionar à Delta Table'
+                    }}
+                  </button>
+                </div>
+              }
+            </div>
+          } @else if (hasSearchedExternal()) {
+            <p class="field-hint empty-candidates-hint">
+              Nenhuma faixa encontrada para esse título e artista.
+            </p>
+          }
         </form>
       }
     }

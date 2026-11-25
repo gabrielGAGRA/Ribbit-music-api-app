@@ -9,6 +9,9 @@ from app.infrastructure.repositories.connection import (
     create_connection,
     transaction,
 )
+from app.infrastructure.repositories.firestore_usage_tracker import (
+    FirestoreUsageTracker,
+)
 from app.infrastructure.repositories.interaction_repository import (
     SQLiteInteractionRepository,
 )
@@ -55,6 +58,7 @@ UserStatsRepository = SQLiteUserStatsRepository
 __all__ = [
     "AuditLogRepository",
     "DEFAULT_DATABASE_PATH",
+    "FirestoreUsageTracker",
     "InteractionRepository",
     "JamRepository",
     "PlanRepository",

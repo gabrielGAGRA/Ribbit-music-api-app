@@ -52,6 +52,7 @@ import type {
   TrackAccessRank,
 } from './admin-mappers';
 import {
+  DEFAULT_FIRESTORE_QUOTA,
   mapAdminAdministratorDto,
   mapAdminModerationReviewDto,
   mapAdminPlanDto,
@@ -86,6 +87,36 @@ export interface CreateAdminTrackPayload {
   readonly explicit: boolean;
 }
 
+export interface ExternalTrackCandidateApiDto {
+  readonly title: string;
+  readonly artist: string;
+  readonly duration_seconds: number;
+  readonly genre: string;
+  readonly spotify_id: string | null;
+  readonly album: string | null;
+  readonly country: string | null;
+  readonly release_year: number | null;
+  readonly cover_url: string | null;
+  readonly itunes_preview_url: string | null;
+  readonly explicit: boolean;
+  readonly already_in_catalog: boolean;
+}
+
+export interface ExternalTrackCandidate {
+  readonly title: string;
+  readonly artist: string;
+  readonly durationSeconds: number;
+  readonly genre: string;
+  readonly spotifyId: string | null;
+  readonly album: string | null;
+  readonly country: string | null;
+  readonly releaseYear: number | null;
+  readonly coverUrl: string | null;
+  readonly itunesPreviewUrl: string | null;
+  readonly explicit: boolean;
+  readonly alreadyInCatalog: boolean;
+}
+
 const ADMIN_SESSION_STORAGE_KEY = 'ribbit-admin-session';
 const LEGACY_ADMIN_STORAGE_KEYS: readonly string[] = [
   'ribbit-admin-plans',
@@ -99,14 +130,19 @@ const EMPTY_DASHBOARD: ExecutiveDashboard = {
   estimatedNetRevenue: 0,
   usersByPlan: {},
   revenueByPlan: {},
+  profitByPlan: {},
+  paidPlansRevenue: 0,
+  paidPlansProfit: 0,
+  costToRevenuePercent: 0,
   grossRevenue: 0,
   contentCost: 0,
   infrastructureCost: 0,
   totalCosts: 0,
   activeTracksCount: 0,
   contentCostPerTrack: 0.04,
-  infrastructureFixedCost: 10,
-  infrastructureCostPerUser: 0.5,
+  infrastructureFixedCost: 25,
+  infrastructureCostPerUser: 0,
+  firestoreUsage: DEFAULT_FIRESTORE_QUOTA,
 };
 
 const EMPTY_AUDIENCE: AudienceReport = {
@@ -227,12 +263,22 @@ function buildBreakdownFromDashboard(
   return plans.map((plan) => {
     const count = dashboard.usersByPlan[plan.name] ?? 0;
     const rev = Math.round((dashboard.revenueByPlan[plan.name] ?? 0) * 100) / 100;
+    const isPaid = plan.monthlyPrice > 0;
+    const allocatedFallback =
+      isPaid && totalUsers > 0 ? dashboard.totalCosts * (count / totalUsers) : 0;
+    const rawProfit =
+      dashboard.profitByPlan[plan.name] ?? (isPaid ? rev - allocatedFallback : 0);
+    const profit = isPaid ? Math.round(rawProfit * 100) / 100 : 0;
+    const marginPercent = isPaid && rev > 0 ? Math.round((profit / rev) * 100) : 0;
     return {
       planName: plan.name,
       userCount: count,
       userPercent: toPercent(count, totalUsers),
       revenue: rev,
       revenuePercent: toPercent(rev, grossRevenue),
+      isPaid,
+      profit,
+      marginPercent,
     };
   });
 }
@@ -651,6 +697,37 @@ export class AdminStateService implements OnDestroy {
   /** Queries GET /api/admin/tracks on the backend and updates active catalog tracks. */
   fetchCatalogTracksFromBackend(query: string): Observable<readonly AdminTrackItem[]> {
     return this.loadAdminCatalog({ query });
+  }
+
+  /** Queries GET /api/admin/tracks/external-search by title and artist. */
+  searchExternalTracks(
+    title: string,
+    artist: string,
+  ): Observable<readonly ExternalTrackCandidate[]> {
+    let params = new HttpParams().set('limit', '10');
+    if (title.trim()) params = params.set('title', title.trim());
+    if (artist.trim()) params = params.set('artist', artist.trim());
+    return this.http
+      .get<readonly ExternalTrackCandidateApiDto[]>('/api/admin/tracks/external-search', { params })
+      .pipe(
+        map((items) =>
+          items.map((item) => ({
+            title: item.title,
+            artist: item.artist,
+            durationSeconds: item.duration_seconds,
+            genre: item.genre,
+            spotifyId: item.spotify_id,
+            album: item.album,
+            country: item.country,
+            releaseYear: item.release_year,
+            coverUrl: item.cover_url,
+            itunesPreviewUrl: item.itunes_preview_url,
+            explicit: item.explicit,
+            alreadyInCatalog: item.already_in_catalog,
+          })),
+        ),
+        catchError((err: unknown) => throwError(() => mapAdminDomainError(err))),
+      );
   }
 
   /** Creates a new catalog track via POST /api/admin/tracks and refreshes metrics. */

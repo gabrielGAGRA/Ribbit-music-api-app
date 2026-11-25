@@ -1,6 +1,7 @@
 """SQLite implementation of the Jam session and queue persistence port."""
 
 from datetime import UTC, datetime
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.jam_repository import JamRepositoryPort
@@ -61,10 +62,22 @@ def _row_to_queue_item(row: sqlite3.Row) -> JamQueueItem:
 class SQLiteJamRepository(JamRepositoryPort):
     """SQLite adapter implementing JamRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
+
+    def _pull_deltas(self) -> None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
+
+    def _push_jam(self, jam_id: int) -> None:
+        if self._sync is not None:
+            self._sync.push_jam_by_id(jam_id)
 
     def find_by_id(self, jam_id: int) -> Jam | None:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM jams WHERE jam_id = ?",
             (jam_id,),
@@ -73,6 +86,7 @@ class SQLiteJamRepository(JamRepositoryPort):
         return _row_to_jam(row) if row else None
 
     def find_by_code(self, room_code: str) -> Jam | None:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM jams WHERE room_code = ? AND is_active = 1",
             (room_code,),
@@ -81,6 +95,7 @@ class SQLiteJamRepository(JamRepositoryPort):
         return _row_to_jam(row) if row else None
 
     def save(self, jam: Jam) -> Jam:
+        self._pull_deltas()
         target_id: int | None = jam.jam_id
         with transaction(self.conn) as cursor:
             if jam.jam_id is not None:
@@ -123,6 +138,7 @@ class SQLiteJamRepository(JamRepositoryPort):
                         jam.jam_id,
                     ),
                 )
+                self._push_jam(jam.jam_id)
             else:
                 created_at_str = (jam.created_at or datetime.now(UTC)).isoformat()
                 cursor.execute(
@@ -150,11 +166,14 @@ class SQLiteJamRepository(JamRepositoryPort):
                     ),
                 )
                 target_id = cursor.lastrowid
+                if target_id is not None:
+                    self._push_jam(target_id)
         if target_id is not None:
             return self.find_by_id(target_id) or jam
         return jam
 
     def find_queue_item(self, jam_id: int, track_id: int) -> JamQueueItem | None:
+        self._pull_deltas()
         cursor = self.conn.execute(
             """
             SELECT * FROM jam_queue_items
@@ -166,6 +185,7 @@ class SQLiteJamRepository(JamRepositoryPort):
         return _row_to_queue_item(row) if row else None
 
     def save_queue_item(self, item: JamQueueItem) -> JamQueueItem:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             existing = cursor.execute(
                 """
@@ -192,9 +212,11 @@ class SQLiteJamRepository(JamRepositoryPort):
                     """,
                     (item.jam_id, item.track_id, item.vote_points, added_at_str),
                 )
+            self._push_jam(item.jam_id)
         return self.find_queue_item(item.jam_id, item.track_id) or item
 
     def list_queue(self, jam_id: int) -> list[JamQueueItem]:
+        self._pull_deltas()
         cursor = self.conn.execute(
             """
             SELECT * FROM jam_queue_items
@@ -207,6 +229,7 @@ class SQLiteJamRepository(JamRepositoryPort):
         return [_row_to_queue_item(r) for r in rows]
 
     def remove_track_from_queue(self, jam_id: int, track_id: int) -> bool:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             cursor.execute(
                 """
@@ -215,11 +238,15 @@ class SQLiteJamRepository(JamRepositoryPort):
                 """,
                 (jam_id, track_id),
             )
-            return cursor.rowcount > 0
+            removed = cursor.rowcount > 0
+            if removed:
+                self._push_jam(jam_id)
+        return removed
 
     def advance_playback(
         self, jam_id: int, new_track_id: int, removed_track_id: int
     ) -> Jam:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             row = cursor.execute(
                 "SELECT jam_id FROM jams WHERE jam_id = ?",
@@ -243,12 +270,14 @@ class SQLiteJamRepository(JamRepositoryPort):
                 """,
                 (jam_id, removed_track_id),
             )
+            self._push_jam(jam_id)
         jam = self.find_by_id(jam_id)
         if jam is None:
             raise EntityNotFoundError(entity_name="Jam", entity_id=jam_id)
         return jam
 
     def add_participant(self, jam_id: int, user_id: int) -> bool:
+        self._pull_deltas()
         now_str = datetime.now(UTC).isoformat()
         with transaction(self.conn) as cursor:
             cursor.execute(
@@ -258,9 +287,13 @@ class SQLiteJamRepository(JamRepositoryPort):
                 """,
                 (jam_id, user_id, now_str),
             )
-            return cursor.rowcount > 0
+            added = cursor.rowcount > 0
+            if added:
+                self._push_jam(jam_id)
+        return added
 
     def is_participant(self, jam_id: int, user_id: int) -> bool:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT 1 FROM jam_participants WHERE jam_id = ? AND user_id = ?",
             (jam_id, user_id),
@@ -271,6 +304,7 @@ class SQLiteJamRepository(JamRepositoryPort):
         return jam is not None and jam.host_user_id == user_id
 
     def list_participants(self, jam_id: int) -> list[int]:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT user_id FROM jam_participants WHERE jam_id = ? ORDER BY joined_at ASC",
             (jam_id,),
@@ -278,6 +312,7 @@ class SQLiteJamRepository(JamRepositoryPort):
         return [int(row["user_id"]) for row in cursor.fetchall()]
 
     def record_skip_vote(self, jam_id: int, track_id: int, user_id: int) -> bool:
+        self._pull_deltas()
         now_str = datetime.now(UTC).isoformat()
         with transaction(self.conn) as cursor:
             cursor.execute(
@@ -287,9 +322,13 @@ class SQLiteJamRepository(JamRepositoryPort):
                 """,
                 (jam_id, track_id, user_id, now_str),
             )
-            return cursor.rowcount > 0
+            recorded = cursor.rowcount > 0
+            if recorded:
+                self._push_jam(jam_id)
+        return recorded
 
     def count_skip_votes(self, jam_id: int, track_id: int) -> int:
+        self._pull_deltas()
         cursor = self.conn.execute(
             "SELECT COUNT(*) FROM jam_skip_votes WHERE jam_id = ? AND track_id = ?",
             (jam_id, track_id),
@@ -298,6 +337,7 @@ class SQLiteJamRepository(JamRepositoryPort):
         return int(row[0]) if row else 0
 
     def clear_skip_votes(self, jam_id: int, track_id: int | None = None) -> None:
+        self._pull_deltas()
         with transaction(self.conn) as cursor:
             if track_id is not None:
                 cursor.execute(
@@ -309,6 +349,9 @@ class SQLiteJamRepository(JamRepositoryPort):
                     "DELETE FROM jam_skip_votes WHERE jam_id = ?",
                     (jam_id,),
                 )
+            changed = cursor.rowcount > 0
+            if changed:
+                self._push_jam(jam_id)
 
 
 __all__ = ["SQLiteJamRepository"]
