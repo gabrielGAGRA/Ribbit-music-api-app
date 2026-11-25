@@ -146,6 +146,8 @@ def create_app(
             app_version=resolved_settings.app_version,
             environment=resolved_settings.environment,
         )
+        if container.firestore_sync_service is not None:
+            container.firestore_sync_service.sync_all()
         if owns_connection:
             catalog_sync_thread = _start_background_catalog_sync(
                 resolved_settings, container, logger

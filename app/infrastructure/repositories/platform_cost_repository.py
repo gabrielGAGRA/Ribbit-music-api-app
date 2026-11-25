@@ -1,6 +1,7 @@
 """SQLite implementation of the platform cost settings repository port."""
 
 from datetime import UTC, datetime
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.platform_cost_repository import (
@@ -13,10 +14,15 @@ from app.infrastructure.repositories.connection import transaction
 class SQLitePlatformCostRepository(PlatformCostRepositoryPort):
     """SQLite adapter implementing PlatformCostRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
 
     def get_settings(self) -> PlatformCostSettings:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         row = self.conn.execute(
             """
             SELECT
@@ -40,6 +46,8 @@ class SQLitePlatformCostRepository(PlatformCostRepositoryPort):
         )
 
     def save_settings(self, settings: PlatformCostSettings) -> PlatformCostSettings:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         updated_at = settings.updated_at or datetime.now(UTC)
         updated_at_str = updated_at.isoformat()
         with transaction(self.conn) as cursor:
@@ -65,6 +73,8 @@ class SQLitePlatformCostRepository(PlatformCostRepositoryPort):
                     updated_at_str,
                 ),
             )
+            if self._sync is not None:
+                self._sync.push_platform_cost_settings()
         return PlatformCostSettings(
             content_cost_per_track=settings.content_cost_per_track,
             infrastructure_fixed_cost=settings.infrastructure_fixed_cost,

@@ -237,7 +237,8 @@ As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional 
 #### SGBD e Armazenamento
 | Tecnologia | Versão / Imagem | Finalidade |
 | :--- | :--- | :--- |
-| **SQLite 3** | `3.45+` (nativo no Python 3.15 / pacote `sqlite3` Ubuntu 26.04) | SGBD relacional local (`local.db`) para usuários, faixas, playlists, jams, interações, avaliações, planos e logs de auditoria |
+| **SQLite 3** | `3.45+` (nativo no Python 3.15 / pacote `sqlite3` Ubuntu 26.04) | Banco relacional local/cache por instância; usado sozinho no desenvolvimento |
+| **Google Cloud Firestore** | Firestore REST v1 | Sincronização compartilhada dos dados persistentes quando `FIRESTORE_ENABLED=true` no deploy |
 | **fake-gcs-server (Emulador GCS)** | `fsouza/fake-gcs-server:latest` | Emulação local de bucket Google Cloud Storage para catálogo `.parquet` |
 
 #### Infraestrutura, Qualidade, Linting, Tipagem e Testes
@@ -253,7 +254,7 @@ As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional 
 | **ESLint** + **angular-eslint** | `^10.13.0` / `^22.6.0` | Regras de lint específicas para templates e componentes Angular |
 | **uv** | `0.13.1` | Gerenciador de pacotes e ambientes Python |
 
-> **Nota sobre a evolução da especificação:** Os diagramas iniciais do documento de especificação (*Tecnologia-Arquitetura*) previam Redis/DynamoDB e Deezer em nível conceitual. Na implementação final entregue neste repositório, a arquitetura foi consolidada com **SQLite 3** (relacional local), **GCS/Parquet** (catálogo), **Spotify + iTunes** (APIs externas) e **Angular 22 + FastAPI**, documentados nos diagramas atualizados abaixo.
+> **Nota sobre a evolução da especificação:** Os diagramas iniciais do documento de especificação (*Tecnologia-Arquitetura*) previam Redis/DynamoDB e Deezer em nível conceitual. A implementação usa **SQLite 3** como banco local/cache, **Firestore** para sincronização dos dados persistentes em produção, **GCS/Parquet** para o catálogo, **Spotify + iTunes** como APIs externas e **Angular 22 + FastAPI**, documentados nos diagramas atualizados abaixo.
 
 ---
 
@@ -783,6 +784,10 @@ python scripts/init_db.py
 ```
 
 > **Nota sobre execução offline e variáveis de ambiente (opcional):** Na Opção 2 (manual sem Docker), o backend opera 100% localmente usando apenas o banco SQLite inicializado por `database/dump.sql`, sem subir o container `fake-gcs-server`. Caso queira habilitar sincronização com Google Cloud Storage (GCS) ou integração com Spotify e Google OAuth, copie `.env.example` para `.env` e preencha suas credenciais.
+
+### Deploy como website (sincronização de dados)
+
+No deploy, configure `ENVIRONMENT=production`, `FIRESTORE_ENABLED=true`, `GCP_PROJECT_ID` (ou `GOOGLE_CLOUD_PROJECT`) e credenciais Google com acesso ao Firestore (Application Default Credentials ou `GOOGLE_APPLICATION_CREDENTIALS`). O SQLite continua sendo usado como cache local; a inicialização sincroniza os dados com Firestore e falhas de configuração ou sincronização impedem que o serviço confirme gravações. O catálogo musical permanece no GCS/Parquet. Em desenvolvimento, `FIRESTORE_ENABLED` fica desativado por padrão e os dados permanecem somente no SQLite local.
 
 #### 3. Iniciar Backend e Frontend Conectados
 Para subir o backend (`http://127.0.0.1:8000`) e o frontend (`http://localhost:4200`, já conectado via proxy à API) com um único comando:

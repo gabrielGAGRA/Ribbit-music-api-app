@@ -131,6 +131,8 @@ from app.application.use_cases.user import (
     UpdateProfileUseCase,
 )
 from app.infrastructure.adapters import (
+    FirestoreRestClient,
+    FirestoreSyncService,
     GCSTrackCatalogAdapter,
     ITunesAdapter,
     SpotifyAdapter,
@@ -166,6 +168,7 @@ class Container:
 
     settings: Settings
     connection: sqlite3.Connection
+    firestore_sync_service: FirestoreSyncService | None
     http_session: niquests.Session
     password_hasher: PBKDF2PasswordHasher
     token_service: HMACTokenService
@@ -372,6 +375,21 @@ def build_container(
         else create_connection(settings.database_path)
     )
     http_session = niquests.Session()
+    firestore_sync_service = None
+    if settings.firestore_enabled:
+        if settings.gcp_project_id is None:
+            raise RuntimeError(
+                "A GCP project ID is required when Firestore synchronization is enabled."
+            )
+        firestore_client = FirestoreRestClient(
+            project_id=settings.gcp_project_id,
+            database_id=settings.firestore_database,
+            http_session=http_session,
+        )
+        firestore_sync_service = FirestoreSyncService(
+            conn=conn,
+            client=firestore_client,
+        )
     password_hasher = PBKDF2PasswordHasher(iterations=settings.password_hash_iterations)
     token_service = HMACTokenService(
         secret_key=settings.secret_key,
@@ -388,16 +406,22 @@ def build_container(
     )
     music_service = SpotifyAdapter(spotify_credentials, session=http_session)
 
-    user_repo = SQLiteUserRepository(conn)
-    plan_repo = SQLitePlanRepository(conn)
+    user_repo = SQLiteUserRepository(conn, sync_service=firestore_sync_service)
+    plan_repo = SQLitePlanRepository(conn, sync_service=firestore_sync_service)
     track_repo = SQLiteTrackRepository(conn)
-    playlist_repo = SQLitePlaylistRepository(conn)
-    interaction_repo = SQLiteInteractionRepository(conn)
-    jam_repo = SQLiteJamRepository(conn)
-    review_repo = SQLiteReviewRepository(conn)
-    audit_log_repo = SQLiteAuditLogRepository(conn)
-    track_access_repo = SQLiteTrackAccessRepository(conn)
-    platform_cost_repo = SQLitePlatformCostRepository(conn)
+    playlist_repo = SQLitePlaylistRepository(conn, sync_service=firestore_sync_service)
+    interaction_repo = SQLiteInteractionRepository(
+        conn, sync_service=firestore_sync_service
+    )
+    jam_repo = SQLiteJamRepository(conn, sync_service=firestore_sync_service)
+    review_repo = SQLiteReviewRepository(conn, sync_service=firestore_sync_service)
+    audit_log_repo = SQLiteAuditLogRepository(conn, sync_service=firestore_sync_service)
+    track_access_repo = SQLiteTrackAccessRepository(
+        conn, sync_service=firestore_sync_service
+    )
+    platform_cost_repo = SQLitePlatformCostRepository(
+        conn, sync_service=firestore_sync_service
+    )
 
     catalog_adapter = (
         GCSTrackCatalogAdapter(
@@ -499,11 +523,14 @@ def build_container(
         if user_spotify_auth is not None
         else None
     )
-    user_stats_repo = SQLiteUserStatsRepository(conn)
+    user_stats_repo = SQLiteUserStatsRepository(
+        conn, sync_service=firestore_sync_service
+    )
 
     return Container(
         settings=settings,
         connection=conn,
+        firestore_sync_service=firestore_sync_service,
         http_session=http_session,
         password_hasher=password_hasher,
         token_service=token_service,

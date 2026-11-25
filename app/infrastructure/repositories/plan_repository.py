@@ -1,5 +1,6 @@
 """SQLite implementation of the plan persistence port."""
 
+from typing import Any
 lazy import sqlite3
 
 from app.application.ports.repositories.plan_repository import PlanRepositoryPort
@@ -20,10 +21,15 @@ def _row_to_plan(row: sqlite3.Row) -> Plan:
 class SQLitePlanRepository(PlanRepositoryPort):
     """SQLite adapter implementing PlanRepositoryPort."""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(
+        self, conn: sqlite3.Connection, sync_service: Any | None = None
+    ) -> None:
         self.conn = conn
+        self._sync = sync_service
 
     def find_by_id(self, plan_id: int) -> Plan | None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM plans WHERE plan_id = ?",
             (plan_id,),
@@ -32,6 +38,8 @@ class SQLitePlanRepository(PlanRepositoryPort):
         return _row_to_plan(row) if row else None
 
     def find_by_name(self, name: str) -> Plan | None:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         cursor = self.conn.execute(
             "SELECT * FROM plans WHERE lower(name) = ?",
             (name.lower().strip(),),
@@ -40,11 +48,15 @@ class SQLitePlanRepository(PlanRepositoryPort):
         return _row_to_plan(row) if row else None
 
     def list_all(self) -> list[Plan]:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         cursor = self.conn.execute("SELECT * FROM plans ORDER BY plan_id ASC")
         rows = cursor.fetchall()
         return [_row_to_plan(r) for r in rows]
 
     def save(self, plan: Plan) -> Plan:
+        if self._sync is not None:
+            self._sync.pull_deltas()
         target_id: int | None = plan.plan_id
         with transaction(self.conn) as cursor:
             if plan.plan_id is not None:
@@ -71,6 +83,8 @@ class SQLitePlanRepository(PlanRepositoryPort):
                         plan.plan_id,
                     ),
                 )
+                if self._sync is not None:
+                    self._sync.push_plan_by_id(plan.plan_id)
             else:
                 cursor.execute(
                     """
@@ -80,6 +94,8 @@ class SQLitePlanRepository(PlanRepositoryPort):
                     (plan.name, plan.monthly_price, plan.max_profiles),
                 )
                 target_id = cursor.lastrowid
+                if target_id is not None and self._sync is not None:
+                    self._sync.push_plan_by_id(target_id)
         if target_id is not None:
             return self.find_by_id(target_id) or plan
         return plan
