@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from typing import Self
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, model_validator
 
 _DEFAULT_DEV_SECRET_KEY = "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
@@ -188,7 +189,7 @@ class Settings(BaseModel):
     firestore_database: str = "(default)"
 
     @model_validator(mode="after")
-    def _validate_production_secret_key(self) -> Self:  # noqa: N804
+    def _validate_production_secret_key(self) -> Self:
         if self.environment.lower() == "production" and (
             not self.secret_key or self.secret_key == _DEFAULT_DEV_SECRET_KEY
         ):

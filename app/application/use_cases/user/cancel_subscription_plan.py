@@ -2,7 +2,11 @@
 
 from dataclasses import dataclass
 
-from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
+from app.domain.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    PermissionDeniedError,
+)
 from app.domain.models.plan import Plan
 lazy from app.application.ports.repositories.plan_repository import PlanRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
@@ -24,6 +28,11 @@ class CancelSubscriptionPlanUseCase:
         if user.primary_account_id is not None:
             raise PermissionDeniedError(
                 "Dependents cannot cancel the primary account subscription."
+            )
+
+        if user.is_minor() and not user.is_admin:
+            raise BusinessRuleViolationError(
+                "Minor users cannot use the Free plan and must be linked to an active Family plan."
             )
 
         free_plan = self.plan_repo.find_by_name(Plan.DEFAULT_FREE_PLAN_NAME)

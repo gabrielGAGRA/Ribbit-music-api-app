@@ -212,6 +212,9 @@ class AddFamilyMemberUseCase:
                 "A dependent user cannot manage family members."
             )
 
+        if primary_user.is_minor() and not primary_user.is_admin:
+            raise PermissionDeniedError("Minor users cannot manage a Family plan.")
+
         effective_plan = self._resolve_effective_family_plan(primary_user, plan)
 
         if dependent_user_id is not None and not (email and password):

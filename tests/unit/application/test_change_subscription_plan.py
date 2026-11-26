@@ -229,27 +229,29 @@ def test_change_subscription_plan_blocks_minor_from_paid_individual_or_family() 
             use_case.execute(user_id=10, new_plan_id=paid_plan.plan_id or 2)
 
 
-def test_change_subscription_plan_allows_minor_to_switch_to_free() -> None:
+def test_change_subscription_plan_blocks_minor_from_switching_to_free() -> None:
     minor = User(
         user_id=10,
         email="minor@test.com",
         password_hash="hash",
         display_name="Minor",
         age=16,
-        plan_id=2,
+        plan_id=3,
     )
     free_plan = Plan(
         plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
     )
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = minor
-    user_repo.list_dependents.return_value = []
-    user_repo.save.side_effect = lambda u: u
 
     plan_repo = MagicMock(spec=PlanRepositoryPort)
     plan_repo.find_by_id.return_value = free_plan
 
     use_case = ChangeSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
-    res = use_case.execute(user_id=10, new_plan_id=1)
+    with pytest.raises(
+        BusinessRuleViolationError,
+        match="Minor users cannot use the Free plan",
+    ):
+        use_case.execute(user_id=10, new_plan_id=1)
 
-    assert res.plan_id == 1
+    user_repo.save.assert_not_called()

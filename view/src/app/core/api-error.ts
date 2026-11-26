@@ -85,6 +85,14 @@ const EXACT_PT_BR_ERRORS: Record<string, string> = {
   'Invalid birth date.': 'Data de nascimento inválida.',
   'Birth date cannot be in the future.': 'A data de nascimento não pode estar no futuro.',
   'Default Free plan not found.': 'Plano Free padrão não encontrado.',
+  'Minor users cannot use the Free plan and must be linked to an active Family plan.':
+    'Usuários menores de 18 anos não podem usar o plano Free e devem estar vinculados a um Plano Família ativo.',
+  'Minor users cannot manage a Family plan.':
+    'Usuários menores de 18 anos não podem gerenciar um Plano Família.',
+  'Only adult users (18+) can subscribe to paid plans.':
+    'Somente usuários maiores de 18 anos podem assinar planos pagos.',
+  'Direct registration only permitted for users 18 years or older.':
+    'Cadastro direto permitido apenas para maiores de 18 anos.',
   'A plan with this name already exists.': 'Já existe um plano com esse nome.',
   'Plan name is required.': 'O nome do plano é obrigatório.',
   'Track duration must be positive.': 'A duração da faixa deve ser positiva.',

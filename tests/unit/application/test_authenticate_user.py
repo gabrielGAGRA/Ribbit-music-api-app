@@ -5,11 +5,16 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.application.dtos.auth_dtos import AuthenticateUserCommand
+from app.application.ports.repositories.plan_repository import PlanRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.ports.services.password_hasher import PasswordHasherPort
 from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.auth.authenticate_user import AuthenticateUserUseCase
-from app.domain.exceptions import AuthenticationRequiredError
+from app.domain.exceptions import (
+    AuthenticationRequiredError,
+    PermissionDeniedError,
+)
+from app.domain.models.plan import Plan
 from app.domain.models.user import User
 
 
@@ -140,3 +145,70 @@ def test_authenticate_user_invalid_password_raises_authentication_required() -> 
 
     with pytest.raises(AuthenticationRequiredError, match="Invalid credentials"):
         use_case.execute(command)
+
+
+def test_authenticate_user_rejects_minor_on_free_plan() -> None:
+    minor = User(
+        user_id=11,
+        email="minor@ribbit.com",
+        password_hash="hashed_pw",
+        display_name="Minor",
+        age=15,
+        plan_id=1,
+    )
+    free_plan = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_email.return_value = minor
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = free_plan
+    password_hasher = MagicMock(spec=PasswordHasherPort)
+    password_hasher.verify_password.return_value = True
+
+    use_case = AuthenticateUserUseCase(
+        user_repo=user_repo,
+        password_hasher=password_hasher,
+        token_service=_token_service(),
+        plan_repo=plan_repo,
+    )
+
+    with pytest.raises(
+        PermissionDeniedError, match="Minor users cannot use the Free plan"
+    ):
+        use_case.execute(
+            AuthenticateUserCommand(email="minor@ribbit.com", password="secret")
+        )
+
+
+def test_authenticate_user_allows_minor_linked_to_family_plan() -> None:
+    minor = User(
+        user_id=12,
+        email="minor-dep@ribbit.com",
+        password_hash="hashed_pw",
+        display_name="Minor Dep",
+        age=15,
+        plan_id=3,
+        primary_account_id=1,
+    )
+    family_plan = Plan(
+        plan_id=3, name="Família", initial_monthly_price=27.90, initial_max_profiles=4
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_email.return_value = minor
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = family_plan
+    password_hasher = MagicMock(spec=PasswordHasherPort)
+    password_hasher.verify_password.return_value = True
+
+    use_case = AuthenticateUserUseCase(
+        user_repo=user_repo,
+        password_hasher=password_hasher,
+        token_service=_token_service(),
+        plan_repo=plan_repo,
+    )
+
+    result = use_case.execute(
+        AuthenticateUserCommand(email="minor-dep@ribbit.com", password="secret")
+    )
+    assert result.user is minor

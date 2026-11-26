@@ -17,6 +17,7 @@ lazy from app.application.ports.services.music_service import (
     lookup_matching_preview,
 )
 lazy from app.domain.models.track import Track
+lazy from app.domain.models.user import User
 
 
 @dataclass(slots=True, frozen=True)
@@ -152,7 +153,7 @@ class SearchTracksUseCase:
     def _fetch_spotify_fallback_tracks(
         self,
         command: SearchTracksCommand,
-        user: object,
+        user: User,
         query_term: str,
         artist_filter: str,
         title_filter: str,
@@ -171,7 +172,7 @@ class SearchTracksUseCase:
             candidate = self._build_track_from_catalog(ct, query_term)
             if not self._matches_search_filters(candidate, artist_filter, title_filter):
                 continue
-            if user.is_track_restricted_for_minor(candidate):  # type: ignore[attr-defined]
+            if user.is_track_restricted_for_minor(candidate):
                 continue
             saved = self.track_repo.save(candidate)
             if saved.is_deleted:

@@ -106,6 +106,12 @@ function isFutureBirthDate(birth: Date, today: Date): boolean {
   return birth.getTime() > endOfToday.getTime();
 }
 
+const GOOGLE_OAUTH_ERROR_MESSAGES: Readonly<Record<string, string>> = {
+  access_denied: 'Autorização com o Google cancelada pelo usuário.',
+  minor_free_plan_not_allowed:
+    'Usuários menores de 18 anos não podem usar o plano Free e devem estar vinculados a um Plano Família ativo.',
+};
+
 /** Handles real user authentication and registration against /api/auth. */
 @Component({
   selector: 'app-auth',
@@ -367,11 +373,10 @@ export class AuthComponent implements OnInit {
       return;
     }
     if (oauthParams.googleAuthError !== null) {
-      const msg =
-        oauthParams.googleAuthError === 'access_denied'
-          ? 'Autorização com o Google cancelada pelo usuário.'
-          : 'Não foi possível autenticar com o Google. Tente novamente.';
-      this.errorMessage.set(msg);
+      this.errorMessage.set(
+        GOOGLE_OAUTH_ERROR_MESSAGES[oauthParams.googleAuthError] ??
+          'Não foi possível autenticar com o Google. Tente novamente.',
+      );
     }
   }
 

@@ -150,7 +150,7 @@
             }
           </span>
         </div>
-        @if (!state.isAdmin() && state.currentPlan() !== 'Free') {
+        @if (state.canCancelSubscription()) {
           <button class="danger-link-btn" (click)="cancelSubscription()">
             Cancelar assinatura
           </button>

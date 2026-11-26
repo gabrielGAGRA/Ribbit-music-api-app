@@ -94,6 +94,44 @@ def test_user_is_minor_invariant(age: int) -> None:
     assert user.is_minor() is (age < 18)
 
 
+def test_user_can_use_plan_blocks_minors_on_free_or_unlinked() -> None:
+    free_plan = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+    family_plan = Plan(
+        plan_id=3, name="Família", initial_monthly_price=27.90, initial_max_profiles=4
+    )
+
+    minor_free = User(
+        email="minor@example.com",
+        password_hash="hashed_pw",
+        display_name="Minor",
+        age=16,
+        plan_id=1,
+    )
+    minor_linked = User(
+        email="minor-dep@example.com",
+        password_hash="hashed_pw",
+        display_name="Minor Dep",
+        age=16,
+        plan_id=3,
+        primary_account_id=1,
+    )
+    adult_free = User(
+        email="adult@example.com",
+        password_hash="hashed_pw",
+        display_name="Adult",
+        age=20,
+        plan_id=1,
+    )
+
+    assert minor_free.can_use_plan(free_plan) is False
+    assert minor_free.can_use_plan(family_plan) is False
+    assert minor_linked.can_use_plan(free_plan) is False
+    assert minor_linked.can_use_plan(family_plan) is True
+    assert adult_free.can_use_plan(free_plan) is True
+
+
 @given(
     age=st.integers(min_value=0, max_value=100),
     blocked=st.lists(st.text(max_size=20), max_size=5),

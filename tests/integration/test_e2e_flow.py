@@ -399,23 +399,50 @@ def test_flow_3_family_plan_management(client: TestClient) -> None:
     assert overflow_res.status_code == 400
     assert "reached" in overflow_res.text.lower()
 
-    # 5. Cancel subscription plan unlinks dependents and reverts them to Free
-    cancel_res = client.delete("/api/profile/plan", headers=headers)
-    assert cancel_res.status_code == 200
-
-    # Verify dependents can still log in and are now on Free plan
-    dep_login = client.post(
+    # Verify minor dependent has a working session while linked to Family plan
+    minor_active_login = client.post(
         "/api/auth/login",
         json={
             "email": "family_dependent_1@example.com",
             "password": "Password123!",
         },
     )
-    assert dep_login.status_code == 200
-    dep_token_headers = {"Authorization": f"Bearer {dep_login.json()['access_token']}"}
-    dep_profile = client.get("/api/profile/me", headers=dep_token_headers).json()
-    dep_plan = dep_profile["plan"]
-    assert dep_plan["name"] == "Free"
+    assert minor_active_login.status_code == 200
+    minor_active_headers = {
+        "Authorization": f"Bearer {minor_active_login.json()['access_token']}"
+    }
+
+    # 5. Cancel subscription plan unlinks dependents and reverts them to Free
+    cancel_res = client.delete("/api/profile/plan", headers=headers)
+    assert cancel_res.status_code == 200
+
+    # Adult dependent can still log in and is now on Free plan
+    adult_dep_login = client.post(
+        "/api/auth/login",
+        json={
+            "email": existing_email,
+            "password": existing_password,
+        },
+    )
+    assert adult_dep_login.status_code == 200
+    adult_dep_headers = {
+        "Authorization": f"Bearer {adult_dep_login.json()['access_token']}"
+    }
+    adult_dep_profile = client.get("/api/profile/me", headers=adult_dep_headers).json()
+    assert adult_dep_profile["plan"]["name"] == "Free"
+
+    # Minor dependent is blocked from logging in or using the Free version
+    minor_dep_login = client.post(
+        "/api/auth/login",
+        json={
+            "email": "family_dependent_1@example.com",
+            "password": "Password123!",
+        },
+    )
+    assert minor_dep_login.status_code == 403
+    assert "Free plan" in minor_dep_login.text
+    minor_stale_profile = client.get("/api/profile/me", headers=minor_active_headers)
+    assert minor_stale_profile.status_code == 403
 
 
 # ==============================================================================

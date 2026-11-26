@@ -9,7 +9,11 @@ from app.application.ports.repositories.user_repository import UserRepositoryPor
 from app.application.use_cases.user.cancel_subscription_plan import (
     CancelSubscriptionPlanUseCase,
 )
-from app.domain.exceptions import EntityNotFoundError, PermissionDeniedError
+from app.domain.exceptions import (
+    BusinessRuleViolationError,
+    EntityNotFoundError,
+    PermissionDeniedError,
+)
 from app.domain.models.plan import Plan
 from app.domain.models.user import User
 
@@ -165,3 +169,27 @@ def test_cancel_subscription_plan_unlinks_all_dependents_to_free_plan() -> None:
     assert dep1.plan_id == 1
     assert dep1.primary_account_id is None
     assert user_repo.save.call_count == 2
+
+
+def test_cancel_subscription_plan_blocks_minor_from_reverting_to_free() -> None:
+    minor = User(
+        user_id=10,
+        email="minor@test.com",
+        password_hash="hash",
+        display_name="Minor",
+        age=16,
+        plan_id=3,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = minor
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+
+    use_case = CancelSubscriptionPlanUseCase(user_repo=user_repo, plan_repo=plan_repo)
+
+    with pytest.raises(
+        BusinessRuleViolationError,
+        match="Minor users cannot use the Free plan",
+    ):
+        use_case.execute(user_id=10)
+
+    user_repo.save.assert_not_called()

@@ -630,3 +630,30 @@ def test_add_family_member_allows_admin_on_free_plan_to_link_and_provision() -> 
     )
     assert provisioned.primary_account_id == 1
     assert provisioned.plan_id == 3
+
+
+def test_add_family_member_rejects_minor_as_primary_account() -> None:
+    minor_primary = User(
+        user_id=1,
+        email="minor@test.com",
+        password_hash="hash",
+        display_name="Minor",
+        age=16,
+        plan_id=3,
+    )
+    family_plan = Plan(
+        plan_id=3,
+        name="Família",
+        initial_monthly_price=27.90,
+        initial_max_profiles=4,
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = minor_primary
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    plan_repo.find_by_id.return_value = family_plan
+
+    use_case = AddFamilyMemberUseCase(user_repo=user_repo, plan_repo=plan_repo)
+    with pytest.raises(
+        PermissionDeniedError, match="Minor users cannot manage a Family plan"
+    ):
+        use_case.execute(primary_user_id=1, dependent_user_id=2)

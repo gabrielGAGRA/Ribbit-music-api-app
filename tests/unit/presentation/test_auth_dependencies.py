@@ -8,10 +8,11 @@ from app.domain.exceptions import (
     AuthenticationRequiredError,
     PermissionDeniedError,
 )
-from app.domain.models import User
+from app.domain.models import Plan, User
 from app.infrastructure.security.token_service import HMACTokenService
 from app.presentation.dependencies.auth import (
     get_current_user_id,
+    get_optional_current_user,
     require_admin,
     require_user,
 )
@@ -118,3 +119,51 @@ def test_require_admin_non_admin_user_raises_permission_denied() -> None:
         PermissionDeniedError, match="Access restricted to administrators"
     ):
         require_admin(request=request, admin_id=2)
+
+
+def test_require_user_and_optional_user_reject_minor_on_free_plan() -> None:
+    minor = User(
+        user_id=15,
+        email="minor@ribbit.com",
+        password_hash="pw",
+        display_name="Minor",
+        age=15,
+        plan_id=1,
+    )
+    free_plan = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+    request, token_service = _request_with_token_service()
+    request.app.state.container.user_repo.find_by_id.return_value = minor
+    request.app.state.container.plan_repo.find_by_id.return_value = free_plan
+    token = token_service.create_access_token(user_id=15)
+
+    with pytest.raises(
+        PermissionDeniedError, match="Minor users cannot use the Free plan"
+    ):
+        require_user(request=request, user_id=15)
+
+    with pytest.raises(
+        PermissionDeniedError, match="Minor users cannot use the Free plan"
+    ):
+        get_optional_current_user(request=request, authorization=f"Bearer {token}")
+
+
+def test_require_user_allows_minor_linked_to_family_plan() -> None:
+    minor_dep = User(
+        user_id=16,
+        email="minor-dep@ribbit.com",
+        password_hash="pw",
+        display_name="Minor Dep",
+        age=15,
+        plan_id=3,
+        primary_account_id=1,
+    )
+    family_plan = Plan(
+        plan_id=3, name="Família", initial_monthly_price=27.90, initial_max_profiles=4
+    )
+    request = MagicMock()
+    request.app.state.container.user_repo.find_by_id.return_value = minor_dep
+    request.app.state.container.plan_repo.find_by_id.return_value = family_plan
+
+    assert require_user(request=request, user_id=16) == 16

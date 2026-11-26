@@ -109,7 +109,7 @@ O projeto é composto por duas frentes:
 - Conexão e desconexão de conta do Spotify com suporte a OAuth e PKCE.
 - Dashboard pessoal com artistas principais, gêneros predominantes, entre outras estatísticas.
 - Exclusão transparente de dados sob solicitação do usuário.
-- Edição e cancelamento do plano de assinatura (planos pagos restritos a maiores de 18 anos; menores podem usar o plano Free ou participar como dependentes no Plano Família).
+- Edição e cancelamento do plano de assinatura (planos pagos restritos a maiores de 18 anos; menores de 18 anos não podem usar o plano Free e só podem acessar a plataforma como dependentes vinculados a um Plano Família).
 
 #### 7. Restrições de conteúdo para menores
 - Contas de menores não recebem nem podem interagir com faixas explícitas ou classificadas como Funk, Trap, Rap ou Hip Hop.
@@ -139,7 +139,7 @@ O projeto é composto por duas frentes:
 
 ## Descrição de Uso do Sistema
 
-1. **Cadastro e Login**: Na tela inicial (`/auth`), o usuário cria sua conta informando nome, e-mail, data de nascimento, senha e plano inicial (menores de 18 anos podem se cadastrar no plano **Free** ou participar como dependentes no **Plano Família**, enquanto planos pagos exigem maioridade), ou realiza login com uma conta existente.
+1. **Cadastro e Login**: Na tela inicial (`/auth`), o usuário cria sua conta informando nome, e-mail, data de nascimento, senha e plano inicial (menores de 18 anos não podem se cadastrar diretamente nem usar o plano **Free**, podendo participar apenas como dependentes vinculados a um **Plano Família**, enquanto planos próprios exigem maioridade), ou realiza login com uma conta existente.
 2. **Descoberta por Swipe (`/discover`)**: O usuário visualiza um card por vez com capa, metadados, selo **Ouvido** (quando já acessada) e prévia de áudio. Pode arrastar ou usar os botões para **Curtir** (direita), **Amar/Superlike** (cima), **Rejeitar** (esquerda), **Desfazer** (planos pagos, restaurando a faixa diretamente do backend) ou adicionar diretamente a uma playlist (`+`).
 3. **Playlists Inteligentes (`/playlists`)**: Permite criar playlists com filtros de duração, gênero, artista ou época e montá-las via swipe sem afetar as Curtidas globais, além de gerenciar faixas e exportar para o Spotify.
 4. **Jams Colaborativas (`/jams`)**: Usuários com Spotify Premium conectado criam uma sala (recebendo um código de 6 dígitos) ou entram em uma sala ativa para votar nas próximas faixas da fila e votar para pular a faixa atual.
@@ -333,7 +333,7 @@ docker compose up --build
 ### Contas de Teste (de `database/dump.sql`)
 - **Administrador**: `admin@ribbit.example.com` / `RibbitLocal2026!`
 - **Usuário Adulto (Plano Individual)**: `usuario@ribbit.example.com` / `RibbitUser2026!`
-- **Usuário Menor de Idade (Plano Free)**: `menor@ribbit.example.com` / `RibbitUser2026!`
+- **Usuário Menor de Idade (Dependente no Plano Família)**: `menor@ribbit.example.com` / `RibbitUser2026!`
 - **Usuário Família (Plano Família)**: `familia@ribbit.example.com` / `RibbitUser2026!`
 
 ---

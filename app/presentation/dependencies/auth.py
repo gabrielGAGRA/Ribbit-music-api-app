@@ -64,6 +64,22 @@ def get_current_user_id(
     return user_id
 
 
+def _ensure_minor_can_access_plan(request: Request, user: User) -> None:
+    if user.is_admin or not user.is_minor():
+        return
+    container = getattr(
+        getattr(getattr(request, "app", None), "state", None), "container", None
+    )
+    plan_repo = getattr(container, "plan_repo", None)
+    if plan_repo is None:
+        return
+    plan = plan_repo.find_by_id(user.plan_id)
+    if not user.can_use_plan(plan):
+        raise PermissionDeniedError(
+            "Minor users cannot use the Free plan and must be linked to an active Family plan."
+        )
+
+
 def require_user(
     request: Request,
     user_id: Annotated[int, Depends(get_current_user_id)],
@@ -72,6 +88,7 @@ def require_user(
     user = request.app.state.container.user_repo.find_by_id(user_id)
     if not user:
         raise AuthenticationRequiredError("User not found.")
+    _ensure_minor_can_access_plan(request, user)
     request.state.user = user
     return user_id
 
@@ -123,6 +140,7 @@ def get_optional_current_user(
     user = request.app.state.container.user_repo.find_by_id(user_id)
     if not user:
         raise AuthenticationRequiredError("User not found.")
+    _ensure_minor_can_access_plan(request, user)
     request.state.user = user
     return user
 

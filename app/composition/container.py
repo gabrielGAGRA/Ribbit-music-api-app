@@ -494,6 +494,7 @@ def build_container(
         user_repo=user_repo,
         token_service=token_service,
         google_verifier=google_verifier,
+        plan_repo=plan_repo,
     )
     complete_google_oauth_use_case = (
         CompleteGoogleOAuthUseCase(
@@ -570,7 +571,7 @@ def build_container(
             user_repo, plan_repo, password_hasher
         ),
         authenticate_user_use_case=AuthenticateUserUseCase(
-            user_repo, password_hasher, token_service=token_service
+            user_repo, password_hasher, token_service=token_service, plan_repo=plan_repo
         ),
         authenticate_admin_use_case=AuthenticateAdminUseCase(
             user_repo, password_hasher, token_service=token_service

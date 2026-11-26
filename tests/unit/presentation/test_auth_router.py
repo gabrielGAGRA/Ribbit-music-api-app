@@ -397,6 +397,61 @@ def test_google_session_endpoint() -> None:
     assert auth_res.user.email == "user99@ribbit.com"
 
 
+def test_google_session_rejects_minor_on_free_plan() -> None:
+    from fastapi import Request, Response
+
+    from app.application.ports.repositories.plan_repository import PlanRepositoryPort
+    from app.application.ports.repositories.user_repository import UserRepositoryPort
+    from app.application.ports.services.token_service import TokenServicePort
+    from app.config import Settings
+    from app.domain.models.plan import Plan
+    from app.presentation.routers.auth import _sign_cookie_payload, google_session
+
+    settings = Settings(database_path=":memory:", secret_key="secret-key-1234")
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    plan_repo = MagicMock(spec=PlanRepositoryPort)
+    token_service = MagicMock(spec=TokenServicePort)
+
+    valid_handoff = _sign_cookie_payload(
+        {"user_id": 100, "exp": 9999999999}, secret_key="secret-key-1234"
+    )
+    req_valid = Request(
+        {
+            "type": "http",
+            "headers": [
+                (
+                    b"cookie",
+                    f"ribbit_google_oauth_handoff={valid_handoff}".encode("ascii"),
+                )
+            ],
+        }
+    )
+    user_repo.find_by_id.return_value = User(
+        user_id=100,
+        email="minor100@ribbit.com",
+        password_hash="oauth",
+        display_name="Minor 100",
+        age=15,
+        plan_id=1,
+    )
+    plan_repo.find_by_id.return_value = Plan(
+        plan_id=1, name="Free", initial_monthly_price=0.0, initial_max_profiles=1
+    )
+
+    resp = Response()
+    res = google_session(
+        request=req_valid,
+        response=resp,
+        settings=settings,
+        user_repo=user_repo,
+        token_service=token_service,
+        plan_repo=plan_repo,
+    )
+    assert res.status_code == 403
+    assert b"Minor users cannot use the Free plan" in res.body
+    token_service.create_access_token.assert_not_called()
+
+
 def test_google_callback_and_session_forward_unregistered_user_to_register() -> None:
     from fastapi import Request
 

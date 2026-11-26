@@ -33,7 +33,11 @@ class ChangeSubscriptionPlanUseCase:
         if not new_plan:
             raise EntityNotFoundError(f"Plan with ID {new_plan_id} not found.")
 
-        if user.is_minor() and new_plan.is_paid:
+        if user.is_minor() and not user.is_admin:
+            if not new_plan.is_paid:
+                raise BusinessRuleViolationError(
+                    "Minor users cannot use the Free plan and must be linked to an active Family plan."
+                )
             raise BusinessRuleViolationError(
                 "Only adult users (18+) can subscribe to paid plans."
             )

@@ -406,13 +406,16 @@ describe('RibbitStateService', () => {
     expect(service.activeModal()).toBe('upgrade');
   });
 
-  it('blocks paid plan selection (Family and Individual) for minor users', () => {
+  it('blocks paid and Free plan selection and subscription cancellation for minor users', () => {
     service.completeAuthentication(SAMPLE_AUTH);
     flushInitialHydration(httpMock);
     service.applyUserDto({
       ...SAMPLE_AUTH.user,
       age: 15,
+      plan_id: 3,
+      primary_account_id: 1,
     });
+    service.setPlan('Família');
     service.setModal(null);
 
     service.initiatePlanSelection({
@@ -424,8 +427,7 @@ describe('RibbitStateService', () => {
       copy: '',
       features: [],
     });
-    expect(service.activeModal()).toBeNull();
-    expect(service.toast()).toContain('Somente usuários maiores de 18 anos');
+    expect(service.toast()).toContain('já está no plano');
 
     service.initiatePlanSelection({
       planId: 2,
@@ -438,6 +440,24 @@ describe('RibbitStateService', () => {
     });
     expect(service.activeModal()).toBeNull();
     expect(service.toast()).toContain('Somente usuários maiores de 18 anos');
+
+    service.initiatePlanSelection({
+      planId: 1,
+      name: 'Free',
+      displayName: 'Ribbit Free',
+      price: 'R$ 0,00',
+      maxProfiles: 1,
+      copy: '',
+      features: [],
+    });
+    expect(service.activeModal()).toBeNull();
+    expect(service.toast()).toContain('não podem usar o plano Free');
+    expect(service.currentPlan()).toBe('Família');
+
+    service.cancelSubscription();
+    expect(service.toast()).toContain('não podem usar o plano Free');
+    expect(service.currentPlan()).toBe('Família');
+    httpMock.expectNone('/api/profile/plan');
   });
 
   it('handles UI navigation, modals, filters, theme, toast, and logout state transitions', () => {

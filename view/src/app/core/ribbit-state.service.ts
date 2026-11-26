@@ -284,6 +284,13 @@ export class RibbitStateService implements OnDestroy {
     const planName = this.currentPlan().toLowerCase();
     return planName.includes('famíl') || planName.includes('famil');
   });
+  readonly canCancelSubscription = computed<boolean>(
+    () =>
+      !this.isAdmin() &&
+      !this.isMinorUser() &&
+      this.primaryAccountId() === null &&
+      this.currentPlan() !== 'Free',
+  );
   readonly spotifyId = signal<string | null>(this.initialUser?.spotify_id ?? null);
   readonly spotifyPremium = signal<boolean>(Boolean(this.initialUser?.spotify_premium));
   readonly preferredTheme = signal<'light' | 'dark'>(
@@ -670,7 +677,14 @@ export class RibbitStateService implements OnDestroy {
         this.currentPlan.set(profile.plan.name);
         this.currentPlanId.set(profile.plan.plan_id);
       },
-      error: () => {
+      error: (err: unknown) => {
+        const apiErr = toApiError(err);
+        if (
+          apiErr.status === 403 &&
+          apiErr.rawMessage.includes('Minor users cannot use the Free plan')
+        ) {
+          this.logout(apiErr.message);
+        }
         // 401 is handled centrally by authInterceptor
       },
     });
@@ -989,12 +1003,23 @@ export class RibbitStateService implements OnDestroy {
       this.notify(`Você já está no plano ${plan.displayName}.`);
       return;
     }
-    if (this.isMinorUser() && plan.name !== 'Free') {
+    if (this.isMinorUser()) {
+      if (plan.name === 'Free') {
+        this.notify('Usuários menores de 18 anos não podem usar o plano Free.');
+        this.showRibbyAlert({
+          title: 'Plano Free indisponível para menores',
+          message:
+            'Contas de menores de 18 anos não podem usar o plano Free e devem estar vinculadas como dependentes em um Plano Família.',
+          tone: 'restriction',
+          mood: 'talk',
+        });
+        return;
+      }
       this.notify('Somente usuários maiores de 18 anos podem assinar planos pagos.');
       this.showRibbyAlert({
         title: 'Plano exclusivo para maiores de 18 anos',
         message:
-          'Contas de menores usam o plano Free ou participam como dependentes em um Plano Família.',
+          'Contas de menores de 18 anos participam apenas como dependentes em um Plano Família.',
         tone: 'restriction',
         mood: 'talk',
       });
@@ -1036,6 +1061,17 @@ export class RibbitStateService implements OnDestroy {
 
   /** Cancels the user's paid subscription via DELETE /api/profile/plan. */
   cancelSubscription(): void {
+    if (this.isMinorUser()) {
+      this.notify('Usuários menores de 18 anos não podem usar o plano Free.');
+      this.showRibbyAlert({
+        title: 'Plano Free indisponível para menores',
+        message:
+          'Contas de menores de 18 anos não podem usar o plano Free e devem permanecer vinculadas a um Plano Família ativo.',
+        tone: 'restriction',
+        mood: 'talk',
+      });
+      return;
+    }
     if (!readAuthToken()) {
       this.currentPlan.set('Free');
       this.notify('Assinatura cancelada. Seu plano agora é o Free.');

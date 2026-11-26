@@ -107,6 +107,12 @@ class User:
         """Returns True for administrators or users on a plan supporting dependents."""
         return self.is_admin or (plan is not None and plan.allows_dependents)
 
+    def can_use_plan(self, plan: Plan | None) -> bool:
+        """Returns True when the user is eligible to access the platform under the given plan."""
+        if self.is_admin or not self.is_minor():
+            return True
+        return plan is not None and plan.is_paid and self.primary_account_id is not None
+
     def restricted_genre_terms(self) -> tuple[str, ...]:
         if not self.is_minor():
             return ()

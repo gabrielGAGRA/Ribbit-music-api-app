@@ -18,6 +18,7 @@ from app.application.dtos import (
     AuthenticateWithGoogleCommand,
     RegisterUserCommand,
 )
+from app.application.ports.repositories.plan_repository import PlanRepositoryPort
 from app.application.ports.repositories.user_repository import UserRepositoryPort
 from app.application.ports.services.token_service import TokenServicePort
 from app.application.use_cases.auth import (
@@ -33,6 +34,7 @@ from app.domain.exceptions import (
     CustomError,
     EntityNotFoundError,
     ExternalServiceError,
+    PermissionDeniedError,
 )
 from app.presentation.dependencies import provide, provide_optional
 from app.presentation.schemas import (
@@ -235,6 +237,58 @@ def _build_google_handoff_redirect(
     return res
 
 
+def _exchange_google_oauth_callback(
+    complete_use_case: CompleteGoogleOAuthUseCase,
+    code: str,
+    code_verifier: str | None,
+    base_target: str,
+    separator: str,
+    secret_key: str,
+) -> RedirectResponse:
+    try:
+        result = complete_use_case.execute(code=code, code_verifier=code_verifier)
+    except EntityNotFoundError as exc:
+        if exc.details.get("registration_required"):
+            return _build_google_handoff_redirect(
+                f"{base_target}{separator}google_auth=register",
+                {
+                    "registration_required": True,
+                    "email": exc.details.get("email", ""),
+                    "display_name": exc.details.get("display_name", ""),
+                    "exp": int(time.time()) + 300,
+                },
+                secret_key,
+                max_age=300,
+            )
+        reason = "exchange_failed"
+    except PermissionDeniedError:
+        reason = "minor_free_plan_not_allowed"
+    except Exception:  # noqa: BLE001
+        logging.getLogger("app.presentation.routers.auth").warning(
+            "Google OAuth callback exchange failed",
+            exc_info=True,
+        )
+        reason = "exchange_failed"
+    else:
+        user_id = result.user.user_id
+        if user_id is None:
+            reason = "user_persisted_id_missing"
+        else:
+            return _build_google_handoff_redirect(
+                f"{base_target}{separator}google_auth=complete",
+                {"user_id": user_id, "exp": int(time.time()) + 120},
+                secret_key,
+                max_age=120,
+            )
+
+    res = RedirectResponse(
+        url=f"{base_target}{separator}google_auth_error={quote(reason)}",
+        status_code=status.HTTP_302_FOUND,
+    )
+    res.delete_cookie(key="ribbit_google_oauth_state", path="/api/auth/google")
+    return res
+
+
 @router.get("/google/callback")
 def google_callback(
     request: Request,
@@ -272,39 +326,13 @@ def google_callback(
     if not payload or payload.get("state") != state:
         return _err_redirect("invalid_state")
 
-    code_verifier = payload.get("code_verifier")
-    try:
-        result = complete_use_case.execute(code=code, code_verifier=code_verifier)
-    except EntityNotFoundError as exc:
-        if exc.details.get("registration_required"):
-            return _build_google_handoff_redirect(
-                f"{base_target}{separator}google_auth=register",
-                {
-                    "registration_required": True,
-                    "email": exc.details.get("email", ""),
-                    "display_name": exc.details.get("display_name", ""),
-                    "exp": int(time.time()) + 300,
-                },
-                settings.secret_key,
-                max_age=300,
-            )
-        return _err_redirect("exchange_failed")
-    except Exception:  # noqa: BLE001
-        logging.getLogger("app.presentation.routers.auth").warning(
-            "Google OAuth callback exchange failed",
-            exc_info=True,
-        )
-        return _err_redirect("exchange_failed")
-
-    user_id = result.user.user_id
-    if user_id is None:
-        return _err_redirect("user_persisted_id_missing")
-
-    return _build_google_handoff_redirect(
-        f"{base_target}{separator}google_auth=complete",
-        {"user_id": user_id, "exp": int(time.time()) + 120},
-        settings.secret_key,
-        max_age=120,
+    return _exchange_google_oauth_callback(
+        complete_use_case=complete_use_case,
+        code=code,
+        code_verifier=payload.get("code_verifier"),
+        base_target=base_target,
+        separator=separator,
+        secret_key=settings.secret_key,
     )
 
 
@@ -328,6 +356,9 @@ def google_session(
     settings: Annotated[Settings, Depends(provide(Settings))],
     user_repo: Annotated[UserRepositoryPort, Depends(provide(UserRepositoryPort))],
     token_service: Annotated[TokenServicePort, Depends(provide(TokenServicePort))],
+    plan_repo: Annotated[
+        PlanRepositoryPort | None, Depends(provide_optional(PlanRepositoryPort))
+    ] = None,
 ) -> AuthResponse | JSONResponse:
     handoff_cookie = request.cookies.get("ribbit_google_oauth_handoff")
     response.delete_cookie(key="ribbit_google_oauth_handoff", path="/api/auth/google")
@@ -365,6 +396,16 @@ def google_session(
             AuthenticationRequiredError("Authenticated user not found."),
             status.HTTP_401_UNAUTHORIZED,
         )
+
+    if not user.is_admin and user.is_minor() and plan_repo is not None:
+        plan = plan_repo.find_by_id(user.plan_id)
+        if not user.can_use_plan(plan):
+            return _error_json_clearing_handoff(
+                PermissionDeniedError(
+                    "Minor users cannot use the Free plan and must be linked to an active Family plan."
+                ),
+                status.HTTP_403_FORBIDDEN,
+            )
 
     token = token_service.create_access_token(
         user_id=user.user_id, is_admin=user.is_admin
