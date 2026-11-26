@@ -74,11 +74,14 @@
           [appTransform]="cardTransform()"
           (pointerdown)="startCardDrag($event)"
           (pointermove)="moveCardDrag($event)"
-          (pointerup)="finishCardDrag()"
+          (pointerup)="finishCardDrag($event)"
           (pointercancel)="cancelCardDrag()"
+          (lostpointercapture)="finishCardDrag()"
+          (dragstart)="preventNativeDrag($event)"
         >
           <img
             class="album-art"
+            draggable="false"
             [src]="currentSong().image"
             [alt]="'Arte de capa: ' + currentSong().title + ', ' + currentSong().artist"
           />

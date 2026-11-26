@@ -1176,6 +1176,69 @@ describe('JamsComponent', () => {
     state.setModal(null);
   });
 
+  it('commits superlike on upward drag, like/reject on horizontal drag, and resets drag on quota exhaustion', () => {
+    state.songs.set([
+      makeSong(101, 'Track One'),
+      makeSong(102, 'Track Two'),
+      makeSong(103, 'Track Three'),
+    ]);
+    const firstSong = component['currentJamDeckSong']();
+    expect(firstSong).toBeTruthy();
+
+    component['startJamCardDrag']({
+      clientX: 100,
+      clientY: 200,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    component['finishJamCardDrag']({
+      clientX: 105,
+      clientY: 130,
+      pointerId: 1,
+    } as unknown as PointerEvent);
+
+    expect(component['jamSuperlikesCount']()).toBe(1);
+    expect(component['currentJamDeckSong']()?.trackId).not.toBe(firstSong?.trackId);
+    expect(component['jamDrag']()).toEqual({ x: 0, y: 0 });
+
+    const secondSong = component['currentJamDeckSong']();
+    component['startJamCardDrag']({
+      clientX: 100,
+      clientY: 200,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    component['finishJamCardDrag']({
+      clientX: 170,
+      clientY: 205,
+      pointerId: 1,
+    } as unknown as PointerEvent);
+    expect(component['currentJamDeckSong']()?.trackId).not.toBe(secondSong?.trackId);
+
+    state.jamState.update((jam) => ({
+      ...jam,
+      maxSuperlikes: 1,
+      superlikesUsed: 1,
+    }));
+    component['startJamCardDrag']({
+      clientX: 100,
+      clientY: 200,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    component['finishJamCardDrag']({
+      clientX: 100,
+      clientY: 120,
+      pointerId: 1,
+    } as unknown as PointerEvent);
+
+    expect(component['jamDrag']()).toEqual({ x: 0, y: 0 });
+    expect(component['isDraggingJam']()).toBe(false);
+  });
+
   it('should compute jamDurationProgressPercent from accumulated, active, and queued tracks and bind progressbar', () => {
     state.jamState.set({
       ...state.jamState(),

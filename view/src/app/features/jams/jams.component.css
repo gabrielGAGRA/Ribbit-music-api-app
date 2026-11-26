@@ -91,10 +91,46 @@
   border: 1px solid var(--border);
 }
 
+.jam-swipe-card.is-dragging {
+  transition: none;
+  will-change: transform;
+}
+
 .jam-swipe-card img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.jam-drag-badge {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #fff;
+  pointer-events: none;
+}
+
+.jam-drag-badge.like {
+  background: rgba(34, 197, 94, 0.92);
+}
+
+.jam-drag-badge.superlike {
+  background: rgba(245, 158, 11, 0.94);
+}
+
+.jam-drag-badge.reject {
+  background: rgba(239, 68, 68, 0.92);
 }
 
 .jam-card-shade {

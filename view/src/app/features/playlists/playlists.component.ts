@@ -503,6 +503,7 @@ export class PlaylistsComponent {
     const track = this.activeTrack();
     this.isDragging.set(false);
     this.deckDrag.set({ x: 0, y: 0 });
+    this.player.unlock();
     this.player.pause();
     if (!p || !track || this.isSwipeBlocked()) return;
 
@@ -518,11 +519,20 @@ export class PlaylistsComponent {
 
   protected startDeckCardDrag(event: PointerEvent): void {
     if (this.isSwipeBlocked()) return;
+    if (event.isPrimary === false) return;
     if (event.target instanceof Element && event.target.closest('button')) return;
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    this.player.unlock();
     this.deckPointerStart = { x: event.clientX, y: event.clientY };
     this.isDragging.set(true);
     if (event.currentTarget instanceof HTMLElement) {
-      event.currentTarget.setPointerCapture(event.pointerId);
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Synthetic or detached pointer events may reject pointer capture
+      }
     }
   }
 
@@ -541,10 +551,12 @@ export class PlaylistsComponent {
     this.deckDrag.set({ x: 0, y: 0 });
   }
 
-  protected finishDeckCardDrag(): void {
-    if (!this.deckPointerStart) return;
+  protected finishDeckCardDrag(event?: PointerEvent): void {
+    if (!this.deckPointerStart || event?.isPrimary === false) return;
+    this.syncFinalDeckDrag(this.deckPointerStart, event);
     this.deckPointerStart = null;
     this.isDragging.set(false);
+    this.player.unlock();
     const { x } = this.deckDrag();
     if (x > 65) {
       this.swipeDeckTrack('like');
@@ -552,6 +564,24 @@ export class PlaylistsComponent {
       this.swipeDeckTrack('dislike');
     } else {
       this.deckDrag.set({ x: 0, y: 0 });
+    }
+  }
+
+  protected preventNativeDrag(event: Event): void {
+    event.preventDefault();
+  }
+
+  private syncFinalDeckDrag(start: { x: number; y: number }, event?: PointerEvent): void {
+    if (
+      event &&
+      (event.isTrusted || event.clientX !== 0 || event.clientY !== 0) &&
+      Number.isFinite(event.clientX) &&
+      Number.isFinite(event.clientY)
+    ) {
+      this.deckDrag.set({
+        x: event.clientX - start.x,
+        y: event.clientY - start.y,
+      });
     }
   }
 

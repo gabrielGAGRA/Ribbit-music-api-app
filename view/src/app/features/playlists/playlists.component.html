@@ -137,11 +137,14 @@
                   [appTransform]="deckCardTransform()"
                   (pointerdown)="startDeckCardDrag($event)"
                   (pointermove)="moveDeckCardDrag($event)"
-                  (pointerup)="finishDeckCardDrag()"
+                  (pointerup)="finishDeckCardDrag($event)"
                   (pointercancel)="cancelDeckCardDrag()"
+                  (lostpointercapture)="finishDeckCardDrag()"
+                  (dragstart)="preventNativeDrag($event)"
                 >
                   <img
                     class="album-art"
+                    draggable="false"
                     [src]="deckTrack.image"
                     [alt]="'Arte de capa: ' + deckTrack.title + ', ' + deckTrack.artist"
                   />
