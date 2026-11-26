@@ -142,7 +142,10 @@ from app.infrastructure.adapters.google_auth_adapter import (
     GoogleIdpVerifierAdapter,
     GoogleOAuthAdapter,
 )
-from app.infrastructure.adapters.spotify import SpotifyCredentials
+from app.infrastructure.adapters.spotify import (
+    SpotifyCredentials,
+    SpotifyHostQueueAdapter,
+)
 from app.infrastructure.adapters.spotify.auth import SpotifyAuth
 from app.infrastructure.adapters.spotify.user_profile import SpotifyUserProfileAdapter
 from app.infrastructure.repositories import (
@@ -516,6 +519,18 @@ def build_container(
         if settings.spotify_client_id and settings.spotify_redirect_uri
         else None
     )
+    spotify_host_queue = (
+        SpotifyHostQueueAdapter(
+            credentials=SpotifyCredentials(
+                client_id=settings.spotify_client_id,
+                client_secret=settings.spotify_client_secret,
+                redirect_uri=settings.spotify_redirect_uri,
+            ),
+            session=http_session,
+        )
+        if settings.spotify_client_id
+        else None
+    )
     get_spotify_authorize_url_use_case = (
         GetSpotifyAuthorizeUrlUseCase(spotify_auth=user_spotify_auth)
         if user_spotify_auth is not None
@@ -647,12 +662,22 @@ def build_container(
             track_repo,
             interaction_repo=interaction_repo,
             track_access_repo=track_access_repo,
+            spotify_queue=spotify_host_queue,
+            track_catalog=music_service,
         ),
         vote_skip_jam_track_use_case=VoteSkipJamTrackUseCase(
-            jam_repo, user_repo, track_repo
+            jam_repo,
+            user_repo,
+            track_repo,
+            spotify_queue=spotify_host_queue,
+            track_catalog=music_service,
         ),
         advance_jam_playback_use_case=AdvanceJamPlaybackUseCase(
-            jam_repo, track_repo=track_repo
+            jam_repo,
+            track_repo=track_repo,
+            user_repo=user_repo,
+            spotify_queue=spotify_host_queue,
+            track_catalog=music_service,
         ),
         save_queue_track_use_case=SaveQueueTrackUseCase(
             jam_repo,

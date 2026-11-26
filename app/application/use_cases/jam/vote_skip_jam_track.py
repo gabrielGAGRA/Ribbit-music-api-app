@@ -14,6 +14,7 @@ from app.domain.exceptions import (
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.application.ports.services.music_service import TrackCatalogPort
 lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
 
 if TYPE_CHECKING:
@@ -28,6 +29,7 @@ class VoteSkipJamTrackUseCase:
     user_repo: UserRepositoryPort
     track_repo: TrackRepositoryPort
     spotify_queue: SpotifyHostQueuePort | None = None
+    track_catalog: TrackCatalogPort | None = None
 
     def _advance(self, jam: Jam) -> bool:
         if jam.jam_id is None:
@@ -62,6 +64,7 @@ class VoteSkipJamTrackUseCase:
             jam,
             self.track_repo,
             winner.track_id,
+            track_catalog=self.track_catalog,
         )
         return True
 
