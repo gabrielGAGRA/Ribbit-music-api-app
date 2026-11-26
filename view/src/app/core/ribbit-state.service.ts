@@ -34,6 +34,7 @@ import {
   mapApiActionToDecision,
   mapJamStateDto,
   mapTrackDtoToSong,
+  resolveSongDurationSeconds,
 } from './api-mappers';
 import { AudioPlayerService } from './audio-player.service';
 import { AuthSessionNotifier } from './auth-session.notifier';
@@ -217,6 +218,7 @@ export class RibbitStateService implements OnDestroy {
   private readonly jamConfirmedSeenTrackIds = new Set<number>();
   private serverJamSuperlikes = 0;
   private pendingJamSuperlikes = 0;
+  private hostAdvancedJamSeconds = 0;
   private readonly unsubscribeUnauthorized: () => void;
   private readonly recentAccessTimestamps = new Map<string, number>();
 
@@ -481,7 +483,11 @@ export class RibbitStateService implements OnDestroy {
   }
 
   /** Persists credentials after login or registration and hydrates backend data. */
-  completeAuthentication(auth: AuthApiResponse, fallbackPlanName?: string): void {
+  completeAuthentication(
+    auth: AuthApiResponse,
+    fallbackPlanName?: string,
+    showTutorial = false,
+  ): void {
     writeAuthToken(auth.access_token);
     this.applyUserDto(auth.user);
     if (fallbackPlanName) {
@@ -490,13 +496,8 @@ export class RibbitStateService implements OnDestroy {
     this.authView.set('app');
     this.hydrateAuthenticatedSession();
 
-    // Trigger onboarding on first access
-    if (typeof localStorage !== 'undefined') {
-      const email = auth.user.email;
-      const seen = localStorage.getItem(`ribbit:onboarding_done:${email}`);
-      if (!seen) {
-        this.setModal('onboarding');
-      }
+    if (showTutorial) {
+      this.setModal('onboarding');
     }
   }
 
@@ -799,7 +800,10 @@ export class RibbitStateService implements OnDestroy {
     setStoredGenres('ribbit-genres', limited);
     if (readAuthToken()) {
       this.profileApi.updateFavoriteGenres(limited).subscribe({
-        next: () => {
+        next: (updatedUser) => {
+          if (updatedUser && typeof updatedUser.user_id === 'number') {
+            this.applyUserDto(updatedUser);
+          }
           this.loadNextDiscoveryTrack(true);
           this.notify('Gêneros favoritos atualizados com sucesso!');
         },
@@ -1401,10 +1405,17 @@ export class RibbitStateService implements OnDestroy {
 
   /** Advances the active Jam track immediately (host only) via POST /api/jams/{id}/advance. */
   advanceJam(): void {
-    const jamId = this.jamState().jamId;
+    const jam = this.jamState();
+    const jamId = jam.jamId;
     if (!jamId) return;
+    const advancedTrackSeconds = jam.currentTrack
+      ? resolveSongDurationSeconds(jam.currentTrack)
+      : 0;
     this.jamService.advanceJam(jamId).subscribe({
       next: () => {
+        if (this.jamState().jamId === jamId && advancedTrackSeconds > 0) {
+          this.hostAdvancedJamSeconds += advancedTrackSeconds;
+        }
         this.syncJamState(jamId);
         this.notify('Faixa da Jam avançada pelo anfitrião.');
       },
@@ -2001,6 +2012,7 @@ export class RibbitStateService implements OnDestroy {
     this.jamConfirmedSeenTrackIds.clear();
     this.serverJamSuperlikes = 0;
     this.pendingJamSuperlikes = 0;
+    this.hostAdvancedJamSeconds = 0;
     this.jamDeckSongs.set([]);
     this.jamDeckCursor.set(0);
     this.jamDeckNextCursor.set(null);
@@ -2024,12 +2036,24 @@ export class RibbitStateService implements OnDestroy {
         ) {
           return;
         }
-        const lookup = this.buildTrackLookup([...this.songs(), ...this.jamDeckSongs()]);
+        const currentJam = this.jamState();
+        const activeJamSongs = [
+          ...(currentJam.currentTrack ? [currentJam.currentTrack] : []),
+          ...(currentJam.queueItems ?? []).map((item) => item.song),
+        ];
+        const lookup = this.buildTrackLookup([
+          ...this.songs(),
+          ...this.jamDeckSongs(),
+          ...activeJamSongs,
+        ]);
         const mapped = mapJamStateDto({
           dto: stateDto,
           trackLookup: lookup,
           fallbackSong: this.currentSong(),
         });
+        const totalAccumulatedSeconds =
+          (stateDto.jam.accumulated_duration_seconds || 0) + this.hostAdvancedJamSeconds;
+        const effectiveAccumulatedMinutes = Math.round(totalAccumulatedSeconds / 60);
         this.serverJamSuperlikes = mapped.superlikesCount ?? 0;
         const limit =
           mapped.superlikesLimit ?? this.serverJamSuperlikes + this.pendingJamSuperlikes;
@@ -2037,7 +2061,11 @@ export class RibbitStateService implements OnDestroy {
           limit,
           this.serverJamSuperlikes + this.pendingJamSuperlikes,
         );
-        this.jamState.set({ ...mapped, superlikesCount: effectiveSuperlikes });
+        this.jamState.set({
+          ...mapped,
+          accumulatedMinutes: effectiveAccumulatedMinutes,
+          superlikesCount: effectiveSuperlikes,
+        });
         if (!mapped.active) {
           this.stopJamPolling();
         }

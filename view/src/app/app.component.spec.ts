@@ -120,10 +120,6 @@ describe('AppComponent', () => {
     expect(state.activeModal()).toBe('playlist');
     state.setModal(null);
 
-    component['openTutorial']();
-    expect(state.activeModal()).toBe('onboarding');
-    state.setModal(null);
-
     component['openNotifications']();
 
     component['setTheme']('light');

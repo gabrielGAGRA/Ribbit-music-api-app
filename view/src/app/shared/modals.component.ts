@@ -209,6 +209,10 @@ export class ModalsComponent {
 
   protected closeOnBackdrop(event: MouseEvent): void {
     if (event.target === event.currentTarget) {
+      if (this.state.activeModal() === 'onboarding') {
+        this.finishOnboarding();
+        return;
+      }
       this.closeModal();
     }
   }

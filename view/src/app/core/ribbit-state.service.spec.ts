@@ -958,4 +958,18 @@ describe('RibbitStateService', () => {
       if (!r.cancelled) r.flush([]);
     });
   });
+
+  it('does not open onboarding modal on login by default', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    expect(service.activeModal()).toBeNull();
+  });
+
+  it('opens onboarding modal when showTutorial is true (registration flow)', () => {
+    service.completeAuthentication(SAMPLE_AUTH, 'Free', true);
+    flushInitialHydration(httpMock);
+
+    expect(service.activeModal()).toBe('onboarding');
+  });
 });
