@@ -1,15 +1,17 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import type { JamQueueTrack, Song } from '@ribbit/shared-types';
+import { computeSongsDurationSeconds, resolveSongDurationSeconds } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
 import { RibbitStateService } from '../../core/ribbit-state.service';
 import { TransformStyleDirective } from '../../shared/transform-style.directive';
+import { WidthPercentDirective } from '../../shared/width-percent.directive';
 import { IconComponent } from '../../shared/icon.component';
 
 /** Collaborative Jam workspace supporting room joining, deck voting, skip consensus, and queue saving. */
 @Component({
   selector: 'app-jams',
   standalone: true,
-  imports: [IconComponent, TransformStyleDirective],
+  imports: [IconComponent, TransformStyleDirective, WidthPercentDirective],
   templateUrl: './jams.component.html',
   styleUrl: './jams.component.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -42,6 +44,33 @@ export class JamsComponent {
   protected readonly formattedDurationMinutes = computed<string>(() =>
     String(this.state.jamState().durationMinutes).padStart(2, '0'),
   );
+
+  private readonly jamTotalAccumulatedSeconds = computed<number>(() => {
+    const jam = this.state.jamState();
+    const baseSeconds = Math.max(0, (jam.accumulatedMinutes || 0) * 60);
+    const currentSeconds = jam.currentTrack ? resolveSongDurationSeconds(jam.currentTrack) : 0;
+    const queueSongs = (jam.queueItems ?? []).map((item) => item.song);
+    return baseSeconds + currentSeconds + computeSongsDurationSeconds(queueSongs);
+  });
+
+  protected readonly jamAccumulatedMinutes = computed<number>(() => {
+    const totalSeconds = this.jamTotalAccumulatedSeconds();
+    if (totalSeconds <= 0) return 0;
+    return Math.max(1, Math.round(totalSeconds / 60));
+  });
+
+  protected readonly jamDurationProgressPercent = computed<number>(() => {
+    const jam = this.state.jamState();
+    const totalMinutes = jam.durationHours * 60 + jam.durationMinutes;
+    if (totalMinutes <= 0) return 0;
+    const totalDurationSeconds = totalMinutes * 60;
+    const accumulatedSeconds = this.jamTotalAccumulatedSeconds();
+    if (accumulatedSeconds <= 0) return 0;
+    return Math.min(
+      100,
+      Math.max(1, Math.round((accumulatedSeconds / totalDurationSeconds) * 100)),
+    );
+  });
 
   protected readonly jamSuperlikesCount = computed<number>(
     () => this.state.jamState().superlikesCount || 0,

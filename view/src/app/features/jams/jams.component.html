@@ -180,10 +180,17 @@
           <strong>
             {{ state.jamState().durationHours }}h {{ formattedDurationMinutes() }}min
           </strong>
-          <span>+ {{ state.jamState().accumulatedMinutes || 0 }} min acumulados</span>
+          <span>+ {{ jamAccumulatedMinutes() }} min acumulados</span>
         </div>
-        <div class="duration-bar">
-          <i></i>
+        <div
+          class="duration-bar"
+          role="progressbar"
+          aria-label="Progresso de tempo da Jam"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          [attr.aria-valuenow]="jamDurationProgressPercent()"
+        >
+          <i [appWidthPercent]="jamDurationProgressPercent()"></i>
         </div>
 
         <div class="section-title">

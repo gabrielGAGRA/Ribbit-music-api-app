@@ -1175,4 +1175,50 @@ describe('JamsComponent', () => {
     expect(state.activeModal()).toBe('jam');
     state.setModal(null);
   });
+
+  it('should compute jamDurationProgressPercent from accumulated, active, and queued tracks and bind progressbar', () => {
+    state.jamState.set({
+      ...state.jamState(),
+      active: true,
+      durationHours: 1,
+      durationMinutes: 0,
+      accumulatedMinutes: 3,
+      queueItems: [],
+    });
+    expect(component['jamAccumulatedMinutes']()).toBe(3);
+    expect(component['jamDurationProgressPercent']()).toBe(5);
+
+    state.jamState.set({
+      ...state.jamState(),
+      durationHours: 1,
+      durationMinutes: 0,
+      accumulatedMinutes: 3,
+      currentTrack: makeSong(10, 'Playing Track'),
+      queueItems: [{ song: makeSong(11, 'Queued Track'), votePoints: 2 }],
+    });
+    expect(component['jamAccumulatedMinutes']()).toBe(9);
+    expect(component['jamDurationProgressPercent']()).toBe(15);
+
+    state.jamState.set({
+      ...state.jamState(),
+      durationHours: 1,
+      durationMinutes: 0,
+      accumulatedMinutes: 90,
+      queueItems: [],
+    });
+    expect(component['jamDurationProgressPercent']()).toBe(100);
+
+    state.jamState.set({
+      ...state.jamState(),
+      durationHours: 0,
+      durationMinutes: 0,
+      accumulatedMinutes: 5,
+      queueItems: [],
+    });
+    expect(component['jamDurationProgressPercent']()).toBe(0);
+
+    const html = readFileSync(resolve(import.meta.dirname, 'jams.component.html'), 'utf8');
+    expect(html).toContain('[appWidthPercent]="jamDurationProgressPercent()"');
+    expect(html).toContain('role="progressbar"');
+  });
 });
