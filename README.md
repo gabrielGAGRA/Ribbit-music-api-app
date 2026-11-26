@@ -14,10 +14,15 @@
 - Mateus Silva de Araújo
 
 ### Divisão de Responsabilidades da Equipe
-- **Gabriel Agra**: Arquitetura hexagonal e estrutura base (refatoração inicial e revisões de PRs); regras de engenharia, linters e type-checking (Python, Angular e TypeScript: Ruff, Pyrefly, Oxlint, ESLint-Angular); testes (pytest, vitest, cobertura >= 85%, E2E Playwright e vídeos) e CI/CD (quality gate e verificação de cobertura); README, badges, histórico de escuta, filtros/ordenação por avaliações, criação de faixas, métricas de interação, painel de custos e analytics de acessos no Admin.
-- **Carolina Haddad**: *(a completar)*
-- **Fernando Mendes**: *(a completar)*
-- **Mateus Araujo**: *(a completar)*
+- **Arquitetura & CI**: Gabriel
+- **Backend**: Carol, Fernando, Gabriel 
+- **Bug Fix**: Fernando, Mateus
+- **Dados/Cloud & CD**: Fernando
+- **Documentação**: Carol, Gabriel, Mateus
+- **Frontend**: Carol, Mateus
+- **Testes**: Carol, Fernando, Gabriel
+
+> **Nota:** Mais detalhes nas abas de [Contributions](https://github.com/gabrielGAGRA/Ribbit-music-api-app/graphs/contributors?all=1) e histórico de commit dela.
 
 ## Sumário
 - [Sobre](#sobre)
@@ -27,7 +32,6 @@
   - [Painel Administrativo](#painel-administrativo-web)
 - [Descrição de Uso do Sistema](#descrição-de-uso-do-sistema)
 - [Histórias de Usuário](#histórias-de-usuário)
-  - [Definição de Done (DoD)](#definição-de-done-dod)
 - [Arquitetura e Tecnologias](#arquitetura-e-tecnologias)
   - [Ferramentas, Bibliotecas, Frameworks e SGBD](#ferramentas-bibliotecas-frameworks-e-sgbd)
   - [Mapeamento MVC e Arquitetura Hexagonal](#mapeamento-mvc-e-arquitetura-hexagonal)
@@ -140,85 +144,8 @@ O projeto é composto por duas frentes:
 
 ## Histórias de Usuário
 
-As 35 histórias de usuário (HU01–HU35) abaixo consolidam o escopo funcional do projeto, detalhando **tipo de usuário**, **tarefas e subtarefas**, **responsável** e **critérios de aceitação**.
-
-### Definição de Done (DoD)
-
-Uma história de usuário é considerada **Done** apenas quando atende a todos os critérios abaixo:
-- [ ] **Código e Arquitetura:** Implementação aderente à arquitetura hexagonal (`app/`) e standalone/Signals (`view/`), revisada via Pull Request.
-- [ ] **Qualidade Estática:** Aprovado no *Quality Gate* sem erros (`ruff format --check`, `ruff check`, `pyrefly check`, `npm run lint`, `npm run typecheck`).
-- [ ] **Testes e Cobertura:** Testes unitários e/ou de integração cobrindo os critérios de aceitação, mantendo cobertura $\ge 85\%$ (`pytest --cov=app --cov-fail-under=85` e `vitest --coverage`).
-- [ ] **Validação E2E e Documentação:** Fluxos principais validados em navegador (`npm run test:e2e`) e documentação (`README.md`, `docs/database/`) atualizada quando aplicável.
-
-### Épico 1 — Cadastro e Preferências
-
-| ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **HU01** | Criar conta | Novo Usuário | **Backend:** Endpoint `POST /api/auth/register`, hash PBKDF2 e validação Pydantic.<br>**Frontend:** Tela de cadastro (`AuthComponent`) com validação de e-mail, senha e idade. | Gabriel Agra | • Consegue criar conta com solicitação e validação de dados.<br>• Acessa a conta imediatamente após o cadastro. |
-| **HU02** | Definir preferências musicais | Novo Usuário | **Backend:** Persistência de `favorite_genres` em `users` e endpoint de atualização.<br>**Frontend:** Seleção de gêneros e artistas favoritos no perfil/onboarding. | Carolina Haddad | • Seleciona gêneros e artistas de interesse.<br>• Preferências são salvas no perfil e usadas nas recomendações. |
-| **HU03** | Bloquear gêneros musicais | Usuário Padrão | **Backend:** Campo `blocked_genres` no modelo `User` e filtro em `recommendation.py` (`select_weighted_track`, `order_tracks_by_weighted_seed`).<br>**Frontend:** Gestão de gêneros bloqueados em Configurações/Perfil. | Carolina Haddad | • Adiciona e remove gêneros bloqueados.<br>• Faixas exclusivamente desses gêneros não aparecem em Descobertas nem Playlists. |
-
-### Épico 2 — Descoberta de Músicas
-
-| ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **HU04** | Descobrir músicas | Usuário Padrão | **Backend:** Caso de uso `GetNextDiscoveryTrackUseCase` e rota `/api/discovery/next`.<br>**Frontend:** Deck de cartões com suporte a swipe em `DiscoverComponent`. | Gabriel Agra | • Sugere apenas faixas inéditas (fora de Curtidas, Amadas e Rejeitadas).<br>• Respeita preferências e gêneros bloqueados.<br>• Apresenta nova faixa após cada swipe. |
-| **HU05** | Curtir uma música | Usuário Padrão | **Backend:** `RecordSwipeInteractionUseCase` gravando `action='like'`.<br>**Frontend:** Gesto de swipe para a direita / botão Like e listagem em `/likes`. | Fernando Seraco | • Dá like e salva a faixa em Curtidas.<br>• Faixa não retorna como descoberta inédita e fica visível em Curtidas. |
-| **HU06** | Amar uma música | Usuário Padrão | **Backend:** `RecordSwipeInteractionUseCase` gravando `action='superlike'`.<br>**Frontend:** Gesto de swipe para cima / botão Superlike e listagem em `/loved`. | Fernando Seraco | • Dá superlike e adiciona a faixa às Amadas e Curtidas.<br>• Não reaparece na descoberta; visualizada separadamente em Amadas. |
-| **HU07** | Rejeitar uma música | Usuário Padrão | **Backend:** `RecordSwipeInteractionUseCase` gravando `action='dislike'`.<br>**Frontend:** Gesto de swipe para a esquerda / botão Rejeitar e listagem em `/rejected`. | Mateus Araújo | • Rejeita a faixa e a envia para Rejeitadas.<br>• Não retorna em Descobertas nem sugestões de Playlists.<br>• Listagem consultável pelo usuário. |
-| **HU08** | Descobrir músicas a partir das preferências | Usuário Padrão | **Backend:** Ponderação em `recommendation.py` (`select_weighted_track`, `order_tracks_by_weighted_seed`) por artistas/gêneros curtidos e amados.<br>**Frontend:** Atualização dinâmica do feed em `DiscoverComponent`. | Gabriel Agra | • Considera Curtidas, Amadas, artistas e gêneros favoritos.<br>• Exclui Rejeitadas e gêneros bloqueados.<br>• Permite avaliação por swipe. |
-
-### Épico 3 — Playlists Inteligentes e Contextuais
-
-| ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **HU09** | Criar playlist | Usuário Padrão | **Backend:** CRUD de playlists em `playlists.py` e cálculo `total_duration_seconds`.<br>**Frontend:** Modal/tela de criação e edição em `PlaylistsComponent`. | Mateus Araújo | • Cria, edita e exclui playlist com nome e descrição.<br>• Adiciona/remove faixas e exibe duração total. |
-| **HU10** | Adicionar músicas à playlist por swipe | Usuário Padrão | **Backend:** `GetPlaylistDeckUseCase` e `AddTrackToPlaylistUseCase` isolados de Curtidas globais.<br>**Frontend:** Deck de swipe contextual dentro da playlist. | Mateus Araújo | • Sugere faixas fora de Rejeitadas.<br>• Like adiciona só à playlist; Superlike adiciona à playlist e Amadas.<br>• Rejeição na sessão não polui Rejeitadas globais e não repete na sessão. |
-| **HU11** | Criar playlist a partir de referências | Usuário Padrão | **Backend:** `CreateDeckPlaylistUseCase` aceitando `source_playlist_id` e filtros de referência.<br>**Frontend:** Seletor de Curtidas, Amadas ou playlists existentes como base. | Carolina Haddad | • Seleciona Curtidas, Amadas ou playlists como referência.<br>• Gera sugestões relacionadas avaliáveis por swipe para adicionar à nova playlist. |
-| **HU12** | Criar playlist com duração definida | Usuário Padrão | **Backend:** `max_duration_seconds` na entidade `Playlist` e ajuste no deck.<br>**Frontend:** Campo de duração desejada e barra de progresso/tempo restante. | Gabriel Agra | • Define duração desejada; exibe duração atual e restante.<br>• Sugestões respeitam tolerância máxima de ±1 minuto. |
-| **HU13** | Criar playlist baseada em lineup | Usuário Padrão | **Backend:** Filtragem/ranqueamento por artistas em `deck_filters`.<br>**Frontend:** Entrada de artistas para lineup de festival/show. | Fernando Seraco | • Informa artistas; sistema identifica e sugere faixas relacionadas.<br>• Permite adicionar via swipe. |
-| **HU14** | Criar playlist baseada em época | Usuário Padrão | **Backend:** Filtro por `release_year`/década em `deck_filters`.<br>**Frontend:** Seletor de época no criador contextual. | Mateus Araújo | • Informa época; recebe sugestões relacionadas para adicionar via swipe. |
-
-### Épico 4 — Jams Colaborativas (Pond)
-
-| ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **HU15** | Criar uma Jam e convidar amigos | Usuário Padrão | **Backend:** `CreateJamUseCase` e `JoinJamUseCase` com `room_code` de 6 dígitos.<br>**Frontend:** Criação/entrada em sala em `JamsComponent`. | Gabriel Agra | • Cria Jam, compartilha código e participantes entram, avaliam e veem a fila atualizada. |
-| **HU16** | Adicionar músicas à Jam por swipe | Participante de Jam | **Backend:** `VoteJamTrackUseCase` registrando like, superlike e deslike.<br>**Frontend:** Deck de swipe dentro da sala de Jam. | Gabriel Agra | • Participante dá like, superlike ou deslike; avaliação é registrada e altera pontuação da faixa. |
-| **HU17** | Organizar a Jam pelas avaliações | Participante de Jam | **Backend:** Ordenação da `JamQueueItem` por `vote_points` (+1 like, +2 superlike, 0 deslike).<br>**Frontend:** Fila reordenada dinamicamente. | Fernando Seraco | • Like soma +1, deslike soma 0, superlike soma +2 com prioridade.<br>• Fila reordena conforme votos de todos os participantes. |
-| **HU18** | Votar para pular uma música | Participante de Jam | **Backend:** `VoteSkipJamTrackUseCase` e `skip_votes_threshold` configurável pelo host.<br>**Frontend:** Botão de pular faixa com contador de votos. | Fernando Seraco | • Contabiliza votos; ao atingir limite definido pelo criador, pula a faixa e informa participantes. |
-| **HU19** | Acompanhar o tempo da Jam | Participante de Jam | **Backend:** `duration_minutes`, `accumulated_duration_seconds` e `AdvanceJamPlaybackUseCase`.<br>**Frontend:** Indicadores de duração planejada, reproduzida e restante. | Gabriel Agra | • Exibe tempo planejado, reproduzido e restante atualizados em tempo real, com margem de ±1 minuto. |
-
-### Épico 5 — Busca e Avaliações
-
-| ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **HU20** | Buscar músicas | Usuário Padrão | **Backend:** Busca unificada em `tracks_reviews.py` com enriquecimento GCS/Spotify/iTunes.<br>**Frontend:** Barra de busca e filtros em `ExploreComponent`. | Carolina Haddad | • Pesquisa por música, artista, álbum, gênero ou ano e adiciona resultados a playlists. |
-| **HU21** | Avaliar uma música | Usuário Padrão | **Backend:** `ReviewComment` (nota 1–5) e `PublishReviewUseCase`.<br>**Frontend:** Seletor de nota no modal de detalhes da faixa. | Fernando Seraco | • Registra avaliação vinculada ao usuário e à música. |
-| **HU22** | Comentar uma música | Usuário Padrão | **Backend:** Endpoints de criação e exclusão lógica de comentários em `tracks_reviews.py`.<br>**Frontend:** Formulário e ação de excluir comentário próprio. | Fernando Seraco | • Publica e exclui o próprio comentário associado à faixa. |
-| **HU23** | Visualizar avaliações e comentários | Usuário Padrão | **Backend:** `GetTrackReviewsUseCase` e `GetCommunityFeedUseCase`.<br>**Frontend:** Feed comunitário e lista de reviews por música. | Mateus Araújo | • Exibe avaliações e comentários publicados na plataforma. |
-
-### Épico 6 — Perfil, Playlists, Assinaturas e Dados
-
-| ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **HU24** | Visualizar meu perfil musical | Usuário Padrão | **Backend:** `GetUserProfileUseCase`, `ListUserAccessHistoryUseCase` e listagens em `profile.py`.<br>**Frontend:** `ProfileComponent` (abas Curtidas, Amadas, Rejeitadas e Histórico) e `CollectionComponent` (`/likes`, `/loved`, `/rejected`). | Carolina Haddad | • Visualiza Curtidas, Amadas, Rejeitadas, Histórico de acessos (Ouvidas) e playlists. |
-| **HU25** | Visualizar estatísticas e dashboard | Usuário Padrão | **Backend:** `GetAnnualListeningStatsUseCase` e `SQLiteUserStatsRepository`.<br>**Frontend:** `DashboardComponent` (`/dashboard`). | Mateus Araújo | • Apresenta principais artistas, gêneros predominantes e estatísticas de uso. |
-| **HU26** | Gerenciar playlists | Usuário Padrão | **Backend:** `ListUserPlaylistsUseCase`, `AddTrackToPlaylistUseCase`, `RemoveTrackFromPlaylistUseCase` e `DeletePlaylistUseCase`.<br>**Frontend:** Lista e detalhes de playlists com remoção. | Mateus Araújo | • Visualiza, adiciona/remove músicas e exclui playlists. |
-| **HU27** | Editar meus dados e preferências | Usuário Padrão | **Backend:** `UpdateProfileUseCase` e `UpdatePreferredThemeUseCase`.<br>**Frontend:** `SettingsComponent` (`/settings`). | Carolina Haddad | • Visualiza e edita dados cadastrais e preferências com validação e persistência. |
-| **HU28** | Excluir meus dados | Usuário Padrão | **Backend:** Remoção de interações e dados pessoais via `DeleteUserAccountUseCase`.<br>**Frontend:** Fluxo de confirmação em Configurações/Perfil. | Gabriel Agra | • Informa que os dados serão removidos, exige confirmação, exclui e notifica conclusão. |
-| **HU29** | Desfazer swipe | Usuário Pagante | **Backend:** `UndoLatestDiscoveryInteractionUseCase` em `discovery.py`.<br>**Frontend:** Botão "Desfazer" na tela de Descoberta (planos pagos). | Fernando Seraco | • Desfaz a última ação, restaura estado anterior e exibe a faixa novamente. |
-| **HU30** | Planos e verificação de idade | Novo Usuário | **Backend:** `Plan`, `User.is_minor()` e validação de maioridade (18+) para titular e planos pagos (Individual/Família).<br>**Frontend:** Escolha entre planos em `PlansComponent`, checkout e cadastro em `AuthComponent`. | Gabriel Agra | • Seleciona Plano Free, Individual ou Familiar; valida 18+ para planos pagos/titular e registra plano no perfil. |
-| **HU31** | Gestão de perfis na assinatura familiar | Titular de Plano Familiar | **Backend:** `FamilyPlanService`, `AddFamilyMemberUseCase`, `RemoveFamilyMemberUseCase` (até 4 perfis) e filtro de menoridade.<br>**Frontend:** Gerenciamento de dependentes em `FamilyComponent` (`/family`) e restrição etária. | Gabriel Agra | • Cadastra até 4 perfis independentes (1 titular + até 3 dependentes) com histórico/curtidas isolados.<br>• Bloqueia faixas explícitas e de Funk/Trap/Rap/Hip Hop para menores. |
-| **HU32** | Gerenciar e cancelar assinatura | Assinante | **Backend:** `ChangeSubscriptionPlanUseCase` e `CancelSubscriptionPlanUseCase`.<br>**Frontend:** Status do plano e cancelamento em `/plans`, `/profile` e `/settings`. | Fernando Seraco | • Consulta status/plano e solicita cancelamento retornando ao plano Free.<br>• Atualiza status do plano. |
-| **HU33** | Encerrar e excluir conta | Usuário Padrão | **Backend:** `DeleteUserAccountUseCase` e desvinculação de dependentes.<br>**Frontend:** Seção "Excluir conta" com modal de confirmação em `/settings` e `/profile`. | Gabriel Agra | • Cancela assinatura vinculada; revoga dependentes de plano familiar e remove dados. |
-
-### Épico 7 — Administração e Governança
-
-| ID | Título | Tipo de Usuário | Tarefas e Subtarefas | Responsável | Critérios de Aceitação |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **HU34** | Gestão de catálogo (Cadastro & Soft Delete) | Administrador | **Backend:** `CreateTrackUseCase`, `BlockTrackUseCase`, `UpdateTrackGenreUseCase`, `UpdateTrackExplicitFlagUseCase`, `ListAdminAccessHistoryUseCase` e `is_deleted` em `tracks`.<br>**Frontend:** `AdminModerationComponent` (`/admin/moderation`), `AdminUsersComponent` (`/admin/users` — Histórico de Acessos) e guarda `adminAuthGuard`. | Fernando Seraco | • Área restrita a administradores.<br>• Permite cadastro de faixas, curadoria de metadados e remoção lógica (*Soft Delete*), ocultando a faixa das buscas públicas enquanto preserva o histórico administrativo. |
-| **HU35** | Dashboard ADM e cálculo de receita | Administrador | **Backend:** `GetExecutiveDashboardUseCase`, `GetAudienceReportUseCase`, `GetPlatformCostsUseCase`, `UpdatePlatformCostsUseCase` e `SubscriptionAnalyticsService`.<br>**Frontend:** `AdminDashboardComponent` (`/admin/dashboard`). | Mateus Araújo | • Exibe total de usuários ativos, planos, acessos por conteúdo/gênero e Receita Líquida descontando custos configuráveis de conteúdo e infraestrutura. |
+As 35 histórias de usuário (HU01–HU35), organizadas em 7 épicos com **Definição de Done (DoD)**, **tipo de usuário**, **tarefas e subtarefas**, **responsável** e **critérios de aceitação**, estão disponíveis no repositório:
+- **Histórias de Usuário (HU01–HU35 e DoD):** [`docs/features/historias-de-usuario.md`](docs/features/historias-de-usuario.md)
 
 ---
 
@@ -273,7 +200,6 @@ Uma história de usuário é considerada **Done** apenas quando atende a todos o
 | **ESLint** + **angular-eslint** | `10.13.0` / `22.6.0` | Regras de lint específicas para templates e componentes Angular |
 | **uv** | `0.13.1` | Gerenciador de pacotes e ambientes Python |
 
-> **Nota sobre a evolução da especificação:** Os diagramas iniciais do documento de especificação (*Tecnologia-Arquitetura*) previam Redis/DynamoDB e Deezer em nível conceitual. A implementação usa **SQLite 3** como banco local/cache, **Firestore** para sincronização dos dados persistentes em produção, **GCS/Parquet** para o catálogo, **Spotify + iTunes** como APIs externas e **Angular 22 + FastAPI**, documentados nos diagramas atualizados abaixo.
 
 ---
 
@@ -291,451 +217,25 @@ O projeto combina **MVC (Model-View-Controller)** na divisão macro entre fronte
 
 ### Diagrama de Componentes (MVC + Hexagonal)
 
-```mermaid
-flowchart TB
-    User([Usuário / Administrador]) --> View
-
-    subgraph View["VIEW — Frontend Angular (view/src/app/)"]
-        ListenerUI["Features Ouvinte<br/>(auth, discover, playlists, jams,<br/>explore, profile, family, plans,<br/>settings, dashboard, not-found)"]
-        AdminUI["Features Admin<br/>(AdminLogin, AdminShell, AdminDashboard,<br/>AdminUsers, AdminPlans, AdminModeration)"]
-        FEController["Frontend Controllers / State<br/>(RibbitStateService, AdminStateService,<br/>Core & Feature Services, authInterceptor, adminAuthGuard)"]
-        ListenerUI --> FEController
-        AdminUI --> FEController
-    end
-
-    FEController -->|"HTTP / REST JSON<br/>(Bearer Token)"| Presentation
-
-    subgraph Controller["CONTROLLER — Presentation, Application & Composition (app/)"]
-        Presentation["Presentation Layer<br/>(app/presentation/routers/*<br/>+ schemas/* + dependencies/*)"]
-        Composition["Composition Root<br/>(app/composition/container.py)"]
-        UseCases["Application Use Cases & DTOs<br/>(app/application/use_cases/* + dtos/*)"]
-        Ports["Ports / Interfaces<br/>(app/application/ports/repositories &<br/>services)"]
-        Presentation --> Composition
-        Composition --> UseCases
-        UseCases --> Ports
-    end
-
-    subgraph Model["MODEL — Domain & Infrastructure (app/)"]
-        Domain["Domain Models & Services<br/>(Plan, User, Track, Playlist, Jam,<br/>JamQueueItem, Interaction, ReviewComment,<br/>TrackAccess, PlatformCostSettings,<br/>FamilyPlanService, SubscriptionAnalyticsService,<br/>recommendation)"]
-        SQLiteRepo["SQLite Repositories<br/>(app/infrastructure/repositories/)"]
-        ExtAdapters["External & Security Adapters<br/>(SpotifyAdapter, SpotifyUserProfileAdapter,<br/>ITunesAdapter, GoogleIdpVerifierAdapter,<br/>GoogleOAuthAdapter, GCSTrackCatalogAdapter,<br/>PBKDF2PasswordHasher, HMACTokenService)"]
-        UseCases --> Domain
-        Ports -.->|implements| SQLiteRepo
-        Ports -.->|implements| ExtAdapters
-    end
-
-    SQLiteRepo --> DB[(SQLite 3<br/>local.db)]
-    ExtAdapters --> GCS[(GCS / fake-gcs-server<br/>Parquet)]
-    ExtAdapters --> ExtAPIs([Spotify / iTunes / Google OAuth])
-```
+O diagrama de componentes que ilustra a integração entre o frontend Angular (View/State), os roteadores e casos de uso (Controller/Application) e os modelos de domínio e adaptadores de infraestrutura (Model) está disponível no repositório:
+- **Diagrama de Componentes (Mermaid):** [`docs/architecture/diagrama-componentes.md`](docs/architecture/diagrama-componentes.md)
 
 ---
 
 ### Diagrama de Classes (UML — Domínio)
 
-O diagrama abaixo representa as entidades de domínio implementadas em `app/domain/models/`, com seus atributos principais, métodos de negócio e relacionamentos:
-
-```mermaid
-classDiagram
-    class Plan {
-        +int? plan_id
-        +str name
-        +float monthly_price
-        +int max_profiles
-        +bool is_paid
-        +bool allows_dependents
-        +can_accommodate(total_profiles: int) bool
-        +can_accommodate_new_dependent(current_dependents: int) bool
-        +update_name(new_name: str) Plan
-        +update_price(new_price: float) Plan
-        +update_max_profiles(new_max: int) Plan
-    }
-
-    class User {
-        +int? user_id
-        +str email
-        +str password_hash
-        +str display_name
-        +int? age
-        +str? birth_date
-        +int plan_id
-        +int? primary_account_id
-        +frozenset~str~ blocked_genres
-        +frozenset~str~ favorite_genres
-        +str preferred_theme
-        +bool is_admin
-        +str? spotify_id
-        +bool spotify_premium
-        +str? spotify_access_token
-        +str? spotify_refresh_token
-        +datetime? spotify_token_expires_at
-        +datetime? created_at
-        +bool is_adult
-        +current_age(today: date?) int
-        +is_minor() bool
-        +restricted_genre_terms() tuple~str~
-        +can_listen(track: Track) bool
-        +is_track_restricted_for_minor(track: Track) bool
-        +link_primary_account(primary_account_id: int) User
-        +unlink_primary_account(fallback_plan_id: int) User
-        +change_plan(plan_id: int) User
-        +promote_to_admin() User
-        +link_spotify(spotify_id: str) User
-        +unlink_spotify() User
-        +update_spotify_premium(is_premium: bool) User
-        +update_spotify_tokens(access_token: str?, refresh_token: str?, expires_at: datetime?) User
-        +update_blocked_genres(genres: Iterable~str~) User
-        +update_favorite_genres(genres: Iterable~str~) User
-        +update_preferred_theme(theme: str) User
-        +update_profile(display_name: str?, password_hash: str?) User
-        +is_favorite_genre(track: Track) bool
-        +recommendation_weight(track: Track, favorite_multiplier: float?) float
-    }
-
-    class Track {
-        +int? track_id
-        +str title
-        +str artist
-        +int duration_seconds
-        +str genre
-        +str? spotify_id
-        +str? album
-        +str? country
-        +int? release_year
-        +str? cover_url
-        +str? itunes_preview_url
-        +bool explicit
-        +bool is_deleted
-        +datetime? created_at
-        +float? average_rating
-        +int review_count
-        +set_explicit(explicit: bool) Track
-        +has_known_genre() bool
-        +set_genre(genre: str) Track
-        +merge_missing_metadata(...) bool
-        +refresh_catalog_metadata(...) Track
-        +mark_as_deleted() Track
-        +restore() Track
-    }
-
-    class Playlist {
-        +int? playlist_id
-        +int user_id
-        +str name
-        +str? description
-        +str? spotify_playlist_id
-        +str? cover_image_url
-        +bool is_exported
-        +datetime? created_at
-        +int? max_duration_seconds
-        +str? deck_filters
-        +int? source_playlist_id
-        +tuple~Track~ tracks
-        +int total_duration_seconds
-        +is_owned_by(user_id: int) bool
-        +can_fit_duration(additional_seconds: int) bool
-        +add_track(track: Track) Playlist
-        +remove_track(track_id: int) Playlist
-        +replace_tracks(tracks: Sequence~Track~) Playlist
-        +export(spotify_playlist_id: str) Playlist
-    }
-
-    class Jam {
-        +int? jam_id
-        +int host_user_id
-        +str room_name
-        +str room_code
-        +bool is_active
-        +int? current_track_id
-        +datetime? created_at
-        +int duration_minutes
-        +int max_superlikes
-        +int superlikes_used
-        +int skip_votes_threshold
-        +int accumulated_duration_seconds
-        +str deck_source
-        +int? source_playlist_id
-        +int max_duration_seconds
-        +generate_room_code() str
-        +create(host_user_id: int, room_name: str, ...) Jam
-        +is_host(user_id: int) bool
-        +can_use_superlike() bool
-        +use_superlike() Jam
-        +is_duration_exceeded() bool
-        +add_accumulated_duration(seconds: int) Jam
-        +set_current_track(track_id: int?) Jam
-        +close() Jam
-    }
-
-    class JamQueueItem {
-        +int? jam_queue_id
-        +int jam_id
-        +int track_id
-        +int vote_points
-        +datetime? added_at
-        +vote(points: int) JamQueueItem
-    }
-
-    class Interaction {
-        +int? interaction_id
-        +int user_id
-        +int track_id
-        +InteractionAction action
-        +InteractionSource? source
-        +int? jam_id
-        +datetime? created_at
-        +bool is_positive
-        +change_action(new_action: InteractionAction) Interaction
-    }
-
-    class ReviewComment {
-        +int? review_id
-        +int user_id
-        +int track_id
-        +int rating
-        +str? text
-        +int likes_count
-        +bool is_deleted
-        +datetime? created_at
-        +str? author_name
-        +str? track_title
-        +str? track_artist
-        +str? track_image
-        +is_valid_rating(rating: int) bool
-        +like() ReviewComment
-        +mark_as_deleted() ReviewComment
-        +update_content(new_rating: int, new_text: str?) ReviewComment
-    }
-
-    class TrackAccess {
-        +int? access_id
-        +int user_id
-        +int track_id
-        +TrackAccessSource source
-        +datetime? accessed_at
-    }
-
-    class PlatformCostSettings {
-        +float content_cost_per_track
-        +float infrastructure_fixed_cost
-        +float infrastructure_cost_per_user
-        +datetime? updated_at
-    }
-
-    Plan "1" <-- "0..*" User : assina
-    User "0..1" <-- "0..*" User : titular / dependente
-    User "1" --> "0..*" Playlist : possui
-    Playlist "0..*" o-- "0..*" Track : contém
-    Playlist "0..1" <-- "0..*" Playlist : referencia
-    User "1" --> "0..*" Jam : hospeda
-    Jam "1" *-- "0..*" JamQueueItem : fila
-    JamQueueItem "0..*" --> "1" Track : referencia
-    Jam "0..*" --> "0..1" Track : faixa atual
-    Jam "0..*" --> "0..1" Playlist : deck base
-    User "1" --> "0..*" Interaction : realiza
-    Track "1" <-- "0..*" Interaction : avaliada em
-    Jam "0..1" <-- "0..*" Interaction : origem
-    User "1" --> "0..*" ReviewComment : publica
-    Track "1" <-- "0..*" ReviewComment : recebe
-    User "1" --> "0..*" TrackAccess : registra acesso
-    Track "1" <-- "0..*" TrackAccess : acessada em
-```
+O diagrama de classes UML com as entidades de domínio implementadas em `app/domain/models/`, seus atributos principais, métodos de negócio e relacionamentos está disponível no repositório:
+- **Diagrama de Classes UML (Mermaid):** [`docs/architecture/diagrama-classes.md`](docs/architecture/diagrama-classes.md)
 
 ---
 
 ### Diagrama Entidade-Relacionamento (DER)
 
-O esquema relacional completo do SQLite está implementado em [`app/infrastructure/repositories/schema.sql`](app/infrastructure/repositories/schema.sql), documentado em DBML em [`docs/database/DER.sql`](docs/database/DER.sql) e nos módulos SQL em [`docs/database/`](docs/database/), sendo representado tanto pelo diagrama estático [`DER.png`](docs/database/DER.png) quanto pelo diagrama Mermaid abaixo:
-
-```mermaid
-erDiagram
-    plans {
-        INTEGER plan_id PK
-        TEXT name UK
-        REAL monthly_price
-        INTEGER max_profiles
-    }
-
-    users {
-        INTEGER user_id PK
-        TEXT email UK
-        TEXT password_hash
-        TEXT spotify_id UK
-        INTEGER spotify_premium
-        TEXT spotify_access_token
-        TEXT spotify_refresh_token
-        TEXT spotify_token_expires_at
-        TEXT display_name
-        INTEGER age
-        INTEGER plan_id FK
-        INTEGER primary_account_id FK
-        TEXT blocked_genres
-        TEXT favorite_genres
-        TEXT preferred_theme
-        INTEGER is_admin
-        TEXT created_at
-        TEXT birth_date
-    }
-
-    tracks {
-        INTEGER track_id PK
-        TEXT spotify_id
-        TEXT title
-        TEXT artist
-        INTEGER duration_seconds
-        TEXT genre
-        TEXT country
-        INTEGER release_year
-        TEXT cover_url
-        TEXT itunes_preview_url
-        INTEGER explicit
-        INTEGER is_deleted
-        TEXT created_at
-    }
-
-    interactions {
-        INTEGER interaction_id PK
-        INTEGER user_id FK
-        INTEGER track_id FK
-        TEXT action
-        TEXT created_at
-        TEXT source
-        INTEGER jam_id FK
-    }
-
-    playlists {
-        INTEGER playlist_id PK
-        INTEGER user_id FK
-        TEXT name
-        TEXT description
-        TEXT spotify_playlist_id
-        INTEGER is_exported
-        TEXT created_at
-        INTEGER max_duration_seconds
-        TEXT deck_filters
-        TEXT cover_image_url
-        INTEGER source_playlist_id
-    }
-
-    playlist_images {
-        INTEGER playlist_id PK,FK
-        TEXT content_type
-        BLOB image_data
-        TEXT updated_at
-    }
-
-    playlist_tracks {
-        INTEGER playlist_track_id PK
-        INTEGER playlist_id FK
-        INTEGER track_id FK
-        TEXT added_at
-    }
-
-    jams {
-        INTEGER jam_id PK
-        INTEGER host_user_id FK
-        TEXT room_name
-        TEXT room_code UK
-        INTEGER is_active
-        INTEGER current_track_id FK
-        TEXT created_at
-        INTEGER duration_minutes
-        INTEGER max_superlikes
-        INTEGER superlikes_used
-        INTEGER skip_votes_threshold
-        INTEGER accumulated_duration_seconds
-        TEXT deck_source
-        INTEGER source_playlist_id
-    }
-
-    jam_queue_items {
-        INTEGER jam_queue_id PK
-        INTEGER jam_id FK
-        INTEGER track_id FK
-        INTEGER vote_points
-        TEXT added_at
-    }
-
-    jam_participants {
-        INTEGER jam_id PK,FK
-        INTEGER user_id PK,FK
-        TEXT joined_at
-    }
-
-    jam_skip_votes {
-        INTEGER jam_id PK,FK
-        INTEGER track_id PK,FK
-        INTEGER user_id PK,FK
-        TEXT voted_at
-    }
-
-    reviews {
-        INTEGER review_id PK
-        INTEGER user_id FK
-        INTEGER track_id FK
-        INTEGER rating
-        TEXT text
-        INTEGER likes_count
-        INTEGER is_deleted
-        TEXT created_at
-    }
-
-    review_likes {
-        INTEGER review_id PK,FK
-        INTEGER user_id PK,FK
-        TEXT created_at
-    }
-
-    track_accesses {
-        INTEGER access_id PK
-        INTEGER user_id FK
-        INTEGER track_id FK
-        TEXT source
-        TEXT accessed_at
-    }
-
-    audit_logs {
-        INTEGER log_id PK
-        TEXT event
-        TEXT status
-        TEXT created_at
-    }
-
-    platform_cost_settings {
-        INTEGER settings_id PK
-        REAL content_cost_per_track
-        REAL infrastructure_fixed_cost
-        REAL infrastructure_cost_per_user
-        TEXT updated_at
-    }
-
-    plans ||--o{ users : "assina"
-    users o|--o{ users : "titular_dependente"
-    users ||--o{ playlists : "possui"
-    playlists o|--o{ playlists : "origem"
-    playlists ||--o| playlist_images : "capa"
-    playlists ||--o{ playlist_tracks : "contem"
-    tracks ||--o{ playlist_tracks : "integra"
-    users ||--o{ interactions : "registra"
-    tracks ||--o{ interactions : "recebe"
-    jams o|--o{ interactions : "origem_jam"
-    users ||--o{ jams : "hospeda"
-    tracks o|--o{ jams : "toca_atual"
-    playlists o|--o{ jams : "deck_base"
-    jams ||--o{ jam_queue_items : "enfileira"
-    tracks ||--o{ jam_queue_items : "na_fila"
-    jams ||--o{ jam_participants : "participa"
-    users ||--o{ jam_participants : "entra"
-    jams ||--o{ jam_skip_votes : "voto_pulo"
-    tracks ||--o{ jam_skip_votes : "pulada_em"
-    users ||--o{ jam_skip_votes : "vota_pular"
-    users ||--o{ reviews : "escreve"
-    tracks ||--o{ reviews : "avaliada_em"
-    reviews ||--o{ review_likes : "curtida_em"
-    users ||--o{ review_likes : "curte_review"
-    users ||--o{ track_accesses : "acessa"
-    tracks ||--o{ track_accesses : "acessada_em"
-```
+O esquema relacional completo do SQLite está implementado em [`app/infrastructure/repositories/schema.sql`](app/infrastructure/repositories/schema.sql) e documentado no repositório:
+- **Diagrama Entidade-Relacionamento (Mermaid):** [`docs/database/DER.md`](docs/database/DER.md)
+- **Diagrama Estático (Imagem):** [`docs/database/DER.png`](docs/database/DER.png)
+- **Especificação DBML:** [`docs/database/DER.sql`](docs/database/DER.sql)
+- **Módulos SQL:** [`docs/database/`](docs/database/)
 
 ---
 
@@ -754,7 +254,7 @@ Os protótipos de alta e baixa fidelidade das telas do aplicativo e do fluxo de 
 
 ## Como Executar (Ubuntu 26.04)
 
-### Opção 1: Com Docker Compose (Recomendado - 100% Local)
+### Local com Docker Composer
 
 Instale o Docker Engine e o plugin Docker Compose no Ubuntu 26.04 (caso ainda não possua) e adicione seu usuário ao grupo `docker`:
 ```bash
@@ -764,7 +264,7 @@ sudo systemctl enable --now docker
 sudo usermod -aG docker "$USER" && newgrp docker
 ```
 
-Com o Docker e o Docker Compose instalados, suba o frontend, o backend (com carga automática de [`database/dump.sql`](database/dump.sql)) e o emulador de armazenamento em nuvem (GCS local) com persistência em volumes e sem precisar de credenciais de nuvem (caso não tenha reiniciado a sessão após `usermod`, use `sudo docker compose up --build`):
+Com o Docker e o Docker Compose instalados, suba o frontend, o backend (com carga automática de [`database/dump.sql`](database/dump.sql)) e o emulador de armazenamento em nuvem (Google Cloud Storage local) com persistência em volumes e sem precisar de credenciais de nuvem:
 
 ```bash
 docker compose up --build
@@ -774,67 +274,7 @@ docker compose up --build
 - **Backend API**: [http://localhost:8000](http://localhost:8000) (documentação interativa em `/docs`)
 - **Emulador GCS**: [http://localhost:4443](http://localhost:4443)
 
-### Opção 2: Execução Manual no Ubuntu 26.04 (sem Docker)
-
-#### 1. Pré-requisitos do Sistema
-Atualize os pacotes e instale `curl`, `git`, `sqlite3`, Node.js (v22+) e o gerenciador `uv` (responsável por instalar o Python 3.15):
-
-```bash
-sudo apt-get update && sudo apt-get install -y curl git sqlite3 ca-certificates
-curl -LsSf https://astral.sh/uv/install.sh | sh
-source "$HOME/.local/bin/env"
-uv python install 3.15
-```
-
-Para o Node.js v22+ e `npm` (caso ainda não estejam instalados):
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-```
-
-#### 2. Configurar Ambiente Python, Dependências e Banco de Dados
-Na raiz do repositório, sincronize o ambiente Python com [`uv.lock`](uv.lock) via `uv sync --frozen` (recomendado; alternativamente use `uv venv --python 3.15 .venv && uv pip install -r requirements.txt`), instale as dependências Node de [`package.json`](package.json) e inicialize o banco SQLite a partir de [`database/dump.sql`](database/dump.sql):
-
-```bash
-uv sync --frozen
-source .venv/bin/activate
-npm ci
-chmod +x scripts/start_local.sh
-python scripts/init_db.py
-```
-
-Scripts utilitários disponíveis em `scripts/`:
-- `python scripts/init_db.py --force`: recria o banco SQLite local (`local.db`) sobrescrevendo dados existentes.
-- `python scripts/bootstrap_local_gcs.py`: popula o emulador local `fake-gcs-server` com os arquivos `.parquet` do catálogo.
-- `python scripts/sync_tracks.py`: sincroniza o catálogo de faixas com o GCS/Parquet e banco local.
-- `python scripts/prepare_e2e_db.py`: prepara o banco SQLite determinístico para execução dos testes E2E Playwright.
-
-> **Nota sobre execução offline e variáveis de ambiente (opcional):** Na Opção 2 (manual sem Docker), o backend opera 100% localmente usando apenas o banco SQLite inicializado por `database/dump.sql`, sem subir o container `fake-gcs-server`. Caso queira habilitar sincronização com Google Cloud Storage (GCS) ou integração com Spotify e Google OAuth, copie `.env.example` para `.env` e preencha suas credenciais.
-
-### Deploy como website (sincronização de dados)
-
-No deploy, configure `ENVIRONMENT=production`, `FIRESTORE_ENABLED=true`, `GCP_PROJECT_ID` (ou `GOOGLE_CLOUD_PROJECT`) e credenciais Google com acesso ao Firestore (Application Default Credentials ou `GOOGLE_APPLICATION_CREDENTIALS`). O SQLite continua sendo usado como cache local; a inicialização sincroniza os dados com Firestore e falhas de configuração ou sincronização impedem que o serviço confirme gravações. O catálogo musical permanece no GCS/Parquet. Em desenvolvimento, `FIRESTORE_ENABLED` fica desativado por padrão e os dados permanecem somente no SQLite local.
-
-#### 3. Iniciar Backend e Frontend Conectados
-Para subir o backend (`http://127.0.0.1:8000`) e o frontend (`http://localhost:4200`, já conectado via proxy à API) com um único comando:
-
-```bash
-./scripts/start_local.sh
-```
-
-Ou, se preferir iniciar em dois terminais separados:
-```bash
-# Terminal 1 (Backend)
-source .venv/bin/activate
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-
-# Terminal 2 (Frontend)
-npm run dev:web
-```
-
-O backend ficará disponível em `http://127.0.0.1:8000` (documentação em `/docs`) e o frontend em `http://localhost:4200` (`--host 0.0.0.0 --port 4200`).
-
-### Contas de Teste (Carga Inicial de `database/dump.sql`)
+### Contas de Teste (de `database/dump.sql`)
 - **Administrador**: `admin@ribbit.example.com` / `RibbitLocal2026!`
 - **Usuário Adulto (Plano Individual)**: `usuario@ribbit.example.com` / `RibbitUser2026!`
 - **Usuário Menor de Idade (Plano Free)**: `menor@ribbit.example.com` / `RibbitUser2026!`
@@ -842,7 +282,9 @@ O backend ficará disponível em `http://127.0.0.1:8000` (documentação em `/do
 
 ---
 
-## Fluxo de Execução para o Administrador / Avaliador
+## Fluxo para Administrador
+
+Acesse o painel de admin em [http://localhost:4200/admin/login](http://localhost:4200/admin/login).
 
 Siga o passo a passo abaixo para validar todas as funcionalidades administrativas e do aplicativo após subir o ambiente:
 
@@ -873,21 +315,6 @@ Siga o passo a passo abaixo para validar todas as funcionalidades administrativa
 6. **Alternar para o App Ouvinte (`/discover`):**
    - No rodapé do menu lateral ou no cabeçalho superior, clique em **Ir para App Ouvinte** para navegar até `/discover` e testar o fluxo de swipe, playlists inteligentes, Jams (Pond), busca com filtros de nota mínima e ordenação por avaliação, selo **Ouvido** em faixas já acessadas e restrições de conteúdo para menores (`menor@ribbit.example.com`).
 
----
-
-## Como Visualizar
-
-### No Computador
-Abra qualquer navegador moderno (Chrome, Edge, Firefox, Brave) e acesse:
-- **URL**: [http://localhost:4200](http://localhost:4200)
-- **Painel Admin**: [http://localhost:4200/admin/login](http://localhost:4200/admin/login)
-
-### No Celular
-
-#### Opção A: Acesso Direto (Mesma rede Wi-Fi)
-1. Conecte o computador e o celular na **mesma rede Wi-Fi**.
-2. No navegador do celular (Chrome ou Samsung Internet), acesse a URL da rede exibida no terminal:
-   - **URL**: `http://<SEU_IP_LOCAL>:4200`
 
 ---
 
