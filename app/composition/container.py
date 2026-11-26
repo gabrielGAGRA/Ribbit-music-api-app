@@ -655,7 +655,13 @@ def build_container(
             playlist_repo=playlist_repo,
             interaction_repo=interaction_repo,
         ),
-        get_jam_state_use_case=GetJamStateUseCase(jam_repo, user_repo, track_repo),
+        get_jam_state_use_case=GetJamStateUseCase(
+            jam_repo,
+            user_repo,
+            track_repo,
+            spotify_queue=spotify_host_queue,
+            track_catalog=music_service,
+        ),
         vote_jam_track_use_case=VoteJamTrackUseCase(
             jam_repo,
             user_repo,

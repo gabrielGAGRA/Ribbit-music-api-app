@@ -1,14 +1,18 @@
 """Use case for retrieving current Jam state, queue, and playback."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from app.application.dtos.jam_dtos import JamStateResult
+from app.application.use_cases.jam._spotify_sync import sync_advance_track
 from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import EntityNotFoundError
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
-lazy from app.domain.models.jam import JamQueueItem
+lazy from app.application.ports.services.music_service import TrackCatalogPort
+lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
+lazy from app.domain.models.jam import Jam, JamQueueItem
 
 
 @dataclass(slots=True, frozen=True)
@@ -18,6 +22,61 @@ class GetJamStateUseCase:
     jam_repo: JamRepositoryPort
     user_repo: UserRepositoryPort
     track_repo: TrackRepositoryPort
+    spotify_queue: SpotifyHostQueuePort | None = None
+    track_catalog: TrackCatalogPort | None = None
+
+    def _auto_advance_if_track_finished(self, jam: Jam) -> Jam:
+        if (
+            not jam.is_active
+            or jam.jam_id is None
+            or jam.current_track_id is None
+            or jam.current_track_started_at is None
+        ):
+            return jam
+        current_track = self.track_repo.find_by_id(jam.current_track_id)
+        if current_track is None or current_track.duration_seconds <= 0:
+            return jam
+
+        started_at = (
+            jam.current_track_started_at
+            if jam.current_track_started_at.tzinfo is not None
+            else jam.current_track_started_at.replace(tzinfo=UTC)
+        )
+        elapsed = (datetime.now(UTC) - started_at).total_seconds()
+        if elapsed < current_track.duration_seconds:
+            return jam
+
+        if hasattr(self.jam_repo, "clear_skip_votes"):
+            self.jam_repo.clear_skip_votes(jam.jam_id, jam.current_track_id)
+        jam.accumulated_duration_seconds += current_track.duration_seconds
+
+        max_seconds = jam.duration_minutes * 60
+        if jam.accumulated_duration_seconds >= max_seconds:
+            jam.is_active = False
+            jam.current_track_id = None
+            jam.current_track_started_at = None
+            return self.jam_repo.save(jam)
+
+        raw_queue = self.jam_repo.list_queue(jam.jam_id)
+        if not raw_queue:
+            jam.current_track_id = None
+            jam.current_track_started_at = None
+            return self.jam_repo.save(jam)
+
+        winner = raw_queue[0]
+        jam.current_track_id = winner.track_id
+        jam.current_track_started_at = datetime.now(UTC)
+        self.jam_repo.remove_track_from_queue(jam.jam_id, winner.track_id)
+        saved_jam = self.jam_repo.save(jam)
+        sync_advance_track(
+            self.spotify_queue,
+            self.user_repo,
+            saved_jam,
+            self.track_repo,
+            winner.track_id,
+            track_catalog=self.track_catalog,
+        )
+        return saved_jam
 
     def execute(self, jam_id: int, user_id: int) -> JamStateResult:
         user = self.user_repo.find_by_id(user_id)
@@ -28,6 +87,8 @@ class GetJamStateUseCase:
         jam = self.jam_repo.find_by_id(jam_id)
         if not jam:
             raise EntityNotFoundError(f"Jam session {jam_id} not found.")
+
+        jam = self._auto_advance_if_track_finished(jam)
 
         raw_queue = self.jam_repo.list_queue(jam_id)
         track_ids: list[int] = [item.track_id for item in raw_queue]

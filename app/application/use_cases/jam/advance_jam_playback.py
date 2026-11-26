@@ -1,6 +1,7 @@
 """Use case for advancing Jam playback to the top-voted queue track."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from app.application.use_cases.jam._spotify_sync import sync_advance_track
 from app.application.use_cases.spotify.premium_guard import require_spotify_premium
@@ -43,6 +44,7 @@ class AdvanceJamPlaybackUseCase:
         if jam.accumulated_duration_seconds >= max_allowed_seconds:
             jam.is_active = False
             jam.current_track_id = None
+            jam.current_track_started_at = None
             return self.jam_repo.save(jam)
 
         queue = self.jam_repo.list_queue(jam_id)
@@ -69,6 +71,7 @@ class AdvanceJamPlaybackUseCase:
 
         self.jam_repo.remove_track_from_queue(jam_id, winning_item.track_id)
         jam.current_track_id = winning_item.track_id
+        jam.current_track_started_at = datetime.now(UTC)
         saved_jam = self.jam_repo.save(jam)
         sync_advance_track(
             self.spotify_queue,
