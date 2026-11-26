@@ -18,7 +18,7 @@
 - **Backend**: Carol, Fernando, Gabriel 
 - **Bug Fix**: Fernando, Mateus
 - **Dados/Cloud & CD**: Fernando
-- **Documentação**: Carol, Gabriel, Mateus
+- **Documentação**: Carol, Fernando, Gabriel, Mateus
 - **Frontend**: Carol, Mateus
 - **Testes**: Carol, Fernando, Gabriel
 
@@ -38,6 +38,12 @@
   - [Diagrama de Componentes (MVC + Hexagonal)](#diagrama-de-componentes-mvc--hexagonal)
   - [Diagrama de Classes (UML — Domínio)](#diagrama-de-classes-uml--domínio)
   - [Diagrama Entidade-Relacionamento (DER)](#diagrama-entidade-relacionamento-der)
+- [Arquitetura em Nuvem & Recursos GCP](#arquitetura-em-nuvem--recursos-gcp)
+  - [Pipeline Cloud & Dados (GCP)](#pipeline-cloud--dados-gcp)
+  - [Serviços GCP e Responsabilidades](#serviços-gcp-e-responsabilidades)
+  - [Catálogo em Nuvem (GCS, Parquet & Delta Tables)](#catálogo-em-nuvem-gcs-parquet--delta-tables)
+  - [Sincronização Híbrida e Controle de Custos (Firestore)](#sincronização-híbrida-e-controle-de-custos-firestore)
+  - [Deploy em Produção (Compute Engine, HTTPS & Automação)](#deploy-em-produção-compute-engine-https--automação)
 - [Protótipos da Interface](#protótipos-da-interface)
 - [Como Executar (Ubuntu 26.04)](#como-executar-ubuntu-2604)
 - [Fluxo de Execução para o Administrador / Avaliador](#fluxo-de-execução-para-o-administrador--avaliador)
@@ -236,6 +242,100 @@ O esquema relacional completo do SQLite está implementado em [`app/infrastructu
 - **Diagrama Estático (Imagem):** [`docs/database/DER.png`](docs/database/DER.png)
 - **Especificação DBML:** [`docs/database/DER.sql`](docs/database/DER.sql)
 - **Módulos SQL:** [`docs/database/`](docs/database/)
+
+---
+
+## Arquitetura em Nuvem & Recursos GCP
+
+O **Ribbit** combina persistência local de baixa latência em **SQLite** com serviços gerenciados do **Google Cloud Platform (GCP)** para armazenamento do catálogo musical, sincronização compartilhada entre instâncias, autenticação OAuth 2.0, governança de custos em tempo real e hospedagem automatizada em produção — mantendo paridade local via emulador (`fake-gcs-server`) para executar sem credenciais de nuvem.
+
+### Pipeline Cloud & Dados (GCP)
+
+```mermaid
+flowchart TB
+    User([Usuário / Admin - Navegador])
+    DuckDNS["DuckDNS<br/>ribbitmusic.duckdns.org"]
+    Ops["Automação GCP e VM<br/>Instance Schedule 08h-20h BRT<br/>systemd DuckDNS Boot"]
+
+    subgraph GCP_VM["Google Compute Engine — VM Linux (Docker Compose)"]
+        Caddy["Caddy Reverse Proxy<br/>HTTPS TLS automático<br/>Portas 80 e 443"]
+        SPA["Frontend Angular<br/>SPA estática"]
+        Backend["Backend FastAPI / Uvicorn<br/>app/"]
+        SQLite[(SQLite 3<br/>local.db)]
+        IAM["Service Account IAM<br/>ADC sem arquivo de chave"]
+        Caddy -->|"Arquivos estáticos"| SPA
+        Caddy -->|"Proxy API e Health"| Backend
+        Backend -->|"Leitura e escrita local"| SQLite
+        IAM -.->|"Credenciais nativas"| Backend
+    end
+
+    subgraph GCP_GCS["Google Cloud Storage — Catálogo Parquet"]
+        BaseParquet[(tracks.parquet<br/>catalog_version.json)]
+        Deltas[(deltas Parquet<br/>Micro-deltas incrementais)]
+        Deltas -->|"Compactação em lote"| BaseParquet
+    end
+
+    subgraph GCP_FS["Google Cloud Firestore — Estado e Custos"]
+        Firestore[(Cloud Firestore<br/>REST API v1)]
+        CostDash["Painel Admin /admin/dashboard<br/>Cotas Free Tier e Receita Líquida"]
+        Firestore -->|"FirestoreUsageTracker<br/>leituras, escritas, deletes, egress"| CostDash
+    end
+
+    subgraph ExtAuth["Identidade e APIs Externas"]
+        GoogleAuth([Google Auth Platform / OAuth 2.0])
+        MusicAPIs([Spotify Web API / iTunes Preview API])
+    end
+
+    User -->|"HTTPS"| DuckDNS
+    DuckDNS -->|"DNS dinâmico"| Caddy
+    Ops -.->|"Agenda 08h-20h BRT"| Backend
+    Ops -.->|"Atualiza IP no boot"| DuckDNS
+    BaseParquet -->|"Ingestão e Sync"| Backend
+    Backend -->|"Enriquecimento, Cadastro e Soft Delete"| Deltas
+    Backend -->|"FirestoreSyncService<br/>sync_all, pull_deltas, tombstones"| Firestore
+    Firestore -->|"Pull incremental"| Backend
+    Backend -->|"Login Google e PKCE"| GoogleAuth
+    Backend -->|"Capas, prévias, buscas e filas"| MusicAPIs
+```
+
+### Serviços GCP e Responsabilidades
+
+| Serviço / Recurso GCP | Implementação no Repositório | Finalidade |
+| :--- | :--- | :--- |
+| **Google Cloud Storage (GCS)** | [`app/infrastructure/adapters/gcp/gcs_track_catalog.py`](app/infrastructure/adapters/gcp/gcs_track_catalog.py)<br>[`scripts/sync_tracks.py`](scripts/sync_tracks.py) | Armazenamento do catálogo base em Apache Parquet (`Songs/tracks.parquet`), controle de versão (`Songs/catalog_version.json`) e persistência de *micro-deltas* incrementais (`Songs/deltas/`). |
+| **Google Cloud Firestore** | [`app/infrastructure/adapters/gcp/firestore_client.py`](app/infrastructure/adapters/gcp/firestore_client.py)<br>[`app/infrastructure/adapters/gcp/firestore_sync.py`](app/infrastructure/adapters/gcp/firestore_sync.py) | Sincronização bidirecional via REST API v1 (compatível com Python 3.15, sem dependência de gRPC) das entidades operacionais entre instâncias. |
+| **Google Auth Platform (OAuth 2.0 / GIS)** | [`app/infrastructure/adapters/google_auth_adapter.py`](app/infrastructure/adapters/google_auth_adapter.py) | Autenticação via Google Identity Services (`POST /api/auth/google`) e fluxo Authorization Code + PKCE (`GET /api/auth/google/authorize` e `/callback`). |
+| **Google Compute Engine (VM) & Instance Schedules** | Infraestrutura de produção via Docker Compose | Hospedagem da aplicação em VM Linux com agendamento automático de liga/desliga (`08:00–20:00`, `America/Sao_Paulo`) para controle de custos. |
+| **Cloud IAM (Service Account)** | [`app/config.py`](app/config.py)<br>[`gcp_credentials.json.example`](gcp_credentials.json.example) | Autenticação nativa via Application Default Credentials (ADC) na VM (`Storage Object Admin` e `Cloud Datastore User`), sem embutir chaves JSON na imagem Docker. |
+| **Emulação Local (Dev)** | [`docker-compose.yml`](docker-compose.yml)<br>[`scripts/bootstrap_local_gcs.py`](scripts/bootstrap_local_gcs.py) | Container `fsouza/fake-gcs-server` (`STORAGE_EMULATOR_HOST`) permitindo executar toda a pilha de catálogo localmente sem credenciais GCP. |
+
+### Catálogo em Nuvem (GCS, Parquet & Delta Tables)
+
+- **Ingestão versionada:** Na inicialização ou via `POST /api/admin/catalog/sync` / `python -m scripts.sync_tracks` (com `--force` opcional), o `GCSTrackCatalogAdapter` baixa `Songs/tracks.parquet`, aplica eventuais *deltas* pendentes e sincroniza o SQLite local (`/data/local.db`) utilizando `Songs/catalog_version.json` para evitar reprocessamentos desnecessários.
+- **Micro-deltas incrementais:** Enriquecimentos sob demanda (capas e prévias do iTunes/Spotify), novos cadastros administrativos (`POST /api/admin/tracks`), edições de moderação (`explicit`, `genre`) e *soft deletes* (`is_deleted = 1`) são gravados como arquivos Parquet individuais em `Songs/deltas/` seguindo esquema Arrow fixo (`_DELTA_PARQUET_SCHEMA`), evitando reescrever o catálogo completo a cada mutação.
+- **Compactação em lote:** Acionável via painel administrativo (`POST /api/admin/catalog/compact`) ou CLI (`python -m scripts.sync_tracks --compact`), mescla todos os *deltas* pendentes no arquivo base `tracks.parquet` em lotes de `100.000` registros, incrementa a versão do catálogo e limpa os *deltas* já consolidados.
+- **Paridade local sem credenciais:** Em desenvolvimento, `docker compose up --build` sobe o `fake-gcs-server` na porta `4443` e executa `scripts/bootstrap_local_gcs.py` automaticamente. Quando `GOOGLE_APPLICATION_CREDENTIALS` aponta para uma credencial real, `app/config.py` limpa automaticamente `STORAGE_EMULATOR_HOST` apontando para `localhost:4443`.
+
+### Sincronização Híbrida e Controle de Custos (Firestore)
+
+- **Arquitetura híbrida (SQLite + Firestore):** O SQLite atende leituras e consultas complexas em baixa latência enquanto o `FirestoreSyncService` mantém o estado compartilhado no Cloud Firestore (obrigatório quando `ENVIRONMENT=production`, validado em [`app/config.py`](app/config.py)).
+- **Chaves determinísticas e delta pull:** Utiliza IDs determinísticos (SHA-256 de e-mails e chaves de faixa) para evitar duplicação entre máquinas, sincronização completa no startup (`sync_all`), *pulls* incrementais por `updated_at` com janela de sobreposição de 60 segundos (`pull_deltas`) e *tombstones* (`is_deleted`) para propagar exclusões.
+- **Monitoramento de cotas e Receita Líquida:** O [`FirestoreUsageTracker`](app/infrastructure/repositories/firestore_usage_tracker.py) contabiliza operações e tráfego em `firestore_usage_counters`, e [`subscription_analytics_service.py`](app/domain/services/subscription_analytics_service.py) calcula o percentual consumido do Free Tier e projeta o custo mensal excedente em USD, somado ao custo fixo de infraestrutura padrão (`USD 25,00/mês` configurável em [`platform_costs.py`](app/domain/models/platform_costs.py) e `GET/PUT /api/admin/costs`) no painel `/admin/dashboard`:
+
+| Métrica Firestore | Franquia Gratuita (Free Tier) | Tarifa Excedente (USD) |
+| :--- | :--- | :--- |
+| **Leituras** | `50.000` / dia | `USD 0,06` / 100k operações |
+| **Escritas** | `20.000` / dia | `USD 0,18` / 100k operações |
+| **Exclusões** | `20.000` / dia | `USD 0,02` / 100k operações |
+| **Armazenamento** | `1,0 GiB` | `USD 0,18` / GiB·mês |
+| **Saída de Rede (Egress)** | `10,0 GiB` / mês | `USD 0,12` / GiB |
+
+### Deploy em Produção (Compute Engine, HTTPS & Automação)
+
+- **Topologia em produção:** VM Linux (Ubuntu x86_64) no Google Compute Engine executando o backend FastAPI/Uvicorn (com volume persistente para `/data/local.db`), os arquivos estáticos compilados do Angular e o *reverse proxy* **Caddy** nas portas `80`/`443` com emissão e renovação automática de certificados TLS via Let's Encrypt (mantendo a porta interna `8000` fechada externamente).
+- **DNS dinâmico e boot automatizado:** Domínio HTTPS via DuckDNS (`ribbitmusic.duckdns.org`) atualizado automaticamente na inicialização da VM por um serviço `systemd`, garantindo disponibilidade mesmo com IP efêmero após reinícios.
+- **Otimização de custos (Instance Schedules):** Agenda nativa do Compute Engine configurada para ligar/desligar a VM automaticamente (`08:00–20:00`, fuso `America/Sao_Paulo`), interrompendo a cobrança de CPU/RAM fora do horário de uso enquanto o disco persistente e os containers (`restart: unless-stopped`) retomam o serviço automaticamente.
+- **Configuração por variáveis de ambiente:** Todas as integrações GCP (`GCS_BUCKET_NAME`, `GCS_TRACKS_FILE_PATH`, `FIRESTORE_ENABLED`, `GCP_PROJECT_ID`, `FIRESTORE_DATABASE`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_APPLICATION_CREDENTIALS`) estão centralizadas em [`.env.example`](.env.example) e validadas em [`app/config.py`](app/config.py).
 
 ---
 
