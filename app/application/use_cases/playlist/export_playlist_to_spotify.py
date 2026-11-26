@@ -58,18 +58,24 @@ class ExportPlaylistToSpotifyUseCase:
         ]
         cover_image = self._resolve_cover_image(playlist_id)
 
-        export_kwargs: dict[str, object] = {
-            "account_id": user.spotify_id,
-            "name": playlist.name,
-            "track_ids": external_track_ids,
-            "access_token": user.spotify_access_token,
-            "refresh_token": user.spotify_refresh_token,
-        }
-        if cover_image is not None:
-            export_kwargs["cover_image"] = cover_image
-
         try:
-            spotify_playlist_id = self.export_port.export_playlist(**export_kwargs)  # type: ignore[arg-type]
+            if cover_image is not None:
+                spotify_playlist_id = self.export_port.export_playlist(
+                    account_id=user.spotify_id,
+                    name=playlist.name,
+                    track_ids=external_track_ids,
+                    access_token=user.spotify_access_token,
+                    refresh_token=user.spotify_refresh_token,
+                    cover_image=cover_image,
+                )
+            else:
+                spotify_playlist_id = self.export_port.export_playlist(
+                    account_id=user.spotify_id,
+                    name=playlist.name,
+                    track_ids=external_track_ids,
+                    access_token=user.spotify_access_token,
+                    refresh_token=user.spotify_refresh_token,
+                )
         except ExternalServiceError as exc:
             if exc.details.get("error_kind") in ("auth", "forbidden"):
                 raise PermissionDeniedError(

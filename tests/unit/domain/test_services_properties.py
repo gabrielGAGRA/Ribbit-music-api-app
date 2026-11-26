@@ -191,7 +191,7 @@ def test_select_weighted_track_properties(
     selected = select_weighted_track(
         candidates,
         user,
-        rng=random.Random(rng_seed),  # noqa: S311
+        rng=random.Random(rng_seed),
         favorite_multiplier=favorite_multiplier,
     )
 

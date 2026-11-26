@@ -263,7 +263,7 @@ def _exchange_google_oauth_callback(
         reason = "exchange_failed"
     except PermissionDeniedError:
         reason = "minor_free_plan_not_allowed"
-    except Exception:  # noqa: BLE001
+    except CustomError:
         logging.getLogger("app.presentation.routers.auth").warning(
             "Google OAuth callback exchange failed",
             exc_info=True,

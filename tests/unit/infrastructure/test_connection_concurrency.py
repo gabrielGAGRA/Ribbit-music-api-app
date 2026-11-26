@@ -2,6 +2,7 @@
 
 import sqlite3
 import threading
+from concurrent.futures import ThreadPoolExecutor
 lazy from pathlib import Path
 
 import pytest
@@ -41,24 +42,18 @@ def test_thread_local_connection_uses_distinct_connections_per_thread(
     main_raw = conn.current_connection
     seen_ids: set[int] = {id(main_raw)}
     lock = threading.Lock()
-    errors: list[Exception] = []
 
     def worker() -> None:
-        try:
-            raw = conn.current_connection
-            assert isinstance(raw, sqlite3.Connection)
-            with lock:
-                seen_ids.add(id(raw))
-        except Exception as exc:  # noqa: BLE001
-            errors.append(exc)
+        raw = conn.current_connection
+        assert isinstance(raw, sqlite3.Connection)
+        with lock:
+            seen_ids.add(id(raw))
 
-    threads = [threading.Thread(target=worker) for _ in range(4)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(worker) for _ in range(4)]
+        for future in futures:
+            future.result()
 
-    assert not errors, f"Worker threads failed: {errors}"
     assert len(seen_ids) == 5
     conn.close()
 
@@ -74,25 +69,13 @@ def test_thread_local_connection_propagates_create_function_across_threads(
 
     conn.create_function("DOUBLE_VAL", 1, _double_val)
 
-    results: list[int] = []
-    lock = threading.Lock()
-    errors: list[Exception] = []
+    def worker(val: int) -> int:
+        row = conn.execute("SELECT DOUBLE_VAL(?);", (val,)).fetchone()
+        return int(row[0])
 
-    def worker(val: int) -> None:
-        try:
-            row = conn.execute("SELECT DOUBLE_VAL(?);", (val,)).fetchone()
-            with lock:
-                results.append(row[0])
-        except Exception as exc:  # noqa: BLE001
-            errors.append(exc)
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = list(executor.map(worker, range(1, 5)))
 
-    threads = [threading.Thread(target=worker, args=(i,)) for i in range(1, 5)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert not errors, f"UDF worker threads failed: {errors}"
     assert sorted(results) == [2, 4, 6, 8]
     conn.close()
 
@@ -106,25 +89,17 @@ def test_thread_local_connection_concurrent_writes(tmp_path: Path) -> None:
     )
     conn.commit()
 
-    errors: list[Exception] = []
-
     def worker(worker_id: int) -> None:
-        try:
-            for i in range(25):
-                conn.execute(
-                    "INSERT INTO test_counter (val) VALUES (?);", (worker_id * 100 + i,)
-                )
-                conn.commit()
-        except Exception as exc:  # noqa: BLE001
-            errors.append(exc)
+        for i in range(25):
+            conn.execute(
+                "INSERT INTO test_counter (val) VALUES (?);", (worker_id * 100 + i,)
+            )
+            conn.commit()
 
-    threads = [threading.Thread(target=worker, args=(t,)) for t in range(4)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
-
-    assert not errors, f"Concurrent workers encountered errors: {errors}"
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(worker, t) for t in range(4)]
+        for future in futures:
+            future.result()
 
     count_row = conn.execute("SELECT count(*) FROM test_counter;").fetchone()
     assert count_row[0] == 100
@@ -144,31 +119,24 @@ def test_transaction_context_manager_concurrency(tmp_path: Path) -> None:
     )
     conn.commit()
 
-    errors: list[Exception] = []
-
     def tx_worker(worker_id: int) -> None:
-        try:
-            for i in range(15):
-                with transaction(conn) as cur:
-                    cur.execute(
-                        "INSERT INTO test_tx (tag, val) VALUES (?, ?);",
-                        (f"worker_{worker_id}", i),
-                    )
-                    time.sleep(0.001)
-                    cur.execute(
-                        "UPDATE test_tx SET val = val + 10 WHERE tag = ? AND val = ?;",
-                        (f"worker_{worker_id}", i),
-                    )
-        except Exception as exc:  # noqa: BLE001
-            errors.append(exc)
+        for i in range(15):
+            with transaction(conn) as cur:
+                cur.execute(
+                    "INSERT INTO test_tx (tag, val) VALUES (?, ?);",
+                    (f"worker_{worker_id}", i),
+                )
+                time.sleep(0.001)
+                cur.execute(
+                    "UPDATE test_tx SET val = val + 10 WHERE tag = ? AND val = ?;",
+                    (f"worker_{worker_id}", i),
+                )
 
-    threads = [threading.Thread(target=tx_worker, args=(w,)) for w in range(4)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(tx_worker, w) for w in range(4)]
+        for future in futures:
+            future.result()
 
-    assert not errors, f"Concurrent transaction workers failed: {errors}"
     total = conn.execute("SELECT count(*) FROM test_tx;").fetchone()[0]
     assert total == 60
     conn.close()
@@ -210,17 +178,10 @@ def test_thread_local_connection_raises_programming_error_after_close(
     with pytest.raises(sqlite3.ProgrammingError):
         conn.execute("SELECT 1;")
 
-    worker_errors: list[Exception] = []
-
     def worker() -> None:
-        try:
-            conn.execute("SELECT 1;")
-        except Exception as exc:  # noqa: BLE001
-            worker_errors.append(exc)
+        conn.execute("SELECT 1;")
 
-    thread = threading.Thread(target=worker)
-    thread.start()
-    thread.join()
-
-    assert len(worker_errors) == 1
-    assert isinstance(worker_errors[0], sqlite3.ProgrammingError)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(worker)
+        with pytest.raises(sqlite3.ProgrammingError):
+            future.result()

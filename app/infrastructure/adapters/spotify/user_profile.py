@@ -30,7 +30,7 @@ class SpotifyUserProfileAdapter(SpotifyUserProfilePort):
                 headers={"Authorization": f"Bearer {access_token.strip()}"},
                 timeout=_HTTP_TIMEOUT_SECONDS,
             )
-        except Exception as exc:  # noqa: BLE001
+        except niquests.RequestException as exc:
             raise ExternalServiceError(
                 "Unable to fetch Spotify profile due to network failure.",
                 service_name="Spotify",

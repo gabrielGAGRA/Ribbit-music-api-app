@@ -255,7 +255,7 @@ class SpotifyAuth(SpotifyAuthPort):
     def _raise_token_error(self, response: niquests.Response) -> None:
         try:
             error = response.json().get("error")
-        except (ValueError, AttributeError):  # fmt: skip
+        except ValueError, AttributeError:
             error = None
         if response.status_code == HTTPStatus.BAD_REQUEST and error == "invalid_grant":
             self.clear_tokens()

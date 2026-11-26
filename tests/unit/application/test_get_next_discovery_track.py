@@ -561,7 +561,7 @@ def test_get_next_discovery_track_weights_favorite_genres_and_enriches_only_sele
         cover_url=None,
     )
 
-    rng = random.Random(7)  # noqa: S311
+    rng = random.Random(7)
     use_case = GetNextDiscoveryTrackUseCase(
         user_repo=user_repo,
         track_repo=track_repo,
@@ -763,7 +763,7 @@ def test_get_next_discovery_track_excludes_tracks_without_itunes_preview_and_ret
     catalog_port = MagicMock(spec=TrackCatalogFilePort)
 
     # Seed chosen so missing_preview (Rock, weight 3.0) is picked first, then playable.
-    rng = random.Random(1)  # noqa: S311
+    rng = random.Random(1)
     use_case = GetNextDiscoveryTrackUseCase(
         user_repo=user_repo,
         track_repo=track_repo,

@@ -131,7 +131,7 @@ convention = "google"
 # Tests
 [tool.pytest.ini_options]
 testpaths = ["tests/unit", "tests/integration", "tests/test_init_db.py"]
-norecursedirs = ["tests/e2e", "node_modules", ".venv"]
+norecursedirs = ["tests/e2e", "node_modules", ".venv", ".hypothesis"]
 pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]

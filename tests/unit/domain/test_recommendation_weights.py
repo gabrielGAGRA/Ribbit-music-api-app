@@ -80,7 +80,7 @@ def test_select_weighted_track_favors_favorite_genre_while_allowing_others() -> 
     user = _make_user(favorite_genres=frozenset({"rock"}))
     fav_track = _make_track(1, "Rock")
     other_track = _make_track(2, "Pop")
-    rng = random.Random(42)  # noqa: S311
+    rng = random.Random(42)
 
     picks = [
         select_weighted_track([fav_track, other_track], user, rng=rng)
@@ -201,7 +201,7 @@ def test_order_tracks_by_weighted_preference_randomizes_even_without_favorites()
     ordered_rng = order_tracks_by_weighted_preference(
         candidates,
         user,
-        rng=random.Random(7),  # noqa: S311
+        rng=random.Random(7),
     )
 
     ids_a = [t.track_id for t in ordered_a]

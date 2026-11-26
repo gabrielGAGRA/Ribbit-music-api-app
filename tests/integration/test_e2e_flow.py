@@ -1,13 +1,14 @@
 """Comprehensive end-to-end integration test suite covering Flows 1 through 7."""
 
 import sqlite3
-from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 
+from app.application.dtos.spotify_dtos import SpotifyTokens
 from app.application.ports.services.music_service import CatalogTrack, TrackPreview
-from app.application.ports.services.spotify import SpotifyUserProfile
+from app.application.ports.services.spotify import SpotifyAuthPort, SpotifyUserProfile
 from app.composition import create_app
 from app.config import Settings
 from app.domain.models.track import Track
@@ -93,7 +94,7 @@ def _register_and_login(
     email: str,
     birth_date: str,
     plan_id: int,
-    password: str = "Password123!",  # noqa: S107
+    password: str = "Password123!",
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Helper registering and authenticating a user, returning user data and Bearer auth headers."""
     resp = client.post(
@@ -1459,9 +1460,11 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
     assert blocked.json()["error"] == "PermissionDeniedError"
     assert blocked.json()["details"]["rule_name"] == "spotify_connection_required"
 
-    class _StubSpotifyAuth:
-        def exchange_code(self, code: str) -> SimpleNamespace:
-            return SimpleNamespace(access_token=f"tok-{code}")
+    auth_stub = MagicMock(spec=SpotifyAuthPort)
+    auth_stub.exchange_code.side_effect = lambda code: SpotifyTokens(
+        access_token=f"tok-{code}",
+        expires_in=3600,
+    )
 
     class _StubSpotifyProfile:
         def __init__(self, product: str) -> None:
@@ -1480,7 +1483,7 @@ def test_jam_requires_spotify_premium_and_spotify_callback_syncs_status(
     profile_stub = _StubSpotifyProfile("premium")
     connect_uc = ConnectSpotifyAccountUseCase(
         user_repo=app.state.container.user_repo,
-        spotify_auth=_StubSpotifyAuth(),  # type: ignore[arg-type]
+        spotify_auth=auth_stub,
         spotify_profile=profile_stub,
     )
     app.state.container._type_registry[ConnectSpotifyAccountUseCase] = connect_uc

@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from typing import Self
 
-from dotenv import load_dotenv
+import dotenv
 from pydantic import BaseModel, ConfigDict, model_validator
 
 _DEFAULT_DEV_SECRET_KEY = "ribbit-insecure-dev-secret-key-change-me-32chars"  # noqa: S105
@@ -214,10 +214,7 @@ def _sanitize_storage_emulator_env() -> None:
 
 def load_settings() -> Settings:
     """Loads configuration settings from environment variables with ergonomic defaults."""
-    with contextlib.suppress(ImportError):
-        from dotenv import load_dotenv  # noqa: PLC0415
-
-        load_dotenv()
+    dotenv.load_dotenv()
     _sanitize_storage_emulator_env()
 
     raw_iterations = os.getenv("PASSWORD_HASH_ITERATIONS")

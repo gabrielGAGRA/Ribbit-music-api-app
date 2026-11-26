@@ -10,8 +10,8 @@ _REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from app.config import load_settings  # noqa: E402
-from app.infrastructure.repositories.connection import create_connection  # noqa: E402
+from app.config import load_settings
+from app.infrastructure.repositories.connection import create_connection
 
 logger = logging.getLogger("scripts.init_db")
 logging.basicConfig(

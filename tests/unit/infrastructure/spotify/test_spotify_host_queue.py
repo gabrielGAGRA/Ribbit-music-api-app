@@ -22,8 +22,8 @@ def _make_response(status_code: int, json_body: dict | None = None) -> MagicMock
 
 def _make_owner(
     *,
-    access_token: str | None = "acc_valid",  # noqa: S107
-    refresh_token: str | None = "ref_tok",  # noqa: S107
+    access_token: str | None = "acc_valid",
+    refresh_token: str | None = "ref_tok",
     expires_delta: timedelta = timedelta(minutes=30),
 ) -> User:
     return User(

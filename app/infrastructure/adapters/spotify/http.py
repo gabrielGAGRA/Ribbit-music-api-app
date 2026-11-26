@@ -122,7 +122,7 @@ class SpotifyHttpClient:
             return None, None
         try:
             payload = response.json()
-        except (ValueError, AttributeError):  # fmt: skip
+        except ValueError, AttributeError:
             return None, None
         if not isinstance(payload, Mapping):
             return None, None

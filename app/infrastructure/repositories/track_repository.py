@@ -10,6 +10,7 @@ from app.application.dtos.admin_dtos import AdminCatalogTrackResult
 from app.application.ports.repositories.track_repository import TrackRepositoryPort
 from app.domain.exceptions import EntityNotFoundError
 from app.domain.models.track import Track, TrackId
+from app.domain.services.country_names import expand_country_terms
 from app.domain.services.genre_names import (
     expand_genre_aliases,
     expand_genre_db_values,
@@ -142,7 +143,6 @@ def _append_country_clause(
 ) -> None:
     if not values:
         return
-    from app.domain.services.country_names import expand_country_terms  # noqa: PLC0415
 
     exact_codes, name_terms = expand_country_terms(values)
     clauses: list[str] = []

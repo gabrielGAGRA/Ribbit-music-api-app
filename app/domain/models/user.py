@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime
 from typing import ClassVar, Self
 lazy from collections.abc import Iterable
 
+from app.domain.services.genre_names import genre_matches_preference
 lazy from app.domain.models.plan import Plan
 lazy from app.domain.models.track import Track
 
@@ -119,10 +120,6 @@ class User:
         return tuple(sorted(self.MINOR_RESTRICTED_GENRE_TERMS))
 
     def can_listen(self, track: Track) -> bool:
-        from app.domain.services.genre_names import (  # noqa: PLC0415
-            genre_matches_preference,
-        )
-
         return not self.is_track_restricted_for_minor(track) and not any(
             genre_matches_preference(track.genre, blocked)
             for blocked in self.blocked_genres
@@ -237,9 +234,6 @@ class User:
     def is_favorite_genre(self, track: Track) -> bool:
         if not self.favorite_genres or not track.genre.strip():
             return False
-        from app.domain.services.genre_names import (  # noqa: PLC0415
-            genre_matches_preference,
-        )
 
         return any(
             genre_matches_preference(track.genre, favorite)

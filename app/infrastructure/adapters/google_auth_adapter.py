@@ -34,7 +34,7 @@ class GoogleIdpVerifierAdapter(GoogleIdpVerifierPort):
                 params={"id_token": id_token.strip()},
                 timeout=_HTTP_TIMEOUT_SECONDS,
             )
-        except Exception as exc:  # noqa: BLE001
+        except niquests.RequestException as exc:
             raise AuthenticationRequiredError(
                 "Unable to verify Google ID token due to network failure."
             ) from exc
@@ -132,7 +132,7 @@ class GoogleOAuthAdapter(GoogleOAuthPort):
                 data=data,
                 timeout=_HTTP_TIMEOUT_SECONDS,
             )
-        except Exception as exc:  # noqa: BLE001
+        except niquests.RequestException as exc:
             raise AuthenticationRequiredError(
                 "Unable to exchange Google authorization code due to network failure."
             ) from exc
@@ -144,7 +144,7 @@ class GoogleOAuthAdapter(GoogleOAuthPort):
 
         try:
             payload = resp.json()
-        except Exception as exc:  # noqa: BLE001
+        except ValueError as exc:
             raise AuthenticationRequiredError(
                 "Malformed response from Google token endpoint."
             ) from exc

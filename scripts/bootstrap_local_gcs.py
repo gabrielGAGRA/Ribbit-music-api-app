@@ -15,7 +15,7 @@ _REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from app.config import load_settings  # noqa: E402
+from app.config import load_settings
 
 logger = logging.getLogger("scripts.bootstrap_local_gcs")
 logging.basicConfig(
@@ -101,7 +101,7 @@ def bootstrap_gcs_emulator() -> int:
                 logger.info(
                     "Uploaded baseline catalog Parquet to '%s'.", tracks_file_path
                 )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # noqa: BLE001 - emulator startup retry loop
             logger.warning(
                 "Attempt %d/15 failed: %s. Retrying in 1s...", attempt + 1, exc
             )
