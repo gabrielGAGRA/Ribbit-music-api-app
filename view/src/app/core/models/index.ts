@@ -95,6 +95,9 @@ export type {
   RankedGenre,
   ReleaseEraPoint,
   ReleaseYearStatApiDto,
+  RibbyAlert,
+  RibbyAlertMood,
+  RibbyAlertTone,
   SourceStatApiDto,
   YearlyInteractionStatApiDto,
 } from './ui.model';

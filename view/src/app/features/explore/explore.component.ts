@@ -341,6 +341,10 @@ export class ExploreComponent implements OnInit {
       this.state.openUnavailableTrackModal(song);
       return;
     }
+    if (this.state.isSongRestrictedForMinor(song)) {
+      this.state.notifyMinorSongRestriction(song);
+      return;
+    }
     this.state.recordTrackAccess(song, 'search');
     this.state.openTrackForCommunitySwipe(song);
     void this.router?.navigate(['/discover']).catch(() => false);
@@ -351,6 +355,10 @@ export class ExploreComponent implements OnInit {
       this.state.openUnavailableTrackModal(song);
       return;
     }
+    if (this.state.isSongRestrictedForMinor(song)) {
+      this.state.notifyMinorSongRestriction(song);
+      return;
+    }
     if (song.trackId === undefined) return;
     this.songService.likeAndSaveSearchTrack(song.trackId).subscribe({
       next: () => {
@@ -359,7 +367,11 @@ export class ExploreComponent implements OnInit {
         this.state.notify(`"${song.title}" adicionada às suas curtidas!`);
       },
       error: (err: unknown) => {
-        this.state.notify(toApiError(err).message);
+        const apiErr = toApiError(err);
+        if (apiErr.rawMessage === 'Track is restricted for minor users.') {
+          this.state.notifyMinorSongRestriction(song);
+        }
+        this.state.notify(apiErr.message);
       },
     });
   }
@@ -367,6 +379,10 @@ export class ExploreComponent implements OnInit {
   protected openSongDetails(song: Song): void {
     if (song.isDeleted) {
       this.state.openUnavailableTrackModal(song);
+      return;
+    }
+    if (this.state.isSongRestrictedForMinor(song)) {
+      this.state.notifyMinorSongRestriction(song);
       return;
     }
     this.state.openTrackDetailsModal(song);

@@ -18,6 +18,7 @@ import { AuthComponent } from './features/auth/auth.component';
 import { FrogComponent } from './shared/frog.component';
 import { IconComponent } from './shared/icon.component';
 import { ModalsComponent } from './shared/modals.component';
+import { RibbyAlertComponent } from './shared/ribby-alert.component';
 import { ToastComponent } from './shared/toast.component';
 
 interface PageHeading {
@@ -113,6 +114,7 @@ const PAGE_HEADINGS: Record<string, PageHeading> = {
     FrogComponent,
     ToastComponent,
     ModalsComponent,
+    RibbyAlertComponent,
     AuthComponent,
   ],
   templateUrl: './app.component.html',
@@ -237,6 +239,12 @@ export class AppComponent {
     }
     if (!this.state.spotifyPremium()) {
       this.state.notify('Uma conta Spotify Premium é necessária para criar uma Jam no Pond.');
+      this.state.showRibbyAlert({
+        title: 'Spotify Premium necessário',
+        message: 'O recurso de reprodução colaborativa no Pond exige uma conta Spotify Premium.',
+        tone: 'plan',
+        mood: 'talk',
+      });
       return;
     }
     this.state.setModal('jam');

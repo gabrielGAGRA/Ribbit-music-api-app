@@ -381,12 +381,13 @@
         </span>
         <h2>Qual é a sua frequência?</h2>
         <p>Escolha o que te move. Seu próximo play começa aqui.</p>
-        <h3>Seus gêneros favoritos</h3>
+        <h3>Seus gêneros favoritos ({{ state.selectedGenres().length }}/3)</h3>
         <div class="genre-options">
           @for (g of allGenres; track g) {
             <button
               type="button"
               [class.chosen]="isGenreSelected(g)"
+              [attr.aria-pressed]="isGenreSelected(g)"
               (click)="toggleSelectedGenre(g)"
             >
               {{ g }}
@@ -405,6 +406,7 @@
             <button
               type="button"
               [class.blocked]="isGenreBlocked(g)"
+              [attr.aria-pressed]="isGenreBlocked(g)"
               (click)="toggleBlockedGenre(g)"
             >
               {{ g }}

@@ -87,6 +87,13 @@ export class DashboardComponent implements OnInit {
         this.isLoading.set(false);
         if (isPremiumRequiredError(err)) {
           this.isPremiumLocked.set(true);
+          this.state.showRibbyAlert({
+            title: 'Dashboard anual exclusivo',
+            message:
+              'Assine o plano Individual ou Família para desbloquear suas estatísticas anuais.',
+            tone: 'plan',
+            mood: 'wave',
+          });
           return;
         }
         this.state.notify(toApiError(err).message);

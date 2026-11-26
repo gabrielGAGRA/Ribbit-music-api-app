@@ -5,6 +5,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
 } from '@angular/core';
 import { Router } from '@angular/router';
 import type {
@@ -18,7 +19,8 @@ import { readInputValue, readNamedFormControl, readSelectValue } from './dom-eve
 import { FrogComponent, type FrogMood } from './frog.component';
 import { IconComponent } from './icon.component';
 import { toReferenceSource } from '../core/api-mappers';
-import { CATALOG_GENRES } from '../core/genre-catalog';
+import { readAuthToken } from '../core/auth-token.storage';
+import { CATALOG_GENRES, hasCanonicalGenre } from '../core/genre-catalog';
 import { RibbitStateService } from '../core/ribbit-state.service';
 import type { ReviewSortOption } from '../core/song.service';
 
@@ -178,6 +180,18 @@ export class ModalsComponent {
         this.searchStartDateDraft.set(this.state.searchFilterStartDate());
         this.searchEndDateDraft.set(this.state.searchFilterEndDate());
         this.searchMinRatingDraft.set(this.state.searchFilterMinRating());
+      } else if (modal === 'filters') {
+        untracked(() => {
+          if (readAuthToken()) {
+            this.state.setSelectedGenres(this.state.favoriteGenres());
+          }
+        });
+      } else if (modal === 'onboarding') {
+        untracked(() => {
+          this.selectedWordCloudGenres.set(
+            [...this.state.favoriteGenres()].slice(0, MAX_FAVORITE_GENRES),
+          );
+        });
       } else if (modal === 'details') {
         this.rating.set(5);
       }
@@ -189,6 +203,10 @@ export class ModalsComponent {
   protected readonly trackReviews = computed<readonly CommunityReview[]>(() =>
     this.state.activeTrackReviews(),
   );
+  protected readonly hasOwnReview = computed<boolean>(() => {
+    const uid = this.state.userId();
+    return uid !== null && this.trackReviews().some((r) => r.userId === uid);
+  });
   protected readonly checkoutPlan = computed<SubscriptionPlan | null>(() =>
     this.state.pendingCheckoutPlan(),
   );
@@ -283,13 +301,13 @@ export class ModalsComponent {
   }
 
   protected isGenreSelected(genre: string): boolean {
-    return this.state.selectedGenres().includes(genre);
+    return hasCanonicalGenre(this.state.selectedGenres(), genre);
   }
 
   protected toggleSelectedGenre(genre: string): void {
     const list = this.state.selectedGenres();
-    if (list.includes(genre)) {
-      this.state.setSelectedGenres(list.filter((g) => g !== genre));
+    if (hasCanonicalGenre(list, genre)) {
+      this.state.setSelectedGenres(list.filter((g) => !hasCanonicalGenre([g], genre)));
       return;
     }
     if (list.length >= MAX_FAVORITE_GENRES) {
@@ -297,22 +315,41 @@ export class ModalsComponent {
       return;
     }
     this.state.setSelectedGenres([...list, genre]);
+    if (hasCanonicalGenre(this.state.blockedGenres(), genre)) {
+      this.state.setBlockedGenres(
+        this.state.blockedGenres().filter((g) => !hasCanonicalGenre([g], genre)),
+      );
+    }
   }
 
   protected isGenreBlocked(genre: string): boolean {
-    return this.state.blockedGenres().includes(genre);
+    return hasCanonicalGenre(this.state.blockedGenres(), genre);
   }
 
   protected toggleBlockedGenre(genre: string): void {
     const list = this.state.blockedGenres();
-    const updated = list.includes(genre) ? list.filter((g) => g !== genre) : [...list, genre];
+    const alreadyBlocked = hasCanonicalGenre(list, genre);
+    const updated = alreadyBlocked
+      ? list.filter((g) => !hasCanonicalGenre([g], genre))
+      : [...list, genre];
+    if (
+      !alreadyBlocked &&
+      this.state.hasPaidAccess() &&
+      hasCanonicalGenre(this.state.selectedGenres(), genre)
+    ) {
+      this.state.setSelectedGenres(
+        this.state.selectedGenres().filter((g) => !hasCanonicalGenre([g], genre)),
+      );
+    }
     this.state.setBlockedGenres(updated);
   }
 
   protected saveFrequencies(): void {
     this.state.saveFavoriteGenres(this.state.selectedGenres());
     this.closeModal();
-    this.state.notify('Sua frequência foi atualizada.');
+    if (!readAuthToken()) {
+      this.state.notify('Sua frequência foi atualizada.');
+    }
   }
 
   protected isFilterActive(filter: string): boolean {
@@ -404,6 +441,10 @@ export class ModalsComponent {
   }
 
   protected rateSong(stars: number): void {
+    if (this.hasOwnReview()) {
+      this.state.notifyDuplicateReviewAttempt();
+      return;
+    }
     this.rating.set(stars);
   }
 
@@ -619,14 +660,14 @@ export class ModalsComponent {
   }
 
   protected isWordCloudSelected(genre: string): boolean {
-    return this.selectedWordCloudGenres().includes(genre);
+    return hasCanonicalGenre(this.selectedWordCloudGenres(), genre);
   }
 
   protected toggleWordCloudGenre(genre: string): void {
     this.ribbyCustomSpeech.set('');
     const list = this.selectedWordCloudGenres();
-    if (list.includes(genre)) {
-      this.selectedWordCloudGenres.set(list.filter((g) => g !== genre));
+    if (hasCanonicalGenre(list, genre)) {
+      this.selectedWordCloudGenres.set(list.filter((g) => !hasCanonicalGenre([g], genre)));
       return;
     }
     if (list.length >= MAX_FAVORITE_GENRES) {
