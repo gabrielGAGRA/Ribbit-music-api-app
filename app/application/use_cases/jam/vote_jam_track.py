@@ -26,6 +26,7 @@ lazy from app.application.ports.repositories.track_access_repository import (
 )
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.application.ports.services.music_service import TrackCatalogPort
 lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
 lazy from app.domain.models.jam import Jam
 lazy from app.domain.models.track import Track
@@ -41,6 +42,7 @@ class VoteJamTrackUseCase:
     interaction_repo: InteractionRepositoryPort | None = None
     spotify_queue: SpotifyHostQueuePort | None = None
     track_access_repo: TrackAccessRepositoryPort | None = None
+    track_catalog: TrackCatalogPort | None = None
 
     def _compute_vote_points(self, command: VoteJamTrackCommand) -> tuple[int, bool]:
         action = InteractionAction.parse(command.action, default=InteractionAction.LIKE)
@@ -209,5 +211,12 @@ class VoteJamTrackUseCase:
 
         self._maybe_auto_advance(jam)
         if is_new_item:
-            sync_enqueue_track(self.spotify_queue, self.user_repo, jam, track)
+            sync_enqueue_track(
+                self.spotify_queue,
+                self.user_repo,
+                jam,
+                track,
+                track_repo=self.track_repo,
+                track_catalog=self.track_catalog,
+            )
         return saved_item

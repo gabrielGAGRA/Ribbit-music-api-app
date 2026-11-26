@@ -12,6 +12,7 @@ from app.domain.exceptions import (
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.application.ports.services.music_service import TrackCatalogPort
 lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
 lazy from app.domain.models.jam import Jam
 
@@ -24,6 +25,7 @@ class AdvanceJamPlaybackUseCase:
     track_repo: TrackRepositoryPort | None = None
     user_repo: UserRepositoryPort | None = None
     spotify_queue: SpotifyHostQueuePort | None = None
+    track_catalog: TrackCatalogPort | None = None
 
     def execute(self, jam_id: int, requester_user_id: int | None = None) -> Jam:
         self._require_requester_premium(requester_user_id)
@@ -61,6 +63,7 @@ class AdvanceJamPlaybackUseCase:
                 saved_jam,
                 self.track_repo,
                 winning_item.track_id,
+                track_catalog=self.track_catalog,
             )
             return saved_jam
 
@@ -73,6 +76,7 @@ class AdvanceJamPlaybackUseCase:
             saved_jam,
             self.track_repo,
             winning_item.track_id,
+            track_catalog=self.track_catalog,
         )
         return saved_jam
 

@@ -217,3 +217,63 @@ def test_advance_and_skip_threshold_sync_to_spotify_owner() -> None:
 
     assert spotify_queue.start_track.call_count == 2
     spotify_queue.start_track.assert_called_with(host, "spotify:track:next_sp_id")
+
+
+def test_vote_jam_track_resolves_missing_spotify_id_via_track_catalog() -> None:
+    from types import SimpleNamespace
+
+    from app.application.ports.services.music_service import TrackCatalogPort
+
+    host = _user(1, with_tokens=True)
+    jam = Jam(
+        jam_id=10,
+        host_user_id=1,
+        room_name="Pond",
+        room_code="ROOM10",
+        is_active=True,
+        current_track_id=99,
+    )
+    track = Track(
+        track_id=77,
+        title="Hey Bo Diddley",
+        artist="Bo Diddley",
+        genre="Rock",
+        duration_seconds=180,
+        spotify_id=None,
+    )
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.is_participant.return_value = True
+    jam_repo.list_queue.return_value = []
+    jam_repo.find_queue_item.return_value = None
+    jam_repo.save_queue_item.return_value = JamQueueItem(
+        jam_id=10, track_id=77, initial_vote_points=1
+    )
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = host
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = track
+    track_catalog = MagicMock(spec=TrackCatalogPort)
+    track_catalog.search_tracks.return_value = [
+        SimpleNamespace(external_id="resolved_sp_77")
+    ]
+    spotify_queue = MagicMock(spec=SpotifyHostQueuePort)
+
+    use_case = VoteJamTrackUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        spotify_queue=spotify_queue,
+        track_catalog=track_catalog,
+    )
+    use_case.execute(
+        VoteJamTrackCommand(jam_id=10, user_id=1, track_id=77, action="like")
+    )
+
+    track_catalog.search_tracks.assert_called_once_with(
+        "Hey Bo Diddley Bo Diddley", limit=1
+    )
+    track_repo.save.assert_called_once_with(track)
+    spotify_queue.enqueue_track.assert_called_once_with(
+        host, "spotify:track:resolved_sp_77"
+    )
