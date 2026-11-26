@@ -1,0 +1,1 @@
+Weighted random recommendations: validate and refactor (if necessary) the weighted genre preference algorithm i created (favoring favorite_genres while staying randomized in Discovery and Playlists (without altering Jam/Pond order)).
