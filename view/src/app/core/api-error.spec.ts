@@ -54,5 +54,15 @@ describe('api-error', () => {
         }),
       ).message,
     ).toBe('Esta conta do Spotify já está vinculada a outro perfil do Ribbit.');
+    expect(
+      toApiError(
+        new HttpErrorResponse({
+          status: 409,
+          error: { message: 'You have already reviewed this track.' },
+        }),
+      ).message,
+    ).toBe(
+      'Você já avaliou esta música. Para alterar sua nota ou comentário, exclua sua avaliação atual e envie uma nova.',
+    );
   });
 });

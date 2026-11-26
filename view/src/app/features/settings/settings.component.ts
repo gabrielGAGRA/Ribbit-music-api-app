@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { toApiError } from '../../core/api-error';
 import { computeInitials } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
+import { formatGenreLabel, hasCanonicalGenre } from '../../core/genre-catalog';
 import { RibbitStateService } from '../../core/ribbit-state.service';
 import { recordSpotifyOAuthInitiatorOrigin } from '../../core/spotify-oauth-origin';
 import { IconComponent } from '../../shared/icon.component';
@@ -232,8 +233,17 @@ export class SettingsComponent implements OnInit {
     this.state.setModal('filters');
   }
 
+  protected formatGenre(genre: string): string {
+    return formatGenreLabel(genre);
+  }
+
+  protected removeFavoriteGenre(genre: string): void {
+    const updated = this.state.favoriteGenres().filter((g) => !hasCanonicalGenre([g], genre));
+    this.state.saveFavoriteGenres(updated);
+  }
+
   protected removeBlockedGenre(genre: string): void {
-    const updated = this.state.blockedGenres().filter((g) => g !== genre);
+    const updated = this.state.blockedGenres().filter((g) => !hasCanonicalGenre([g], genre));
     this.state.setBlockedGenres(updated);
   }
 

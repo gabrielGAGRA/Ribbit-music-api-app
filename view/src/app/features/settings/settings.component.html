@@ -302,13 +302,37 @@
         </div>
       </div>
       <div class="settings-header-actions">
-        <button class="outline-button small-btn" (click)="openOnboardingModal()">
+        <button type="button" class="outline-button small-btn" (click)="openOnboardingModal()">
           Rever Onboarding &amp; Gêneros
         </button>
-        <button class="outline-button small-btn" (click)="openBlockedGenresModal()">
+        <button type="button" class="outline-button small-btn" (click)="openBlockedGenresModal()">
           Editar filtros
         </button>
       </div>
+    </div>
+
+    <div class="favorite-genres-wrap">
+      <span class="settings-label">Gêneros favoritos nas descobertas:</span>
+      @if (state.favoriteGenres().length === 0) {
+        <p class="empty-text">
+          Nenhum gênero favorito definido. O radar está aberto para todos os estilos.
+        </p>
+      } @else {
+        <div class="favorite-tags">
+          @for (genre of state.favoriteGenres(); track genre) {
+            <span class="favorite-tag">
+              {{ formatGenre(genre) }}
+              <button
+                type="button"
+                aria-label="Remover gênero favorito"
+                (click)="removeFavoriteGenre(genre)"
+              >
+                <app-icon name="close" [size]="12" />
+              </button>
+            </span>
+          }
+        </div>
+      }
     </div>
 
     <div class="blocked-genres-wrap">
@@ -321,7 +345,7 @@
         <div class="blocked-tags">
           @for (genre of state.blockedGenres(); track genre) {
             <span class="blocked-tag">
-              {{ genre }}
+              {{ formatGenre(genre) }}
               <button
                 type="button"
                 aria-label="Desbloquear gênero"

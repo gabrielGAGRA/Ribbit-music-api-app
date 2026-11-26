@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   CATALOG_GENRES,
   GENRE_CATALOG_DICT,
+  canonicalizeGenreList,
   formatGenreLabel,
+  hasCanonicalGenre,
   matchesGenreFilter,
 } from './genre-catalog';
 
@@ -46,5 +48,21 @@ describe('genre-catalog', () => {
     expect(matchesGenreFilter('música tropical', 'Latin')).toBe(true);
     expect(matchesGenreFilter('sertanejo', 'Rock')).toBe(false);
     expect(matchesGenreFilter('Desconhecido', 'Pop')).toBe(false);
+  });
+
+  it('canonicalizes genre lists and deduplicates case-insensitively', () => {
+    expect(
+      canonicalizeGenreList([' hip hop ', 'ROCK', 'hip-hop', 'mpb', 'r&b', 'forro', 'Eletrônica']),
+    ).toEqual(['Hip Hop', 'Rock', 'MPB', 'R&B', 'Forró', 'Eletrônica']);
+    expect(canonicalizeGenreList(['', '   '])).toEqual([]);
+  });
+
+  it('matches canonical genres regardless of casing or punctuation variants', () => {
+    expect(hasCanonicalGenre(['hip hop', 'forro', 'r&b'], 'Hip Hop')).toBe(true);
+    expect(hasCanonicalGenre(['hip-hop'], 'Hip Hop')).toBe(true);
+    expect(hasCanonicalGenre(['forro'], 'Forró')).toBe(true);
+    expect(hasCanonicalGenre(['r&b'], 'R&B')).toBe(true);
+    expect(hasCanonicalGenre(['rock'], 'Jazz')).toBe(false);
+    expect(hasCanonicalGenre(['rock'], '   ')).toBe(false);
   });
 });

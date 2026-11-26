@@ -1,4 +1,4 @@
-@if (state.toast()) {
+@if (state.toast() && !state.ribbyAlert()) {
   <div class="toast" role="status">
     <span>
       <app-icon name="check" [size]="17" />

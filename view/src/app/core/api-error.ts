@@ -141,6 +141,8 @@ const EXACT_PT_BR_ERRORS: Record<string, string> = {
     'Este usuário já está vinculado a outra conta família.',
   'This profile does not belong to your family account.':
     'Este perfil não pertence à sua conta família.',
+  'You have already reviewed this track.':
+    'Você já avaliou esta música. Para alterar sua nota ou comentário, exclua sua avaliação atual e envie uma nova.',
 };
 
 const PATTERN_PT_BR_ERRORS: readonly {
@@ -174,6 +176,10 @@ const PATTERN_PT_BR_ERRORS: readonly {
   {
     pattern: /^Track '.+' by '.+' already exists\.$/i,
     replace: () => 'Esta faixa já existe no catálogo.',
+  },
+  {
+    pattern: /^Track(?: with ID)? .+ not found or inactive\.$/i,
+    replace: () => 'Faixa não encontrada ou indisponível.',
   },
   {
     pattern: /^Track(?: with ID)? .+ not found\.$/i,
@@ -222,6 +228,10 @@ const PATTERN_PT_BR_ERRORS: readonly {
   {
     pattern: /^Family plan profile limit of (\d+) reached\.$/i,
     replace: (_m, n) => `Limite de ${n} perfis do Plano Família atingido.`,
+  },
+  {
+    pattern: /^Rating must be between (\d+) and (\d+)\.$/i,
+    replace: (_m, min, max) => `A nota deve ser entre ${min} e ${max} estrelas.`,
   },
 ];
 
