@@ -101,12 +101,10 @@ export class FamilyComponent {
   protected readonly existingChildIdentifier = signal<string>('');
   protected readonly existingChildPassword = signal<string>('');
 
-  // Parental controls editor state (banned genres & artists per child)
+  // Parental controls editor state (banned genres per child)
   protected readonly editingControlsMemberId = signal<number | null>(null);
   private readonly draftBlockedGenres = signal<readonly string[]>([]);
-  protected readonly draftBlockedArtists = signal<readonly string[]>([]);
   protected readonly customGenreInput = signal<string>('');
-  protected readonly artistBanInput = signal<string>('');
   protected readonly isSavingControls = signal<boolean>(false);
   protected readonly controlsError = signal<string>('');
 
@@ -422,7 +420,7 @@ export class FamilyComponent {
     });
   }
 
-  // --- Parental Controls (Genres & Artists Banning) ---
+  // --- Parental Controls (Genres Banning) ---
 
   protected openParentalControls(member: FamilyMember): void {
     if (this.isSavingControls()) return;
@@ -432,9 +430,7 @@ export class FamilyComponent {
     }
     this.editingControlsMemberId.set(member.userId);
     this.draftBlockedGenres.set([...member.blockedGenres]);
-    this.draftBlockedArtists.set([...member.blockedArtists]);
     this.customGenreInput.set('');
-    this.artistBanInput.set('');
     this.controlsError.set('');
     this.successMessage.set('');
   }
@@ -442,9 +438,7 @@ export class FamilyComponent {
   protected closeParentalControls(): void {
     this.editingControlsMemberId.set(null);
     this.draftBlockedGenres.set([]);
-    this.draftBlockedArtists.set([]);
     this.customGenreInput.set('');
-    this.artistBanInput.set('');
     this.controlsError.set('');
   }
 
@@ -480,33 +474,13 @@ export class FamilyComponent {
   }
 
   protected hasParentalBlocks(member: FamilyMember): boolean {
-    const hasGenres = member.blockedGenres.length > 0;
-    const hasArtists = member.blockedArtists.length > 0;
-    return hasGenres || hasArtists;
+    return member.blockedGenres.length > 0;
   }
 
   protected getExtraDraftGenres(): readonly string[] {
     return this.draftBlockedGenres().filter(
       (genre) => !containsCaseInsensitive(this.availableGenres, genre),
     );
-  }
-
-  protected updateArtistBanInput(event: Event): void {
-    this.artistBanInput.set(readInputValue(event));
-  }
-
-  protected addBlockedArtist(event?: Event): void {
-    event?.preventDefault();
-    const cleaned = this.artistBanInput().trim();
-    if (!cleaned) return;
-    if (!containsCaseInsensitive(this.draftBlockedArtists(), cleaned)) {
-      this.draftBlockedArtists.update((list) => [...list, cleaned]);
-    }
-    this.artistBanInput.set('');
-  }
-
-  protected removeDraftArtist(artist: string): void {
-    this.draftBlockedArtists.update((list) => removeCaseInsensitive(list, artist));
   }
 
   protected saveParentalControls(member: FamilyMember): void {
@@ -516,7 +490,6 @@ export class FamilyComponent {
 
     const payload: UpdateMemberParentalControlsApiRequest = {
       blocked_genres: [...this.draftBlockedGenres()],
-      blocked_artists: [...this.draftBlockedArtists()],
     };
     const toastMsg = `Restrições parentais atualizadas para ${member.displayName}.`;
 
@@ -527,7 +500,6 @@ export class FamilyComponent {
             ? {
                 ...item,
                 blockedGenres: payload.blocked_genres,
-                blockedArtists: payload.blocked_artists,
               }
             : item,
         ),
@@ -551,14 +523,7 @@ export class FamilyComponent {
       },
       error: (err: unknown) => {
         this.isSavingControls.set(false);
-        const apiErr = toApiError(err);
-        if (apiErr.status === 404 || apiErr.status === 405) {
-          this.controlsError.set(
-            `O backend ainda não possui o endpoint de persistência de restrições parentais para contas filhas (PUT /api/profile/family/members/{id}/parental-controls): ${apiErr.message}`,
-          );
-        } else {
-          this.controlsError.set(apiErr.message);
-        }
+        this.controlsError.set(toApiError(err).message);
       },
     });
   }

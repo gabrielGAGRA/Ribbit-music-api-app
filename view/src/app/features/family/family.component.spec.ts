@@ -257,9 +257,6 @@ describe('FamilyComponent', () => {
     component['toggleDraftGenre']('Funk');
     component['customGenreInput'].set('Sertanejo');
     component['addCustomBlockedGenre']();
-    component['artistBanInput'].set('Artist B');
-    component['addBlockedArtist']();
-    component['removeDraftArtist']('Artist A');
 
     component['saveParentalControls'](childMember);
 
@@ -267,7 +264,6 @@ describe('FamilyComponent', () => {
     expect(putReq.request.method).toBe('PUT');
     expect(putReq.request.body).toEqual({
       blocked_genres: ['Metal', 'Funk', 'Sertanejo'],
-      blocked_artists: ['Artist B'],
     });
 
     putReq.flush({
@@ -279,12 +275,10 @@ describe('FamilyComponent', () => {
       primary_account_id: 1,
       is_admin: false,
       blocked_genres: ['metal', 'funk', 'sertanejo'],
-      blocked_artists: ['artist b'],
     });
 
     expect(component['editingControlsMemberId']()).toBeNull();
     expect(component['familyMembers']()[0]?.blockedGenres).toEqual(['metal', 'funk', 'sertanejo']);
-    expect(component['familyMembers']()[0]?.blockedArtists).toEqual(['artist b']);
   });
 
   it('surfaces backend errors when saving parental controls fails', () => {
@@ -312,7 +306,7 @@ describe('FamilyComponent', () => {
 
     expect(component['isSavingControls']()).toBe(false);
     expect(component['editingControlsMemberId']()).toBe(77);
-    expect(component['controlsError']()).toContain('Not Found');
+    expect(component['controlsError']()).toContain('Recurso não encontrado.');
   });
 
   it('calculates exact age on 18th birthday without UTC off-by-one shift', () => {
@@ -361,10 +355,6 @@ describe('FamilyComponent', () => {
     component['addCustomBlockedGenre']();
     expect(component['getExtraDraftGenres']()).toContain('Chiptune');
     component['removeDraftGenre']('Chiptune');
-    component['artistBanInput'].set('Artist Y');
-    component['addBlockedArtist']();
-    expect(component['draftBlockedArtists']()).toContain('Artist Y');
-    component['removeDraftArtist']('Artist Y');
     component['closeParentalControls']();
 
     component['goToPlans']();
@@ -389,8 +379,6 @@ describe('FamilyComponent', () => {
     component['updateExistingChildPassword']({ target: input } as unknown as Event);
     input.value = 'Ska';
     component['updateCustomGenreInput']({ target: input } as unknown as Event);
-    input.value = 'Band Z';
-    component['updateArtistBanInput']({ target: input } as unknown as Event);
 
     component['submitAddChild'](new Event('submit'));
     expect(component['familyMembers']().length).toBe(1);

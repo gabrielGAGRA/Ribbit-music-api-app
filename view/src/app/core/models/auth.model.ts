@@ -110,7 +110,7 @@ export interface AddFamilyMemberApiRequest {
 
 export interface UpdateMemberParentalControlsApiRequest {
   readonly blocked_genres: readonly string[];
-  readonly blocked_artists: readonly string[];
+  readonly blocked_artists?: readonly string[];
 }
 
 // Legacy aliases preserved for backward compatibility
