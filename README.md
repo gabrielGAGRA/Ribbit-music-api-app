@@ -4,8 +4,8 @@
 
 [![Testes](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/tests.yml/badge.svg)](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/tests.yml)
 [![Quality Gate](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/quality-gate.yml/badge.svg)](https://github.com/gabrielGAGRA/Laboratorio_Engenharia_Software/actions/workflows/quality-gate.yml)
-![Testes Automatizados](https://img.shields.io/badge/tests-1307%20passed%20(1007%20pytest%20%2B%20300%20vitest)-brightgreen)
-![Cobertura de Código](https://img.shields.io/badge/coverage-%E2%89%A585%25%20(pytest--cov%2089.21%25%20%7C%20vitest%20v8%2087.27%25)-blue)
+![Testes Automatizados](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/gabrielGAGRA/Laboratorio_Engenharia_Software/badges/tests.json)
+![Cobertura de Código](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/gabrielGAGRA/Laboratorio_Engenharia_Software/badges/coverage.json)
 
 ### Time: Crazy Frogs
 - Carolina Britto Haddad

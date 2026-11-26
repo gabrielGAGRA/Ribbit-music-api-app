@@ -23,7 +23,17 @@ jobs:
           uv pip install --python .venv/bin/python -r requirements.txt
 
       - name: Rodando testes e validando cobertura >= 85%
-        run: .venv/bin/python -m pytest --cov=app --cov-report=term-missing --cov-fail-under=85
+        run: .venv/bin/python -m pytest --cov=app --cov-report=term-missing --cov-report=json:coverage-backend.json --cov-fail-under=85 --junitxml=pytest-results.xml
+
+      - name: Publicando métricas do backend para badges
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-metrics
+          path: |
+            coverage-backend.json
+            pytest-results.xml
+          retention-days: 1
 
   frontend-tests:
     name: Frontend Unit Tests (Vitest)
@@ -41,7 +51,95 @@ jobs:
         run: npm ci
 
       - name: Rodando testes unitários do frontend e validando cobertura >= 85%
-        run: npm run test:cov
+        run: npx vitest run --coverage --reporter=default --reporter=json --outputFile=coverage/vitest-results.json
+
+      - name: Publicando métricas do frontend para badges
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-metrics
+          path: |
+            coverage/coverage-summary.json
+            coverage/vitest-results.json
+          retention-days: 1
+
+  publish-badges:
+    name: Update Dynamic Badges
+    needs: [backend-tests, frontend-tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixando métricas de testes e cobertura
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/metrics
+
+      - name: Gerando JSONs para Shields.io endpoint
+        run: |
+          python3 - <<'EOF'
+          import json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          metrics = Path("/tmp/metrics")
+          py_cov = json.loads((metrics / "backend-metrics" / "coverage-backend.json").read_text())
+          vt_cov = json.loads((metrics / "frontend-metrics" / "coverage-summary.json").read_text())
+          vt_res = json.loads((metrics / "frontend-metrics" / "vitest-results.json").read_text())
+
+          junit_root = ET.fromstring((metrics / "backend-metrics" / "pytest-results.xml").read_text())
+          suite = junit_root if junit_root.tag == "testsuite" else junit_root.find("testsuite")
+          py_total = int(suite.attrib["tests"])
+          py_failed = int(suite.attrib.get("failures", 0)) + int(suite.attrib.get("errors", 0))
+          py_skipped = int(suite.attrib.get("skipped", 0))
+          py_passed = py_total - py_failed - py_skipped
+
+          vt_passed = int(vt_res["numPassedTests"])
+          vt_failed = int(vt_res["numFailedTests"])
+          total_passed = py_passed + vt_passed
+
+          py_pct = float(py_cov["totals"]["percent_covered"])
+          vt_pct = float(vt_cov["total"]["lines"]["pct"])
+
+          out = Path("/tmp/badges")
+          out.mkdir(parents=True, exist_ok=True)
+
+          tests_badge = {
+              "schemaVersion": 1,
+              "label": "tests",
+              "message": f"{total_passed} passed ({py_passed} pytest + {vt_passed} vitest)",
+              "color": "brightgreen" if (py_failed + vt_failed) == 0 else "red",
+          }
+          coverage_badge = {
+              "schemaVersion": 1,
+              "label": "coverage",
+              "message": f"≥85% (pytest {py_pct:.2f}% | vitest {vt_pct:.2f}%)",
+              "color": "blue" if (py_pct >= 85 and vt_pct >= 85) else "yellow",
+          }
+
+          (out / "tests.json").write_text(json.dumps(tests_badge), encoding="utf-8")
+          (out / "coverage.json").write_text(json.dumps(coverage_badge), encoding="utf-8")
+          EOF
+
+      - name: Publicando JSONs na branch badges
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch origin badges:badges 2>/dev/null; then
+            git checkout badges
+          else
+            git checkout --orphan badges
+            git rm -rf . >/dev/null 2>&1 || true
+          fi
+          cp /tmp/badges/tests.json /tmp/badges/coverage.json .
+          git add tests.json coverage.json
+          if ! git diff --cached --quiet; then
+            git commit -m "ci: Update dynamic test and coverage badges"
+            git push origin badges
+          fi
 
   e2e-browser-tests:
     name: Browser E2E Tests (Playwright)
