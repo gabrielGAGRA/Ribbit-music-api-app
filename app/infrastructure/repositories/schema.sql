@@ -99,6 +99,7 @@ CREATE TABLE IF NOT EXISTS jams (
     room_code TEXT NOT NULL UNIQUE,
     is_active INTEGER NOT NULL DEFAULT 1,
     current_track_id INTEGER REFERENCES tracks(track_id) ON DELETE SET NULL,
+    current_track_started_at TEXT,
     created_at TEXT NOT NULL,
     duration_minutes INTEGER NOT NULL DEFAULT 60,
     max_superlikes INTEGER NOT NULL DEFAULT 10,

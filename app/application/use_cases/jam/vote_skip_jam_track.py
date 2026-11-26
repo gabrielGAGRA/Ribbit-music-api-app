@@ -1,6 +1,7 @@
 """Use case for registering a skip vote on a Jam track or downvoting a queued track."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from app.application.dtos.jam_dtos import SkipVoteResult, VoteSkipJamTrackCommand
@@ -45,17 +46,20 @@ class VoteSkipJamTrackUseCase:
         if jam.accumulated_duration_seconds >= max_seconds:
             jam.is_active = False
             jam.current_track_id = None
+            jam.current_track_started_at = None
             self.jam_repo.save(jam)
             return True
 
         queue = self.jam_repo.list_queue(jam.jam_id)
         if not queue:
             jam.current_track_id = None
+            jam.current_track_started_at = None
             self.jam_repo.save(jam)
             return True
 
         winner = queue[0]
         jam.current_track_id = winner.track_id
+        jam.current_track_started_at = datetime.now(UTC)
         self.jam_repo.remove_track_from_queue(jam.jam_id, winner.track_id)
         self.jam_repo.save(jam)
         sync_advance_track(

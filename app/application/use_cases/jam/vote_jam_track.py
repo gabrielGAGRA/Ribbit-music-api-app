@@ -1,8 +1,9 @@
 """Use case for upvoting or adding a track to a Jam queue."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
-from app.application.use_cases.jam._spotify_sync import sync_enqueue_track
+from app.application.use_cases.jam._spotify_sync import sync_advance_track
 from app.application.use_cases.spotify.premium_guard import require_spotify_premium
 from app.domain.exceptions import (
     BusinessRuleViolationError,
@@ -149,15 +150,26 @@ class VoteJamTrackUseCase:
                 TrackAccess(user_id=user_id, track_id=track_id, source="jam")
             )
 
-    def _maybe_auto_advance(self, jam: Jam) -> None:
+    def _maybe_auto_advance(self, jam: Jam) -> bool:
         if jam.current_track_id is not None or jam.jam_id is None:
-            return
+            return False
         queue = self.jam_repo.list_queue(jam.jam_id)
         if queue and isinstance(queue, list) and len(queue) > 0:
             champion = queue[0]
             jam.current_track_id = champion.track_id
+            jam.current_track_started_at = datetime.now(UTC)
             self.jam_repo.remove_track_from_queue(jam.jam_id, champion.track_id)
-            self.jam_repo.save(jam)
+            saved_jam = self.jam_repo.save(jam) or jam
+            sync_advance_track(
+                self.spotify_queue,
+                self.user_repo,
+                saved_jam,
+                self.track_repo,
+                champion.track_id,
+                track_catalog=self.track_catalog,
+            )
+            return True
+        return False
 
     def execute(self, command: VoteJamTrackCommand) -> JamQueueItem:
         user = self.user_repo.find_by_id(command.user_id)
@@ -193,7 +205,7 @@ class VoteJamTrackUseCase:
 
         self._check_duration_cap(jam, track)
 
-        saved_item, is_new_item = self._save_vote(
+        saved_item, _is_new_item = self._save_vote(
             command.jam_id, command.track_id, vote_points
         )
         self._record_interaction(
@@ -210,13 +222,4 @@ class VoteJamTrackUseCase:
             self.jam_repo.save(jam)
 
         self._maybe_auto_advance(jam)
-        if is_new_item:
-            sync_enqueue_track(
-                self.spotify_queue,
-                self.user_repo,
-                jam,
-                track,
-                track_repo=self.track_repo,
-                track_catalog=self.track_catalog,
-            )
         return saved_item

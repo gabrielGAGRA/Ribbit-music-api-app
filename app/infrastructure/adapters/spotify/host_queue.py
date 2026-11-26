@@ -1,6 +1,7 @@
 """User-scoped adapter wiring SpotifyPlayer to a pond owner's stored OAuth tokens."""
 
 from datetime import UTC, datetime
+lazy from collections.abc import Callable
 
 lazy import niquests
 
@@ -80,24 +81,37 @@ class SpotifyHostQueueAdapter(SpotifyHostQueuePort):
                 return str(d["id"])
         return str(candidates[0]["id"])
 
-    def enqueue_track(self, user: User, track_uri: str) -> None:
+    def _run_with_device_fallback(
+        self,
+        user: User,
+        operation: Callable[[SpotifyPlayer, str | None], None],
+    ) -> None:
         http = self._build_client(user)
         player = SpotifyPlayer(http)
         try:
-            player.add_to_queue(track_uri)
+            operation(player, None)
         except ExternalServiceError as exc:
             if exc.details.get("status_code") != 404:
                 raise
             device_id = self._pick_fallback_device_id(http)
             if not device_id:
                 raise
-            player.add_to_queue(track_uri, device_id=device_id)
+            operation(player, device_id)
+
+    def enqueue_track(self, user: User, track_uri: str) -> None:
+        self._run_with_device_fallback(
+            user, lambda player, dev: player.add_to_queue(track_uri, device_id=dev)
+        )
 
     def skip_to_next(self, user: User) -> None:
-        self._build_player(user).next_track()
+        self._run_with_device_fallback(
+            user, lambda player, dev: player.next_track(device_id=dev)
+        )
 
     def start_track(self, user: User, track_uri: str) -> None:
-        self._build_player(user).play(uris=[track_uri])
+        self._run_with_device_fallback(
+            user, lambda player, dev: player.play(uris=[track_uri], device_id=dev)
+        )
 
 
 __all__ = ["SpotifyHostQueueAdapter"]
