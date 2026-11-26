@@ -1,0 +1,1 @@
+Spotify Premium & Pond integration: Add spotify_premium to users, gate Pond/Jam rooms for Spotify Premium users, integrate Spotify playback/queue endpoints into Pond, differentiate unlinked vs. non-premium error prompts, allow non-premium Spotify users to export playlists, and add DELETE /api/spotify/connection.

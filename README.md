@@ -22,7 +22,7 @@
 - **Frontend**: Carol, Mateus
 - **Testes**: Carol, Fernando, Gabriel
 
-> **Nota:** Mais detalhes nas abas de [Contributions](https://github.com/gabrielGAGRA/Ribbit-music-api-app/graphs/contributors?all=1) e histórico de commit dela.
+> **Nota:** Mais detalhes nas abas de [Contributions](https://github.com/gabrielGAGRA/Ribbit-music-api-app/graphs/contributors?all=1&selectedMetric=additions) e histórico de commit dela.
 
 ## Sumário
 - [Sobre](#sobre)

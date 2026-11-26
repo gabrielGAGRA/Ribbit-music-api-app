@@ -1,0 +1,1 @@
+Audio previews, artwork & performance: Integrate iTunes preview URLs and cover artwork (cover_url) into swipes and delta tables, auto-play after each swipe, preload tracks/images to reduce swipe latency, and exclude tracks without a preview URL.

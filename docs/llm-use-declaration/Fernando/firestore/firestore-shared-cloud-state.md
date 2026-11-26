@@ -1,0 +1,1 @@
+Shared cloud state: Add low-latency Firestore synchronization for users, interactions, playlists, reviews, jams, and access history so multiple instances share data beyond local SQLite.
