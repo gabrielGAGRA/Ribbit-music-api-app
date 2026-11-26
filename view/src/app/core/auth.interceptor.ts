@@ -50,7 +50,7 @@ function isSpotifyOAuthState401(
   if (!url.includes('/api/spotify/callback') || !token) {
     return false;
   }
-  const msg = toApiError(err).message;
+  const msg = toApiError(err).rawMessage;
   if (msg.includes('Spotify OAuth state')) {
     return true;
   }
@@ -86,7 +86,7 @@ function isSecondaryCredential401(
   if (!isFamilyAdd && !isProfileUpdate) {
     return false;
   }
-  const msg = toApiError(err).message;
+  const msg = toApiError(err).rawMessage;
   if (isBearerAuthFailureMessage(msg)) {
     return false;
   }

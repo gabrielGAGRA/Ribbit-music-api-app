@@ -213,17 +213,9 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  private extractDetail(err: unknown): string | null {
-    if (typeof err !== 'object' || err === null || !('error' in err)) return null;
-    const inner = err.error;
-    if (typeof inner !== 'object' || inner === null || !('detail' in inner)) return null;
-    return typeof inner.detail === 'string' ? inner.detail : null;
-  }
-
   private handleSpotifyError(err: unknown): void {
     this.isLinkingSpotify.set(false);
-    const detail = this.extractDetail(err);
-    this.reportSpotifyClientError(detail ?? toApiError(err).message);
+    this.reportSpotifyClientError(toApiError(err).message);
   }
 
   protected goToPlans(): void {
@@ -304,8 +296,7 @@ export class SettingsComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.isChangingPassword.set(false);
-        const message = this.extractDetail(err) ?? toApiError(err).message;
-        this.passwordError.set(message);
+        this.passwordError.set(toApiError(err).message);
       },
     });
   }

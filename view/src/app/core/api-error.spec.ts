@@ -38,5 +38,21 @@ describe('api-error', () => {
       'PermissionDeniedError',
     );
     expect(toApiError('unknown').status).toBe(500);
+    expect(
+      toApiError(
+        new HttpErrorResponse({
+          status: 401,
+          error: { message: 'Current password is required and must match.' },
+        }),
+      ).message,
+    ).toBe('A senha atual é obrigatória e deve estar correta.');
+    expect(
+      toApiError(
+        new HttpErrorResponse({
+          status: 400,
+          error: { message: 'This Spotify account is already linked to another Ribbit profile.' },
+        }),
+      ).message,
+    ).toBe('Esta conta do Spotify já está vinculada a outro perfil do Ribbit.');
   });
 });
