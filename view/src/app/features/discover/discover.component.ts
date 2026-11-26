@@ -88,7 +88,7 @@ export class DiscoverComponent {
       return null;
     }
 
-    if (y < -threshold && absY > absX) {
+    if (y <= -threshold && absY > absX) {
       return 'love';
     }
 
@@ -112,6 +112,7 @@ export class DiscoverComponent {
 
   protected submitDecision(kind: DecisionKind): void {
     if (this.animation()) return;
+    this.player.unlock();
     this.player.pause();
     this.animation.set(kind);
     const target = this.targetPlaylist();
@@ -169,15 +170,25 @@ export class DiscoverComponent {
   }
 
   protected startCardDrag(event: PointerEvent): void {
+    if (event.isPrimary === false) return;
     if (event.target instanceof Element && event.target.closest('button')) return;
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    this.player.unlock();
     this.pointerStart = { x: event.clientX, y: event.clientY };
     this.isDragging.set(true);
     if (event.currentTarget instanceof HTMLElement) {
-      event.currentTarget.setPointerCapture(event.pointerId);
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Synthetic or detached pointer events may reject pointer capture
+      }
     }
   }
 
   protected moveCardDrag(event: PointerEvent): void {
+    if (event.isPrimary === false) return;
     if (this.pointerStart) {
       this.drag.set({
         x: event.clientX - this.pointerStart.x,
@@ -192,15 +203,35 @@ export class DiscoverComponent {
     this.drag.set({ x: 0, y: 0 });
   }
 
-  protected finishCardDrag(): void {
-    if (!this.pointerStart) return;
+  protected finishCardDrag(event?: PointerEvent): void {
+    if (!this.pointerStart || event?.isPrimary === false) return;
+    this.syncFinalDrag(this.pointerStart, event);
     this.pointerStart = null;
     this.isDragging.set(false);
+    this.player.unlock();
     const action = this.activeDragAction();
     if (action) {
       this.submitDecision(action);
     } else {
       this.drag.set({ x: 0, y: 0 });
+    }
+  }
+
+  protected preventNativeDrag(event: Event): void {
+    event.preventDefault();
+  }
+
+  private syncFinalDrag(start: { x: number; y: number }, event?: PointerEvent): void {
+    if (
+      event &&
+      (event.isTrusted || event.clientX !== 0 || event.clientY !== 0) &&
+      Number.isFinite(event.clientX) &&
+      Number.isFinite(event.clientY)
+    ) {
+      this.drag.set({
+        x: event.clientX - start.x,
+        y: event.clientY - start.y,
+      });
     }
   }
 }

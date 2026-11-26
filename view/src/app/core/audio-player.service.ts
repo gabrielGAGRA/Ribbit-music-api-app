@@ -10,24 +10,91 @@ export class AudioPlayerService implements OnDestroy {
   readonly activePreviewUrl = signal<string | null>(null);
   readonly usingRealAudio = signal<boolean>(false);
 
+  private static readonly SILENT_WAV_DATA_URI =
+    'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
   private intervalId: ReturnType<typeof setInterval> | null = null;
   private audioElement: HTMLAudioElement | null = null;
+  private unlocked = false;
+  private isUnlocking = false;
+
+  /**
+   * Unlocks audio playback on a persistent HTMLAudioElement inside a user gesture
+   * so subsequent programmatic track transitions (e.g. after swipe animations) play audio.
+   */
+  unlock(): void {
+    if (
+      this.unlocked ||
+      (this.isPlaying() && this.usingRealAudio()) ||
+      typeof Audio === 'undefined'
+    ) {
+      return;
+    }
+    if (!this.audioElement) {
+      this.attachAudioElement(AudioPlayerService.SILENT_WAV_DATA_URI);
+    }
+    const audio = this.audioElement;
+    if (!audio) return;
+
+    this.isUnlocking = true;
+    audio.muted = true;
+    try {
+      const playPromise = audio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.then(
+          () => {
+            this.unlocked = true;
+            if (this.isUnlocking && this.audioElement === audio) {
+              audio.pause();
+              audio.currentTime = 0;
+              audio.muted = false;
+              this.isUnlocking = false;
+            }
+          },
+          () => {
+            if (this.isUnlocking && this.audioElement === audio) {
+              audio.muted = false;
+              this.isUnlocking = false;
+            }
+          },
+        );
+      } else {
+        this.unlocked = true;
+        audio.muted = false;
+        this.isUnlocking = false;
+      }
+    } catch {
+      audio.muted = false;
+      this.isUnlocking = false;
+    }
+  }
 
   /** Configures a new track preview URL and resets playback progress. */
   loadTrack(previewUrl?: string): void {
     const wasPlaying = this.isPlaying();
     this.pause();
-    this.disposeAudioElement();
+    this.isUnlocking = false;
     this.progress.set(0);
 
     if (!previewUrl || typeof Audio === 'undefined') {
+      if (this.audioElement && !this.unlocked) {
+        this.disposeAudioElement();
+      } else if (this.audioElement) {
+        this.audioElement.removeAttribute('src');
+      }
       this.activePreviewUrl.set(null);
       this.usingRealAudio.set(false);
       return;
     }
 
     this.activePreviewUrl.set(previewUrl);
-    this.attachAudioElement(previewUrl);
+    if (this.audioElement) {
+      this.audioElement.muted = false;
+      this.audioElement.volume = this.volume() / 100;
+      this.audioElement.src = previewUrl;
+    } else {
+      this.attachAudioElement(previewUrl);
+    }
     if (wasPlaying) {
       this.play();
     }
@@ -105,18 +172,18 @@ export class AudioPlayerService implements OnDestroy {
       audio.preload = 'metadata';
       audio.volume = this.volume() / 100;
       audio.addEventListener('timeupdate', () => {
-        if (this.audioElement !== audio) return;
+        if (this.audioElement !== audio || this.isUnlocking) return;
         if (Number.isFinite(audio.duration) && audio.duration > 0) {
           this.progress.set(Math.min(100, (audio.currentTime / audio.duration) * 100));
         }
       });
       audio.addEventListener('ended', () => {
-        if (this.audioElement !== audio) return;
+        if (this.audioElement !== audio || this.isUnlocking) return;
         this.isPlaying.set(false);
         this.progress.set(0);
       });
       audio.addEventListener('error', () => {
-        if (this.audioElement !== audio) return;
+        if (this.audioElement !== audio || this.isUnlocking) return;
         this.fallbackToTicker();
       });
       this.audioElement = audio;
@@ -133,6 +200,8 @@ export class AudioPlayerService implements OnDestroy {
       this.startTicker();
       return;
     }
+    this.isUnlocking = false;
+    audio.muted = false;
     try {
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.then === 'function') {
@@ -142,6 +211,7 @@ export class AudioPlayerService implements OnDestroy {
               audio.pause();
               return;
             }
+            this.unlocked = true;
             this.usingRealAudio.set(true);
             this.stopTicker();
           },

@@ -323,3 +323,31 @@ export function matchesGenreFilter(trackGenre: string, selectedFilter: string): 
     (alias) => normTrack === alias || hasTokenSubsequence(trackTokens, alias.split(' ')),
   );
 }
+
+/** Formats raw genre strings into canonical display labels and deduplicates case-insensitively. */
+export function canonicalizeGenreList(genres: readonly string[]): readonly string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of genres) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const label = formatGenreLabel(trimmed);
+    const key = label.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(label);
+    }
+  }
+  return result;
+}
+
+/** Checks whether a genre list contains a target genre using canonical label comparison. */
+export function hasCanonicalGenre(genres: readonly string[], target: string): boolean {
+  const trimmed = target.trim();
+  if (!trimmed) return false;
+  const targetKey = formatGenreLabel(trimmed).toLowerCase();
+  return genres.some((item) => {
+    const clean = item.trim();
+    return clean.length > 0 && formatGenreLabel(clean).toLowerCase() === targetKey;
+  });
+}

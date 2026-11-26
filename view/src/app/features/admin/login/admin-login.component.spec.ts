@@ -75,7 +75,7 @@ describe('AdminLoginComponent', () => {
     req.flush({ detail: 'Invalid credentials' }, { status: 401, statusText: 'Unauthorized' });
 
     expect(component['isSubmitting']()).toBe(false);
-    expect(component['errorMessage']()).toContain('Invalid credentials');
+    expect(component['errorMessage']()).toContain('E-mail ou senha inválidos.');
 
     component['returnToListenerApp']();
   });

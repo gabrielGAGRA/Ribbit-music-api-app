@@ -20,6 +20,7 @@ const LEGACY_STORAGE_KEYS: readonly string[] = [
   'ribbit-user-name',
   'ribbit-plan',
   'ribbit-blocked',
+  'ribbit-genres',
 ];
 
 function hasStorage(): boolean {

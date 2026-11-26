@@ -199,3 +199,15 @@ export interface DashboardViewData {
 export interface ActionSuccessApiDto {
   readonly success: boolean;
 }
+
+export type RibbyAlertTone = 'restriction' | 'review' | 'plan';
+
+export type RibbyAlertMood = 'talk' | 'wave' | 'excited';
+
+export interface RibbyAlert {
+  readonly id: number;
+  readonly title: string;
+  readonly message: string;
+  readonly tone: RibbyAlertTone;
+  readonly mood: RibbyAlertMood;
+}

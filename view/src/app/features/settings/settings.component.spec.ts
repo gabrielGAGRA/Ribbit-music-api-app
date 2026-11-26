@@ -181,13 +181,33 @@ describe('SettingsComponent', () => {
     );
   });
 
-  it('should remove blocked genre', () => {
-    state.blockedGenres.set(['Metal', 'Sertanejo']);
-    expect(state.blockedGenres()).toContain('Metal');
+  it('should remove blocked genre case-insensitively and remove favorite genre via API', () => {
+    state.blockedGenres.set(['metal', 'Sertanejo']);
+    expect(state.blockedGenres()).toContain('metal');
 
     component['removeBlockedGenre']('Metal');
-    expect(state.blockedGenres()).not.toContain('Metal');
-    expect(state.blockedGenres()).toContain('Sertanejo');
+    expect(state.blockedGenres()).toEqual(['Sertanejo']);
+
+    writeAuthToken('jwt-token');
+    state.favoriteGenres.set(['Rock', 'Hip Hop']);
+    component['removeFavoriteGenre']('hip hop');
+
+    const favReq = httpMock.expectOne('/api/profile/favorite-genres');
+    expect(favReq.request.method).toBe('PUT');
+    expect(favReq.request.body).toEqual({ favorite_genres: ['Rock'] });
+    favReq.flush({
+      user_id: 9,
+      email: 'joao@ribbit.app',
+      display_name: 'João Lucas',
+      age: 26,
+      plan_id: 1,
+      favorite_genres: ['rock'],
+      blocked_genres: [],
+      is_admin: false,
+    });
+    httpMock.expectOne('/api/discovery/next').flush(null);
+
+    expect(state.favoriteGenres()).toEqual(['Rock']);
   });
 
   it('should cancel subscription and downgrade to Free', () => {
@@ -452,5 +472,35 @@ describe('SettingsComponent DOM', () => {
       expect(window.name).toBe(`ribbit-oauth-origin:${window.location.origin}`);
     }
     window.name = '';
+  });
+
+  it('renders canonical favorite and blocked genre chips and supports removing them from DOM', async () => {
+    state.favoriteGenres.set(['hip hop', 'mpb']);
+    state.blockedGenres.set(['forro']);
+
+    const harness = await RouterTestingHarness.create('/settings');
+    harness.detectChanges();
+
+    const favTags = Array.from(
+      harness.fixture.nativeElement.querySelectorAll('.favorite-tag') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+    const blockedTags = Array.from(
+      harness.fixture.nativeElement.querySelectorAll('.blocked-tag') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+
+    expect(favTags).toEqual(['Hip Hop', 'MPB']);
+    expect(blockedTags).toEqual(['Forró']);
+
+    const removeFavBtn = harness.fixture.nativeElement.querySelector(
+      '.favorite-tag button',
+    ) as HTMLButtonElement | null;
+    expect(removeFavBtn).not.toBeNull();
+    removeFavBtn?.click();
+    harness.detectChanges();
+
+    const updatedFavTags = Array.from(
+      harness.fixture.nativeElement.querySelectorAll('.favorite-tag') as NodeListOf<HTMLElement>,
+    ).map((el) => el.textContent?.trim());
+    expect(updatedFavTags).toEqual(['MPB']);
   });
 });

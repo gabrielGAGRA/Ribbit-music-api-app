@@ -1175,4 +1175,113 @@ describe('JamsComponent', () => {
     expect(state.activeModal()).toBe('jam');
     state.setModal(null);
   });
+
+  it('commits superlike on upward drag, like/reject on horizontal drag, and resets drag on quota exhaustion', () => {
+    state.songs.set([
+      makeSong(101, 'Track One'),
+      makeSong(102, 'Track Two'),
+      makeSong(103, 'Track Three'),
+    ]);
+    const firstSong = component['currentJamDeckSong']();
+    expect(firstSong).toBeTruthy();
+
+    component['startJamCardDrag']({
+      clientX: 100,
+      clientY: 200,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    component['finishJamCardDrag']({
+      clientX: 105,
+      clientY: 130,
+      pointerId: 1,
+    } as unknown as PointerEvent);
+
+    expect(component['jamSuperlikesCount']()).toBe(1);
+    expect(component['currentJamDeckSong']()?.trackId).not.toBe(firstSong?.trackId);
+    expect(component['jamDrag']()).toEqual({ x: 0, y: 0 });
+
+    const secondSong = component['currentJamDeckSong']();
+    component['startJamCardDrag']({
+      clientX: 100,
+      clientY: 200,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    component['finishJamCardDrag']({
+      clientX: 170,
+      clientY: 205,
+      pointerId: 1,
+    } as unknown as PointerEvent);
+    expect(component['currentJamDeckSong']()?.trackId).not.toBe(secondSong?.trackId);
+
+    state.jamState.update((jam) => ({
+      ...jam,
+      maxSuperlikes: 1,
+      superlikesUsed: 1,
+    }));
+    component['startJamCardDrag']({
+      clientX: 100,
+      clientY: 200,
+      pointerId: 1,
+      target: document.createElement('div'),
+      currentTarget: null,
+    } as unknown as PointerEvent);
+    component['finishJamCardDrag']({
+      clientX: 100,
+      clientY: 120,
+      pointerId: 1,
+    } as unknown as PointerEvent);
+
+    expect(component['jamDrag']()).toEqual({ x: 0, y: 0 });
+    expect(component['isDraggingJam']()).toBe(false);
+  });
+
+  it('should compute jamDurationProgressPercent from accumulated, active, and queued tracks and bind progressbar', () => {
+    state.jamState.set({
+      ...state.jamState(),
+      active: true,
+      durationHours: 1,
+      durationMinutes: 0,
+      accumulatedMinutes: 3,
+      queueItems: [],
+    });
+    expect(component['jamAccumulatedMinutes']()).toBe(3);
+    expect(component['jamDurationProgressPercent']()).toBe(5);
+
+    state.jamState.set({
+      ...state.jamState(),
+      durationHours: 1,
+      durationMinutes: 0,
+      accumulatedMinutes: 3,
+      currentTrack: makeSong(10, 'Playing Track'),
+      queueItems: [{ song: makeSong(11, 'Queued Track'), votePoints: 2 }],
+    });
+    expect(component['jamAccumulatedMinutes']()).toBe(9);
+    expect(component['jamDurationProgressPercent']()).toBe(15);
+
+    state.jamState.set({
+      ...state.jamState(),
+      durationHours: 1,
+      durationMinutes: 0,
+      accumulatedMinutes: 90,
+      queueItems: [],
+    });
+    expect(component['jamDurationProgressPercent']()).toBe(100);
+
+    state.jamState.set({
+      ...state.jamState(),
+      durationHours: 0,
+      durationMinutes: 0,
+      accumulatedMinutes: 5,
+      queueItems: [],
+    });
+    expect(component['jamDurationProgressPercent']()).toBe(0);
+
+    const html = readFileSync(resolve(import.meta.dirname, 'jams.component.html'), 'utf8');
+    expect(html).toContain('[appWidthPercent]="jamDurationProgressPercent()"');
+    expect(html).toContain('role="progressbar"');
+  });
 });

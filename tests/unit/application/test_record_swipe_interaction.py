@@ -305,3 +305,47 @@ def test_record_swipe_interaction_string_synonym_action_saves_correctly() -> Non
     result = use_case.execute(command)
 
     assert result.action == InteractionAction.SUPERLIKE
+
+
+def test_record_swipe_interaction_rejects_blocked_genre_alias() -> None:
+    user = User(
+        user_id=1,
+        email="user@ribbit.com",
+        password_hash="pw",
+        display_name="Frog",
+        age=25,
+        plan_id=2,
+        blocked_genres=frozenset({"hip hop"}),
+    )
+    hip_hop_track = Track(
+        track_id=11,
+        title="Rap Track",
+        artist="MC",
+        duration_seconds=180,
+        genre="hip-hop",
+        explicit=False,
+    )
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = user
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = hip_hop_track
+
+    interaction_repo = MagicMock(spec=InteractionRepositoryPort)
+
+    use_case = RecordSwipeInteractionUseCase(
+        user_repo=user_repo,
+        track_repo=track_repo,
+        interaction_repo=interaction_repo,
+    )
+    command = RecordSwipeCommand(
+        user_id=1,
+        track_id=11,
+        action=InteractionAction.LIKE,
+    )
+
+    with pytest.raises(BusinessRuleViolationError, match="Genre is blocked by user"):
+        use_case.execute(command)
+
+    interaction_repo.save.assert_not_called()

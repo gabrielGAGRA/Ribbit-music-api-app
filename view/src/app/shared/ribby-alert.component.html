@@ -1,0 +1,38 @@
+@if (state.ribbyAlert(); as alert) {
+  <div class="ribby-alert-anchor" role="status" aria-live="polite">
+    <div
+      class="ribby-alert-card"
+      tabindex="0"
+      [class.tone-restriction]="alert.tone === 'restriction'"
+      [class.tone-review]="alert.tone === 'review'"
+      [class.tone-plan]="alert.tone === 'plan'"
+      (mouseenter)="pauseAutoDismiss()"
+      (mouseleave)="resumeAutoDismiss()"
+      (focusin)="pauseAutoDismiss()"
+      (focusout)="resumeAutoDismiss()"
+      (click)="dismissAlert()"
+      (keydown.enter)="dismissAlert()"
+      (keydown.escape)="dismissAlert()"
+    >
+      <div class="ribby-alert-mascot" aria-hidden="true">
+        <app-frog [size]="64" [mood]="alert.mood" [speaking]="true" />
+        <span class="ribby-alert-lilypad"></span>
+      </div>
+
+      <div class="ribby-alert-bubble">
+        <div class="ribby-alert-header">
+          <strong>{{ alert.title }}</strong>
+          <button
+            type="button"
+            class="ribby-alert-close"
+            aria-label="Fechar aviso do Ribby"
+            (click)="dismissAlert($event)"
+          >
+            <app-icon name="close" [size]="14" />
+          </button>
+        </div>
+        <p>{{ alert.message }}</p>
+      </div>
+    </div>
+  </div>
+}

@@ -4,6 +4,7 @@ import { Router } from '@angular/router';
 import { toApiError } from '../../core/api-error';
 import { computeInitials } from '../../core/api-mappers';
 import { readAuthToken } from '../../core/auth-token.storage';
+import { formatGenreLabel, hasCanonicalGenre } from '../../core/genre-catalog';
 import { RibbitStateService } from '../../core/ribbit-state.service';
 import { recordSpotifyOAuthInitiatorOrigin } from '../../core/spotify-oauth-origin';
 import { IconComponent } from '../../shared/icon.component';
@@ -213,17 +214,9 @@ export class SettingsComponent implements OnInit {
     });
   }
 
-  private extractDetail(err: unknown): string | null {
-    if (typeof err !== 'object' || err === null || !('error' in err)) return null;
-    const inner = err.error;
-    if (typeof inner !== 'object' || inner === null || !('detail' in inner)) return null;
-    return typeof inner.detail === 'string' ? inner.detail : null;
-  }
-
   private handleSpotifyError(err: unknown): void {
     this.isLinkingSpotify.set(false);
-    const detail = this.extractDetail(err);
-    this.reportSpotifyClientError(detail ?? toApiError(err).message);
+    this.reportSpotifyClientError(toApiError(err).message);
   }
 
   protected goToPlans(): void {
@@ -240,8 +233,17 @@ export class SettingsComponent implements OnInit {
     this.state.setModal('filters');
   }
 
+  protected formatGenre(genre: string): string {
+    return formatGenreLabel(genre);
+  }
+
+  protected removeFavoriteGenre(genre: string): void {
+    const updated = this.state.favoriteGenres().filter((g) => !hasCanonicalGenre([g], genre));
+    this.state.saveFavoriteGenres(updated);
+  }
+
   protected removeBlockedGenre(genre: string): void {
-    const updated = this.state.blockedGenres().filter((g) => g !== genre);
+    const updated = this.state.blockedGenres().filter((g) => !hasCanonicalGenre([g], genre));
     this.state.setBlockedGenres(updated);
   }
 
@@ -304,8 +306,7 @@ export class SettingsComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.isChangingPassword.set(false);
-        const message = this.extractDetail(err) ?? toApiError(err).message;
-        this.passwordError.set(message);
+        this.passwordError.set(toApiError(err).message);
       },
     });
   }

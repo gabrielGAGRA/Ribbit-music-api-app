@@ -70,13 +70,34 @@
           @if (currentJamDeckSong(); as deckSong) {
             <div
               class="jam-swipe-card"
+              [class.is-dragging]="isDraggingJam()"
+              [class.drag-like]="activeJamDragAction() === 'like'"
+              [class.drag-superlike]="activeJamDragAction() === 'superlike'"
+              [class.drag-reject]="activeJamDragAction() === 'reject'"
               [appTransform]="jamCardTransform()"
               (pointerdown)="startJamCardDrag($event)"
               (pointermove)="moveJamCardDrag($event)"
-              (pointerup)="finishJamCardDrag()"
+              (pointerup)="finishJamCardDrag($event)"
               (pointercancel)="cancelJamCardDrag()"
+              (lostpointercapture)="finishJamCardDrag()"
+              (dragstart)="preventNativeDrag($event)"
             >
-              <img [src]="deckSong.image" [alt]="'Capa de ' + deckSong.title" />
+              <img draggable="false" [src]="deckSong.image" [alt]="'Capa de ' + deckSong.title" />
+              @if (activeJamDragAction(); as dragAction) {
+                <span class="jam-drag-badge" [class]="'jam-drag-badge ' + dragAction">
+                  @switch (dragAction) {
+                    @case ('like') {
+                      CURTI
+                    }
+                    @case ('superlike') {
+                      SUPERLIKE
+                    }
+                    @case ('reject') {
+                      PULAR
+                    }
+                  }
+                </span>
+              }
               <div class="jam-card-shade"></div>
               <div class="jam-card-info">
                 <strong>{{ deckSong.title }}</strong>
@@ -180,10 +201,17 @@
           <strong>
             {{ state.jamState().durationHours }}h {{ formattedDurationMinutes() }}min
           </strong>
-          <span>+ {{ state.jamState().accumulatedMinutes || 0 }} min acumulados</span>
+          <span>+ {{ jamAccumulatedMinutes() }} min acumulados</span>
         </div>
-        <div class="duration-bar">
-          <i></i>
+        <div
+          class="duration-bar"
+          role="progressbar"
+          aria-label="Progresso de tempo da Jam"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          [attr.aria-valuenow]="jamDurationProgressPercent()"
+        >
+          <i [appWidthPercent]="jamDurationProgressPercent()"></i>
         </div>
 
         <div class="section-title">

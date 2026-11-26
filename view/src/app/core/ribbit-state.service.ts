@@ -14,6 +14,9 @@ import type {
   JamState,
   Playlist,
   RecentInteractedTrackApiDto,
+  RibbyAlert,
+  RibbyAlertMood,
+  RibbyAlertTone,
   Song,
   SubscriptionPlan,
   TrackAccessHistoryItem,
@@ -34,10 +37,11 @@ import {
   mapApiActionToDecision,
   mapJamStateDto,
   mapTrackDtoToSong,
+  resolveSongDurationSeconds,
 } from './api-mappers';
 import { AudioPlayerService } from './audio-player.service';
 import { AuthSessionNotifier } from './auth-session.notifier';
-import { matchesGenreFilter } from './genre-catalog';
+import { canonicalizeGenreList, matchesGenreFilter } from './genre-catalog';
 import {
   clearAuthStorage,
   readAuthToken,
@@ -210,6 +214,9 @@ export class RibbitStateService implements OnDestroy {
   private readonly initialUser = readStoredUser();
   private readonly hasInitialToken = readAuthToken() !== null;
   private jamPollTimer: ReturnType<typeof setInterval> | null = null;
+  private ribbyAlertTimer: ReturnType<typeof setTimeout> | null = null;
+  private ribbyAlertSeq = 0;
+  private ribbyAlertPaused = false;
   private jamDeckLoadSub: Subscription | null = null;
   private jamStateSyncSub: Subscription | null = null;
   private jamSessionEpoch = 0;
@@ -217,6 +224,7 @@ export class RibbitStateService implements OnDestroy {
   private readonly jamConfirmedSeenTrackIds = new Set<number>();
   private serverJamSuperlikes = 0;
   private pendingJamSuperlikes = 0;
+  private hostAdvancedJamSeconds = 0;
   private readonly unsubscribeUnauthorized: () => void;
   private readonly recentAccessTimestamps = new Map<string, number>();
 
@@ -226,6 +234,7 @@ export class RibbitStateService implements OnDestroy {
   readonly discoverySong = signal<Song | null>(null);
   private readonly discoveryQueue: Song[] = [];
   private discoveryPrefetchInFlight = false;
+  private discoveryQueueVersion = 0;
   private readonly discoveryQueueTarget = 3;
   readonly isDeckEmpty = signal<boolean>(false);
   readonly isLoadingDiscovery = signal<boolean>(false);
@@ -248,9 +257,11 @@ export class RibbitStateService implements OnDestroy {
 
   readonly playlists = signal<readonly Playlist[]>([]);
   readonly selectedGenres = signal<readonly string[]>(
-    getStoredGenres('ribbit-genres', ['Rock', 'Pop', 'Indie']).slice(0, 3),
+    canonicalizeGenreList(getStoredGenres('ribbit-genres', ['Rock', 'Pop', 'Indie'])).slice(0, 3),
   );
-  readonly blockedGenres = signal<readonly string[]>(this.initialUser?.blocked_genres ?? []);
+  readonly blockedGenres = signal<readonly string[]>(
+    canonicalizeGenreList(this.initialUser?.blocked_genres ?? []),
+  );
   readonly blockedArtists = signal<readonly string[]>(this.initialUser?.blocked_artists ?? []);
 
   readonly userId = signal<number | null>(this.initialUser?.user_id ?? null);
@@ -282,9 +293,12 @@ export class RibbitStateService implements OnDestroy {
         : 'dark',
     ),
   );
-  readonly favoriteGenres = signal<readonly string[]>(this.initialUser?.favorite_genres ?? []);
+  readonly favoriteGenres = signal<readonly string[]>(
+    canonicalizeGenreList(this.initialUser?.favorite_genres ?? []),
+  );
 
   readonly toast = signal<string>('');
+  readonly ribbyAlert = signal<RibbyAlert | null>(null);
   readonly activePage = signal<string>('discover');
   readonly authView = signal<'app' | 'login' | 'register' | 'forgot-password'>(
     this.hasInitialToken ? 'app' : 'login',
@@ -379,6 +393,10 @@ export class RibbitStateService implements OnDestroy {
 
   ngOnDestroy(): void {
     this.stopJamPolling();
+    if (this.ribbyAlertTimer !== null) {
+      clearTimeout(this.ribbyAlertTimer);
+      this.ribbyAlertTimer = null;
+    }
     this.unsubscribeUnauthorized();
   }
 
@@ -395,6 +413,120 @@ export class RibbitStateService implements OnDestroy {
   /** Dismisses any active toast notification immediately. */
   clearToast(): void {
     this.toast.set('');
+  }
+
+  /** Displays a floating Ribby speech-bubble alert with auto-dismiss. */
+  showRibbyAlert(options: {
+    readonly title: string;
+    readonly message: string;
+    readonly tone?: RibbyAlertTone;
+    readonly mood?: RibbyAlertMood;
+    readonly durationMs?: number;
+  }): void {
+    const id = ++this.ribbyAlertSeq;
+    if (this.ribbyAlertTimer !== null) {
+      clearTimeout(this.ribbyAlertTimer);
+      this.ribbyAlertTimer = null;
+    }
+    this.ribbyAlertPaused = false;
+    this.ribbyAlert.set({
+      id,
+      title: options.title,
+      message: options.message,
+      tone: options.tone ?? 'restriction',
+      mood: options.mood ?? 'talk',
+    });
+    const duration = options.durationMs ?? 6000;
+    this.ribbyAlertTimer = setTimeout(() => {
+      if (!this.ribbyAlertPaused && this.ribbyAlert()?.id === id) {
+        this.dismissRibbyAlert();
+      }
+    }, duration);
+  }
+
+  /** Pauses the auto-dismiss timer while the user inspects the Ribby alert. */
+  pauseRibbyAlert(): void {
+    this.ribbyAlertPaused = true;
+    if (this.ribbyAlertTimer !== null) {
+      clearTimeout(this.ribbyAlertTimer);
+      this.ribbyAlertTimer = null;
+    }
+  }
+
+  /** Resumes the auto-dismiss timer after hover or focus leaves the Ribby alert. */
+  resumeRibbyAlert(): void {
+    this.ribbyAlertPaused = false;
+    const active = this.ribbyAlert();
+    if (!active) return;
+    if (this.ribbyAlertTimer !== null) {
+      clearTimeout(this.ribbyAlertTimer);
+    }
+    const id = active.id;
+    this.ribbyAlertTimer = setTimeout(() => {
+      if (!this.ribbyAlertPaused && this.ribbyAlert()?.id === id) {
+        this.dismissRibbyAlert();
+      }
+    }, 3500);
+  }
+
+  /** Dismisses the currently displayed Ribby speech-bubble alert. */
+  dismissRibbyAlert(): void {
+    if (this.ribbyAlertTimer !== null) {
+      clearTimeout(this.ribbyAlertTimer);
+      this.ribbyAlertTimer = null;
+    }
+    this.ribbyAlertPaused = false;
+    this.ribbyAlert.set(null);
+  }
+
+  /** Returns true when the current minor user is blocked from accessing the given track. */
+  isSongRestrictedForMinor(song: Song): boolean {
+    if (!this.isMinorUser()) {
+      return false;
+    }
+    if (song.explicit) {
+      return true;
+    }
+    const normalized = song.genre
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+    if (!normalized) {
+      return false;
+    }
+    const tokens = normalized.split(/\s+/);
+    if (tokens.some((token) => token === 'funk' || token === 'trap' || token === 'rap')) {
+      return true;
+    }
+    for (let i = 0; i < tokens.length - 1; i++) {
+      if (tokens[i] === 'hip' && tokens[i + 1] === 'hop') {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Surfaces a Ribby restriction alert when a minor tries to access restricted content. */
+  notifyMinorSongRestriction(song?: Song): void {
+    this.showRibbyAlert({
+      title: 'Conteúdo restrito para menores',
+      message: song?.title
+        ? `"${song.title}" possui classificação restrita (+18 ou gênero bloqueado para menores de 18 anos).`
+        : 'Contas para menores de 18 anos não podem acessar músicas explícitas (+18) ou dos gêneros Funk, Trap, Rap e Hip Hop.',
+      tone: 'restriction',
+      mood: 'talk',
+    });
+  }
+
+  /** Surfaces a Ribby guidance alert when a user tries to edit or duplicate an existing review. */
+  notifyDuplicateReviewAttempt(): void {
+    this.showRibbyAlert({
+      title: 'Você já avaliou esta música',
+      message:
+        'As avaliações não podem ser editadas diretamente. Exclua sua avaliação atual na lista abaixo para enviar uma nova nota ou comentário.',
+      tone: 'review',
+      mood: 'talk',
+    });
   }
 
   readonly playlistsViewReset = signal<number>(0);
@@ -437,12 +569,22 @@ export class RibbitStateService implements OnDestroy {
   openUnavailableTrackModal(song: Song): void {
     this.selectedDetailsSong.set(song);
     this.setModal('track-unavailable');
+    this.showRibbyAlert({
+      title: 'Música indisponível',
+      message: `"${song.title}" foi removida do catálogo e não pode mais ser reproduzida ou avaliada.`,
+      tone: 'restriction',
+      mood: 'talk',
+    });
   }
 
   /** Opens the track details & reviews modal for a specific song. */
   openTrackDetailsModal(song: Song): void {
     if (song.isDeleted) {
       this.openUnavailableTrackModal(song);
+      return;
+    }
+    if (this.isSongRestrictedForMinor(song)) {
+      this.notifyMinorSongRestriction(song);
       return;
     }
     this.selectedDetailsSong.set(song);
@@ -453,6 +595,10 @@ export class RibbitStateService implements OnDestroy {
   openTrackForCommunitySwipe(song: Song): boolean {
     if (song.isDeleted) {
       this.openUnavailableTrackModal(song);
+      return false;
+    }
+    if (this.isSongRestrictedForMinor(song)) {
+      this.notifyMinorSongRestriction(song);
       return false;
     }
     this.pendingCommunityReturnSong.set(song);
@@ -481,7 +627,12 @@ export class RibbitStateService implements OnDestroy {
   }
 
   /** Persists credentials after login or registration and hydrates backend data. */
-  completeAuthentication(auth: AuthApiResponse, fallbackPlanName?: string): void {
+  completeAuthentication(
+    auth: AuthApiResponse,
+    fallbackPlanName?: string,
+    showTutorial = false,
+  ): void {
+    this.resetUserCollections();
     writeAuthToken(auth.access_token);
     this.applyUserDto(auth.user);
     if (fallbackPlanName) {
@@ -490,13 +641,8 @@ export class RibbitStateService implements OnDestroy {
     this.authView.set('app');
     this.hydrateAuthenticatedSession();
 
-    // Trigger onboarding on first access
-    if (typeof localStorage !== 'undefined') {
-      const email = auth.user.email;
-      const seen = localStorage.getItem(`ribbit:onboarding_done:${email}`);
-      if (!seen) {
-        this.setModal('onboarding');
-      }
+    if (showTutorial) {
+      this.setModal('onboarding');
     }
   }
 
@@ -600,12 +746,15 @@ export class RibbitStateService implements OnDestroy {
       theme: this.profileApi.getTheme().pipe(catchError(() => of<string | null>(null))),
     }).subscribe(({ blocked, favorites, theme }) => {
       if (blocked !== null) {
-        this.blockedGenres.set([...blocked]);
+        this.blockedGenres.set(canonicalizeGenreList(blocked));
       }
-      if (favorites !== null && favorites.length > 0) {
-        this.favoriteGenres.set([...favorites]);
-        this.selectedGenres.set([...favorites]);
-        setStoredGenres('ribbit-genres', favorites);
+      if (favorites !== null) {
+        const canonicalFavorites = canonicalizeGenreList(favorites).slice(0, 3);
+        this.favoriteGenres.set(canonicalFavorites);
+        if (this.activeModal() !== 'filters') {
+          this.selectedGenres.set(canonicalFavorites);
+        }
+        setStoredGenres('ribbit-genres', canonicalFavorites);
       }
       if (theme === 'light' || theme === 'dark') {
         this.preferredTheme.set(theme);
@@ -630,10 +779,11 @@ export class RibbitStateService implements OnDestroy {
       return;
     }
     this.discoveryPrefetchInFlight = true;
+    const version = this.discoveryQueueVersion;
     this.songService.getNextDiscoverySong().subscribe({
       next: (song) => {
         this.discoveryPrefetchInFlight = false;
-        if (!song) return;
+        if (version !== this.discoveryQueueVersion || !song) return;
         const currentId = this.discoverySong()?.trackId;
         const alreadyQueued = this.discoveryQueue.some(
           (queued) => queued.trackId !== undefined && queued.trackId === song.trackId,
@@ -659,6 +809,7 @@ export class RibbitStateService implements OnDestroy {
     if (!readAuthToken()) return;
     if (resetQueue) {
       this.discoveryQueue.length = 0;
+      this.discoveryQueueVersion += 1;
     }
     const nextSong = this.discoveryQueue.shift();
     if (nextSong) {
@@ -673,8 +824,10 @@ export class RibbitStateService implements OnDestroy {
       }, 0);
       return;
     }
+    const version = this.discoveryQueueVersion;
     this.songService.getNextDiscoverySong().subscribe({
       next: (song) => {
+        if (version !== this.discoveryQueueVersion) return;
         if (song) {
           this.discoverySong.set(song);
           this.isDeckEmpty.set(false);
@@ -793,17 +946,30 @@ export class RibbitStateService implements OnDestroy {
 
   /** Saves favorite genres via /api/profile/favorite-genres (maximum 3 genres). */
   saveFavoriteGenres(genres: readonly string[]): void {
-    const limited = genres.slice(0, 3);
+    const limited = canonicalizeGenreList(genres).slice(0, 3);
+    const previousFavorites = this.favoriteGenres();
+    const previousSelected = this.selectedGenres();
     this.favoriteGenres.set(limited);
     this.selectedGenres.set(limited);
     setStoredGenres('ribbit-genres', limited);
     if (readAuthToken()) {
       this.profileApi.updateFavoriteGenres(limited).subscribe({
-        next: () => {
+        next: (updatedUser) => {
+          if (updatedUser && typeof updatedUser.user_id === 'number') {
+            this.applyUserDto(updatedUser);
+            if (Array.isArray(updatedUser.favorite_genres)) {
+              this.selectedGenres.set(
+                canonicalizeGenreList(updatedUser.favorite_genres).slice(0, 3),
+              );
+            }
+          }
           this.loadNextDiscoveryTrack(true);
           this.notify('Gêneros favoritos atualizados com sucesso!');
         },
         error: (err: unknown) => {
+          this.favoriteGenres.set(previousFavorites);
+          this.selectedGenres.set(previousSelected);
+          setStoredGenres('ribbit-genres', previousFavorites);
           this.notify(toApiError(err).message);
         },
       });
@@ -825,6 +991,13 @@ export class RibbitStateService implements OnDestroy {
     }
     if (this.isMinorUser() && plan.name !== 'Free') {
       this.notify('Somente usuários maiores de 18 anos podem assinar planos pagos.');
+      this.showRibbyAlert({
+        title: 'Plano exclusivo para maiores de 18 anos',
+        message:
+          'Contas de menores usam o plano Free ou participam como dependentes em um Plano Família.',
+        tone: 'restriction',
+        mood: 'talk',
+      });
       return;
     }
     if (plan.name === 'Free') {
@@ -885,6 +1058,12 @@ export class RibbitStateService implements OnDestroy {
   promptPlanUpgrade(reason: string): void {
     this.upgradePromptReason.set(reason);
     this.setModal('upgrade');
+    this.showRibbyAlert({
+      title: 'Recurso dos planos pagos',
+      message: reason,
+      tone: 'plan',
+      mood: 'wave',
+    });
   }
 
   /** Surfaces a connection notice modal directing users to /settings when Spotify connection is required. */
@@ -978,7 +1157,7 @@ export class RibbitStateService implements OnDestroy {
       return;
     }
 
-    this.advanceLocalFallbackIndex(idx, nextHistory);
+    this.advanceLocalFallbackIndex(idx, nextHistory, autoPlayNext);
   }
 
   /** Restores the last swiped song back onto the Discovery card so the user can re-decide. */
@@ -1076,7 +1255,11 @@ export class RibbitStateService implements OnDestroy {
             );
             return;
           }
-          this.notify(toApiError(err).message);
+          const apiErr = toApiError(err);
+          if (apiErr.rawMessage === 'Track is restricted for minor users.') {
+            this.notifyMinorSongRestriction(song);
+          }
+          this.notify(apiErr.message);
         },
       });
   }
@@ -1264,8 +1447,15 @@ export class RibbitStateService implements OnDestroy {
           return;
         }
         if (isSpotifyPremiumRequiredError(err) || isSpotifyError(err)) {
+          const message = toApiError(err).message;
           this.setModal(null);
-          this.notify(toApiError(err).message);
+          this.notify(message);
+          this.showRibbyAlert({
+            title: 'Spotify Premium necessário',
+            message,
+            tone: 'plan',
+            mood: 'talk',
+          });
           return;
         }
         if (isPremiumRequiredError(err)) {
@@ -1295,8 +1485,15 @@ export class RibbitStateService implements OnDestroy {
           return;
         }
         if (isSpotifyPremiumRequiredError(err) || isSpotifyError(err)) {
+          const message = toApiError(err).message;
           this.setModal(null);
-          this.notify(toApiError(err).message);
+          this.notify(message);
+          this.showRibbyAlert({
+            title: 'Spotify Premium necessário',
+            message,
+            tone: 'plan',
+            mood: 'talk',
+          });
           return;
         }
         if (isPremiumRequiredError(err)) {
@@ -1401,10 +1598,17 @@ export class RibbitStateService implements OnDestroy {
 
   /** Advances the active Jam track immediately (host only) via POST /api/jams/{id}/advance. */
   advanceJam(): void {
-    const jamId = this.jamState().jamId;
+    const jam = this.jamState();
+    const jamId = jam.jamId;
     if (!jamId) return;
+    const advancedTrackSeconds = jam.currentTrack
+      ? resolveSongDurationSeconds(jam.currentTrack)
+      : 0;
     this.jamService.advanceJam(jamId).subscribe({
       next: () => {
+        if (this.jamState().jamId === jamId && advancedTrackSeconds > 0) {
+          this.hostAdvancedJamSeconds += advancedTrackSeconds;
+        }
         this.syncJamState(jamId);
         this.notify('Faixa da Jam avançada pelo anfitrião.');
       },
@@ -1616,6 +1820,11 @@ export class RibbitStateService implements OnDestroy {
   publishTrackReview(rating: number, commentText: string): void {
     const target = this.detailsTargetSong();
     if (target.trackId === undefined) return;
+    const uid = this.userId();
+    if (uid !== null && this.activeTrackReviews().some((r) => r.userId === uid)) {
+      this.notifyDuplicateReviewAttempt();
+      return;
+    }
     const effectiveRating = rating >= 1 && rating <= 5 ? rating : 5;
     this.songService
       .publishReview({
@@ -1633,7 +1842,13 @@ export class RibbitStateService implements OnDestroy {
           this.notify('Sua avaliação foi publicada na comunidade!');
         },
         error: (err: unknown) => {
-          this.notify(toApiError(err).message);
+          const apiErr = toApiError(err);
+          if (apiErr.status === 409 || apiErr.rawMessage.includes('already reviewed')) {
+            this.notifyDuplicateReviewAttempt();
+          } else if (apiErr.rawMessage === 'Track is restricted for minor users.') {
+            this.notifyMinorSongRestriction(target);
+          }
+          this.notify(apiErr.message);
         },
       });
   }
@@ -1678,7 +1893,7 @@ export class RibbitStateService implements OnDestroy {
 
   /** Persists favorite genres locally for UI recommendations context (maximum 3 genres). */
   setSelectedGenres(genres: readonly string[]): void {
-    const limited = genres.slice(0, 3);
+    const limited = canonicalizeGenreList(genres).slice(0, 3);
     this.selectedGenres.set(limited);
     setStoredGenres('ribbit-genres', limited);
   }
@@ -1686,13 +1901,15 @@ export class RibbitStateService implements OnDestroy {
   /** Updates blocked genres on PUT /api/profile/blocked-genres (triggers upgrade modal on 403). */
   setBlockedGenres(blocked: readonly string[]): void {
     const previous = this.blockedGenres();
-    this.blockedGenres.set(blocked);
+    const canonical = canonicalizeGenreList(blocked);
+    this.blockedGenres.set(canonical);
     if (!readAuthToken()) return;
 
-    this.profileApi.updateBlockedGenres(blocked).subscribe({
+    this.profileApi.updateBlockedGenres(canonical).subscribe({
       next: (updatedUser) => {
         this.applyUserDto(updatedUser);
-        this.loadNextDiscoveryTrack();
+        this.loadNextDiscoveryTrack(true);
+        this.notify('Filtros de gêneros bloqueados atualizados.');
       },
       error: (err: unknown) => {
         this.blockedGenres.set(previous);
@@ -1722,16 +1939,22 @@ export class RibbitStateService implements OnDestroy {
   }
 
   private applyUserPreferencesFromDto(user: UserApiDto): void {
-    this.blockedGenres.set(user.blocked_genres ? [...user.blocked_genres] : []);
+    this.blockedGenres.set(
+      Array.isArray(user.blocked_genres) ? canonicalizeGenreList(user.blocked_genres) : [],
+    );
     this.blockedArtists.set(user.blocked_artists ? [...user.blocked_artists] : []);
     if (user.preferred_theme === 'light' || user.preferred_theme === 'dark') {
       this.preferredTheme.set(user.preferred_theme);
       this.applyTheme(user.preferred_theme);
       setStoredTheme(user.preferred_theme);
     }
-    if (user.favorite_genres && user.favorite_genres.length > 0) {
-      this.favoriteGenres.set([...user.favorite_genres]);
-      this.selectedGenres.set([...user.favorite_genres]);
+    if (Array.isArray(user.favorite_genres)) {
+      const canonicalFavorites = canonicalizeGenreList(user.favorite_genres).slice(0, 3);
+      this.favoriteGenres.set(canonicalFavorites);
+      setStoredGenres('ribbit-genres', canonicalFavorites);
+      if (this.activeModal() !== 'filters') {
+        this.selectedGenres.set(canonicalFavorites);
+      }
     }
   }
 
@@ -1801,7 +2024,11 @@ export class RibbitStateService implements OnDestroy {
     }
   }
 
-  private advanceLocalFallbackIndex(idx: number, nextHistory: readonly Decision[]): void {
+  private advanceLocalFallbackIndex(
+    idx: number,
+    nextHistory: readonly Decision[],
+    autoPlayNext: boolean,
+  ): void {
     const list = this.songs();
     const blocked = this.blockedGenres();
     const nextIdx = list.findIndex(
@@ -1814,6 +2041,10 @@ export class RibbitStateService implements OnDestroy {
       this.isDeckEmpty.set(true);
     } else {
       this.currentIndex.set(nextIdx);
+      this.audioPlayer.loadTrack(list[nextIdx]?.previewUrl);
+      if (autoPlayNext) {
+        this.audioPlayer.play();
+      }
     }
   }
 
@@ -2001,6 +2232,7 @@ export class RibbitStateService implements OnDestroy {
     this.jamConfirmedSeenTrackIds.clear();
     this.serverJamSuperlikes = 0;
     this.pendingJamSuperlikes = 0;
+    this.hostAdvancedJamSeconds = 0;
     this.jamDeckSongs.set([]);
     this.jamDeckCursor.set(0);
     this.jamDeckNextCursor.set(null);
@@ -2024,12 +2256,24 @@ export class RibbitStateService implements OnDestroy {
         ) {
           return;
         }
-        const lookup = this.buildTrackLookup([...this.songs(), ...this.jamDeckSongs()]);
+        const currentJam = this.jamState();
+        const activeJamSongs = [
+          ...(currentJam.currentTrack ? [currentJam.currentTrack] : []),
+          ...(currentJam.queueItems ?? []).map((item) => item.song),
+        ];
+        const lookup = this.buildTrackLookup([
+          ...this.songs(),
+          ...this.jamDeckSongs(),
+          ...activeJamSongs,
+        ]);
         const mapped = mapJamStateDto({
           dto: stateDto,
           trackLookup: lookup,
           fallbackSong: this.currentSong(),
         });
+        const totalAccumulatedSeconds =
+          (stateDto.jam.accumulated_duration_seconds || 0) + this.hostAdvancedJamSeconds;
+        const effectiveAccumulatedMinutes = Math.round(totalAccumulatedSeconds / 60);
         this.serverJamSuperlikes = mapped.superlikesCount ?? 0;
         const limit =
           mapped.superlikesLimit ?? this.serverJamSuperlikes + this.pendingJamSuperlikes;
@@ -2037,7 +2281,11 @@ export class RibbitStateService implements OnDestroy {
           limit,
           this.serverJamSuperlikes + this.pendingJamSuperlikes,
         );
-        this.jamState.set({ ...mapped, superlikesCount: effectiveSuperlikes });
+        this.jamState.set({
+          ...mapped,
+          accumulatedMinutes: effectiveAccumulatedMinutes,
+          superlikesCount: effectiveSuperlikes,
+        });
         if (!mapped.active) {
           this.stopJamPolling();
         }
@@ -2093,6 +2341,7 @@ export class RibbitStateService implements OnDestroy {
     this.activeTrackReviews.set([]);
     this.pendingCommunityReturnSong.set(null);
     this.discoveryQueue.length = 0;
+    this.discoveryQueueVersion += 1;
     this.discoverySong.set(null);
     this.swipeUndoStack.set([]);
     this.isDeckEmpty.set(false);
@@ -2100,6 +2349,7 @@ export class RibbitStateService implements OnDestroy {
     this.jamState.set(DEFAULT_JAM_STATE);
     this.resetJamDeckState();
     this.userId.set(null);
+    this.primaryAccountId.set(null);
     this.userEmail.set('');
     this.userName.set('Visitante');
     this.userAge.set(null);
@@ -2107,8 +2357,18 @@ export class RibbitStateService implements OnDestroy {
     this.currentPlanId.set(1);
     this.isAdmin.set(false);
     this.spotifyId.set(null);
+    this.spotifyPremium.set(false);
     this.blockedGenres.set([]);
     this.blockedArtists.set([]);
+    this.favoriteGenres.set([]);
+    this.selectedGenres.set([]);
+    this.selectedPlaylistName.set(null);
+    this.selectedDetailsSong.set(null);
+    this.queue.set([]);
+    this.queueSongs.set([]);
+    this.queueCursor.set(0);
+    this.activePage.set('discover');
     this.activeModal.set(null);
+    this.dismissRibbyAlert();
   }
 }

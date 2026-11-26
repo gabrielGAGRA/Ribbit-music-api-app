@@ -6,6 +6,7 @@ import { TestBed } from '@angular/core/testing';
 import { describe, expect, it, vi } from 'vitest';
 import { BACKEND_GENRES, MAX_FAVORITE_GENRES, ModalsComponent } from './modals.component';
 import { authInterceptor } from '../core/auth.interceptor';
+import { clearAuthStorage, writeAuthToken } from '../core/auth-token.storage';
 import { RibbitStateService } from '../core/ribbit-state.service';
 
 describe('ModalsComponent', () => {
@@ -595,6 +596,65 @@ describe('ModalsComponent', () => {
         preventDefault: () => undefined,
         target: pForm,
       } as unknown as Event);
+    });
+
+    it('matches lowercase backend genres, prevents favorite/blocked contradictions, and syncs drafts on modal open', () => {
+      localStorage.clear();
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(withInterceptors([authInterceptor])),
+          provideHttpClientTesting(),
+        ],
+      });
+
+      const state = TestBed.inject(RibbitStateService);
+      const component = TestBed.runInInjectionContext(() => new ModalsComponent());
+
+      // Simulate lowercase backend genres already loaded in state
+      state.favoriteGenres.set(['hip hop', 'mpb']);
+      state.selectedGenres.set(['hip hop', 'mpb']);
+      state.blockedGenres.set(['forro']);
+
+      expect(component['isGenreSelected']('Hip Hop')).toBe(true);
+      expect(component['isGenreSelected']('MPB')).toBe(true);
+      expect(component['isGenreBlocked']('Forró')).toBe(true);
+
+      // Deselecting a lowercase favorite works
+      component['toggleSelectedGenre']('Hip Hop');
+      expect(component['isGenreSelected']('Hip Hop')).toBe(false);
+
+      // Selecting a blocked genre as favorite on paid plan unblocks it automatically
+      state.setPlan('Individual');
+      component['toggleSelectedGenre']('Forró');
+      expect(component['isGenreSelected']('Forró')).toBe(true);
+      expect(component['isGenreBlocked']('Forró')).toBe(false);
+
+      // Blocking a favorite genre on paid plan removes it from selected favorites
+      component['toggleBlockedGenre']('MPB');
+      expect(component['isGenreBlocked']('MPB')).toBe(true);
+      expect(component['isGenreSelected']('MPB')).toBe(false);
+
+      // Blocking on Free plan keeps favorite intact (since 403 upgrade prompt applies)
+      state.setPlan('Free');
+      state.selectedGenres.set(['Rock']);
+      state.blockedGenres.set([]);
+      component['toggleBlockedGenre']('Rock');
+      expect(component['isGenreSelected']('Rock')).toBe(true);
+
+      // Opening onboarding hydrates word cloud with persisted favorites
+      state.favoriteGenres.set(['Rock', 'Jazz']);
+      state.setModal('onboarding');
+      TestBed.flushEffects();
+      expect(component['selectedWordCloudGenres']()).toEqual(['Rock', 'Jazz']);
+
+      // Opening filters with auth token resets discarded draft back to persisted favorites
+      writeAuthToken('tok-123');
+      state.setSelectedGenres(['Pop']);
+      state.setModal('filters');
+      TestBed.flushEffects();
+      expect(state.selectedGenres()).toEqual(['Rock', 'Jazz']);
+      clearAuthStorage();
+      localStorage.clear();
     });
   });
 });

@@ -148,4 +148,58 @@ describe('AudioPlayerService', () => {
       vi.stubGlobal('Audio', originalAudio);
     }
   });
+
+  it('unlocks once on a persistent HTMLAudioElement and reuses it across loadTrack calls', async () => {
+    const originalAudio = globalThis.Audio;
+    const playSpy = vi.fn(() => Promise.resolve());
+    const pauseSpy = vi.fn();
+    const audioConstructor = vi.fn();
+    const instances: MockAudio[] = [];
+
+    class MockAudio {
+      src = '';
+      preload = '';
+      volume = 1;
+      muted = false;
+      duration = 30;
+      currentTime = 5;
+      addEventListener = vi.fn();
+      removeAttribute = vi.fn();
+      play = playSpy;
+      pause = pauseSpy;
+      constructor(src?: string) {
+        audioConstructor(src);
+        if (src) this.src = src;
+        instances.push(this);
+      }
+    }
+
+    vi.stubGlobal('Audio', MockAudio);
+    try {
+      player.unlock();
+      await Promise.resolve();
+
+      expect(audioConstructor).toHaveBeenCalledTimes(1);
+      expect(playSpy).toHaveBeenCalledTimes(1);
+      expect(pauseSpy).toHaveBeenCalledTimes(1);
+      expect(instances[0]?.muted).toBe(false);
+      expect(player.isPlaying()).toBe(false);
+
+      player.loadTrack('https://example.com/track-1.mp3');
+      player.play();
+      await Promise.resolve();
+      expect(instances[0]?.src).toBe('https://example.com/track-1.mp3');
+
+      player.loadTrack('https://example.com/track-2.mp3');
+      player.play();
+      await Promise.resolve();
+
+      expect(audioConstructor).toHaveBeenCalledTimes(1);
+      expect(instances[0]?.src).toBe('https://example.com/track-2.mp3');
+      expect(playSpy).toHaveBeenCalledTimes(3);
+      expect(player.isPlaying()).toBe(true);
+    } finally {
+      vi.stubGlobal('Audio', originalAudio);
+    }
+  });
 });

@@ -178,7 +178,7 @@ describe('AdminStateService', () => {
 
     expect(service.isAuthenticated()).toBe(false);
     expect(capturedError).toBeInstanceOf(AdminDomainError);
-    expect((capturedError as AdminDomainError).message).toBe('Invalid credentials.');
+    expect((capturedError as AdminDomainError).message).toBe('E-mail ou senha inválidos.');
   });
 
   it('drops restored session if admin JWT token is missing and clears session on 401 notification', () => {
@@ -402,7 +402,7 @@ describe('AdminStateService', () => {
       );
     expect(compactError).toBeInstanceOf(AdminDomainError);
     expect((compactError as AdminDomainError).message).toBe(
-      'Catalog file storage is not configured.',
+      'Armazenamento do catálogo não configurado.',
     );
 
     let deleteReviewError: unknown;
@@ -418,7 +418,7 @@ describe('AdminStateService', () => {
         { status: 404, statusText: 'Not Found' },
       );
     expect(deleteReviewError).toBeInstanceOf(AdminDomainError);
-    expect((deleteReviewError as AdminDomainError).message).toBe('Review with ID 900 not found.');
+    expect((deleteReviewError as AdminDomainError).message).toBe('Avaliação não encontrada.');
   });
 
   it('cancels in-flight hydration when logoutAdmin is called before requests settle', () => {

@@ -958,4 +958,214 @@ describe('RibbitStateService', () => {
       if (!r.cancelled) r.flush([]);
     });
   });
+
+  it('does not open onboarding modal on login by default', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    expect(service.activeModal()).toBeNull();
+  });
+
+  it('opens onboarding modal when showTutorial is true (registration flow)', () => {
+    service.completeAuthentication(SAMPLE_AUTH, 'Free', true);
+    flushInitialHydration(httpMock);
+
+    expect(service.activeModal()).toBe('onboarding');
+  });
+
+  it('clears previous account state and ribbit-genres from localStorage on logout and account switch', () => {
+    service.completeAuthentication({
+      ...SAMPLE_AUTH,
+      user: {
+        ...SAMPLE_AUTH.user,
+        primary_account_id: 99,
+        spotify_id: 'sp-1',
+        spotify_premium: true,
+      },
+    });
+    flushInitialHydration(httpMock);
+    service.setPage('settings');
+    service.saveFavoriteGenres(['Rock']);
+    httpMock.expectOne('/api/profile/favorite-genres').flush(SAMPLE_AUTH.user);
+    httpMock.expectOne('/api/discovery/next').flush(SAMPLE_TRACK);
+
+    service.logout();
+
+    expect(localStorage.getItem('ribbit-genres')).toBeNull();
+    expect(service.primaryAccountId()).toBeNull();
+    expect(service.spotifyPremium()).toBe(false);
+    expect(service.favoriteGenres()).toEqual([]);
+    expect(service.activePage()).toBe('discover');
+  });
+
+  it('triggers Ribby restriction alerts for minor restricted tracks and paid plans', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+    service.applyUserDto({ ...SAMPLE_AUTH.user, age: 15 });
+
+    const baseSong = {
+      trackId: 200,
+      title: 'Base Song',
+      artist: 'Artist',
+      genre: 'Indie',
+      time: '3:20',
+      image: '',
+      album: 'Album',
+      year: '2024',
+      match: 90,
+    };
+    const explicitTrack = { ...baseSong, trackId: 201, title: 'Explicit Song', explicit: true };
+    const trapTrack = { ...baseSong, trackId: 202, title: 'Trap Beat', genre: 'Trap' };
+    const hipHopTrack = { ...baseSong, trackId: 203, title: 'Boom Bap', genre: 'Hip-Hop' };
+    const indieTrack = { ...baseSong, trackId: 204, title: 'Clean Indie', genre: 'Indie' };
+
+    expect(service.isSongRestrictedForMinor(explicitTrack)).toBe(true);
+    expect(service.isSongRestrictedForMinor(trapTrack)).toBe(true);
+    expect(service.isSongRestrictedForMinor(hipHopTrack)).toBe(true);
+    expect(service.isSongRestrictedForMinor(indieTrack)).toBe(false);
+
+    service.openTrackDetailsModal(trapTrack);
+    expect(service.activeModal()).toBeNull();
+    expect(service.ribbyAlert()?.tone).toBe('restriction');
+    expect(service.ribbyAlert()?.message).toContain('Trap Beat');
+
+    expect(service.openTrackForCommunitySwipe(explicitTrack)).toBe(false);
+    expect(service.ribbyAlert()?.message).toContain('Explicit Song');
+
+    service.initiatePlanSelection({
+      planId: 2,
+      name: 'Individual',
+      displayName: 'Ribbit Individual',
+      price: 'R$ 14,90',
+      maxProfiles: 1,
+      copy: '',
+      features: [],
+    });
+    expect(service.ribbyAlert()?.title).toContain('maiores de 18 anos');
+  });
+
+  it('triggers Ribby guidance alert when attempting to duplicate or edit an existing review', () => {
+    service.completeAuthentication(SAMPLE_AUTH);
+    flushInitialHydration(httpMock);
+
+    service.selectedDetailsSong.set({
+      trackId: 101,
+      title: 'Luzes da Avenida',
+      artist: 'Terno Rei',
+      genre: 'Indie',
+      time: '3:35',
+      image: '',
+      album: 'Gêmeos',
+      year: '2022',
+      match: 92,
+    });
+    service.activeTrackReviews.set([
+      {
+        id: 10,
+        userId: 7,
+        author: 'Mateus',
+        initials: 'MA',
+        text: 'Já avaliei',
+        likes: 0,
+        age: 'agora',
+        date: 1,
+        rating: 5,
+      },
+    ]);
+
+    service.publishTrackReview(4, 'Nova nota');
+    expect(service.ribbyAlert()?.tone).toBe('review');
+    expect(service.ribbyAlert()?.title).toContain('já avaliou');
+
+    service.activeTrackReviews.set([]);
+    service.publishTrackReview(4, 'Conflito servidor');
+    httpMock
+      .expectOne('/api/reviews')
+      .flush(
+        { error: 'DuplicateEntityError', message: 'You have already reviewed this track.' },
+        { status: 409, statusText: 'Conflict' },
+      );
+    expect(service.ribbyAlert()?.tone).toBe('review');
+  });
+
+  it('canonicalizes lowercase genre DTOs, clears empty favorites, preserves drafts during filters modal, resets discovery queue on block, and rolls back failed favorite saves', () => {
+    service.completeAuthentication({
+      ...SAMPLE_AUTH,
+      user: {
+        ...SAMPLE_AUTH.user,
+        plan_id: 2,
+        favorite_genres: ['hip hop', 'mpb', 'r&b'],
+        blocked_genres: ['forro'],
+      },
+    });
+    httpMock.expectOne('/api/plans').flush(SAMPLE_PLANS);
+    httpMock.expectOne('/api/profile/me').flush({
+      user: {
+        ...SAMPLE_AUTH.user,
+        plan_id: 2,
+        favorite_genres: ['hip hop', 'mpb', 'r&b'],
+        blocked_genres: ['forro'],
+      },
+      plan: SAMPLE_PLANS[1]!,
+    });
+    httpMock.expectOne('/api/profile/blocked-genres').flush(['forro']);
+    httpMock.expectOne('/api/profile/favorite-genres').flush(['hip hop', 'mpb', 'r&b']);
+    httpMock.expectOne('/api/profile/theme').flush('dark');
+    httpMock.expectOne('/api/tracks/search?limit=50').flush([SAMPLE_TRACK]);
+    httpMock.expectOne('/api/reviews/feed?limit=20&days=1&sort_by=likes').flush([]);
+    httpMock.expectOne('/api/playlists').flush([]);
+    httpMock.expectOne('/api/reviews/recent-interacted?limit=1000').flush([]);
+    httpMock.expectOne('/api/profile/interactions').flush([]);
+    httpMock.expectOne('/api/profile/access-history?limit=100&offset=0').flush({
+      items: [],
+      seen_track_ids: [],
+    });
+    httpMock.expectOne('/api/discovery/next').flush(SAMPLE_TRACK);
+
+    expect(service.favoriteGenres()).toEqual(['Hip Hop', 'MPB', 'R&B']);
+    expect(service.blockedGenres()).toEqual(['Forró']);
+
+    // Simulate open filters modal with unsaved favorite edit while toggling a blocked genre
+    service.setModal('filters');
+    service.setSelectedGenres(['Rock', 'Jazz']);
+    service.setBlockedGenres(['Metal']);
+
+    const blockedReq = httpMock.expectOne('/api/profile/blocked-genres');
+    expect(blockedReq.request.method).toBe('PUT');
+    expect(blockedReq.request.body).toEqual({ blocked_genres: ['Metal'] });
+    blockedReq.flush({
+      ...SAMPLE_AUTH.user,
+      plan_id: 2,
+      favorite_genres: ['hip hop', 'mpb', 'r&b'],
+      blocked_genres: ['metal'],
+    });
+
+    // Queue reset triggers a fresh /api/discovery/next fetch
+    const nextAfterBlock = httpMock.expectOne('/api/discovery/next');
+    nextAfterBlock.flush({ ...SAMPLE_TRACK, track_id: 999, title: 'Fresh Discovery' });
+    expect(service.discoverySong()?.trackId).toBe(999);
+    expect(service.blockedGenres()).toEqual(['Metal']);
+    expect(service.selectedGenres()).toEqual(['Rock', 'Jazz']);
+
+    // Clearing all favorite genres updates state even when returned list is empty
+    service.saveFavoriteGenres([]);
+    httpMock.expectOne('/api/profile/favorite-genres').flush({
+      ...SAMPLE_AUTH.user,
+      plan_id: 2,
+      favorite_genres: [],
+      blocked_genres: ['metal'],
+    });
+    httpMock.expectOne('/api/discovery/next').flush(SAMPLE_TRACK);
+    expect(service.favoriteGenres()).toEqual([]);
+    expect(service.selectedGenres()).toEqual([]);
+
+    // Rollback on saveFavoriteGenres error
+    service.saveFavoriteGenres(['Rock']);
+    httpMock
+      .expectOne('/api/profile/favorite-genres')
+      .flush({ message: 'Server failure' }, { status: 500, statusText: 'Server Error' });
+    expect(service.favoriteGenres()).toEqual([]);
+    expect(service.selectedGenres()).toEqual([]);
+    expect(service.toast()).toContain('Server failure');
+  });
 });

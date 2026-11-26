@@ -46,7 +46,7 @@ class RecordSwipeInteractionUseCase:
         if user.is_track_restricted_for_minor(track):
             raise BusinessRuleViolationError("Track is restricted for minor users.")
 
-        if track.genre.strip().casefold() in user.blocked_genres:
+        if not user.can_listen(track):
             raise BusinessRuleViolationError("Genre is blocked by user.")
 
         try:

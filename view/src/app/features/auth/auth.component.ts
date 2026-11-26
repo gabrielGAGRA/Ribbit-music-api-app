@@ -604,7 +604,7 @@ export class AuthComponent implements OnInit {
       .subscribe({
         next: (response) => {
           this.isSubmitting.set(false);
-          this.state.completeAuthentication(response, selectedPlan.name);
+          this.state.completeAuthentication(response, selectedPlan.name, true);
           this.state.notify(
             `Conta criada com sucesso no Plano ${selectedPlan.name}. Bem-vindo ao Ribbit, ${displayName}!`,
           );

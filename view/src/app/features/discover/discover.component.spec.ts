@@ -301,4 +301,52 @@ describe('DiscoverComponent DOM', () => {
     instance['finishCardDrag']();
     expect(instance['isDragging']()).toBe(false);
   });
+
+  it('commits superlike on upward pointerup release, unlocks audio, and auto-plays next song', () => {
+    vi.useFakeTimers();
+    const fixture = TestBed.createComponent(DiscoverComponent);
+    const instance = fixture.componentInstance;
+    const state = TestBed.inject(RibbitStateService);
+    const player = TestBed.inject(AudioPlayerService);
+
+    state.songs.set([
+      TEST_SONG,
+      {
+        ...TEST_SONG,
+        trackId: 2,
+        title: 'Second Track',
+        previewUrl: 'https://example.com/second.mp3',
+      },
+    ]);
+    state.currentIndex.set(0);
+    state.pendingCommunityReturnSong.set(null);
+    const unlockSpy = vi.spyOn(player, 'unlock');
+    const playSpy = vi.spyOn(player, 'play');
+    const initialSongId = state.currentSong().trackId;
+
+    instance['startCardDrag']({
+      clientX: 120,
+      clientY: 220,
+      pointerId: 1,
+      cancelable: true,
+      target: document.createElement('div'),
+      currentTarget: null,
+      preventDefault: vi.fn(),
+    } as unknown as PointerEvent);
+
+    instance['finishCardDrag']({
+      clientX: 125,
+      clientY: 160,
+      pointerId: 1,
+    } as unknown as PointerEvent);
+
+    expect(unlockSpy).toHaveBeenCalled();
+    expect(instance['animation']()).toBe('love');
+
+    vi.advanceTimersByTime(300);
+
+    expect(state.currentSong().trackId).not.toBe(initialSongId);
+    expect(playSpy).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
 });
