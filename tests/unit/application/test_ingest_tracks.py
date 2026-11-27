@@ -2,6 +2,9 @@
 
 import sqlite3
 from unittest.mock import MagicMock
+lazy from collections.abc import Iterator
+
+import pytest
 
 from app.application.ports.services.catalog_source import (
     CatalogSourceTrack,
@@ -14,16 +17,21 @@ from app.infrastructure.repositories.connection import SCHEMA_PATH
 from app.infrastructure.repositories.track_repository import SQLiteTrackRepository
 
 
-def _create_in_memory_db() -> sqlite3.Connection:
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON;")
-    conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-    return conn
+@pytest.fixture
+def conn() -> Iterator[sqlite3.Connection]:
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON;")
+    connection.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
-def test_ingest_tracks_inserts_new_tracks_into_empty_repo() -> None:
-    conn = _create_in_memory_db()
+def test_ingest_tracks_inserts_new_tracks_into_empty_repo(
+    conn: sqlite3.Connection,
+) -> None:
     repo = SQLiteTrackRepository(conn)
 
     mock_catalog = MagicMock(spec=TrackCatalogFilePort)
@@ -69,8 +77,9 @@ def test_ingest_tracks_inserts_new_tracks_into_empty_repo() -> None:
     assert track_b.genre == "Pop"
 
 
-def test_ingest_tracks_idempotent_and_updates_missing_metadata() -> None:
-    conn = _create_in_memory_db()
+def test_ingest_tracks_idempotent_and_updates_missing_metadata(
+    conn: sqlite3.Connection,
+) -> None:
     repo = SQLiteTrackRepository(conn)
 
     mock_catalog = MagicMock(spec=TrackCatalogFilePort)
@@ -117,8 +126,7 @@ def test_ingest_tracks_idempotent_and_updates_missing_metadata() -> None:
     assert updated.itunes_preview_url == "https://example.com/new_preview.mp3"
 
 
-def test_ingest_tracks_updates_missing_genre() -> None:
-    conn = _create_in_memory_db()
+def test_ingest_tracks_updates_missing_genre(conn: sqlite3.Connection) -> None:
     repo = SQLiteTrackRepository(conn)
 
     mock_catalog = MagicMock(spec=TrackCatalogFilePort)
@@ -156,8 +164,9 @@ def test_ingest_tracks_updates_missing_genre() -> None:
     assert track.genre == "Synthwave"
 
 
-def test_ingest_tracks_updates_unknown_genre_and_retains_known_genre() -> None:
-    conn = _create_in_memory_db()
+def test_ingest_tracks_updates_unknown_genre_and_retains_known_genre(
+    conn: sqlite3.Connection,
+) -> None:
     repo = SQLiteTrackRepository(conn)
 
     mock_catalog = MagicMock(spec=TrackCatalogFilePort)

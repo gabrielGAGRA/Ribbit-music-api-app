@@ -200,7 +200,7 @@ def list_blocked_genres(
 def _parse_genre_list(raw: str | list[str]) -> list[str]:
     if isinstance(raw, str):
         return [g.strip() for g in raw.split(",") if g.strip()]
-    return [str(g).strip() for g in raw if str(g).strip()]
+    return [g.strip() for g in raw if g.strip()]
 
 
 @router.put("/api/profile/blocked-genres", response_model=UserResponse)
@@ -279,7 +279,7 @@ def update_favorite_genres(
     if isinstance(req.favorite_genres, str):
         favorite_list = [g.strip() for g in req.favorite_genres.split(",") if g.strip()]
     else:
-        favorite_list = [str(g).strip() for g in req.favorite_genres if str(g).strip()]
+        favorite_list = [g.strip() for g in req.favorite_genres if g.strip()]
     user = use_case.execute(
         user_id=user_id,
         favorite_genres=favorite_list,

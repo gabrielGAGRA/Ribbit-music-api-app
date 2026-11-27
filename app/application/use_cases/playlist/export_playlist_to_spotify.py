@@ -122,4 +122,4 @@ class ExportPlaylistToSpotifyUseCase:
             or not isinstance(image[1], (bytes, bytearray))
         ):
             return None
-        return (image[0], bytes(image[1]))
+        return (image[0], image[1])

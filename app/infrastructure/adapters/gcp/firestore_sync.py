@@ -2143,7 +2143,7 @@ class FirestoreSyncService:
             """,
             (clean, _SYNC_PLACEHOLDER_HASH, name, plan_id, _utc_now_iso()),
         )
-        return int(cur.lastrowid) if cur.lastrowid is not None else None
+        return cur.lastrowid if cur.lastrowid is not None else None
 
     def _find_local_track_id(
         self, cursor: sqlite3.Cursor, doc: Mapping[str, Any]
@@ -2201,7 +2201,7 @@ class FirestoreSyncService:
                 _utc_now_iso(),
             ),
         )
-        return int(cur.lastrowid) if cur.lastrowid is not None else None
+        return cur.lastrowid if cur.lastrowid is not None else None
 
     def _enrich_existing_track(
         self,
@@ -2490,7 +2490,7 @@ class FirestoreSyncService:
             was_stale = self._delete_local_user_if_stale(cursor, email, cutoff_raw)
             if cutoff_raw:
                 self._persist_user_tombstone_state(
-                    cursor, email, str(cutoff_raw), is_deleted=was_stale
+                    cursor, email, cutoff_raw, is_deleted=was_stale
                 )
             return
         existing = self._purge_stale_local_user_if_needed(cursor, email, doc)
@@ -2499,7 +2499,7 @@ class FirestoreSyncService:
             self._upsert_local_user(cursor, existing, email, doc, fields)
         if cutoff_raw or email in self._deleted_user_emails:
             self._persist_user_tombstone_state(
-                cursor, email, str(cutoff_raw or ""), is_deleted=False
+                cursor, email, cutoff_raw or "", is_deleted=False
             )
 
     def _reconcile_review_likes_count(
@@ -2591,7 +2591,7 @@ class FirestoreSyncService:
             (user_id, track_id, rating, text, likes_count, is_deleted, created_at),
         )
         if cur.lastrowid is not None:
-            self._reconcile_review_likes_count(cursor, int(cur.lastrowid), likes_count)
+            self._reconcile_review_likes_count(cursor, cur.lastrowid, likes_count)
 
     def _has_deleted_like_actor(self, liker_email: str, rev_email: str) -> bool:
         return (
@@ -2864,12 +2864,12 @@ class FirestoreSyncService:
         new_pid = cur.lastrowid
         if new_pid is not None:
             local_cover_url = _normalize_local_cover_url(
-                doc.get("cover_image_url"), int(new_pid)
+                doc.get("cover_image_url"), new_pid
             )
             if local_cover_url is not None:
                 cursor.execute(
                     "UPDATE playlists SET cover_image_url = ? WHERE playlist_id = ?",
-                    (local_cover_url, int(new_pid)),
+                    (local_cover_url, new_pid),
                 )
 
     def _apply_playlist_image_doc(

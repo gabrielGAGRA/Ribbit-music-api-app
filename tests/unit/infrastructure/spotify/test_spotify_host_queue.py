@@ -145,22 +145,26 @@ def test_container_wires_spotify_host_queue_when_client_id_configured(
         spotify_redirect_uri="http://127.0.0.1:4200/callback",
     )
     container = build_container(settings)
-    assert isinstance(
-        container.vote_jam_track_use_case.spotify_queue,
-        SpotifyHostQueueAdapter,
-    )
-    assert isinstance(
-        container.vote_skip_jam_track_use_case.spotify_queue,
-        SpotifyHostQueueAdapter,
-    )
-    assert isinstance(
-        container.advance_jam_playback_use_case.spotify_queue,
-        SpotifyHostQueueAdapter,
-    )
-    assert (
-        container.advance_jam_playback_use_case.user_repo
-        is container.vote_jam_track_use_case.user_repo
-    )
+    try:
+        assert isinstance(
+            container.vote_jam_track_use_case.spotify_queue,
+            SpotifyHostQueueAdapter,
+        )
+        assert isinstance(
+            container.vote_skip_jam_track_use_case.spotify_queue,
+            SpotifyHostQueueAdapter,
+        )
+        assert isinstance(
+            container.advance_jam_playback_use_case.spotify_queue,
+            SpotifyHostQueueAdapter,
+        )
+        assert (
+            container.advance_jam_playback_use_case.user_repo
+            is container.vote_jam_track_use_case.user_repo
+        )
+    finally:
+        container.connection.close()
+        container.http_session.close()
 
 
 def test_enqueue_track_falls_back_to_available_device_on_404() -> None:

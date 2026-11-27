@@ -278,13 +278,11 @@ class GetNextDiscoveryTrackUseCase:
         ):
             track.cover_url = None
         changed = track.merge_missing_metadata(
-            itunes_preview_url=str(preview.preview_url)
+            itunes_preview_url=preview.preview_url
             if needs_preview and preview.preview_url
             else None,
-            genre=str(preview.genre) if needs_genre and preview.genre else None,
-            cover_url=str(preview.cover_url)
-            if needs_cover and preview.cover_url
-            else None,
+            genre=preview.genre if needs_genre and preview.genre else None,
+            cover_url=preview.cover_url if needs_cover and preview.cover_url else None,
         )
         if changed:
             self.track_repo.save(track)

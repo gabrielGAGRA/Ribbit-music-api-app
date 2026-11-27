@@ -180,7 +180,7 @@ class User:
         return self
 
     def update_spotify_premium(self, is_premium: bool) -> Self:
-        self.spotify_premium = bool(is_premium)
+        self.spotify_premium = is_premium
         return self
 
     def update_spotify_tokens(

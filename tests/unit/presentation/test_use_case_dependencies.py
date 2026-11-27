@@ -169,10 +169,15 @@ ALL_USE_CASES = [
 
 
 @pytest.fixture(scope="module")
-def container() -> Container:
+def container():
     conn = create_connection(":memory:")
     settings = Settings(database_path=":memory:", password_hash_iterations=1_000)
-    return build_container(settings=settings, connection=conn)
+    built = build_container(settings=settings, connection=conn)
+    try:
+        yield built
+    finally:
+        conn.close()
+        built.http_session.close()
 
 
 @pytest.mark.parametrize("use_case_type", ALL_USE_CASES)

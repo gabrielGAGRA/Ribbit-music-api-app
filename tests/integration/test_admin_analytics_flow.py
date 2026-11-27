@@ -104,3 +104,5 @@ def test_admin_costs_dashboard_and_audience_access_analytics(tmp_path: Path) -> 
     assert aud["total_accesses"] == 1
     assert aud["accesses_by_track"][0]["track_id"] == track_id
     assert aud["accesses_by_genre"][0]["genre"] == "Indie"
+    container.connection.close()
+    container.http_session.close()

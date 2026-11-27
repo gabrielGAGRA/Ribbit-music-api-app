@@ -19,12 +19,15 @@ ADMIN_PASSWORD = "RibbitLocal2026!"
 
 
 @pytest.fixture
-def test_db() -> sqlite3.Connection:
+def test_db():
     """Creates an isolated in-memory SQLite database connection."""
     conn = sqlite3.connect(":memory:", check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON;")
-    return conn
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 
 @pytest.fixture
@@ -36,7 +39,11 @@ def app(test_db: sqlite3.Connection):
         token_expiration_seconds=43200,
         secret_key="ribbit-insecure-dev-secret-key-change-me-32chars",
     )
-    return create_app(settings=settings, connection=test_db)
+    created_app = create_app(settings=settings, connection=test_db)
+    try:
+        yield created_app
+    finally:
+        created_app.state.container.http_session.close()
 
 
 @pytest.fixture

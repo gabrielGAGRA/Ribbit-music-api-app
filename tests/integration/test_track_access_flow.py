@@ -124,3 +124,5 @@ def test_track_access_and_soft_delete_isolation(tmp_path: Path) -> None:
     )
     assert only_del_res.status_code == 200
     assert all(e["track_is_deleted"] is True for e in only_del_res.json())
+    container.connection.close()
+    container.http_session.close()

@@ -85,7 +85,7 @@ async def http_exception_handler(_request: Request, exc: Exception) -> JSONRespo
             status_code=exc.status_code,
             content={
                 "error": "HTTPException",
-                "message": str(exc.detail),
+                "message": exc.detail,
                 "details": {},
             },
             headers=exc.headers,

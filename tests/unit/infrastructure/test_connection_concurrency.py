@@ -42,8 +42,10 @@ def test_thread_local_connection_uses_distinct_connections_per_thread(
     main_raw = conn.current_connection
     seen_ids: set[int] = {id(main_raw)}
     lock = threading.Lock()
+    barrier = threading.Barrier(4, timeout=5.0)
 
     def worker() -> None:
+        barrier.wait()
         raw = conn.current_connection
         assert isinstance(raw, sqlite3.Connection)
         with lock:

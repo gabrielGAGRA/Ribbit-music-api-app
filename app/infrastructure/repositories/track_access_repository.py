@@ -74,7 +74,7 @@ class SQLiteTrackAccessRepository(TrackAccessRepositoryPort):
                 INSERT INTO track_accesses (user_id, track_id, source, accessed_at)
                 VALUES (?, ?, ?, ?)
                 """,
-                (access.user_id, access.track_id, str(access.source), accessed_at_str),
+                (access.user_id, access.track_id, access.source, accessed_at_str),
             )
             access_id = cursor.lastrowid
             if self._sync is not None and access_id is not None:

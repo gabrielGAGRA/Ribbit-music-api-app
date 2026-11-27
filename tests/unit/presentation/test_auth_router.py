@@ -523,24 +523,30 @@ def test_google_callback_and_session_forward_unregistered_user_to_register() -> 
     assert decoded["display_name"] == "New Google User"
 
     app = create_app(settings)
-    client = TestClient(app)
-    res_http = client.post(
-        "/api/auth/google/session",
-        headers={"cookie": f"ribbit_google_oauth_handoff={handoff_cookie_val}"},
-    )
-    assert res_http.status_code == 404
-    body = res_http.json()
-    assert body["details"]["registration_required"] is True
-    assert body["details"]["email"] == "new.google@ribbit.com"
-    assert body["details"]["display_name"] == "New Google User"
-    set_cookie_resp = res_http.headers.get("set-cookie", "")
-    assert "ribbit_google_oauth_handoff=" in set_cookie_resp
-    assert "max-age=0" in set_cookie_resp.lower()
+    try:
+        client = TestClient(app)
+        res_http = client.post(
+            "/api/auth/google/session",
+            headers={"cookie": f"ribbit_google_oauth_handoff={handoff_cookie_val}"},
+        )
+        assert res_http.status_code == 404
+        body = res_http.json()
+        assert body["details"]["registration_required"] is True
+        assert body["details"]["email"] == "new.google@ribbit.com"
+        assert body["details"]["display_name"] == "New Google User"
+        set_cookie_resp = res_http.headers.get("set-cookie", "")
+        assert "ribbit_google_oauth_handoff=" in set_cookie_resp
+        assert "max-age=0" in set_cookie_resp.lower()
 
-    # After the browser clears the cookie, replaying without it yields 401
-    res_replay = client.post("/api/auth/google/session")
-    assert res_replay.status_code == 401
-    assert "ribbit_google_oauth_handoff=" in res_replay.headers.get("set-cookie", "")
+        # After the browser clears the cookie, replaying without it yields 401
+        res_replay = client.post("/api/auth/google/session")
+        assert res_replay.status_code == 401
+        assert "ribbit_google_oauth_handoff=" in res_replay.headers.get(
+            "set-cookie", ""
+        )
+    finally:
+        app.state.container.connection.close()
+        app.state.container.http_session.close()
 
 
 def test_google_oauth_endpoints_via_fastapi_di_when_unconfigured() -> None:
@@ -556,14 +562,18 @@ def test_google_oauth_endpoints_via_fastapi_di_when_unconfigured() -> None:
         google_redirect_uri=None,
     )
     app = create_app(settings)
-    client = TestClient(app)
+    try:
+        client = TestClient(app)
 
-    # 1. Authorize endpoint should return 502 ExternalServiceError instead of 500 KeyError
-    res_auth = client.get("/api/auth/google/authorize")
-    assert res_auth.status_code == 502
-    assert "not configured" in res_auth.json().get("message", "")
+        # 1. Authorize endpoint should return 502 ExternalServiceError instead of 500 KeyError
+        res_auth = client.get("/api/auth/google/authorize")
+        assert res_auth.status_code == 502
+        assert "not configured" in res_auth.json().get("message", "")
 
-    # 2. Callback endpoint should redirect with error instead of 500 KeyError
-    res_cb = client.get("/api/auth/google/callback?error=access_denied")
-    assert res_cb.status_code == 302
-    assert "google_auth_error=access_denied" in res_cb.headers.get("location", "")
+        # 2. Callback endpoint should redirect with error instead of 500 KeyError
+        res_cb = client.get("/api/auth/google/callback?error=access_denied")
+        assert res_cb.status_code == 302
+        assert "google_auth_error=access_denied" in res_cb.headers.get("location", "")
+    finally:
+        app.state.container.connection.close()
+        app.state.container.http_session.close()

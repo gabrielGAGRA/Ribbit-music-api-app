@@ -57,7 +57,7 @@ def encode_firestore_value(value: Any) -> dict[str, Any]:
 
 def encode_document_fields(data: Mapping[str, Any]) -> dict[str, Any]:
     """Converts a flat or nested Python mapping into Firestore REST document fields."""
-    return {str(key): encode_firestore_value(val) for key, val in data.items()}
+    return {key: encode_firestore_value(val) for key, val in data.items()}
 
 
 def decode_firestore_value(raw: Mapping[str, Any]) -> Any:

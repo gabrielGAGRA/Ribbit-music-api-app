@@ -143,16 +143,14 @@ def build_delta_parquet_bytes(
         "title": [title],
         "artist": [artist],
         "album": [album],
-        "duration_seconds": [
-            int(duration_seconds) if duration_seconds is not None else None
-        ],
+        "duration_seconds": [duration_seconds],
         "genre": [genre],
         "country": [country],
-        "release_year": [int(release_year) if release_year is not None else None],
+        "release_year": [release_year],
         "cover_url": [cover_url],
         "itunes_preview_url": [preview_url],
-        "explicit": [int(bool(explicit)) if explicit is not None else None],
-        "is_deleted": [int(bool(is_deleted)) if is_deleted is not None else None],
+        "explicit": [int(explicit) if explicit is not None else None],
+        "is_deleted": [int(is_deleted) if is_deleted is not None else None],
         "created_at": [now_iso],
     }
     table = pa.Table.from_pydict(data, schema=DELTA_PARQUET_SCHEMA)
@@ -173,7 +171,7 @@ def delta_to_catalog_track(delta: _TrackDeltaItem) -> CatalogSourceTrack:
         cover_url=delta.cover_url,
         spotify_id=delta.spotify_id,
         itunes_preview_url=delta.preview_url,
-        explicit=bool(delta.explicit) if delta.explicit is not None else False,
+        explicit=delta.explicit if delta.explicit is not None else False,
     )
 
 
@@ -250,7 +248,7 @@ def iter_new_deltas(
         if id(delta) in seen_ids or delta.is_deleted:
             continue
         seen_ids.add(id(delta))
-        sid = str(delta.spotify_id or "").strip()
+        sid = (delta.spotify_id or "").strip()
         t_norm = (delta.title or "").strip().lower()
         a_norm = (delta.artist or "").strip().lower()
         if (sid and sid in existing_sids) or (
@@ -275,7 +273,7 @@ def apply_delta_to_track(
     title = (track.title or "").strip().lower()
     artist = (track.artist or "").strip().lower()
     delta = lookup_track_delta(
-        delta_map, str(track.spotify_id or "").strip(), title, artist
+        delta_map, (track.spotify_id or "").strip(), title, artist
     )
     if delta is None:
         return track
@@ -354,7 +352,7 @@ def _delta_to_record(delta: _TrackDeltaItem) -> dict[str, Any]:
         "release_year": delta.release_year,
         "cover_url": delta.cover_url,
         "itunes_preview_url": delta.preview_url,
-        "explicit": int(bool(delta.explicit)) if delta.explicit is not None else 0,
+        "explicit": int(delta.explicit) if delta.explicit is not None else 0,
     }
 
 

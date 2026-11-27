@@ -94,7 +94,7 @@ def _verify_cookie_payload(token: str | None, secret_key: str) -> dict[str, Any]
             (payload_b64 + padding).encode("ascii")
         )
         payload = json.loads(payload_bytes.decode("utf-8"))
-    except ValueError, TypeError, json.JSONDecodeError:
+    except ValueError, TypeError:
         return None
     else:
         if not isinstance(payload, dict):

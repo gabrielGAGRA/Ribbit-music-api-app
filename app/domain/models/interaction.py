@@ -36,7 +36,7 @@ class InteractionAction(StrEnum):
             if default is not None:
                 return default
             raise ValueError("Interaction action cannot be None.")
-        norm = str(value).strip().lower()
+        norm = value.strip().lower()
         if not norm:
             if default is not None:
                 return default

@@ -76,7 +76,7 @@ def _resolve_google_oauth_settings() -> tuple[
     explicit_client_id = (os.getenv("GOOGLE_CLIENT_ID") or "").strip() or None
     file_client_id_raw = oauth_section.get("client_id")
     file_client_id = (
-        str(file_client_id_raw).strip()
+        file_client_id_raw.strip()
         if isinstance(file_client_id_raw, str) and file_client_id_raw.strip()
         else None
     )
@@ -93,7 +93,7 @@ def _resolve_google_oauth_settings() -> tuple[
     explicit_secret = (os.getenv("GOOGLE_CLIENT_SECRET") or "").strip() or None
     file_secret_raw = oauth_section.get("client_secret")
     file_secret = (
-        str(file_secret_raw).strip()
+        file_secret_raw.strip()
         if isinstance(file_secret_raw, str) and file_secret_raw.strip()
         else None
     )

@@ -241,7 +241,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             cover_url=delta.cover_url,
             spotify_id=delta.spotify_id,
             itunes_preview_url=delta.preview_url,
-            explicit=bool(delta.explicit) if delta.explicit is not None else False,
+            explicit=delta.explicit if delta.explicit is not None else False,
         )
 
     def _download_catalog_to_temp(self, bucket: storage.Bucket) -> Path:
@@ -398,20 +398,14 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
                 "spotify_id": [spotify_id],
                 "title": [title],
                 "artist": [artist],
-                "duration_seconds": [
-                    int(duration_seconds) if duration_seconds is not None else None
-                ],
+                "duration_seconds": [duration_seconds],
                 "genre": [genre],
                 "country": [country],
-                "release_year": [
-                    int(release_year) if release_year is not None else None
-                ],
+                "release_year": [release_year],
                 "cover_url": [cover_url],
                 "itunes_preview_url": [preview_url],
-                "explicit": [int(bool(explicit)) if explicit is not None else None],
-                "is_deleted": [
-                    int(bool(is_deleted)) if is_deleted is not None else None
-                ],
+                "explicit": [int(explicit) if explicit is not None else None],
+                "is_deleted": [int(is_deleted) if is_deleted is not None else None],
                 "created_at": [now_iso],
             }
             table = pa.Table.from_pydict(data, schema=_DELTA_PARQUET_SCHEMA)
@@ -462,14 +456,12 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             if merged_genre is not None:
                 record["genre"] = merged_genre
         explicit_val = (
-            _coerce_flag_for_arrow(bool(delta.explicit), schema.field("explicit").type)
+            _coerce_flag_for_arrow(delta.explicit, schema.field("explicit").type)
             if delta.explicit is not None and "explicit" in schema_names
             else None
         )
         is_deleted_val = (
-            _coerce_flag_for_arrow(
-                bool(delta.is_deleted), schema.field("is_deleted").type
-            )
+            _coerce_flag_for_arrow(delta.is_deleted, schema.field("is_deleted").type)
             if delta.is_deleted is not None and "is_deleted" in schema_names
             else None
         )
@@ -500,7 +492,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         schema_names = set(schema.names)
         explicit_val = (
             _coerce_flag_for_arrow(
-                bool(delta.explicit) if delta.explicit is not None else False,
+                delta.explicit if delta.explicit is not None else False,
                 schema.field("explicit").type,
             )
             if "explicit" in schema_names
@@ -877,7 +869,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
             if id(delta) in seen_ids or delta.is_deleted:
                 continue
             seen_ids.add(id(delta))
-            sid = str(delta.spotify_id or "").strip()
+            sid = (delta.spotify_id or "").strip()
             t_norm = (delta.title or "").strip().lower()
             a_norm = (delta.artist or "").strip().lower()
             if (sid and sid in seen_sids) or (
@@ -1017,7 +1009,7 @@ class GCSTrackCatalogAdapter(TrackCatalogFilePort):
         artist = (track.artist or "").strip().lower()
         delta = self._lookup_track_delta(
             delta_map,
-            str(track.spotify_id or "").strip(),
+            (track.spotify_id or "").strip(),
             title,
             artist,
             matched_delta_ids,

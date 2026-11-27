@@ -2,6 +2,8 @@
 
 lazy from pathlib import Path
 
+import pytest
+
 from app.composition import create_app
 from app.config import Settings
 from app.domain.models.track import Track
@@ -9,16 +11,30 @@ from app.infrastructure.repositories.connection import transaction
 from tests.integration.test_client import TestClient
 
 
-def _make_client(tmp_path: Path, name: str) -> tuple[TestClient, object]:
-    db_path = tmp_path / f"{name}.db"
-    app = create_app(
-        settings=Settings(database_path=str(db_path), password_hash_iterations=1_000)
-    )
-    return TestClient(app), app.state.container
+@pytest.fixture
+def make_client(tmp_path: Path):
+    containers: list[object] = []
+
+    def _factory(name: str) -> tuple[TestClient, object]:
+        db_path = tmp_path / f"{name}.db"
+        app = create_app(
+            settings=Settings(
+                database_path=str(db_path), password_hash_iterations=1_000
+            )
+        )
+        containers.append(app.state.container)
+        return TestClient(app), app.state.container
+
+    try:
+        yield _factory
+    finally:
+        for container in containers:
+            container.connection.close()  # type: ignore[attr-defined]
+            container.http_session.close()  # type: ignore[attr-defined]
 
 
-def test_family_parental_controls_201_and_minor_bypasses_closed(tmp_path: Path) -> None:
-    client, container = _make_client(tmp_path, "minor_and_parental")
+def test_family_parental_controls_201_and_minor_bypasses_closed(make_client) -> None:
+    client, container = make_client("minor_and_parental")
 
     with transaction(container.connection) as cur:
         cur.execute(
@@ -171,8 +187,8 @@ def test_family_parental_controls_201_and_minor_bypasses_closed(tmp_path: Path) 
     assert undo_res.json()["track"] is None
 
 
-def test_soft_delete_no_resurrection_and_user_stats_exclusion(tmp_path: Path) -> None:
-    _, container = _make_client(tmp_path, "soft_delete_stats")
+def test_soft_delete_no_resurrection_and_user_stats_exclusion(make_client) -> None:
+    _, container = make_client("soft_delete_stats")
 
     with transaction(container.connection) as cur:
         cur.execute(

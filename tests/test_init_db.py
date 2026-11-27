@@ -45,7 +45,11 @@ def test_init_database_from_dump_and_app_startup(tmp_path: Path) -> None:
     # Verify FastAPI composition + seed_database boots cleanly on top of dump.sql
     settings = Settings(database_path=str(db_path))
     app = create_app(settings=settings)
-    assert app is not None
+    try:
+        assert app is not None
+    finally:
+        app.state.container.connection.close()
+        app.state.container.http_session.close()
 
 
 @pytest.mark.integration
@@ -80,7 +84,11 @@ def test_e2e_dump_fixture_populates_demo_data(tmp_path: Path) -> None:
     # Verify FastAPI composition + seed_database boots cleanly on top of dump.sql
     settings = Settings(database_path=str(db_path))
     app = create_app(settings=settings)
-    assert app is not None
+    try:
+        assert app is not None
+    finally:
+        app.state.container.connection.close()
+        app.state.container.http_session.close()
 
 
 @pytest.mark.integration

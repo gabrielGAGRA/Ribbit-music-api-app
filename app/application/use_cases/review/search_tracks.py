@@ -61,13 +61,13 @@ class SearchTracksUseCase:
                 )
             if preview is not None:
                 track.merge_missing_metadata(
-                    itunes_preview_url=str(preview.preview_url)
+                    itunes_preview_url=preview.preview_url
                     if not track.itunes_preview_url and preview.preview_url
                     else None,
-                    genre=str(preview.genre)
+                    genre=preview.genre
                     if not track.has_known_genre() and preview.genre
                     else None,
-                    cover_url=str(preview.cover_url)
+                    cover_url=preview.cover_url
                     if not track.cover_url and preview.cover_url
                     else None,
                 )

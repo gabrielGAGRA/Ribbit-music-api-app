@@ -32,7 +32,7 @@ class RecordTrackAccessUseCase:
         track_id: int,
         source: TrackAccessSource | str = "play",
     ) -> TrackAccess:
-        normalized_source = str(source).strip().lower()
+        normalized_source = source.strip().lower()
         if normalized_source not in VALID_TRACK_ACCESS_SOURCES:
             raise BusinessRuleViolationError(f"Invalid track access source '{source}'.")
 

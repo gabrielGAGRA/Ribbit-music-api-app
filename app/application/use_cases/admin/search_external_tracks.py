@@ -65,13 +65,9 @@ class SearchExternalTracksUseCase:
                     self.track_preview_port, title=title, artist=artist
                 )
             if preview is not None:
-                preview_url = preview_url or (
-                    str(preview.preview_url) if preview.preview_url else None
-                )
-                cover_url = cover_url or (
-                    str(preview.cover_url) if preview.cover_url else None
-                )
-                genre = str(preview.genre) if preview.genre else genre
+                preview_url = preview_url or (preview.preview_url or None)
+                cover_url = cover_url or (preview.cover_url or None)
+                genre = preview.genre or genre
                 country = preview.country or country
                 album = album or preview.album
                 release_year = release_year or preview.release_year
@@ -131,14 +127,12 @@ class SearchExternalTracksUseCase:
                         title=p_title,
                         artist=p_artist,
                         duration_seconds=180,
-                        genre=str(preview.genre or "Unknown"),
+                        genre=preview.genre or "Unknown",
                         album=preview.album,
                         country=preview.country,
                         release_year=preview.release_year,
-                        cover_url=str(preview.cover_url) if preview.cover_url else None,
-                        itunes_preview_url=(
-                            str(preview.preview_url) if preview.preview_url else None
-                        ),
+                        cover_url=preview.cover_url or None,
+                        itunes_preview_url=preview.preview_url or None,
                         already_in_catalog=self._is_in_catalog(
                             title=p_title, artist=p_artist, spotify_id=None
                         ),
