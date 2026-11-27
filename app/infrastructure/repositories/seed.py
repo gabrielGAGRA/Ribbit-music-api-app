@@ -37,6 +37,7 @@ _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
         "accumulated_duration_seconds": "INTEGER NOT NULL DEFAULT 0",
         "deck_source": "TEXT NOT NULL DEFAULT 'free'",
         "source_playlist_id": "INTEGER",
+        "current_track_started_at": "TEXT",
     },
 }
 

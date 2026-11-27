@@ -1561,6 +1561,12 @@ def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
 
     class _StubHostQueue:
         def enqueue_track(self, user: Any, track_uri: str) -> None:
+            enqueued.append((user.user_id, track_uri))
+
+        def skip_to_next(self, user: Any) -> None:
+            return None
+
+        def start_track(self, user: Any, track_uri: str) -> None:
             if should_fail:
                 raise PermissionDeniedError(
                     "Premium required",
@@ -1568,14 +1574,11 @@ def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
                 )
             enqueued.append((user.user_id, track_uri))
 
-        def skip_to_next(self, user: Any) -> None:
-            return None
-
-        def start_track(self, user: Any, track_uri: str) -> None:
-            return None
-
     object.__setattr__(
         container.vote_jam_track_use_case, "spotify_queue", _StubHostQueue()
+    )
+    object.__setattr__(
+        container.advance_jam_playback_use_case, "spotify_queue", _StubHostQueue()
     )
 
     jam = client.post(
@@ -1604,11 +1607,19 @@ def test_pond_vote_enqueues_spotify_owner_queue_and_downgrades_on_403(
             spotify_id="sp_track_pond_2",
         )
     )
-    should_fail = True
-    vote_fail = client.post(
+    vote_second = client.post(
         f"/api/jams/{jam_id}/deck-vote",
         headers=host_headers,
         json={"track_id": track_two.track_id, "action": "like"},
+    )
+    assert vote_second.status_code == 200, vote_second.text
+    # Queued track stays in app queue only (not pushed to Spotify's immutable queue)
+    assert enqueued == [(owner.user_id, "spotify:track:sp_track_pond_1")]
+
+    should_fail = True
+    vote_fail = client.post(
+        f"/api/jams/{jam_id}/advance",
+        headers=host_headers,
     )
     assert vote_fail.status_code == 403, vote_fail.text
     assert vote_fail.json()["error"] == "PermissionDeniedError"

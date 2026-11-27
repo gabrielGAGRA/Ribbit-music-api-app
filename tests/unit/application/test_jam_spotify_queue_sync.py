@@ -51,21 +51,23 @@ def _track(track_id: int, spotify_id: str | None = "sp_track_1") -> Track:
     )
 
 
-def test_vote_jam_track_enqueues_new_track_for_pond_owner_only_once() -> None:
+def test_vote_jam_track_starts_first_track_only_and_keeps_queue_in_app() -> None:
     host = _user(1, with_tokens=True)
     guest = _user(2, with_tokens=False)
     jam = Jam(jam_id=10, host_user_id=1, room_code="123456", room_name="Pond")
     track = _track(50, "4uLU6hMCjMI75M1A2tKUQC")
+    queued_first = JamQueueItem(jam_id=10, track_id=50, initial_vote_points=1)
 
     jam_repo = MagicMock(spec=JamRepositoryPort)
     jam_repo.find_by_id.return_value = jam
     jam_repo.is_participant.return_value = True
-    jam_repo.list_queue.return_value = []
+    jam_repo.list_queue.return_value = [queued_first]
     jam_repo.find_queue_item.side_effect = [
         None,
-        JamQueueItem(jam_id=10, track_id=50, initial_vote_points=1),
+        JamQueueItem(jam_id=10, track_id=51, initial_vote_points=1),
     ]
     jam_repo.save_queue_item.side_effect = lambda item: item
+    jam_repo.save.side_effect = lambda j: j
 
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.side_effect = lambda uid: host if uid == 1 else guest
@@ -85,10 +87,11 @@ def test_vote_jam_track_enqueues_new_track_for_pond_owner_only_once() -> None:
         VoteJamTrackCommand(jam_id=10, user_id=2, track_id=50, action="like")
     )
     use_case.execute(
-        VoteJamTrackCommand(jam_id=10, user_id=2, track_id=50, action="like")
+        VoteJamTrackCommand(jam_id=10, user_id=2, track_id=51, action="like")
     )
 
-    spotify_queue.enqueue_track.assert_called_once_with(
+    spotify_queue.enqueue_track.assert_not_called()
+    spotify_queue.start_track.assert_called_once_with(
         host, "spotify:track:4uLU6hMCjMI75M1A2tKUQC"
     )
 
@@ -101,9 +104,12 @@ def test_vote_jam_track_falls_back_gracefully_on_non_premium_spotify_error() -> 
     jam_repo = MagicMock(spec=JamRepositoryPort)
     jam_repo.find_by_id.return_value = jam
     jam_repo.is_participant.return_value = True
-    jam_repo.list_queue.return_value = []
+    jam_repo.list_queue.return_value = [
+        JamQueueItem(jam_id=10, track_id=50, initial_vote_points=1)
+    ]
     jam_repo.find_queue_item.return_value = None
     jam_repo.save_queue_item.side_effect = lambda item: item
+    jam_repo.save.side_effect = lambda j: j
 
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = host
@@ -112,7 +118,7 @@ def test_vote_jam_track_falls_back_gracefully_on_non_premium_spotify_error() -> 
     track_repo.find_by_id.return_value = track
 
     spotify_queue = MagicMock(spec=SpotifyHostQueuePort)
-    spotify_queue.enqueue_track.side_effect = ExternalServiceError(
+    spotify_queue.start_track.side_effect = ExternalServiceError(
         "No active device", service_name="Spotify"
     )
 
@@ -138,9 +144,12 @@ def test_vote_jam_track_downgrades_host_on_spotify_premium_required() -> None:
     jam_repo = MagicMock(spec=JamRepositoryPort)
     jam_repo.find_by_id.return_value = jam
     jam_repo.is_participant.return_value = True
-    jam_repo.list_queue.return_value = []
+    jam_repo.list_queue.return_value = [
+        JamQueueItem(jam_id=10, track_id=50, initial_vote_points=1)
+    ]
     jam_repo.find_queue_item.return_value = None
     jam_repo.save_queue_item.side_effect = lambda item: item
+    jam_repo.save.side_effect = lambda j: j
 
     user_repo = MagicMock(spec=UserRepositoryPort)
     user_repo.find_by_id.return_value = host
@@ -150,7 +159,7 @@ def test_vote_jam_track_downgrades_host_on_spotify_premium_required() -> None:
     track_repo.find_by_id.return_value = track
 
     spotify_queue = MagicMock(spec=SpotifyHostQueuePort)
-    spotify_queue.enqueue_track.side_effect = PermissionDeniedError(
+    spotify_queue.start_track.side_effect = PermissionDeniedError(
         "Premium required", details={"rule_name": "spotify_premium_required"}
     )
 
@@ -217,3 +226,118 @@ def test_advance_and_skip_threshold_sync_to_spotify_owner() -> None:
 
     assert spotify_queue.start_track.call_count == 2
     spotify_queue.start_track.assert_called_with(host, "spotify:track:next_sp_id")
+
+
+def test_vote_jam_track_resolves_missing_spotify_id_via_track_catalog() -> None:
+    from types import SimpleNamespace
+
+    from app.application.ports.services.music_service import TrackCatalogPort
+
+    host = _user(1, with_tokens=True)
+    jam = Jam(
+        jam_id=10,
+        host_user_id=1,
+        room_name="Pond",
+        room_code="ROOM10",
+        is_active=True,
+        current_track_id=None,
+    )
+    track = Track(
+        track_id=77,
+        title="Hey Bo Diddley",
+        artist="Bo Diddley",
+        genre="Rock",
+        duration_seconds=180,
+        spotify_id=None,
+    )
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.is_participant.return_value = True
+    jam_repo.list_queue.return_value = [
+        JamQueueItem(jam_id=10, track_id=77, initial_vote_points=1)
+    ]
+    jam_repo.find_queue_item.return_value = None
+    jam_repo.save_queue_item.return_value = JamQueueItem(
+        jam_id=10, track_id=77, initial_vote_points=1
+    )
+    jam_repo.save.side_effect = lambda j: j
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = host
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.return_value = track
+    track_catalog = MagicMock(spec=TrackCatalogPort)
+    track_catalog.search_tracks.return_value = [
+        SimpleNamespace(external_id="resolved_sp_77")
+    ]
+    spotify_queue = MagicMock(spec=SpotifyHostQueuePort)
+
+    use_case = VoteJamTrackUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        spotify_queue=spotify_queue,
+        track_catalog=track_catalog,
+    )
+    use_case.execute(
+        VoteJamTrackCommand(jam_id=10, user_id=1, track_id=77, action="like")
+    )
+
+    track_catalog.search_tracks.assert_called_once_with(
+        "Hey Bo Diddley Bo Diddley", limit=1
+    )
+    track_repo.save.assert_called_once_with(track)
+    spotify_queue.enqueue_track.assert_not_called()
+    spotify_queue.start_track.assert_called_once_with(
+        host, "spotify:track:resolved_sp_77"
+    )
+
+
+def test_get_jam_state_auto_advances_when_track_duration_elapsed() -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.application.use_cases.jam.get_jam_state import GetJamStateUseCase
+
+    host = _user(1, with_tokens=True)
+    current_track = _track(50, "curr_sp")
+    next_track = _track(51, "next_sp")
+    jam = Jam(
+        jam_id=10,
+        host_user_id=1,
+        room_name="Pond",
+        room_code="ROOM10",
+        is_active=True,
+        current_track_id=50,
+        current_track_started_at=datetime.now(UTC) - timedelta(seconds=200),
+    )
+    next_item = JamQueueItem(jam_id=10, track_id=51, initial_vote_points=3)
+
+    jam_repo = MagicMock(spec=JamRepositoryPort)
+    jam_repo.find_by_id.return_value = jam
+    jam_repo.list_queue.side_effect = [[next_item], []]
+    jam_repo.save.side_effect = lambda j: j
+    jam_repo.count_skip_votes.return_value = 0
+
+    user_repo = MagicMock(spec=UserRepositoryPort)
+    user_repo.find_by_id.return_value = host
+
+    track_repo = MagicMock(spec=TrackRepositoryPort)
+    track_repo.find_by_id.side_effect = lambda tid: (
+        current_track if tid == 50 else next_track
+    )
+    track_repo.find_by_ids.return_value = {51: next_track}
+
+    spotify_queue = MagicMock(spec=SpotifyHostQueuePort)
+    use_case = GetJamStateUseCase(
+        jam_repo=jam_repo,
+        user_repo=user_repo,
+        track_repo=track_repo,
+        spotify_queue=spotify_queue,
+    )
+
+    result = use_case.execute(jam_id=10, user_id=1)
+
+    assert result.jam.current_track_id == 51
+    assert result.jam.accumulated_duration_seconds == 180
+    assert result.current_track == next_track
+    assert result.queue == []
+    spotify_queue.start_track.assert_called_once_with(host, "spotify:track:next_sp")

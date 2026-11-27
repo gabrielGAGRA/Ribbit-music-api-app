@@ -30,6 +30,11 @@ def _row_to_jam(row: sqlite3.Row) -> Jam:
     source_playlist_id = (
         row["source_playlist_id"] if "source_playlist_id" in keys else None
     )
+    current_track_started_at = (
+        datetime.fromisoformat(row["current_track_started_at"])
+        if "current_track_started_at" in keys and row["current_track_started_at"]
+        else None
+    )
     return Jam(
         jam_id=row["jam_id"],
         host_user_id=row["host_user_id"],
@@ -37,6 +42,7 @@ def _row_to_jam(row: sqlite3.Row) -> Jam:
         room_code=row["room_code"],
         is_active=bool(row["is_active"]),
         current_track_id=row["current_track_id"],
+        current_track_started_at=current_track_started_at,
         created_at=created_at,
         duration_minutes=duration_minutes,
         max_superlikes=max_superlikes,
@@ -105,6 +111,11 @@ class SQLiteJamRepository(JamRepositoryPort):
                 ).fetchone()
                 if not existing:
                     raise EntityNotFoundError(entity_name="Jam", entity_id=jam.jam_id)
+                started_at_str = (
+                    jam.current_track_started_at.isoformat()
+                    if jam.current_track_started_at is not None
+                    else None
+                )
                 cursor.execute(
                     """
                     UPDATE jams
@@ -113,6 +124,7 @@ class SQLiteJamRepository(JamRepositoryPort):
                         room_code = ?,
                         is_active = ?,
                         current_track_id = ?,
+                        current_track_started_at = ?,
                         duration_minutes = ?,
                         max_superlikes = ?,
                         superlikes_used = ?,
@@ -128,6 +140,7 @@ class SQLiteJamRepository(JamRepositoryPort):
                         jam.room_code,
                         1 if jam.is_active else 0,
                         jam.current_track_id,
+                        started_at_str,
                         jam.duration_minutes,
                         jam.max_superlikes,
                         jam.superlikes_used,
@@ -141,13 +154,19 @@ class SQLiteJamRepository(JamRepositoryPort):
                 self._push_jam(jam.jam_id)
             else:
                 created_at_str = (jam.created_at or datetime.now(UTC)).isoformat()
+                started_at_str = (
+                    jam.current_track_started_at.isoformat()
+                    if jam.current_track_started_at is not None
+                    else None
+                )
                 cursor.execute(
                     """
                     INSERT INTO jams (
-                        host_user_id, room_name, room_code, is_active, current_track_id, created_at,
+                        host_user_id, room_name, room_code, is_active, current_track_id,
+                        current_track_started_at, created_at,
                         duration_minutes, max_superlikes, superlikes_used, skip_votes_threshold,
                         accumulated_duration_seconds, deck_source, source_playlist_id
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         jam.host_user_id,
@@ -155,6 +174,7 @@ class SQLiteJamRepository(JamRepositoryPort):
                         jam.room_code,
                         1 if jam.is_active else 0,
                         jam.current_track_id,
+                        started_at_str,
                         created_at_str,
                         jam.duration_minutes,
                         jam.max_superlikes,
@@ -258,10 +278,11 @@ class SQLiteJamRepository(JamRepositoryPort):
             cursor.execute(
                 """
                 UPDATE jams
-                SET current_track_id = ?
+                SET current_track_id = ?,
+                    current_track_started_at = ?
                 WHERE jam_id = ?
                 """,
-                (new_track_id, jam_id),
+                (new_track_id, datetime.now(UTC).isoformat(), jam_id),
             )
             cursor.execute(
                 """

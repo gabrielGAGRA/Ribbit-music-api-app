@@ -21,6 +21,7 @@ class Jam:
     room_code: str = field(default_factory=generate_room_code)
     is_active: bool = True
     current_track_id: int | None = None
+    current_track_started_at: datetime | None = None
     created_at: datetime | None = None
     duration_minutes: int = 60
     max_superlikes: int = 10

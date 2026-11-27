@@ -128,3 +128,82 @@ def test_expired_token_refreshes_and_403_premium_required_propagates() -> None:
     assert session.request.call_args_list[1][1]["headers"]["Authorization"] == (
         "Bearer acc_refreshed"
     )
+
+
+def test_container_wires_spotify_host_queue_when_client_id_configured(
+    tmp_path,
+) -> None:
+    from app.composition.container import build_container
+    from app.config import Settings
+
+    db_file = tmp_path / "test_jam_wiring.db"
+    settings = Settings(
+        db_path=str(db_file),
+        jwt_secret="test-secret-with-at-least-32-characters-1234",
+        spotify_client_id="cid-123",
+        spotify_client_secret="csec-456",
+        spotify_redirect_uri="http://127.0.0.1:4200/callback",
+    )
+    container = build_container(settings)
+    assert isinstance(
+        container.vote_jam_track_use_case.spotify_queue,
+        SpotifyHostQueueAdapter,
+    )
+    assert isinstance(
+        container.vote_skip_jam_track_use_case.spotify_queue,
+        SpotifyHostQueueAdapter,
+    )
+    assert isinstance(
+        container.advance_jam_playback_use_case.spotify_queue,
+        SpotifyHostQueueAdapter,
+    )
+    assert (
+        container.advance_jam_playback_use_case.user_repo
+        is container.vote_jam_track_use_case.user_repo
+    )
+
+
+def test_enqueue_track_falls_back_to_available_device_on_404() -> None:
+    session = MagicMock()
+    session.request.side_effect = [
+        _make_response(404, {"error": {"status": 404, "message": "No active device"}}),
+        _make_response(
+            200,
+            {
+                "devices": [
+                    {
+                        "id": "dev-pc-1",
+                        "is_active": False,
+                        "is_restricted": False,
+                        "type": "Computer",
+                    }
+                ]
+            },
+        ),
+        _make_response(204, None),
+    ]
+    adapter = SpotifyHostQueueAdapter(
+        credentials=SpotifyCredentials(
+            client_id="cid",
+            client_secret="csec",
+            redirect_uri="http://127.0.0.1:4200/callback",
+        ),
+        session=session,
+    )
+    owner = _make_owner(access_token="valid_tok", expires_delta=timedelta(minutes=30))
+
+    adapter.enqueue_track(owner, "spotify:track:0fFKc3ExiRc2oztY0CiLbT")
+
+    assert session.request.call_count == 3
+    assert session.request.call_args_list[1][0] == (
+        "GET",
+        "https://api.spotify.com/v1/me/player/devices",
+    )
+    assert session.request.call_args_list[2][0] == (
+        "POST",
+        "https://api.spotify.com/v1/me/player/queue",
+    )
+    assert session.request.call_args_list[2][1]["params"] == {
+        "uri": "spotify:track:0fFKc3ExiRc2oztY0CiLbT",
+        "device_id": "dev-pc-1",
+    }

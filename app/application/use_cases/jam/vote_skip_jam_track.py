@@ -1,6 +1,7 @@
 """Use case for registering a skip vote on a Jam track or downvoting a queued track."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from app.application.dtos.jam_dtos import SkipVoteResult, VoteSkipJamTrackCommand
@@ -14,6 +15,7 @@ from app.domain.exceptions import (
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.application.ports.services.music_service import TrackCatalogPort
 lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
 
 if TYPE_CHECKING:
@@ -28,6 +30,7 @@ class VoteSkipJamTrackUseCase:
     user_repo: UserRepositoryPort
     track_repo: TrackRepositoryPort
     spotify_queue: SpotifyHostQueuePort | None = None
+    track_catalog: TrackCatalogPort | None = None
 
     def _advance(self, jam: Jam) -> bool:
         if jam.jam_id is None:
@@ -43,17 +46,20 @@ class VoteSkipJamTrackUseCase:
         if jam.accumulated_duration_seconds >= max_seconds:
             jam.is_active = False
             jam.current_track_id = None
+            jam.current_track_started_at = None
             self.jam_repo.save(jam)
             return True
 
         queue = self.jam_repo.list_queue(jam.jam_id)
         if not queue:
             jam.current_track_id = None
+            jam.current_track_started_at = None
             self.jam_repo.save(jam)
             return True
 
         winner = queue[0]
         jam.current_track_id = winner.track_id
+        jam.current_track_started_at = datetime.now(UTC)
         self.jam_repo.remove_track_from_queue(jam.jam_id, winner.track_id)
         self.jam_repo.save(jam)
         sync_advance_track(
@@ -62,6 +68,7 @@ class VoteSkipJamTrackUseCase:
             jam,
             self.track_repo,
             winner.track_id,
+            track_catalog=self.track_catalog,
         )
         return True
 

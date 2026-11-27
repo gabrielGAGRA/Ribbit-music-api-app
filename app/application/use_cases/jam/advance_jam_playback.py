@@ -1,6 +1,7 @@
 """Use case for advancing Jam playback to the top-voted queue track."""
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from app.application.use_cases.jam._spotify_sync import sync_advance_track
 from app.application.use_cases.spotify.premium_guard import require_spotify_premium
@@ -12,6 +13,7 @@ from app.domain.exceptions import (
 lazy from app.application.ports.repositories.jam_repository import JamRepositoryPort
 lazy from app.application.ports.repositories.track_repository import TrackRepositoryPort
 lazy from app.application.ports.repositories.user_repository import UserRepositoryPort
+lazy from app.application.ports.services.music_service import TrackCatalogPort
 lazy from app.application.ports.services.spotify import SpotifyHostQueuePort
 lazy from app.domain.models.jam import Jam
 
@@ -24,6 +26,7 @@ class AdvanceJamPlaybackUseCase:
     track_repo: TrackRepositoryPort | None = None
     user_repo: UserRepositoryPort | None = None
     spotify_queue: SpotifyHostQueuePort | None = None
+    track_catalog: TrackCatalogPort | None = None
 
     def execute(self, jam_id: int, requester_user_id: int | None = None) -> Jam:
         self._require_requester_premium(requester_user_id)
@@ -41,6 +44,7 @@ class AdvanceJamPlaybackUseCase:
         if jam.accumulated_duration_seconds >= max_allowed_seconds:
             jam.is_active = False
             jam.current_track_id = None
+            jam.current_track_started_at = None
             return self.jam_repo.save(jam)
 
         queue = self.jam_repo.list_queue(jam_id)
@@ -61,11 +65,13 @@ class AdvanceJamPlaybackUseCase:
                 saved_jam,
                 self.track_repo,
                 winning_item.track_id,
+                track_catalog=self.track_catalog,
             )
             return saved_jam
 
         self.jam_repo.remove_track_from_queue(jam_id, winning_item.track_id)
         jam.current_track_id = winning_item.track_id
+        jam.current_track_started_at = datetime.now(UTC)
         saved_jam = self.jam_repo.save(jam)
         sync_advance_track(
             self.spotify_queue,
@@ -73,6 +79,7 @@ class AdvanceJamPlaybackUseCase:
             saved_jam,
             self.track_repo,
             winning_item.track_id,
+            track_catalog=self.track_catalog,
         )
         return saved_jam
 
